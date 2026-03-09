@@ -13,7 +13,8 @@
     "mock": "npx tsx src/mock-server.ts",
     "mock:chaos": "MOCK_FAULT_RATE=0.1 npx tsx src/mock-server.ts",
     "generate-spec": "npx tsx src/spec/generator.ts",
-    "typecheck": "npx tsc --noEmit"
+    "typecheck": "npx tsc --noEmit",
+    "validate": "npx tsx src/validation/validate.ts"
   },
   "dependencies": {
     "ajv": "^8.18.0",
