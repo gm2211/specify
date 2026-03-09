@@ -1,0 +1,64 @@
+version: "1.0"
+name: "Login Page Spec"
+description: "Simple login page with form submission and redirect"
+
+pages:
+  - id: login
+    path: /login
+    title: "Login"
+
+    visual_assertions:
+      - type: element_exists
+        selector: "form"
+        description: "Login form is present"
+      - type: element_exists
+        selector: "#email"
+        description: "Email input field exists"
+      - type: element_exists
+        selector: "#password"
+        description: "Password input field exists"
+      - type: element_exists
+        selector: "button[type=submit]"
+        description: "Submit button exists"
+      - type: text_contains
+        selector: "button[type=submit]"
+        text: "Log In"
+        description: "Submit button says Log In"
+
+    console_expectations:
+      - level: error
+        count: 0
+
+    scenarios:
+      - id: successful-login
+        description: "User logs in with valid credentials"
+        steps:
+          - action: fill
+            selector: "#email"
+            value: "{{test_user.email}}"
+          - action: fill
+            selector: "#password"
+            value: "{{test_user.password}}"
+          - action: click
+            selector: "button[type=submit]"
+          - action: wait_for_navigation
+            url_pattern: "/dashboard"
+            description: "Redirects to dashboard after login"
+
+      - id: failed-login
+        description: "User sees error with invalid credentials"
+        steps:
+          - action: fill
+            selector: "#email"
+            value: "wrong@example.com"
+          - action: fill
+            selector: "#password"
+            value: "badpassword"
+          - action: click
+            selector: "button[type=submit]"
+          - action: assert_visible
+            selector: ".error-message"
+            description: "Error message is displayed"
+
+variables:
+  base_url: "${TARGET_BASE_URL}"

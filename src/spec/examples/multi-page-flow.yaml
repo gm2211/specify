@@ -1,0 +1,188 @@
+version: "1.0"
+name: "E-Commerce Checkout Flow"
+description: "Multi-page flow from product browsing to order confirmation"
+
+pages:
+  - id: product-list
+    path: /products
+    title: "Products"
+
+    visual_assertions:
+      - type: element_exists
+        selector: ".product-grid"
+        description: "Product grid is displayed"
+      - type: element_count
+        selector: ".product-card"
+        min: 1
+        description: "At least one product is listed"
+
+    expected_requests:
+      - method: GET
+        url_pattern: "/api/products"
+        response:
+          status: 200
+          body_schema:
+            type: object
+            required:
+              - products
+            properties:
+              products:
+                type: array
+                minItems: 1
+
+  - id: cart
+    path: /cart
+    title: "Shopping Cart"
+
+    visual_assertions:
+      - type: element_exists
+        selector: ".cart-items"
+        description: "Cart items container exists"
+      - type: element_exists
+        selector: ".cart-total"
+        description: "Cart total is displayed"
+      - type: element_exists
+        selector: "[data-testid=checkout-button]"
+        description: "Checkout button exists"
+
+    expected_requests:
+      - method: GET
+        url_pattern: "/api/cart"
+        response:
+          status: 200
+          body_schema:
+            type: object
+            required:
+              - items
+              - total
+
+  - id: checkout
+    path: /checkout
+    title: "Checkout"
+
+    visual_assertions:
+      - type: element_exists
+        selector: "form.checkout-form"
+        description: "Checkout form exists"
+      - type: element_exists
+        selector: "#card-number"
+        description: "Card number input exists"
+      - type: element_exists
+        selector: ".order-summary"
+        description: "Order summary is shown"
+
+  - id: confirmation
+    path: /order/confirmation
+    title: "Order Confirmation"
+
+    visual_assertions:
+      - type: element_exists
+        selector: ".confirmation-message"
+        description: "Confirmation message is shown"
+      - type: text_matches
+        selector: ".order-number"
+        pattern: "^ORD-\\d+$"
+        description: "Order number follows expected format"
+
+    expected_requests:
+      - method: GET
+        url_pattern: "/api/orders/*"
+        response:
+          status: 200
+          body_schema:
+            type: object
+            required:
+              - orderId
+              - status
+              - items
+
+flows:
+  - id: browse-to-checkout
+    description: "User browses products, adds to cart, and completes checkout"
+    steps:
+      - navigate: /products
+        description: "Start at product listing"
+
+      - assert_page: product-list
+
+      - action: click
+        selector: ".product-card:first-child .add-to-cart"
+        description: "Add first product to cart"
+
+      - action: wait_for_request
+        url_pattern: "/api/cart/items"
+        method: POST
+        description: "Add-to-cart API call completes"
+
+      - action: assert_visible
+        selector: ".cart-badge"
+        description: "Cart badge shows item count"
+
+      - navigate: /cart
+        description: "Go to cart page"
+
+      - assert_page: cart
+
+      - action: click
+        selector: "[data-testid=checkout-button]"
+        description: "Proceed to checkout"
+
+      - action: wait_for_navigation
+        url_pattern: "/checkout"
+
+      - assert_page: checkout
+
+      - action: fill
+        selector: "#card-number"
+        value: "4111111111111111"
+      - action: fill
+        selector: "#card-expiry"
+        value: "12/28"
+      - action: fill
+        selector: "#card-cvc"
+        value: "123"
+
+      - action: click
+        selector: "button.place-order"
+        description: "Place the order"
+
+      - action: wait_for_request
+        url_pattern: "/api/orders"
+        method: POST
+        description: "Order creation API call"
+
+      - action: wait_for_navigation
+        url_pattern: "/order/confirmation*"
+
+      - assert_page: confirmation
+
+hooks:
+  setup:
+    - name: "Create test user"
+      type: api_call
+      method: POST
+      url: "{{base_url}}/api/test/users"
+      body:
+        email: "test@example.com"
+        password: "test123"
+      save_as: test_user
+
+    - name: "Seed product catalog"
+      type: api_call
+      method: POST
+      url: "{{base_url}}/api/test/seed-products"
+      body:
+        count: 10
+
+  teardown:
+    - name: "Delete test user"
+      type: api_call
+      method: DELETE
+      url: "{{base_url}}/api/test/users/{{test_user.id}}"
+
+    - name: "Clean up test orders"
+      type: shell
+      command: "curl -X DELETE {{base_url}}/api/test/orders?user={{test_user.id}}"
+
+variables:
+  base_url: "${TARGET_BASE_URL}"

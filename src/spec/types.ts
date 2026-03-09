@@ -1,0 +1,471 @@
+/**
+ * src/spec/types.ts — Computational spec format types
+ *
+ * A spec describes the **functional behavior** of a web application:
+ * what a user should see, what network calls should happen, and how
+ * interactions should work. Every assertion is programmatically verifiable.
+ *
+ * Key principles:
+ *   - Functional, not structural: describes user experience, not implementation
+ *   - Verifiable: every assertion can be checked automatically
+ *   - Composable: pages are referenced in flows, flows reference pages
+ *   - Flexible: visual, network, console, and interaction checks
+ *   - Templatable: {{var}} for dynamic values, ${ENV_VAR} for env vars
+ */
+
+// ---------------------------------------------------------------------------
+// Top-level spec
+// ---------------------------------------------------------------------------
+
+/** Root spec document. */
+export interface Spec {
+  /** Spec format version. */
+  version: string;
+
+  /** Human-readable name for this spec. */
+  name: string;
+
+  /** Optional description of what this spec covers. */
+  description?: string;
+
+  /** Pages/views in the application. */
+  pages?: PageSpec[];
+
+  /** Multi-page flows (e.g. login-to-dashboard). */
+  flows?: FlowSpec[];
+
+  /** Setup and teardown hooks. */
+  hooks?: HooksSpec;
+
+  /** Template variables and configuration. */
+  variables?: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// Pages
+// ---------------------------------------------------------------------------
+
+/** A single page or view in the application. */
+export interface PageSpec {
+  /** Unique identifier for this page (referenced by flows). */
+  id: string;
+
+  /** URL path or pattern (e.g. "/dashboard", "/users/:id"). */
+  path: string;
+
+  /** Expected page title — exact string or regex pattern. */
+  title?: string;
+
+  /** Visual assertions: what should be visible on this page. */
+  visual_assertions?: VisualAssertion[];
+
+  /** Network requests expected when this page loads. */
+  expected_requests?: ExpectedRequest[];
+
+  /** Console output expectations. */
+  console_expectations?: ConsoleExpectation[];
+
+  /** Interactive scenarios on this page. */
+  scenarios?: ScenarioSpec[];
+}
+
+// ---------------------------------------------------------------------------
+// Visual assertions
+// ---------------------------------------------------------------------------
+
+/** Discriminated union of visual assertion types. */
+export type VisualAssertion =
+  | ElementExistsAssertion
+  | TextContainsAssertion
+  | TextMatchesAssertion
+  | ScreenshotRegionAssertion
+  | ElementCountAssertion;
+
+interface BaseVisualAssertion {
+  /** Human-readable description of what this assertion checks. */
+  description?: string;
+}
+
+/** Assert that an element matching the selector exists in the DOM. */
+export interface ElementExistsAssertion extends BaseVisualAssertion {
+  type: 'element_exists';
+  /** CSS selector for the element. */
+  selector: string;
+}
+
+/** Assert that an element's text contains the given substring. */
+export interface TextContainsAssertion extends BaseVisualAssertion {
+  type: 'text_contains';
+  /** CSS selector for the element. */
+  selector: string;
+  /** Expected text substring. */
+  text: string;
+}
+
+/** Assert that an element's text matches a regex pattern. */
+export interface TextMatchesAssertion extends BaseVisualAssertion {
+  type: 'text_matches';
+  /** CSS selector for the element. */
+  selector: string;
+  /** Regex pattern the text should match. */
+  pattern: string;
+}
+
+/** Assert that a screenshot region renders correctly (visual regression). */
+export interface ScreenshotRegionAssertion extends BaseVisualAssertion {
+  type: 'screenshot_region';
+  /** CSS selector defining the region to capture. */
+  selector: string;
+}
+
+/** Assert the count of elements matching a selector. */
+export interface ElementCountAssertion extends BaseVisualAssertion {
+  type: 'element_count';
+  /** CSS selector for the elements. */
+  selector: string;
+  /** Minimum expected count (inclusive). */
+  min?: number;
+  /** Maximum expected count (inclusive). */
+  max?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Expected requests
+// ---------------------------------------------------------------------------
+
+/** An HTTP request expected when a page loads or an action is performed. */
+export interface ExpectedRequest {
+  /** HTTP method (GET, POST, PUT, DELETE, etc). */
+  method: string;
+
+  /**
+   * URL pattern to match. Supports:
+   *   - Exact path: "/api/users"
+   *   - Glob wildcards: "/api/users/*"
+   *   - Regex: "^/api/users/\\d+$" (when prefixed with ^)
+   */
+  url_pattern: string;
+
+  /** Human-readable description. */
+  description?: string;
+
+  /** Expected request body shape (for POST/PUT). */
+  request_body?: RequestBodySpec;
+
+  /** Expected response shape. */
+  response?: ExpectedResponse;
+}
+
+/** Expected shape of a request body. */
+export interface RequestBodySpec {
+  /** Content type (e.g. "application/json"). */
+  content_type?: string;
+
+  /** JSON Schema for the body (when content type is JSON). */
+  body_schema?: JsonSchema;
+}
+
+/** Expected response shape. */
+export interface ExpectedResponse {
+  /** Expected HTTP status code. */
+  status?: number;
+
+  /** Acceptable status codes (alternative to single status). */
+  status_in?: number[];
+
+  /** Content type pattern (substring match). */
+  content_type?: string;
+
+  /** JSON Schema for the response body. */
+  body_schema?: JsonSchema;
+}
+
+/**
+ * Inline JSON Schema definition.
+ * Uses a subset of JSON Schema Draft 7 to keep specs readable.
+ */
+export interface JsonSchema {
+  type?: string | string[];
+  properties?: Record<string, JsonSchema>;
+  required?: string[];
+  items?: JsonSchema;
+  enum?: unknown[];
+  pattern?: string;
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
+  additionalProperties?: boolean | JsonSchema;
+  description?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Console expectations
+// ---------------------------------------------------------------------------
+
+/** Expectation about browser console output. */
+export interface ConsoleExpectation {
+  /** Console level to check: error, warn, log, info, debug. */
+  level: string;
+
+  /** Maximum number of messages at this level (0 = none expected). */
+  count?: number;
+
+  /** If set, assert no messages match this pattern at the given level. */
+  exclude_pattern?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Scenarios (interactions within a page)
+// ---------------------------------------------------------------------------
+
+/** An interactive scenario describing a user workflow on a single page. */
+export interface ScenarioSpec {
+  /** Unique identifier for this scenario. */
+  id: string;
+
+  /** Human-readable description. */
+  description?: string;
+
+  /** Ordered steps the user performs. */
+  steps: ScenarioStep[];
+}
+
+/** A single step in a scenario. */
+export type ScenarioStep =
+  | ClickStep
+  | FillStep
+  | SelectStep
+  | HoverStep
+  | WaitForRequestStep
+  | WaitForNavigationStep
+  | AssertVisibleStep
+  | AssertTextStep
+  | AssertNotVisibleStep
+  | KeypressStep
+  | ScrollStep
+  | WaitStep;
+
+interface BaseStep {
+  /** Human-readable description of this step. */
+  description?: string;
+}
+
+/** Click an element. */
+export interface ClickStep extends BaseStep {
+  action: 'click';
+  /** CSS selector for the element to click. */
+  selector: string;
+}
+
+/** Fill in an input field. */
+export interface FillStep extends BaseStep {
+  action: 'fill';
+  /** CSS selector for the input element. */
+  selector: string;
+  /** Value to type (supports {{var}} templates). */
+  value: string;
+}
+
+/** Select an option from a dropdown. */
+export interface SelectStep extends BaseStep {
+  action: 'select';
+  /** CSS selector for the select element. */
+  selector: string;
+  /** Option value to select. */
+  value: string;
+}
+
+/** Hover over an element. */
+export interface HoverStep extends BaseStep {
+  action: 'hover';
+  /** CSS selector for the element to hover. */
+  selector: string;
+}
+
+/** Wait for a network request matching a URL pattern. */
+export interface WaitForRequestStep extends BaseStep {
+  action: 'wait_for_request';
+  /** URL pattern to wait for (supports glob wildcards). */
+  url_pattern: string;
+  /** Expected HTTP method (default: any). */
+  method?: string;
+}
+
+/** Wait for navigation to a URL matching a pattern. */
+export interface WaitForNavigationStep extends BaseStep {
+  action: 'wait_for_navigation';
+  /** URL pattern the browser should navigate to. */
+  url_pattern: string;
+}
+
+/** Assert that an element is visible on the page. */
+export interface AssertVisibleStep extends BaseStep {
+  action: 'assert_visible';
+  /** CSS selector for the element to check. */
+  selector: string;
+}
+
+/** Assert that an element contains specific text. */
+export interface AssertTextStep extends BaseStep {
+  action: 'assert_text';
+  /** CSS selector for the element. */
+  selector: string;
+  /** Expected text content (substring match). */
+  text: string;
+}
+
+/** Assert that an element is NOT visible on the page. */
+export interface AssertNotVisibleStep extends BaseStep {
+  action: 'assert_not_visible';
+  /** CSS selector for the element. */
+  selector: string;
+}
+
+/** Press a key or key combination. */
+export interface KeypressStep extends BaseStep {
+  action: 'keypress';
+  /** Key or key combination (e.g. "Enter", "Control+A"). */
+  key: string;
+}
+
+/** Scroll to an element or position. */
+export interface ScrollStep extends BaseStep {
+  action: 'scroll';
+  /** CSS selector to scroll to (optional — scrolls to top/bottom if omitted). */
+  selector?: string;
+  /** Scroll direction when no selector: "top" or "bottom". */
+  direction?: 'top' | 'bottom';
+}
+
+/** Wait for a fixed duration (ms). Use sparingly. */
+export interface WaitStep extends BaseStep {
+  action: 'wait';
+  /** Duration in milliseconds. */
+  duration: number;
+}
+
+// ---------------------------------------------------------------------------
+// Flows (multi-page journeys)
+// ---------------------------------------------------------------------------
+
+/** A multi-page user flow (e.g. login -> dashboard -> settings). */
+export interface FlowSpec {
+  /** Unique identifier for this flow. */
+  id: string;
+
+  /** Human-readable description. */
+  description?: string;
+
+  /** Ordered steps in the flow. */
+  steps: FlowStep[];
+}
+
+/** A single step in a flow. Each step is one of several types. */
+export type FlowStep =
+  | NavigateFlowStep
+  | AssertPageFlowStep
+  | ActionFlowStep;
+
+/** Navigate to a URL. */
+export interface NavigateFlowStep {
+  /** URL path to navigate to (supports {{var}} templates). */
+  navigate: string;
+
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert the current page matches a page spec by id. */
+export interface AssertPageFlowStep {
+  /** References a PageSpec.id. */
+  assert_page: string;
+
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Perform an interactive action (same as scenario steps). */
+export interface ActionFlowStep extends BaseStep {
+  /** The action type — same as ScenarioStep.action. */
+  action: ScenarioStep['action'];
+
+  /** CSS selector (for click, fill, hover, etc). */
+  selector?: string;
+
+  /** Value for fill/select actions. */
+  value?: string;
+
+  /** Key for keypress action. */
+  key?: string;
+
+  /** URL pattern for wait_for_request / wait_for_navigation. */
+  url_pattern?: string;
+
+  /** HTTP method for wait_for_request. */
+  method?: string;
+
+  /** Text for assert_text. */
+  text?: string;
+
+  /** Duration for wait. */
+  duration?: number;
+
+  /** Scroll direction. */
+  direction?: 'top' | 'bottom';
+}
+
+// ---------------------------------------------------------------------------
+// Hooks (setup / teardown)
+// ---------------------------------------------------------------------------
+
+/** Setup and teardown hooks for test environment preparation. */
+export interface HooksSpec {
+  /** Steps to run before validation (create test data, etc). */
+  setup?: HookStep[];
+
+  /** Steps to run after validation (clean up test data, etc). */
+  teardown?: HookStep[];
+}
+
+/** A single hook step. */
+export type HookStep = ApiCallHookStep | ShellHookStep;
+
+/** Make an HTTP API call (for setup/teardown of test data). */
+export interface ApiCallHookStep {
+  /** Human-readable name for this step. */
+  name: string;
+
+  type: 'api_call';
+
+  /** HTTP method. */
+  method: string;
+
+  /** URL (supports {{var}} and ${ENV_VAR} templates). */
+  url: string;
+
+  /** Optional request headers. */
+  headers?: Record<string, string>;
+
+  /** Optional request body (will be JSON-serialized). */
+  body?: unknown;
+
+  /** Save the JSON response under this variable name for later use. */
+  save_as?: string;
+}
+
+/** Run a shell command (for setup/teardown). */
+export interface ShellHookStep {
+  /** Human-readable name for this step. */
+  name: string;
+
+  type: 'shell';
+
+  /** Shell command to run. */
+  command: string;
+
+  /** Save stdout under this variable name. */
+  save_as?: string;
+}
