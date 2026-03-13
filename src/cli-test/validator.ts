@@ -1,5 +1,8 @@
 /**
  * src/cli-test/validator.ts — Validate CLI command output against spec
+ *
+ * Every assertion result includes `expected` and `actual` fields
+ * so reports can show the evidence for human spot-checking.
  */
 
 import Ajv from 'ajv';
@@ -15,10 +18,10 @@ export function validateCommandRun(spec: CliCommandSpec, run: CliCommandRun): Cl
 
   // Output assertions
   const stdoutAssertions = (spec.stdout_assertions ?? []).map(a =>
-    validateOutputAssertion(a, run.stdout, 'stdout')
+    validateOutputAssertion(a, run.stdout)
   );
   const stderrAssertions = (spec.stderr_assertions ?? []).map(a =>
-    validateOutputAssertion(a, run.stderr, 'stderr')
+    validateOutputAssertion(a, run.stderr)
   );
 
   // Overall status
@@ -41,6 +44,8 @@ export function validateCommandRun(spec: CliCommandSpec, run: CliCommandRun): Cl
     stderrAssertions,
     durationMs: run.durationMs,
     timedOut: run.timedOut,
+    stdoutPreview: truncatePreview(run.stdout),
+    stderrPreview: truncatePreview(run.stderr),
   };
 }
 
@@ -66,7 +71,6 @@ function validateExitCode(spec: CliCommandSpec, run: CliCommandRun): CliExitCode
 function validateOutputAssertion(
   assertion: CliOutputAssertion,
   output: string,
-  _stream: 'stdout' | 'stderr',
 ): CliAssertionResult {
   switch (assertion.type) {
     case 'text_contains':
@@ -81,13 +85,17 @@ function validateOutputAssertion(
     case 'json_path':
       return validateJsonPath(assertion.path, assertion.value, output, assertion.description);
 
-    case 'empty':
+    case 'empty': {
+      const passed = output.trim() === '';
       return {
         type: 'empty',
         description: assertion.description,
-        status: output.trim() === '' ? 'passed' : 'failed',
-        reason: output.trim() !== '' ? `Expected empty output but got ${output.length} chars` : undefined,
+        status: passed ? 'passed' : 'failed',
+        expected: '(empty)',
+        actual: passed ? '(empty)' : truncate(output, 100),
+        reason: !passed ? `Expected empty output but got ${output.length} chars` : undefined,
       };
+    }
 
     case 'line_count': {
       const lineCount = output === '' ? 0 : output.split('\n').length;
@@ -122,6 +130,9 @@ function validateTextContains(text: string, output: string, description?: string
     description,
     status: passed ? 'passed' : 'failed',
     expected: text,
+    actual: passed
+      ? extractSnippet(output, text)
+      : truncate(output, 200),
     reason: passed ? undefined : `Output does not contain "${text}"`,
   };
 }
@@ -129,12 +140,16 @@ function validateTextContains(text: string, output: string, description?: string
 function validateTextMatches(pattern: string, output: string, description?: string): CliAssertionResult {
   try {
     const regex = new RegExp(pattern, 'm');
-    const passed = regex.test(output);
+    const match = regex.exec(output);
+    const passed = match !== null;
     return {
       type: 'text_matches',
       description,
       status: passed ? 'passed' : 'failed',
-      expected: pattern,
+      expected: `/${pattern}/`,
+      actual: passed
+        ? extractSnippet(output, match![0])
+        : truncate(output, 200),
       reason: passed ? undefined : `Output does not match pattern /${pattern}/`,
     };
   } catch (err) {
@@ -142,6 +157,7 @@ function validateTextMatches(pattern: string, output: string, description?: stri
       type: 'text_matches',
       description,
       status: 'failed',
+      expected: `/${pattern}/`,
       reason: `Invalid regex: ${(err as Error).message}`,
     };
   }
@@ -156,6 +172,8 @@ function validateJsonSchema(schema: unknown, output: string, description?: strin
       type: 'json_schema',
       description,
       status: 'failed',
+      expected: 'valid JSON',
+      actual: truncate(output, 200),
       reason: 'Output is not valid JSON',
     };
   }
@@ -164,7 +182,13 @@ function validateJsonSchema(schema: unknown, output: string, description?: strin
     const validate = ajv.compile(schema as object);
     const valid = validate(parsed);
     if (valid) {
-      return { type: 'json_schema', description, status: 'passed' };
+      return {
+        type: 'json_schema',
+        description,
+        status: 'passed',
+        expected: 'matches schema',
+        actual: 'valid',
+      };
     }
     const errors = (validate.errors ?? []).map(e =>
       `${e.instancePath || '/'}: ${e.message}`
@@ -173,6 +197,8 @@ function validateJsonSchema(schema: unknown, output: string, description?: strin
       type: 'json_schema',
       description,
       status: 'failed',
+      expected: 'matches schema',
+      actual: errors.join('; '),
       reason: `Schema validation failed: ${errors.join('; ')}`,
     };
   } catch (err) {
@@ -180,6 +206,7 @@ function validateJsonSchema(schema: unknown, output: string, description?: strin
       type: 'json_schema',
       description,
       status: 'failed',
+      expected: 'matches schema',
       reason: `Schema compilation error: ${(err as Error).message}`,
     };
   }
@@ -194,6 +221,7 @@ function validateJsonPath(jsonPath: string, expectedValue: unknown, output: stri
       type: 'json_path',
       description,
       status: 'failed',
+      expected: expectedValue,
       reason: 'Output is not valid JSON',
     };
   }
@@ -232,4 +260,32 @@ function getByPath(obj: unknown, path: string): unknown {
     }
   }
   return current;
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Extract a snippet of output surrounding a found match. */
+function extractSnippet(output: string, match: string, contextChars = 60): string {
+  const idx = output.indexOf(match);
+  if (idx === -1) return truncate(output, contextChars * 2);
+  const start = Math.max(0, idx - contextChars);
+  const end = Math.min(output.length, idx + match.length + contextChars);
+  const prefix = start > 0 ? '...' : '';
+  const suffix = end < output.length ? '...' : '';
+  return prefix + output.slice(start, end) + suffix;
+}
+
+/** Truncate a string to maxLen chars. */
+function truncate(s: string, maxLen: number): string {
+  if (s.length <= maxLen) return s;
+  return s.slice(0, maxLen) + `... (${s.length - maxLen} more chars)`;
+}
+
+/** Truncate preview for report embedding. */
+function truncatePreview(text: string, maxLen = 500): string | undefined {
+  if (!text || text.trim() === '') return undefined;
+  if (text.length <= maxLen) return text;
+  return text.slice(0, maxLen) + `\n... (${text.length - maxLen} more chars)`;
 }

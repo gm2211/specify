@@ -65,6 +65,10 @@ export interface CliCommandResult {
   stderrAssertions: CliAssertionResult[];
   durationMs: number;
   timedOut: boolean;
+  /** Truncated stdout for inline evidence in reports. */
+  stdoutPreview?: string;
+  /** Truncated stderr for inline evidence in reports. */
+  stderrPreview?: string;
 }
 
 /** Result of checking the exit code. */

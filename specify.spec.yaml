@@ -27,6 +27,71 @@ cli:
           schema:
             type: object
             required: ["name", "version", "commands", "global_options", "exit_codes"]
+        - type: json_schema
+          description: "Commands array includes all registered commands"
+          schema:
+            type: object
+            properties:
+              commands:
+                type: array
+                minItems: 18
+                items:
+                  type: object
+                  required: ["name", "description", "parameters"]
+        - type: text_contains
+          description: "Includes spec validate"
+          text: "spec validate"
+        - type: text_contains
+          description: "Includes spec generate"
+          text: "spec generate"
+        - type: text_contains
+          description: "Includes spec refine"
+          text: "spec refine"
+        - type: text_contains
+          description: "Includes spec evolve"
+          text: "spec evolve"
+        - type: text_contains
+          description: "Includes spec import"
+          text: "spec import"
+        - type: text_contains
+          description: "Includes spec export"
+          text: "spec export"
+        - type: text_contains
+          description: "Includes spec sync"
+          text: "spec sync"
+        - type: text_contains
+          description: "Includes spec lint"
+          text: "spec lint"
+        - type: text_contains
+          description: "Includes spec guide"
+          text: "spec guide"
+        - type: text_contains
+          description: "Includes agent run"
+          text: "agent run"
+        - type: text_contains
+          description: "Includes cli run"
+          text: "cli run"
+        - type: text_contains
+          description: "Includes report diff"
+          text: "report diff"
+        - type: text_contains
+          description: "Includes report stats"
+          text: "report stats"
+        - type: text_contains
+          description: "Includes schema"
+          text: "\"name\": \"schema\""
+        - type: text_contains
+          description: "Includes mcp"
+          text: "\"name\": \"mcp\""
+        - type: text_contains
+          description: "Includes human"
+          text: "\"name\": \"human\""
+        - type: text_contains
+          description: "Includes human shell"
+          text: "human shell"
+        - type: text_contains
+          description: "Includes human watch"
+          text: "human watch"
 
     - id: help-flag
       description: "The --help flag prints human-readable usage to stderr"
@@ -215,7 +280,7 @@ cli:
         - type: json_path
           description: "Sees our CLI commands"
           path: "spec_summary.cli_command_count"
-          value: 20
+          value: 24
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -293,6 +358,59 @@ cli:
                 items:
                   type: object
                   required: ["id", "category", "priority", "description", "question"]
+
+    # -------------------------------------------------------------------
+    # Spec lint (structural validation)
+    # -------------------------------------------------------------------
+    - id: lint-valid-spec
+      description: "Lint a valid spec returns valid=true"
+      args: ["spec", "lint", "--spec", "src/spec/examples/login-page.yaml"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "valid"
+          value: true
+
+    - id: lint-self-spec
+      description: "Lint the self-spec returns valid=true"
+      args: ["spec", "lint", "--spec", "specify.spec.yaml"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "valid"
+          value: true
+        - type: json_schema
+          schema:
+            type: object
+            required: ["valid", "errors"]
+
+    - id: lint-missing-spec
+      description: "Lint a nonexistent spec fails"
+      args: ["spec", "lint", "--spec", "nonexistent.yaml"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Spec file not found"
+
+    # -------------------------------------------------------------------
+    # Spec guide (authoring guidance)
+    # -------------------------------------------------------------------
+    - id: guide-output
+      description: "Guide outputs schema, examples, patterns, and tips"
+      args: ["spec", "guide"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          description: "Guide has all required sections"
+          schema:
+            type: object
+            required: ["schema", "examples", "patterns", "assertion_types", "template_variables", "tips"]
+        - type: text_contains
+          description: "Includes example specs"
+          text: "Login Page Spec"
+        - type: text_contains
+          description: "Includes assertion type docs"
+          text: "element_exists"
 
     - id: evolve-missing-spec
       description: "Evolve with nonexistent spec fails"

@@ -121,6 +121,33 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'spec lint',
+    description: 'Validate spec structure without captures (schema + semantic checks)',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+    ],
+  },
+  {
+    name: 'spec guide',
+    description: 'Output authoring guide (schema, examples, patterns) for LLM spec writers',
+    parameters: [],
+  },
+  {
+    name: 'mcp',
+    description: 'Start MCP (Model Context Protocol) server for LLM tool integration',
+    parameters: [
+      { name: '--http', type: 'boolean', required: false, description: 'Use HTTP transport instead of stdio (for remote access)' },
+      { name: '--port', type: 'number', required: false, description: 'Port for HTTP transport (default: 8080)' },
+      { name: '--host', type: 'string', required: false, description: 'Host to bind to (default: 0.0.0.0)' },
+    ],
+    examples: [
+      'specify mcp',
+      'specify mcp --http --port 3001',
+      '{"mcpServers": {"specify": {"command": "specify", "args": ["mcp"]}}}',
+      '{"mcpServers": {"specify": {"url": "http://host:8080/mcp"}}}',
+    ],
+  },
+  {
     name: 'human',
     description: 'Interactive mode — context-aware wizard that detects project state and guides you',
     parameters: [

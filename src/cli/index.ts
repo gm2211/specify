@@ -21,11 +21,14 @@
  *   specify spec import    --from <path> [--framework playwright|cypress]
  *   specify spec export    --spec <path> --framework playwright|cypress
  *   specify spec sync      --spec <path> --tests <dir>
+ *   specify spec lint      --spec <path|->
+ *   specify spec guide
  *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
  *   specify cli run         --spec <path|-> [--output <dir>]
  *   specify report diff     --a <path> --b <path>
  *   specify report stats    --history-dir <dir>
  *   specify schema spec|report|commands
+ *   specify mcp             MCP server for LLM tool integration
  *   specify human           Interactive mode (wizard / REPL / TUI)
  */
 
@@ -128,11 +131,14 @@ Commands:
   spec import      Import existing e2e tests as spec items
   spec export      Export spec items as e2e test code
   spec sync        Compare spec against e2e tests bidirectionally
+  spec lint        Validate spec structure (no captures needed)
+  spec guide       Output authoring guide for LLM spec writers
   agent run        Run autonomous agent-driven verification
   cli run          Run CLI verification against a spec
   report diff      Diff two gap reports
   report stats     Show statistical confidence from history
   schema           Output JSON Schema (spec, report, or commands)
+  mcp              Start MCP server for LLM tool integration
   human            Interactive mode (wizard, REPL, TUI)
 
 Global Options:
@@ -259,6 +265,16 @@ async function main(): Promise<void> {
         splitFiles: hasFlag(rest, '--split-files'),
       }, ctx);
 
+    } else if (noun === 'spec' && verb === 'lint') {
+      const { specLint } = await import('./commands/spec-lint.js');
+      exitCode = await specLint({
+        spec: getArg(rest, '--spec') ?? '',
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'guide') {
+      const { specGuide } = await import('./commands/spec-guide.js');
+      exitCode = await specGuide(ctx);
+
     } else if (noun === 'spec' && verb === 'sync') {
       const { specSync } = await import('./commands/spec-sync.js');
       exitCode = await specSync({
@@ -305,6 +321,16 @@ async function main(): Promise<void> {
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
       exitCode = await schemaCommand(verb ?? '', ctx);
+
+    } else if (noun === 'mcp') {
+      const { startMcpServer } = await import('../mcp/server.js');
+      await startMcpServer({
+        http: hasFlag(remaining, '--http'),
+        port: getArg(remaining, '--port') ? parseInt(getArg(remaining, '--port')!) : undefined,
+        host: getArg(remaining, '--host'),
+      });
+      // MCP server runs until client disconnects — don't exit
+      return;
 
     } else {
       // Unknown command — structured error
