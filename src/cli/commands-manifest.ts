@@ -24,10 +24,11 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'spec refine',
-    description: 'Refine a spec using a gap report',
+    description: 'Refine a spec interactively or using a gap report',
     parameters: [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--report', type: 'string', required: true, description: 'Path to gap report JSON' },
+      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON (if omitted, enters interactive mode)' },
+      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (interactive mode only)' },
       { name: '--output', type: 'string', required: false, description: 'Output file path' },
     ],
   },
@@ -67,6 +68,34 @@ export const COMMANDS: CommandDefinition[] = [
     description: 'Output JSON Schema for spec, report, or commands',
     parameters: [
       { name: 'target', type: 'string', required: true, description: 'Schema target: spec, report, or commands' },
+    ],
+  },
+  {
+    name: 'spec import',
+    description: 'Import existing e2e tests as spec items',
+    parameters: [
+      { name: '--from', type: 'string', required: true, description: 'Path to test file or directory' },
+      { name: '--framework', type: 'string', required: false, description: 'Test framework: playwright or cypress (auto-detected if omitted)' },
+      { name: '--output', type: 'string', required: false, description: 'Output path for generated spec file' },
+    ],
+  },
+  {
+    name: 'spec export',
+    description: 'Export spec items as e2e test code',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+      { name: '--framework', type: 'string', required: true, description: 'Target framework: playwright or cypress' },
+      { name: '--output', type: 'string', required: false, description: 'Output directory for generated test files' },
+      { name: '--split-files', type: 'boolean', required: false, description: 'Generate one file per page/flow' },
+    ],
+  },
+  {
+    name: 'spec sync',
+    description: 'Compare spec against existing e2e tests bidirectionally',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+      { name: '--tests', type: 'string', required: true, description: 'Path to test directory' },
+      { name: '--framework', type: 'string', required: false, description: 'Test framework: playwright or cypress (auto-detected if omitted)' },
     ],
   },
   {

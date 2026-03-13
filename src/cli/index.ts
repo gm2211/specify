@@ -16,7 +16,10 @@
  * Command structure:
  *   specify spec validate   --spec <path|-> --capture <dir>
  *   specify spec generate   --input <dir> --output <path> [--smart]
- *   specify spec refine     --spec <path> --report <path>
+ *   specify spec refine     --spec <path> [--report <path>] [--url <url>]
+ *   specify spec import    --from <path> [--framework playwright|cypress]
+ *   specify spec export    --spec <path> --framework playwright|cypress
+ *   specify spec sync      --spec <path> --tests <dir>
  *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
  *   specify report diff     --a <path> --b <path>
  *   specify report stats    --history-dir <dir>
@@ -118,7 +121,10 @@ Usage: specify <noun> <verb> [options]
 Commands:
   spec validate    Validate a spec against captured data
   spec generate    Generate a spec from capture data
-  spec refine      Refine a spec using a gap report
+  spec refine      Refine a spec interactively or using a gap report
+  spec import      Import existing e2e tests as spec items
+  spec export      Export spec items as e2e test code
+  spec sync        Compare spec against e2e tests bidirectionally
   agent run        Run autonomous agent-driven verification
   report diff      Diff two gap reports
   report stats     Show statistical confidence from history
@@ -219,8 +225,34 @@ async function main(): Promise<void> {
       const { specRefine } = await import('./commands/spec-refine.js');
       exitCode = await specRefine({
         spec: getArg(rest, '--spec') ?? '',
-        report: getArg(rest, '--report') ?? '',
+        report: getArg(rest, '--report'),
+        url: getArg(rest, '--url'),
         output: getArg(rest, '--output'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'import') {
+      const { specImport } = await import('./commands/spec-import.js');
+      exitCode = await specImport({
+        from: getArg(rest, '--from') ?? '',
+        framework: getArg(rest, '--framework'),
+        output: getArg(rest, '--output'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'export') {
+      const { specExport } = await import('./commands/spec-export.js');
+      exitCode = await specExport({
+        spec: getArg(rest, '--spec') ?? '',
+        framework: getArg(rest, '--framework') ?? '',
+        output: getArg(rest, '--output'),
+        splitFiles: hasFlag(rest, '--split-files'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'sync') {
+      const { specSync } = await import('./commands/spec-sync.js');
+      exitCode = await specSync({
+        spec: getArg(rest, '--spec') ?? '',
+        tests: getArg(rest, '--tests') ?? '',
+        framework: getArg(rest, '--framework'),
       }, ctx);
 
     } else if (noun === 'agent' && verb === 'run') {

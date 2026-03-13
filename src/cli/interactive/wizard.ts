@@ -24,6 +24,8 @@ interface ProjectState {
   reports: string[];
   historyDir: string | null;
   agentRuns: string[];
+  e2eTestDirs: string[];
+  e2eFramework: 'playwright' | 'cypress' | 'unknown' | null;
 }
 
 function detectProjectState(): ProjectState {
@@ -86,7 +88,27 @@ function detectProjectState(): ProjectState {
     ? '.specify/history'
     : null;
 
-  return { specs, captures, reports, historyDir, agentRuns };
+  // Detect e2e test directories and framework
+  const e2eTestDirs: string[] = [];
+  let e2eFramework: 'playwright' | 'cypress' | 'unknown' | null = null;
+
+  // Check common e2e test locations
+  const testDirCandidates = ['tests', 'e2e', 'test', 'cypress/e2e', 'cypress/integration', '__tests__'];
+  for (const dir of testDirCandidates) {
+    const full = path.join(cwd, dir);
+    if (fs.existsSync(full) && fs.statSync(full).isDirectory()) {
+      e2eTestDirs.push(dir);
+    }
+  }
+
+  // Detect framework from config files
+  if (fs.existsSync(path.join(cwd, 'playwright.config.ts')) || fs.existsSync(path.join(cwd, 'playwright.config.js'))) {
+    e2eFramework = 'playwright';
+  } else if (fs.existsSync(path.join(cwd, 'cypress.config.ts')) || fs.existsSync(path.join(cwd, 'cypress.config.js')) || fs.existsSync(path.join(cwd, 'cypress.json'))) {
+    e2eFramework = 'cypress';
+  }
+
+  return { specs, captures, reports, historyDir, agentRuns, e2eTestDirs, e2eFramework };
 }
 
 // ---------------------------------------------------------------------------
@@ -265,6 +287,9 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
     if (state.historyDir) {
       console.error(`  Found history:    ${state.historyDir}`);
     }
+    if (state.e2eTestDirs.length > 0) {
+      console.error(`  Found e2e tests: ${state.e2eTestDirs.join(', ')}${state.e2eFramework ? ` (${state.e2eFramework})` : ''}`);
+    }
     if (state.specs.length === 0 && state.captures.length === 0) {
       console.error('  No existing specs or captures found.');
     }
@@ -275,8 +300,11 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
       { label: 'Run the agent against a live URL', action: 'agent' },
       { label: 'Generate a spec from capture data', action: 'generate' },
       { label: 'Refine a spec using a gap report', action: 'refine' },
+      { label: 'Improve a spec interactively', action: 'improve' },
       { label: 'Diff two reports to detect regressions', action: 'diff' },
       { label: 'Show statistical confidence from run history', action: 'stats' },
+      { label: 'Import e2e tests as spec items', action: 'import-tests' },
+      { label: 'Sync spec against e2e tests', action: 'sync-tests' },
       { label: 'Create a new spec from scratch', action: 'create' },
       { label: 'Open the interactive REPL shell', action: 'shell' },
     ];
@@ -301,6 +329,9 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
       case 'refine':
         exitCode = await flowRefine(state, prompts);
         break;
+      case 'improve':
+        exitCode = await flowImprove(state, prompts);
+        break;
       case 'diff':
         exitCode = await flowDiff(state, prompts);
         break;
@@ -309,6 +340,12 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
         break;
       case 'generate':
         exitCode = await flowGenerate(state, prompts);
+        break;
+      case 'import-tests':
+        exitCode = await flowImportTests(state, prompts);
+        break;
+      case 'sync-tests':
+        exitCode = await flowSyncTests(state, prompts);
         break;
       case 'create':
         exitCode = await flowCreate(prompts, options.fromCapture);
@@ -478,6 +515,24 @@ async function flowRefine(state: ProjectState, { ask, askPath, choose }: PromptF
   }
 
   return ExitCode.SUCCESS;
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Improve
+// ---------------------------------------------------------------------------
+
+async function flowImprove(state: ProjectState, { ask, askPath, choose }: PromptFns): Promise<number> {
+  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
+
+  const url = await ask('Target URL for page discovery (empty to skip)', '');
+
+  console.error('\n  Analyzing spec for gaps...\n');
+
+  const { specRefine } = await import('../commands/spec-refine.js');
+  return await specRefine(
+    { spec: specPath, url: url || undefined },
+    { outputFormat: 'text', quiet: false },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -655,6 +710,66 @@ async function flowCreate(
   }
 
   return ExitCode.SUCCESS;
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Import e2e tests
+// ---------------------------------------------------------------------------
+
+async function flowImportTests(state: ProjectState, { ask, askPath }: PromptFns): Promise<number> {
+  let testDir: string;
+  if (state.e2eTestDirs.length === 1) {
+    testDir = state.e2eTestDirs[0];
+    console.error(`\n  Using test directory: ${testDir}`);
+  } else if (state.e2eTestDirs.length > 1) {
+    testDir = await askPath('Path to test file or directory', state.e2eTestDirs[0]);
+  } else {
+    testDir = await askPath('Path to test file or directory');
+  }
+
+  const framework = state.e2eFramework && state.e2eFramework !== 'unknown'
+    ? state.e2eFramework
+    : undefined;
+
+  const outputPath = await ask('Output spec file (empty to only show analysis)', '');
+
+  console.error('\n  Analyzing test files...\n');
+
+  const { specImport } = await import('../commands/spec-import.js');
+  return await specImport(
+    { from: testDir, framework, output: outputPath || undefined },
+    { outputFormat: 'text', quiet: false },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Sync spec against e2e tests
+// ---------------------------------------------------------------------------
+
+async function flowSyncTests(state: ProjectState, { askPath, choose }: PromptFns): Promise<number> {
+  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
+
+  let testDir: string;
+  if (state.e2eTestDirs.length === 1) {
+    testDir = state.e2eTestDirs[0];
+    console.error(`  Using test directory: ${testDir}`);
+  } else if (state.e2eTestDirs.length > 1) {
+    testDir = await askPath('Path to test directory', state.e2eTestDirs[0]);
+  } else {
+    testDir = await askPath('Path to test directory');
+  }
+
+  const framework = state.e2eFramework && state.e2eFramework !== 'unknown'
+    ? state.e2eFramework
+    : undefined;
+
+  console.error('\n  Computing sync...\n');
+
+  const { specSync } = await import('../commands/spec-sync.js');
+  return await specSync(
+    { spec: specPath, tests: testDir, framework },
+    { outputFormat: 'text', quiet: false },
+  );
 }
 
 // ---------------------------------------------------------------------------
