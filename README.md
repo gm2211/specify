@@ -1,16 +1,15 @@
 ```
-     ___  ___  ___  ___  ___  ___  _  _
-    / __|| _ \| __||  _||_ _|| __|| \| |
-    \__ \|  _/| _| | (_  | | | _| |    |
-    |___/|_|  |___| \___||_| |_|  |_|\_| ▐▌
-                                         ▐▌
-    spec-driven verification             ▐▌
-    for things that ship                 ▀▀
+
+   ███████╗██████╗ ███████╗ ██████╗██╗███████╗██╗   ██╗
+   ██╔════╝██╔══██╗██╔════╝██╔════╝██║██╔════╝╚██╗ ██╔╝
+   ███████╗██████╔╝█████╗  ██║     ██║█████╗   ╚████╔╝
+   ╚════██║██╔═══╝ ██╔══╝  ██║     ██║██╔══╝    ╚██╔╝
+   ███████║██║     ███████╗╚██████╗██║██║        ██║
+   ╚══════╝╚═╝     ╚══════╝ ╚═════╝╚═╝╚═╝        ╚═╝
+
+   Write specs. Validate behavior. Ship with evidence.
+
 ```
-
-# Specify
-
-Write specs. Validate behavior. Ship with evidence.
 
 Specify turns functional requirements into machine-verifiable specs. Define what your app should do — pages, flows, assertions, API contracts — and Specify tells you what's met, what's not, and what's untested. Every assertion shows its work: expected value, actual value, raw output.
 
