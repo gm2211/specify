@@ -1,7 +1,7 @@
 #!/bin/bash
 export FORCE_COLOR=1
-CLI="node /Users/gmecocci/projects/specify/dist/src/cli/index.js"
 cd /Users/gmecocci/projects/specify
+CLI="./specify"
 
 type_cmd() {
   printf '\033[1;34m❯\033[0m '

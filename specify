@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# specify — CLI entry point
+#
+# Auto-builds TypeScript if needed, then runs the CLI.
+#
+#   ./specify --help
+#   ./specify spec validate --spec spec.yaml --capture ./captures
+#   ./specify cli run --spec spec.yaml
+#   ./specify human
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DIST="$SCRIPT_DIR/dist/src/cli/index.js"
+
+# Auto-build if dist is missing or any source file is newer
+needs_build() {
+  [ ! -f "$DIST" ] && return 0
+  local newer
+  newer=$(find "$SCRIPT_DIR/src" -name '*.ts' -newer "$DIST" -print -quit 2>/dev/null)
+  [ -n "$newer" ]
+}
+
+if needs_build; then
+  echo "Building TypeScript..." >&2
+  npx tsc --project "$SCRIPT_DIR/tsconfig.json"
+fi
+
+exec node "$DIST" "$@"
