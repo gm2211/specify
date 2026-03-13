@@ -1,5 +1,5 @@
 #!/bin/bash
-# Scripted demo for asciinema recording — compact and colorful
+# Scripted demo — compact
 export FORCE_COLOR=1
 CLI="node /Users/gmecocci/projects/specify/dist/src/cli/index.js"
 cd /Users/gmecocci/projects/specify
@@ -16,19 +16,13 @@ type_cmd() {
 
 clear
 
-# 1. Colored help (just commands section)
-type_cmd "specify --help"
-$CLI --help 2>&1 | head -22
-sleep 1.5
-echo
-
-# 2. Lint — only show stderr (the colored verdict)
-type_cmd "specify spec lint --spec specify.spec.yaml"
+# 1. Lint
+type_cmd "specify spec lint --spec app.spec.yaml"
 $CLI spec lint --spec specify.spec.yaml 2>&1 1>/dev/null
-sleep 1
-echo
+sleep 1.2
 
-# 3. CLI validation — show progress on stderr, suppress stdout
-type_cmd "specify cli run --spec specify.spec.yaml"
+# 2. CLI validation summary
+echo
+type_cmd "specify cli run --spec app.spec.yaml"
 $CLI cli run --spec specify.spec.yaml 2>&1 1>/dev/null
 sleep 1.5
