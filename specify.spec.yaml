@@ -42,6 +42,8 @@ cli:
         - type: text_contains
           text: "cli run"
         - type: text_contains
+          text: "spec evolve"
+        - type: text_contains
           text: "human"
 
     # -------------------------------------------------------------------
@@ -155,6 +157,55 @@ cli:
         - type: text_contains
           description: "Contains interaction code"
           text: "page.locator"
+
+    # -------------------------------------------------------------------
+    # Spec evolve (interactive gap analysis)
+    # -------------------------------------------------------------------
+    - id: evolve-interactive
+      description: "Interactive evolve produces structured suggestions"
+      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "mode"
+          value: "interactive"
+        - type: json_schema
+          description: "Evolve result has required structure"
+          schema:
+            type: object
+            required: ["mode", "spec_summary", "suggestions"]
+            properties:
+              suggestions:
+                type: array
+                items:
+                  type: object
+                  required: ["id", "category", "priority", "description", "rationale", "proposed_change", "question"]
+
+    - id: evolve-finds-gaps
+      description: "Interactive evolve finds real gaps in example spec"
+      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          description: "Analyzes the login page spec"
+          path: "spec_summary.page_count"
+          value: 1
+        - type: text_contains
+          description: "Finds the missing-assertion scenario gap"
+          text: "interactions but no assertions"
+
+    - id: evolve-no-pr-flag-ok
+      description: "Evolve without --pr uses interactive mode"
+      args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "mode"
+          value: "interactive"
+        - type: json_path
+          description: "Sees our CLI commands"
+          path: "spec_summary.cli_command_count"
+          value: 16
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)

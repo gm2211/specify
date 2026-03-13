@@ -17,6 +17,7 @@
  *   specify spec validate   --spec <path|-> --capture <dir>
  *   specify spec generate   --input <dir> --output <path> [--smart]
  *   specify spec refine     --spec <path> [--report <path>] [--url <url>]
+ *   specify spec evolve    --spec <path> [--pr <number|url>] [--repo <owner/repo>]
  *   specify spec import    --from <path> [--framework playwright|cypress]
  *   specify spec export    --spec <path> --framework playwright|cypress
  *   specify spec sync      --spec <path> --tests <dir>
@@ -123,6 +124,7 @@ Commands:
   spec validate    Validate a spec against captured data
   spec generate    Generate a spec from capture data
   spec refine      Refine a spec interactively or using a gap report
+  spec evolve      Evolve a spec from PR changes or interactively
   spec import      Import existing e2e tests as spec items
   spec export      Export spec items as e2e test code
   spec sync        Compare spec against e2e tests bidirectionally
@@ -230,6 +232,14 @@ async function main(): Promise<void> {
         report: getArg(rest, '--report'),
         url: getArg(rest, '--url'),
         output: getArg(rest, '--output'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'evolve') {
+      const { specEvolve } = await import('./commands/spec-evolve.js');
+      exitCode = await specEvolve({
+        spec: getArg(rest, '--spec') ?? '',
+        pr: getArg(rest, '--pr'),
+        repo: getArg(rest, '--repo'),
       }, ctx);
 
     } else if (noun === 'spec' && verb === 'import') {

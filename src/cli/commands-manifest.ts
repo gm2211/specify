@@ -98,6 +98,20 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'spec evolve',
+    description: 'Evolve a spec from PR changes or interactive gap analysis',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+      { name: '--pr', type: 'string', required: false, description: 'PR number or URL to analyze (omit for interactive mode)' },
+      { name: '--repo', type: 'string', required: false, description: 'GitHub repo (owner/repo) if not inferrable from PR URL' },
+    ],
+    examples: [
+      'specify spec evolve --spec spec.yaml --pr 42',
+      'specify spec evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42',
+      'specify spec evolve --spec spec.yaml',
+    ],
+  },
+  {
     name: 'spec sync',
     description: 'Compare spec against existing e2e tests bidirectionally',
     parameters: [
