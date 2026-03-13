@@ -1,5 +1,4 @@
 #!/bin/bash
-# Scripted demo — compact
 export FORCE_COLOR=1
 CLI="node /Users/gmecocci/projects/specify/dist/src/cli/index.js"
 cd /Users/gmecocci/projects/specify
@@ -15,14 +14,13 @@ type_cmd() {
 }
 
 clear
-
-# 1. Lint
 type_cmd "specify spec lint --spec app.spec.yaml"
 $CLI spec lint --spec specify.spec.yaml 2>&1 1>/dev/null
-sleep 1.2
-
-# 2. CLI validation summary
+sleep 1
 echo
 type_cmd "specify cli run --spec app.spec.yaml"
-$CLI cli run --spec specify.spec.yaml 2>&1 1>/dev/null
+printf '\033[2mRunning 24 commands...\033[0m\n'
+sleep 0.8
+# Only show the summary line
+$CLI cli run --spec specify.spec.yaml 2>&1 1>/dev/null | tail -1
 sleep 1.5
