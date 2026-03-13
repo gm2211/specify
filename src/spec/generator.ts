@@ -22,6 +22,7 @@ import type {
 } from './types.js';
 import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
 import { specToYaml } from './parser.js';
+import { smartGenerate } from './smart-generator.js';
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -315,6 +316,9 @@ function buildExpectedRequest(entry: CapturedTraffic, origin: string): ExpectedR
     expectedReq.response = response;
   }
 
+  // Tag with confidence: assertions derived from captured traffic are "observed"
+  expectedReq.confidence = 'observed';
+
   return expectedReq;
 }
 
@@ -411,6 +415,40 @@ function buildPagesFromScreenshots(
   }
 
   return pages;
+}
+
+// ---------------------------------------------------------------------------
+// Core spec generation logic — importable from CLI commands
+// ---------------------------------------------------------------------------
+
+/** Core spec generation logic — importable from CLI commands. */
+export function generateSpec(options: { inputDir: string; specName: string; smart?: boolean }): Spec {
+  const traffic = loadTraffic(options.inputDir);
+  const consoleLogs = loadConsole(options.inputDir);
+
+  if (options.smart) {
+    return smartGenerate({
+      inputDir: options.inputDir,
+      specName: options.specName,
+      traffic,
+      consoleLogs,
+    });
+  }
+
+  const screenshots = loadScreenshots(options.inputDir);
+  const origin = traffic.length > 0 ? extractOrigin(traffic[0].url) : '';
+  const pageGroups = groupByPage(traffic);
+  const pages = buildPagesFromScreenshots(screenshots, pageGroups, consoleLogs, origin);
+
+  return {
+    version: '1.0',
+    name: options.specName,
+    description: `Generated from capture: ${path.basename(options.inputDir)}`,
+    pages,
+    variables: {
+      base_url: origin || '${TARGET_BASE_URL}',
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

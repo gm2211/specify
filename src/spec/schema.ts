@@ -39,6 +39,12 @@ export const specSchema = {
       type: 'object',
       additionalProperties: { type: 'string' },
     },
+    assumptions: {
+      type: 'array',
+      items: { $ref: '#/$defs/Assumption' },
+      description: 'Preconditions that must hold for this spec to be validly tested.',
+    },
+    defaults: { $ref: '#/$defs/DefaultProperties' },
   },
 
   $defs: {
@@ -95,6 +101,8 @@ export const specSchema = {
         pattern: { type: 'string' },
         min: { type: 'number' },
         max: { type: 'number' },
+        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
+        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
       },
       allOf: [
         {
@@ -133,6 +141,8 @@ export const specSchema = {
         description: { type: 'string' },
         request_body: { $ref: '#/$defs/RequestBodySpec' },
         response: { $ref: '#/$defs/ExpectedResponse' },
+        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
+        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
       },
     },
 
@@ -173,6 +183,8 @@ export const specSchema = {
         level: { type: 'string' },
         count: { type: 'number' },
         exclude_pattern: { type: 'string' },
+        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
+        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
       },
     },
 
@@ -311,6 +323,58 @@ export const specSchema = {
           then: { required: ['command'] },
         },
       ],
+    },
+
+    // -------------------------------------------------------------------
+    // Assumption (preconditions for valid testing)
+    // -------------------------------------------------------------------
+    Assumption: {
+      type: 'object',
+      required: ['type'],
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['url_reachable', 'env_var_set', 'api_returns', 'selector_exists'],
+        },
+        description: { type: 'string' },
+        url: { type: 'string' },
+        name: { type: 'string' },
+        method: { type: 'string' },
+        status: { type: 'number' },
+        selector: { type: 'string' },
+      },
+      allOf: [
+        {
+          if: { properties: { type: { const: 'url_reachable' } } },
+          then: { required: ['url'] },
+        },
+        {
+          if: { properties: { type: { const: 'env_var_set' } } },
+          then: { required: ['name'] },
+        },
+        {
+          if: { properties: { type: { const: 'api_returns' } } },
+          then: { required: ['url'] },
+        },
+        {
+          if: { properties: { type: { const: 'selector_exists' } } },
+          then: { required: ['url', 'selector'] },
+        },
+      ],
+    },
+
+    // -------------------------------------------------------------------
+    // DefaultProperties (universal properties across all pages)
+    // -------------------------------------------------------------------
+    DefaultProperties: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        no_5xx: { type: 'boolean' },
+        no_console_errors: { type: 'boolean' },
+        no_uncaught_exceptions: { type: 'boolean' },
+        page_load_timeout_ms: { type: 'number' },
+      },
     },
   },
 } as const;

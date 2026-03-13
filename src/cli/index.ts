@@ -1,0 +1,281 @@
+#!/usr/bin/env node
+
+/**
+ * src/cli/index.ts — Agent-friendly CLI entry point for Specify
+ *
+ * Design principles (agent-first):
+ *   - Structured JSON to stdout, human messages to stderr
+ *   - Meaningful exit codes for branching (0, 1, 2, 10-14)
+ *   - Noun-verb command pattern for tree-search discovery
+ *   - Schema introspection via `specify schema <target>`
+ *   - Field masks via --fields for context-window discipline
+ *   - Stdin support (--spec -) for piping
+ *   - TTY auto-detection: pretty text for humans, JSON for pipes
+ *   - `specify human` enters interactive mode (wizard, REPL, TUI)
+ *
+ * Command structure:
+ *   specify spec validate   --spec <path|-> --capture <dir>
+ *   specify spec generate   --input <dir> --output <path> [--smart]
+ *   specify spec refine     --spec <path> --report <path>
+ *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
+ *   specify report diff     --a <path> --b <path>
+ *   specify report stats    --history-dir <dir>
+ *   specify schema spec|report|commands
+ *   specify human           Interactive mode (wizard / REPL / TUI)
+ */
+
+import { detectOutputFormat } from './output.js';
+import { ExitCode } from './exit-codes.js';
+import type { CliContext, OutputFormat } from './types.js';
+
+import { COMMANDS } from './commands-manifest.js';
+
+// Re-export for external consumers
+export { COMMANDS };
+
+// ---------------------------------------------------------------------------
+// Argument parsing
+// ---------------------------------------------------------------------------
+
+function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: string[] } {
+  let outputFormat: OutputFormat | undefined;
+  let fields: string[] | undefined;
+  let quiet = false;
+  const remaining: string[] = [];
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if ((arg === '--output-format' || arg === '--format') && args[i + 1]) {
+      outputFormat = args[++i] as OutputFormat;
+    } else if (arg === '--json') {
+      outputFormat = 'json';
+    } else if (arg === '--fields' && args[i + 1]) {
+      fields = args[++i].split(',');
+    } else if (arg === '--quiet' || arg === '-q') {
+      quiet = true;
+    } else {
+      remaining.push(arg);
+    }
+  }
+
+  return {
+    ctx: {
+      outputFormat: outputFormat ?? detectOutputFormat(),
+      fields,
+      quiet,
+    },
+    remaining,
+  };
+}
+
+function getArg(args: string[], flag: string): string | undefined {
+  const idx = args.indexOf(flag);
+  if (idx === -1 || idx + 1 >= args.length) return undefined;
+  return args[idx + 1];
+}
+
+function hasFlag(args: string[], flag: string): boolean {
+  return args.includes(flag);
+}
+
+// ---------------------------------------------------------------------------
+// Help — structured for agents, readable for humans
+// ---------------------------------------------------------------------------
+
+function printHelp(asJson: boolean): void {
+  if (asJson) {
+    // Agent-friendly: emit command manifest as JSON to stdout
+    process.stdout.write(JSON.stringify({
+      name: 'specify',
+      version: '0.1.0',
+      description: 'Spec-driven functional verification for web applications',
+      commands: COMMANDS,
+      global_options: [
+        { name: '--json', description: 'Force JSON output' },
+        { name: '--output-format', type: 'string', description: 'Output format: json|text|markdown|ndjson' },
+        { name: '--fields', type: 'string', description: 'Comma-separated field paths to select from output' },
+        { name: '--quiet', description: 'Suppress non-essential output' },
+      ],
+      exit_codes: {
+        '0': 'success',
+        '1': 'assertion_failure',
+        '2': 'all_untested',
+        '10': 'parse_error',
+        '11': 'network_error',
+        '12': 'timeout',
+        '13': 'assumption_failure',
+        '14': 'browser_error',
+      },
+      hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
+    }, null, 2) + '\n');
+  } else {
+    // Human-readable to stderr
+    process.stderr.write(`
+Specify — spec-driven functional verification
+
+Usage: specify <noun> <verb> [options]
+
+Commands:
+  spec validate    Validate a spec against captured data
+  spec generate    Generate a spec from capture data
+  spec refine      Refine a spec using a gap report
+  agent run        Run autonomous agent-driven verification
+  report diff      Diff two gap reports
+  report stats     Show statistical confidence from history
+  schema           Output JSON Schema (spec, report, or commands)
+  human            Interactive mode (wizard, REPL, TUI)
+
+Global Options:
+  --json                                        Force JSON output to stdout
+  --output-format <json|text|markdown|ndjson>   Output format (default: auto-detect)
+  --fields <field1,field2,...>                   Select specific fields from output
+  --quiet, -q                                   Suppress non-essential output
+  --help, -h                                    Show this help
+
+Examples:
+  specify spec validate --spec ./spec.yaml --capture ./captures/latest
+  specify spec validate --spec ./spec.yaml --capture ./captures/latest --json --fields summary
+  specify agent run --spec ./spec.yaml --url http://localhost:3000
+  specify schema commands
+  cat spec.yaml | specify spec validate --spec - --capture ./captures/latest
+  specify human
+`.trimStart());
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main(): Promise<void> {
+  const { ctx, remaining } = parseGlobalOptions(process.argv.slice(2));
+
+  // --help flag: always human-readable text to stderr
+  if (hasFlag(remaining, '--help') || hasFlag(remaining, '-h')) {
+    printHelp(false);
+    process.exit(ExitCode.SUCCESS);
+    return;
+  }
+
+  // No arguments: always JSON — agent-friendly self-description
+  // Humans should run `specify --help` for text or `specify human` for interactive
+  if (remaining.length === 0) {
+    printHelp(true);
+    process.exit(ExitCode.SUCCESS);
+    return;
+  }
+
+  const [noun, verb, ...rest] = remaining;
+
+  let exitCode: number;
+
+  try {
+    // -----------------------------------------------------------------
+    // Interactive modes — `specify human [init|shell|watch]`
+    // -----------------------------------------------------------------
+    if (noun === 'human') {
+      if (verb === 'shell' || verb === 'repl') {
+        const { runRepl } = await import('./interactive/repl.js');
+        exitCode = await runRepl({
+          spec: getArg(rest, '--spec'),
+          url: getArg(rest, '--url'),
+        });
+      } else if (verb === 'watch' || verb === 'tui') {
+        const { runTui } = await import('./interactive/tui.js');
+        exitCode = await runTui({
+          spec: getArg(rest, '--spec') ?? '',
+          url: getArg(rest, '--url') ?? '',
+        });
+      } else {
+        // Default: wizard (covers `specify human` and `specify human init`)
+        const { runWizard } = await import('./interactive/wizard.js');
+        exitCode = await runWizard({
+          fromCapture: getArg(remaining.slice(1), '--from-capture'),
+        });
+      }
+
+    // -----------------------------------------------------------------
+    // Agent-friendly commands — structured output to stdout
+    // -----------------------------------------------------------------
+    } else if (noun === 'spec' && verb === 'validate') {
+      const { specValidate } = await import('./commands/spec-validate.js');
+      exitCode = await specValidate({
+        spec: getArg(rest, '--spec') ?? '',
+        capture: getArg(rest, '--capture') ?? '',
+        output: getArg(rest, '--output'),
+        historyDir: getArg(rest, '--history-dir'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'generate') {
+      const { specGenerate } = await import('./commands/spec-generate.js');
+      exitCode = await specGenerate({
+        input: getArg(rest, '--input') ?? '',
+        output: getArg(rest, '--output'),
+        name: getArg(rest, '--name'),
+        smart: hasFlag(rest, '--smart'),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'refine') {
+      const { specRefine } = await import('./commands/spec-refine.js');
+      exitCode = await specRefine({
+        spec: getArg(rest, '--spec') ?? '',
+        report: getArg(rest, '--report') ?? '',
+        output: getArg(rest, '--output'),
+      }, ctx);
+
+    } else if (noun === 'agent' && verb === 'run') {
+      const { agentRun } = await import('./commands/agent-run.js');
+      exitCode = await agentRun({
+        spec: getArg(rest, '--spec') ?? '',
+        url: getArg(rest, '--url') ?? '',
+        headed: hasFlag(rest, '--headed'),
+        output: getArg(rest, '--output'),
+        explore: hasFlag(rest, '--explore'),
+        maxExplorationRounds: getArg(rest, '--max-exploration-rounds') ? parseInt(getArg(rest, '--max-exploration-rounds')!) : undefined,
+        noSetup: hasFlag(rest, '--no-setup'),
+        noTeardown: hasFlag(rest, '--no-teardown'),
+        timeout: getArg(rest, '--timeout') ? parseInt(getArg(rest, '--timeout')!) : undefined,
+        noScreenshots: hasFlag(rest, '--no-screenshots'),
+      }, ctx);
+
+    } else if (noun === 'report' && verb === 'diff') {
+      const { reportDiff } = await import('./commands/report-diff.js');
+      exitCode = await reportDiff({
+        a: getArg(rest, '--a') ?? '',
+        b: getArg(rest, '--b') ?? '',
+      }, ctx);
+
+    } else if (noun === 'report' && verb === 'stats') {
+      const { reportStats } = await import('./commands/report-stats.js');
+      exitCode = await reportStats({
+        historyDir: getArg(rest, '--history-dir') ?? '',
+      }, ctx);
+
+    } else if (noun === 'schema') {
+      const { schemaCommand } = await import('./commands/schema.js');
+      exitCode = await schemaCommand(verb ?? '', ctx);
+
+    } else {
+      // Unknown command — structured error
+      const error = { error: 'unknown_command', command: `${noun} ${verb ?? ''}`.trim(), hint: 'Run "specify schema commands" for available commands' };
+      if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
+        process.stdout.write(JSON.stringify(error) + '\n');
+      } else {
+        process.stderr.write(`Unknown command: ${error.command}\n`);
+        printHelp(false);
+      }
+      exitCode = ExitCode.PARSE_ERROR;
+    }
+  } catch (err) {
+    const error = { error: 'internal_error', message: err instanceof Error ? err.message : String(err) };
+    if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
+      process.stdout.write(JSON.stringify(error) + '\n');
+    }
+    process.stderr.write(`Error: ${error.message}\n`);
+    exitCode = ExitCode.PARSE_ERROR;
+  }
+
+  process.exit(exitCode);
+}
+
+main();

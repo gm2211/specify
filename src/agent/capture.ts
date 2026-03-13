@@ -144,6 +144,11 @@ export class CaptureCollector {
     this.traffic.push(entry);
   }
 
+  /** Record console log entries manually (e.g. from resumed sessions). */
+  addConsoleLog(entry: CapturedConsoleEntry): void {
+    this.consoleLogs.push(entry);
+  }
+
   /** Get all collected traffic. */
   getTraffic(): CapturedTraffic[] {
     return this.traffic;

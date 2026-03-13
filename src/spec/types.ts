@@ -14,6 +14,94 @@
  */
 
 // ---------------------------------------------------------------------------
+// Assertion quantifiers and confidence (Antithesis-inspired)
+// ---------------------------------------------------------------------------
+
+/**
+ * Quantifier for assertions: whether the assertion must hold on every run
+ * ("always") or is expected to hold on at least some runs ("sometimes").
+ */
+export type AssertionQuantifier = 'always' | 'sometimes';
+
+/**
+ * Confidence level for an assertion, indicating how it was established:
+ *   - "observed": derived from actual captured behavior
+ *   - "inferred": inferred from documentation, patterns, or heuristics
+ *   - "reviewed": manually reviewed and confirmed by a human
+ */
+export type AssertionConfidence = 'observed' | 'inferred' | 'reviewed';
+
+// ---------------------------------------------------------------------------
+// Default universal properties
+// ---------------------------------------------------------------------------
+
+/** Universal properties that should hold across all pages unless overridden. */
+export interface DefaultProperties {
+  /** If true, no HTTP response should have a 5xx status code. */
+  no_5xx?: boolean;
+
+  /** If true, no console.error entries should appear. */
+  no_console_errors?: boolean;
+
+  /** If true, no uncaught exceptions should appear in the console. */
+  no_uncaught_exceptions?: boolean;
+
+  /** Maximum page load time in milliseconds. */
+  page_load_timeout_ms?: number;
+}
+
+// ---------------------------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------------------------
+
+/** A precondition that must hold for the spec to be validly tested. */
+export type Assumption =
+  | UrlReachableAssumption
+  | EnvVarSetAssumption
+  | ApiReturnsAssumption
+  | SelectorExistsAssumption;
+
+/** Base fields shared by all assumption types. */
+interface BaseAssumption {
+  /** Human-readable description of this assumption. */
+  description?: string;
+}
+
+/** Assumption that a URL is reachable (responds with 2xx to a HEAD request). */
+export interface UrlReachableAssumption extends BaseAssumption {
+  type: 'url_reachable';
+  /** URL that must be reachable. */
+  url: string;
+}
+
+/** Assumption that an environment variable is set and non-empty. */
+export interface EnvVarSetAssumption extends BaseAssumption {
+  type: 'env_var_set';
+  /** Name of the environment variable. */
+  name: string;
+}
+
+/** Assumption that an API endpoint returns an expected status code. */
+export interface ApiReturnsAssumption extends BaseAssumption {
+  type: 'api_returns';
+  /** URL of the API endpoint. */
+  url: string;
+  /** HTTP method (defaults to GET). */
+  method?: string;
+  /** Expected HTTP status code (defaults to 200). */
+  status?: number;
+}
+
+/** Assumption that a CSS selector exists on a given page. */
+export interface SelectorExistsAssumption extends BaseAssumption {
+  type: 'selector_exists';
+  /** URL of the page to check. */
+  url: string;
+  /** CSS selector that must exist. */
+  selector: string;
+}
+
+// ---------------------------------------------------------------------------
 // Top-level spec
 // ---------------------------------------------------------------------------
 
@@ -39,6 +127,12 @@ export interface Spec {
 
   /** Template variables and configuration. */
   variables?: Record<string, string>;
+
+  /** Preconditions that must hold for this spec to be validly tested. */
+  assumptions?: Assumption[];
+
+  /** Universal properties that apply across all pages by default. */
+  defaults?: DefaultProperties;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +178,12 @@ export type VisualAssertion =
 interface BaseVisualAssertion {
   /** Human-readable description of what this assertion checks. */
   description?: string;
+
+  /** Whether this assertion must hold always or only sometimes. */
+  quantifier?: AssertionQuantifier;
+
+  /** How this assertion was established. */
+  confidence?: AssertionConfidence;
 }
 
 /** Assert that an element matching the selector exists in the DOM. */
@@ -154,6 +254,12 @@ export interface ExpectedRequest {
 
   /** Expected response shape. */
   response?: ExpectedResponse;
+
+  /** Whether this request must always or only sometimes be observed. */
+  quantifier?: AssertionQuantifier;
+
+  /** How this assertion was established. */
+  confidence?: AssertionConfidence;
 }
 
 /** Expected shape of a request body. */
@@ -215,6 +321,12 @@ export interface ConsoleExpectation {
 
   /** If set, assert no messages match this pattern at the given level. */
   exclude_pattern?: string;
+
+  /** Whether this expectation must hold always or only sometimes. */
+  quantifier?: AssertionQuantifier;
+
+  /** How this expectation was established. */
+  confidence?: AssertionConfidence;
 }
 
 // ---------------------------------------------------------------------------

@@ -9,7 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import Ajv from 'ajv';
-import type { Spec, PageSpec, ExpectedRequest, FlowSpec, FlowStep } from '../spec/types.js';
+import type { Spec, PageSpec, ExpectedRequest, FlowSpec, FlowStep, DefaultProperties } from '../spec/types.js';
 import type {
   CapturedTraffic,
   CapturedConsoleEntry,
@@ -26,6 +26,7 @@ import type {
   FlowResult,
   FlowStepResult,
   CheckStatus,
+  DefaultResult,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -253,6 +254,8 @@ function validateRequest(
       description: req.description,
       status: 'untested',
       reason: 'Parent page was not visited in this capture session',
+      quantifier: req.quantifier,
+      confidence: req.confidence,
     };
   }
 
@@ -264,12 +267,18 @@ function validateRequest(
   );
 
   if (matches.length === 0) {
+    // For "sometimes" quantifier in single-run, mark as untested rather than failed
+    const effectiveStatus: CheckStatus = req.quantifier === 'sometimes' ? 'untested' : 'failed';
     return {
       method: req.method,
       urlPattern: req.url_pattern,
       description: req.description,
-      status: 'failed',
-      reason: `No ${req.method} request matching "${req.url_pattern}" found in capture`,
+      status: effectiveStatus,
+      reason: req.quantifier === 'sometimes'
+        ? `No ${req.method} request matching "${req.url_pattern}" found — "sometimes" assertion requires multiple runs to confirm failure`
+        : `No ${req.method} request matching "${req.url_pattern}" found in capture`,
+      quantifier: req.quantifier,
+      confidence: req.confidence,
     };
   }
 
@@ -281,6 +290,8 @@ function validateRequest(
     status: 'passed',
     matchedUrl: match.url,
     actualStatus: match.status,
+    quantifier: req.quantifier,
+    confidence: req.confidence,
   };
 
   // Check status code
@@ -597,10 +608,244 @@ function validateFlowStep(
 }
 
 // ---------------------------------------------------------------------------
+// Default property validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate universal default properties against captured data.
+ * Defaults are considered ON unless explicitly set to false in the spec.
+ */
+function validateDefaults(
+  defaults: DefaultProperties | undefined,
+  capture: CaptureData,
+): DefaultResult[] {
+  // Resolve effective defaults (ON unless explicitly disabled)
+  const effective = {
+    no_5xx: defaults?.no_5xx ?? true,
+    no_console_errors: defaults?.no_console_errors ?? true,
+    no_uncaught_exceptions: defaults?.no_uncaught_exceptions ?? true,
+    page_load_timeout_ms: defaults?.page_load_timeout_ms,
+  };
+
+  const results: DefaultResult[] = [];
+
+  // Check no_5xx: scan all traffic for 5xx status codes
+  if (effective.no_5xx) {
+    const fiveXxEntries = capture.traffic.filter(
+      (t) => t.status >= 500 && t.status < 600,
+    );
+    if (fiveXxEntries.length > 0) {
+      const urls = fiveXxEntries.slice(0, 5).map((t) => `${t.method} ${t.url} (${t.status})`);
+      results.push({
+        property: 'no_5xx',
+        status: 'failed',
+        details: `Found ${fiveXxEntries.length} request(s) with 5xx status`,
+        reason: `5xx responses: ${urls.join('; ')}${fiveXxEntries.length > 5 ? ` (and ${fiveXxEntries.length - 5} more)` : ''}`,
+      });
+    } else {
+      results.push({
+        property: 'no_5xx',
+        status: 'passed',
+        details: 'No 5xx status codes found in captured traffic',
+      });
+    }
+  }
+
+  // Check no_console_errors: look for console.error entries
+  if (effective.no_console_errors) {
+    if (capture.console.length === 0) {
+      results.push({
+        property: 'no_console_errors',
+        status: 'untested',
+        reason: 'No console.json found in capture — console logs were not captured',
+      });
+    } else {
+      const errorEntries = capture.console.filter(
+        (e) => e.type.toLowerCase() === 'error',
+      );
+      if (errorEntries.length > 0) {
+        const samples = errorEntries.slice(0, 5).map((e) => e.text);
+        results.push({
+          property: 'no_console_errors',
+          status: 'failed',
+          details: `Found ${errorEntries.length} console.error entries`,
+          reason: `Errors: ${samples.join('; ')}${errorEntries.length > 5 ? ` (and ${errorEntries.length - 5} more)` : ''}`,
+        });
+      } else {
+        results.push({
+          property: 'no_console_errors',
+          status: 'passed',
+          details: 'No console.error entries found',
+        });
+      }
+    }
+  }
+
+  // Check no_uncaught_exceptions: look for console entries with "uncaught" or "Uncaught"
+  if (effective.no_uncaught_exceptions) {
+    if (capture.console.length === 0) {
+      results.push({
+        property: 'no_uncaught_exceptions',
+        status: 'untested',
+        reason: 'No console.json found in capture — console logs were not captured',
+      });
+    } else {
+      const uncaughtPattern = /uncaught/i;
+      const uncaughtEntries = capture.console.filter(
+        (e) => e.type.toLowerCase() === 'error' && uncaughtPattern.test(e.text),
+      );
+      if (uncaughtEntries.length > 0) {
+        const samples = uncaughtEntries.slice(0, 5).map((e) => e.text);
+        results.push({
+          property: 'no_uncaught_exceptions',
+          status: 'failed',
+          details: `Found ${uncaughtEntries.length} uncaught exception(s)`,
+          reason: `Uncaught exceptions: ${samples.join('; ')}${uncaughtEntries.length > 5 ? ` (and ${uncaughtEntries.length - 5} more)` : ''}`,
+        });
+      } else {
+        results.push({
+          property: 'no_uncaught_exceptions',
+          status: 'passed',
+          details: 'No uncaught exceptions found in console',
+        });
+      }
+    }
+  }
+
+  // Check page_load_timeout_ms: check timing if available from traffic timestamps.
+  // The CapturedTraffic type may be extended with a `duration` field in future;
+  // for now we cast to access it safely.
+  if (effective.page_load_timeout_ms !== undefined) {
+    type TrafficWithDuration = CapturedTraffic & { duration?: number };
+    const navigationRequests = (capture.traffic as TrafficWithDuration[]).filter(
+      (t) => (t.method === 'GET' || t.method === 'get') && t.duration !== undefined,
+    );
+    if (navigationRequests.length === 0) {
+      results.push({
+        property: 'page_load_timeout_ms',
+        status: 'untested',
+        reason: 'No page load timing data available in capture',
+      });
+    } else {
+      const slowPages = navigationRequests.filter(
+        (t) => (t.duration ?? 0) > effective.page_load_timeout_ms!,
+      );
+      if (slowPages.length > 0) {
+        const urls = slowPages.slice(0, 5).map((t) => `${t.url} (${t.duration}ms)`);
+        results.push({
+          property: 'page_load_timeout_ms',
+          status: 'failed',
+          details: `${slowPages.length} page(s) exceeded ${effective.page_load_timeout_ms}ms timeout`,
+          reason: `Slow pages: ${urls.join('; ')}${slowPages.length > 5 ? ` (and ${slowPages.length - 5} more)` : ''}`,
+        });
+      } else {
+        results.push({
+          property: 'page_load_timeout_ms',
+          status: 'passed',
+          details: `All navigation requests completed within ${effective.page_load_timeout_ms}ms`,
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Multi-run validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate a spec against multiple capture sessions and merge results.
+ *
+ * Quantifier semantics:
+ *   - "always": the assertion must pass in ALL runs; fails if ANY run shows failure.
+ *   - "sometimes": the assertion must pass in at least ONE run; passes if ANY run shows true.
+ *
+ * Single-run behavior: "sometimes" assertions that fail are marked "untested"
+ * since a single run is insufficient to determine if the assertion ever holds.
+ */
+export function validateMultiRun(spec: Spec, captures: CaptureData[]): GapReport {
+  if (captures.length === 0) {
+    throw new Error('validateMultiRun requires at least one capture session');
+  }
+
+  // Validate each capture independently
+  const reports = captures.map((capture) => validate(spec, capture));
+
+  // Use the first report as the base and merge multi-run data
+  const base = reports[0];
+  const runCount = reports.length;
+
+  // Merge page results
+  for (let pi = 0; pi < base.pages.length; pi++) {
+    const page = base.pages[pi];
+
+    // Merge request results
+    for (let ri = 0; ri < page.requests.length; ri++) {
+      const baseReq = page.requests[ri];
+      const statuses = reports.map((r) => r.pages[pi]?.requests[ri]?.status ?? 'untested');
+      const passedCount = statuses.filter((s) => s === 'passed').length;
+
+      baseReq.runsChecked = runCount;
+      baseReq.runsPassed = passedCount;
+
+      if (baseReq.quantifier === 'sometimes') {
+        // Passes if ANY run shows true
+        baseReq.status = passedCount > 0 ? 'passed' : (runCount === 1 ? 'untested' : 'failed');
+      } else {
+        // "always" (default): fails if ANY run shows failure
+        const failedCount = statuses.filter((s) => s === 'failed').length;
+        if (failedCount > 0) baseReq.status = 'failed';
+      }
+    }
+
+    // Merge visual assertion results
+    for (let vi = 0; vi < page.visualAssertions.length; vi++) {
+      const baseVa = page.visualAssertions[vi];
+      const statuses = reports.map((r) => r.pages[pi]?.visualAssertions[vi]?.status ?? 'untested');
+      const passedCount = statuses.filter((s) => s === 'passed').length;
+
+      baseVa.runsChecked = runCount;
+      baseVa.runsPassed = passedCount;
+
+      if (baseVa.quantifier === 'sometimes') {
+        baseVa.status = passedCount > 0 ? 'passed' : (runCount === 1 ? 'untested' : 'failed');
+      } else {
+        const failedCount = statuses.filter((s) => s === 'failed').length;
+        if (failedCount > 0) baseVa.status = 'failed';
+      }
+    }
+
+    // Merge console results
+    for (let ci = 0; ci < page.consoleExpectations.length; ci++) {
+      const baseCe = page.consoleExpectations[ci];
+      const statuses = reports.map((r) => r.pages[pi]?.consoleExpectations[ci]?.status ?? 'untested');
+      const passedCount = statuses.filter((s) => s === 'passed').length;
+
+      baseCe.runsChecked = runCount;
+      baseCe.runsPassed = passedCount;
+
+      if (baseCe.quantifier === 'sometimes') {
+        baseCe.status = passedCount > 0 ? 'passed' : (runCount === 1 ? 'untested' : 'failed');
+      } else {
+        const failedCount = statuses.filter((s) => s === 'failed').length;
+        if (failedCount > 0) baseCe.status = 'failed';
+      }
+    }
+  }
+
+  // Recompute summary after merging
+  base.summary = computeSummary(base.pages, base.flows, base.defaults);
+
+  return base;
+}
+
+// ---------------------------------------------------------------------------
 // Summary computation
 // ---------------------------------------------------------------------------
 
-function computeSummary(pages: PageResult[], flows: FlowResult[]) {
+function computeSummary(pages: PageResult[], flows: FlowResult[], defaults?: DefaultResult[]) {
   let total = 0;
   let passed = 0;
   let failed = 0;
@@ -629,6 +874,11 @@ function computeSummary(pages: PageResult[], flows: FlowResult[]) {
     for (const step of flow.steps) count(step.status);
   }
 
+  // Include default property results in the summary
+  if (defaults) {
+    for (const d of defaults) count(d.status);
+  }
+
   const coverage = total > 0 ? Math.round(((passed + failed) / total) * 100) : 0;
 
   return { total, passed, failed, untested, coverage };
@@ -648,7 +898,10 @@ export function validate(spec: Spec, capture: CaptureData): GapReport {
     validateFlow(flow, capture),
   );
 
-  const summary = computeSummary(pages, flows);
+  // Validate universal default properties
+  const defaults = validateDefaults(spec.defaults, capture);
+
+  const summary = computeSummary(pages, flows, defaults);
 
   return {
     spec: {
@@ -665,5 +918,6 @@ export function validate(spec: Spec, capture: CaptureData): GapReport {
     summary,
     pages,
     flows,
+    defaults,
   };
 }

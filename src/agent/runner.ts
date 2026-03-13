@@ -26,6 +26,8 @@ import { toMarkdown, toJson } from '../validation/reporter.js';
 import { CaptureCollector } from './capture.js';
 import { executeHooks, type HookContext } from './hooks.js';
 import { executeStep, executeFlowStep } from './executor.js';
+import { planExploration } from './explorer.js';
+import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
 
 export interface AgentConfig {
   /** Path to spec YAML/JSON */
@@ -48,6 +50,12 @@ export interface AgentConfig {
   screenshotOnEveryStep?: boolean;
   /** Log function (default: console.log) */
   log?: (msg: string) => void;
+  /** Enable adaptive exploration of untested assertions */
+  explore?: boolean;
+  /** Maximum rounds of exploration (default: 2) */
+  maxExplorationRounds?: number;
+  /** Resume from existing capture directory */
+  resumeDir?: string;
 }
 
 export interface AgentRunResult {
@@ -190,6 +198,42 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
   const stepTimeoutMs = Math.min(15_000, overallTimeout / 10);
 
   // ---------------------------------------------------------------------------
+  // 0. Resume support — load existing captures if resumeDir is set
+  // ---------------------------------------------------------------------------
+  let resumedTraffic: CapturedTraffic[] = [];
+  let resumedConsole: CapturedConsoleEntry[] = [];
+  const resumedPages = new Set<string>();
+
+  if (config.resumeDir) {
+    log(`[agent] Resuming from ${config.resumeDir}...`);
+    const manifestPath = path.join(config.resumeDir, 'manifest.json');
+    if (fs.existsSync(manifestPath)) {
+      const trafficPath = path.join(config.resumeDir, 'traffic.json');
+      const consolePath = path.join(config.resumeDir, 'console.json');
+
+      if (fs.existsSync(trafficPath)) {
+        resumedTraffic = JSON.parse(fs.readFileSync(trafficPath, 'utf-8')) as CapturedTraffic[];
+        log(`[agent] Loaded ${resumedTraffic.length} existing traffic entries`);
+        // Determine which pages were already visited from traffic
+        for (const entry of resumedTraffic) {
+          try {
+            const urlPath = new URL(entry.url).pathname;
+            resumedPages.add(urlPath);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      if (fs.existsSync(consolePath)) {
+        resumedConsole = JSON.parse(fs.readFileSync(consolePath, 'utf-8')) as CapturedConsoleEntry[];
+        log(`[agent] Loaded ${resumedConsole.length} existing console entries`);
+      }
+    } else {
+      log(`[agent] No manifest.json found in ${config.resumeDir}, starting fresh`);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // 1. Load spec
   // ---------------------------------------------------------------------------
   log('[agent] Loading spec...');
@@ -253,11 +297,21 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
     capture.attachToPage(page);
 
     // ---------------------------------------------------------------------------
-    // 5. Execute pages and scenarios
+    // 5. Execute pages and scenarios (skip pages already captured when resuming)
     // ---------------------------------------------------------------------------
     log('[agent] Executing pages...');
+    const specToExecute = resumedPages.size > 0
+      ? {
+          ...spec,
+          pages: (spec.pages ?? []).filter((p) => !resumedPages.has(p.path)),
+        }
+      : spec;
+    if (resumedPages.size > 0) {
+      const skipped = (spec.pages ?? []).length - (specToExecute.pages ?? []).length;
+      if (skipped > 0) log(`[agent] Skipping ${skipped} page(s) already captured`);
+    }
     try {
-      await executePages(spec, page, capture, ctx, config.targetUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
+      await executePages(specToExecute, page, capture, ctx, config.targetUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
     } catch (err) {
       const msg = `Page execution error: ${err instanceof Error ? err.message : String(err)}`;
       log(`[agent] ERROR: ${msg}`);
@@ -293,8 +347,16 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
   }
 
   // ---------------------------------------------------------------------------
-  // 6. Save captures
+  // 6. Save captures (merge with resumed data if applicable)
   // ---------------------------------------------------------------------------
+  // Merge resumed traffic and console logs into the collector before saving
+  for (const entry of resumedTraffic) {
+    capture.addTraffic(entry);
+  }
+  // Console logs from resumed sessions are added via addConsoleLogs
+  for (const entry of resumedConsole) {
+    capture.addConsoleLog(entry);
+  }
   log('[agent] Saving captures...');
   capture.save();
   log(`[agent] Captures saved to ${captureDir}`);
@@ -303,9 +365,108 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
   // 7. Run validation engine
   // ---------------------------------------------------------------------------
   log('[agent] Running validation engine...');
-  const captureData = loadCaptureData(captureDir);
-  const report = validate(spec, captureData);
+  let captureData = loadCaptureData(captureDir);
+  let report = validate(spec, captureData);
   log(`[agent] Validation: ${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.untested} untested`);
+
+  // ---------------------------------------------------------------------------
+  // 7b. Adaptive exploration (--explore)
+  // ---------------------------------------------------------------------------
+  if (config.explore && report.summary.untested > 0) {
+    const maxRounds = config.maxExplorationRounds ?? 2;
+    log(`[agent] Explore mode enabled (max ${maxRounds} rounds)...`);
+
+    for (let round = 1; round <= maxRounds; round++) {
+      const strategy = planExploration(spec, report);
+      if (strategy.totalUntested === 0) {
+        log(`[agent] Exploration round ${round}: nothing left to explore`);
+        break;
+      }
+
+      log(`[agent] Exploration round ${round}: ${strategy.totalUntested} untested items`);
+
+      // Log what we plan to explore
+      for (const target of strategy.untestedPages) {
+        log(`  [explore] Unvisited page: ${target.path}`);
+      }
+      for (const target of strategy.untestedRequests) {
+        log(`  [explore] Untested request: ${target.description}`);
+      }
+      for (const target of strategy.untestedScenarios) {
+        log(`  [explore] Untested scenario: ${target.description}`);
+      }
+
+      // Launch a new browser session for exploration
+      let exploreBrowser: Browser | null = null;
+      let exploreContext: BrowserContext | null = null;
+      try {
+        exploreBrowser = await chromium.launch({ headless });
+        exploreContext = await exploreBrowser.newContext({
+          viewport: { width: 1440, height: 900 },
+        });
+
+        const explorePage = await exploreContext.newPage();
+        await capture.attachToContext(exploreContext);
+        capture.attachToPage(explorePage);
+
+        // Navigate to each untested page
+        const allTargets = [
+          ...strategy.untestedPages,
+          ...strategy.untestedRequests,
+          ...strategy.untestedScenarios,
+        ];
+
+        for (const target of allTargets) {
+          const url = resolveUrl(target.path, config.targetUrl);
+          log(`  [explore] Navigating to ${url}`);
+          try {
+            await explorePage.goto(url, {
+              waitUntil: 'domcontentloaded',
+              timeout: stepTimeoutMs,
+            });
+            await explorePage.waitForTimeout(800);
+            await capture.screenshot(explorePage, `explore-${target.pageId}`);
+
+            // Execute any interaction steps
+            for (const step of target.interactionSteps) {
+              try {
+                await executeStep(explorePage, step, capture, ctx, {
+                  screenshotOnEveryStep,
+                  stepTimeoutMs,
+                });
+              } catch {
+                // Continue on step failure
+              }
+            }
+          } catch (err) {
+            log(`  [explore] ERROR: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        await explorePage.close();
+      } catch (err) {
+        const msg = `Exploration error: ${err instanceof Error ? err.message : String(err)}`;
+        log(`[agent] ERROR: ${msg}`);
+        errors.push(msg);
+      } finally {
+        try {
+          await exploreContext?.close();
+        } catch { /* ignore */ }
+        try {
+          await exploreBrowser?.close();
+        } catch { /* ignore */ }
+      }
+
+      // Re-save captures and re-validate
+      capture.save();
+      captureData = loadCaptureData(captureDir);
+      report = validate(spec, captureData);
+      log(`[agent] After exploration round ${round}: ${report.summary.passed} passed, ${report.summary.failed} failed, ${report.summary.untested} untested`);
+
+      // Stop if no more untested items
+      if (report.summary.untested === 0) break;
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // 8. Generate gap reports

@@ -43,6 +43,12 @@ export interface GapReport {
   };
   pages: PageResult[];
   flows: FlowResult[];
+
+  /** Results of checking spec-level assumptions (preconditions). */
+  assumptions?: AssumptionResult[];
+
+  /** Results of checking universal default properties. */
+  defaults?: DefaultResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -83,6 +89,17 @@ export interface RequestResult {
   bodySchemaErrors?: string[];
   /** Reason for failure or untested */
   reason?: string;
+
+  /** Whether this assertion must hold always or only sometimes. */
+  quantifier?: 'always' | 'sometimes';
+  /** How this assertion was established. */
+  confidence?: 'observed' | 'inferred' | 'reviewed';
+  /** Number of validation runs checked (multi-run support). */
+  runsChecked?: number;
+  /** Number of runs where this assertion passed (multi-run support). */
+  runsPassed?: number;
+  /** Classification of the finding across runs. */
+  finding_type?: 'new' | 'resolved' | 'ongoing' | 'rare';
 }
 
 /** Result of checking a visual assertion. */
@@ -93,6 +110,17 @@ export interface AssertionResult {
   status: CheckStatus;
   /** Reason for failure or untested */
   reason?: string;
+
+  /** Whether this assertion must hold always or only sometimes. */
+  quantifier?: 'always' | 'sometimes';
+  /** How this assertion was established. */
+  confidence?: 'observed' | 'inferred' | 'reviewed';
+  /** Number of validation runs checked (multi-run support). */
+  runsChecked?: number;
+  /** Number of runs where this assertion passed (multi-run support). */
+  runsPassed?: number;
+  /** Classification of the finding across runs. */
+  finding_type?: 'new' | 'resolved' | 'ongoing' | 'rare';
 }
 
 /** Result of checking a console expectation. */
@@ -105,6 +133,17 @@ export interface ConsoleResult {
   /** Matching log entries that triggered a failure */
   matchingEntries?: string[];
   reason?: string;
+
+  /** Whether this expectation must hold always or only sometimes. */
+  quantifier?: 'always' | 'sometimes';
+  /** How this expectation was established. */
+  confidence?: 'observed' | 'inferred' | 'reviewed';
+  /** Number of validation runs checked (multi-run support). */
+  runsChecked?: number;
+  /** Number of runs where this expectation passed (multi-run support). */
+  runsPassed?: number;
+  /** Classification of the finding across runs. */
+  finding_type?: 'new' | 'resolved' | 'ongoing' | 'rare';
 }
 
 // ---------------------------------------------------------------------------
@@ -152,5 +191,33 @@ export interface FlowStepResult {
   pageId?: string;
   status: CheckStatus;
   evidence?: string;
+  reason?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Assumption and default results
+// ---------------------------------------------------------------------------
+
+/** Result of checking a single spec assumption (precondition). */
+export interface AssumptionResult {
+  /** The assumption type (e.g. "url_reachable", "env_var_set"). */
+  type: string;
+  /** Human-readable description of the assumption. */
+  description?: string;
+  /** Whether the assumption was satisfied. */
+  status: CheckStatus;
+  /** Reason for failure, if applicable. */
+  reason?: string;
+}
+
+/** Result of checking a universal default property. */
+export interface DefaultResult {
+  /** The default property name (e.g. "no_5xx", "no_console_errors"). */
+  property: string;
+  /** Whether the property held. */
+  status: CheckStatus;
+  /** Additional details about the check. */
+  details?: string;
+  /** Reason for failure, if applicable. */
   reason?: string;
 }

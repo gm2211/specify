@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "description": "Web capture toolkit for spec-based functional verification",
   "type": "module",
+  "bin": {
+    "specify": "dist/src/cli/index.js"
+  },
   "scripts": {
     "login": "PLAYWRIGHT_BROWSERS_PATH=0 npx tsx scripts/login.ts",
     "browse": "node scripts/browse-and-capture.mjs",
@@ -15,7 +18,9 @@
     "generate-spec": "npx tsx src/spec/generator.ts",
     "typecheck": "npx tsc --noEmit",
     "validate": "npx tsx src/validation/validate.ts",
-    "agent": "npx tsx src/agent/run.ts"
+    "agent": "npx tsx src/agent/run.ts",
+    "build": "tsc",
+    "specify": "npx tsx src/cli/index.ts"
   },
   "dependencies": {
     "ajv": "^8.18.0",

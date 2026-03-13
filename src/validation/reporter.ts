@@ -15,6 +15,8 @@ import type {
   ScenarioResult,
   FlowStepResult,
   CheckStatus,
+  AssumptionResult,
+  DefaultResult,
 } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -86,6 +88,23 @@ export function toMarkdown(report: GapReport): string {
   lines.push(`| **Coverage** | **${pct(report.summary.coverage)}** |`);
   lines.push('');
 
+  // Confidence breakdown
+  const allResults = collectAllResults(report);
+  const confidenceCounts: Record<string, number> = { observed: 0, inferred: 0, reviewed: 0 };
+  let hasConfidence = false;
+  for (const r of allResults) {
+    if (r.confidence) {
+      confidenceCounts[r.confidence] = (confidenceCounts[r.confidence] ?? 0) + 1;
+      hasConfidence = true;
+    }
+  }
+  if (hasConfidence) {
+    lines.push(
+      `Reviewed: ${confidenceCounts.reviewed} | Observed: ${confidenceCounts.observed} | Inferred: ${confidenceCounts.inferred}`,
+    );
+    lines.push('');
+  }
+
   // Overall status
   const overallStatus: CheckStatus =
     report.summary.failed > 0
@@ -95,6 +114,32 @@ export function toMarkdown(report: GapReport): string {
         : 'untested';
   lines.push(`**Overall:** ${icon(overallStatus)}`);
   lines.push('');
+
+  // Assumptions
+  if (report.assumptions && report.assumptions.length > 0) {
+    lines.push('## Assumptions');
+    lines.push('');
+    lines.push('| Type | Status | Details |');
+    lines.push('|------|--------|---------|');
+    for (const a of report.assumptions) {
+      const details = a.reason ?? a.description ?? '\u2014';
+      lines.push(`| \`${a.type}\` | ${icon(a.status)} | ${details} |`);
+    }
+    lines.push('');
+  }
+
+  // Defaults
+  if (report.defaults && report.defaults.length > 0) {
+    lines.push('## Default Properties');
+    lines.push('');
+    lines.push('| Property | Status | Details |');
+    lines.push('|----------|--------|---------|');
+    for (const d of report.defaults) {
+      const details = d.reason ?? d.details ?? '\u2014';
+      lines.push(`| ${d.property} | ${icon(d.status)} | ${details} |`);
+    }
+    lines.push('');
+  }
 
   // Pages
   if (report.pages.length > 0) {
@@ -143,13 +188,14 @@ function renderPageSection(page: PageResult): string[] {
   if (page.requests.length > 0) {
     lines.push('#### Expected Requests');
     lines.push('');
-    lines.push('| Method | Pattern | Status | Matched URL | HTTP Status |');
-    lines.push('|--------|---------|--------|-------------|-------------|');
+    lines.push('| Method | Pattern | Status | Matched URL | HTTP Status | Confidence |');
+    lines.push('|--------|---------|--------|-------------|-------------|------------|');
     for (const req of page.requests) {
-      const matchedUrl = req.matchedUrl ? `\`${truncate(req.matchedUrl, 60)}\`` : '—';
-      const httpStatus = req.actualStatus !== undefined ? String(req.actualStatus) : '—';
+      const matchedUrl = req.matchedUrl ? `\`${truncate(req.matchedUrl, 60)}\`` : '\u2014';
+      const httpStatus = req.actualStatus !== undefined ? String(req.actualStatus) : '\u2014';
+      const conf = req.confidence ? `\`${req.confidence}\`` : '\u2014';
       lines.push(
-        `| \`${req.method}\` | \`${req.urlPattern}\` | ${icon(req.status)} | ${matchedUrl} | ${httpStatus} |`,
+        `| \`${req.method}\` | \`${req.urlPattern}\` | ${icon(req.status)} | ${matchedUrl} | ${httpStatus} | ${conf} |`,
       );
     }
     lines.push('');
@@ -163,6 +209,7 @@ function renderPageSection(page: PageResult): string[] {
       for (const req of failures) {
         lines.push(`**${req.method} ${req.urlPattern}**`);
         if (req.description) lines.push(`> ${req.description}`);
+        if (req.confidence) lines.push(`> Confidence: ${req.confidence}`);
         if (req.reason) lines.push(`> Reason: ${req.reason}`);
         if (req.bodySchemaErrors?.length) {
           lines.push('> Schema errors:');
@@ -310,4 +357,17 @@ function renderFlowStepDetail(step: FlowStepResult): string {
 function truncate(str: string, maxLen: number): string {
   if (str.length <= maxLen) return str;
   return str.slice(0, maxLen - 3) + '...';
+}
+
+/** Collect all result objects that may carry a confidence field. */
+function collectAllResults(
+  report: GapReport,
+): Array<{ confidence?: string }> {
+  const results: Array<{ confidence?: string }> = [];
+  for (const page of report.pages) {
+    for (const req of page.requests) results.push(req);
+    for (const va of page.visualAssertions) results.push(va);
+    for (const ce of page.consoleExpectations) results.push(ce);
+  }
+  return results;
 }
