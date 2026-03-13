@@ -35,6 +35,7 @@
 import { detectOutputFormat } from './output.js';
 import { ExitCode } from './exit-codes.js';
 import type { CliContext, OutputFormat } from './types.js';
+import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 
@@ -119,42 +120,39 @@ function printHelp(asJson: boolean): void {
   } else {
     // Human-readable to stderr
     process.stderr.write(`
-Specify — spec-driven functional verification
+${c.boldCyan('Specify')} ${c.dim('—')} spec-driven functional verification
 
-Usage: specify <noun> <verb> [options]
+${c.bold('Usage:')} specify ${c.cyan('<noun>')} ${c.cyan('<verb>')} ${c.dim('[options]')}
 
-Commands:
-  spec validate    Validate a spec against captured data
-  spec generate    Generate a spec from capture data
-  spec refine      Refine a spec interactively or using a gap report
-  spec evolve      Evolve a spec from PR changes or interactively
-  spec import      Import existing e2e tests as spec items
-  spec export      Export spec items as e2e test code
-  spec sync        Compare spec against e2e tests bidirectionally
-  spec lint        Validate spec structure (no captures needed)
-  spec guide       Output authoring guide for LLM spec writers
-  agent run        Run autonomous agent-driven verification
-  cli run          Run CLI verification against a spec
-  report diff      Diff two gap reports
-  report stats     Show statistical confidence from history
-  schema           Output JSON Schema (spec, report, or commands)
-  mcp              Start MCP server for LLM tool integration
-  human            Interactive mode (wizard, REPL, TUI)
+${c.bold('Commands:')}
+  ${c.cyan('spec validate')}    Validate a spec against captured data
+  ${c.cyan('spec generate')}    Generate a spec from capture data
+  ${c.cyan('spec refine')}      Refine a spec interactively or using a gap report
+  ${c.cyan('spec evolve')}      Evolve a spec from PR changes or interactively
+  ${c.cyan('spec import')}      Import existing e2e tests as spec items
+  ${c.cyan('spec export')}      Export spec items as e2e test code
+  ${c.cyan('spec sync')}        Compare spec against e2e tests bidirectionally
+  ${c.cyan('spec lint')}        Validate spec structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec guide')}       Output authoring guide for LLM spec writers
+  ${c.cyan('agent run')}        Run autonomous agent-driven verification
+  ${c.cyan('cli run')}          Run CLI verification against a spec
+  ${c.cyan('report diff')}      Diff two gap reports
+  ${c.cyan('report stats')}     Show statistical confidence from history
+  ${c.cyan('schema')}           Output JSON Schema ${c.dim('(spec, report, or commands)')}
+  ${c.cyan('mcp')}              Start MCP server for LLM tool integration
+  ${c.cyan('human')}            Interactive mode ${c.dim('(wizard, REPL, TUI)')}
 
-Global Options:
-  --json                                        Force JSON output to stdout
-  --output-format <json|text|markdown|ndjson>   Output format (default: auto-detect)
-  --fields <field1,field2,...>                   Select specific fields from output
-  --quiet, -q                                   Suppress non-essential output
-  --help, -h                                    Show this help
+${c.bold('Global Options:')}
+  ${c.yellow('--json')}                                        Force JSON output to stdout
+  ${c.yellow('--output-format')} ${c.dim('<json|text|markdown|ndjson>')}   Output format ${c.dim('(default: auto-detect)')}
+  ${c.yellow('--fields')} ${c.dim('<field1,field2,...>')}                   Select specific fields from output
+  ${c.yellow('--quiet, -q')}                                   Suppress non-essential output
+  ${c.yellow('--help, -h')}                                    Show this help
 
-Examples:
-  specify spec validate --spec ./spec.yaml --capture ./captures/latest
-  specify spec validate --spec ./spec.yaml --capture ./captures/latest --json --fields summary
-  specify agent run --spec ./spec.yaml --url http://localhost:3000
-  specify schema commands
-  cat spec.yaml | specify spec validate --spec - --capture ./captures/latest
-  specify human
+${c.bold('Examples:')}
+  ${c.dim('$')} specify spec validate --spec ./spec.yaml --capture ./captures/latest
+  ${c.dim('$')} specify agent run --spec ./spec.yaml --url http://localhost:3000
+  ${c.dim('$')} specify human
 `.trimStart());
   }
 }

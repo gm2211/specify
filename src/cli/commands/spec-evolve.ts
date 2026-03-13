@@ -22,6 +22,7 @@ import type { Spec } from '../../spec/types.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
+import { c } from '../colors.js';
 
 export interface SpecEvolveOptions {
   spec: string;
@@ -116,10 +117,10 @@ function runInteractiveMode(
   ctx: CliContext,
 ): number {
   if (!ctx.quiet) {
-    process.stderr.write(`\nAnalyzing spec: ${spec.name}\n`);
-    process.stderr.write(`  Pages: ${specSummary.page_count}  Flows: ${specSummary.flow_count}  Scenarios: ${specSummary.scenario_count}\n`);
+    process.stderr.write(`\n${c.boldCyan('Analyzing spec:')} ${c.bold(spec.name)}\n`);
+    process.stderr.write(`  ${c.dim('Pages:')} ${specSummary.page_count}  ${c.dim('Flows:')} ${specSummary.flow_count}  ${c.dim('Scenarios:')} ${specSummary.scenario_count}\n`);
     if (specSummary.cli_command_count > 0) {
-      process.stderr.write(`  CLI commands: ${specSummary.cli_command_count}  CLI scenarios: ${specSummary.cli_scenario_count}\n`);
+      process.stderr.write(`  ${c.dim('CLI commands:')} ${specSummary.cli_command_count}  ${c.dim('CLI scenarios:')} ${specSummary.cli_scenario_count}\n`);
     }
     process.stderr.write('\n');
   }
@@ -135,7 +136,7 @@ function runInteractiveMode(
   outputResult(result, ctx);
 
   if (!ctx.quiet) {
-    process.stderr.write(`\n${suggestions.length} suggestion(s) for spec evolution\n`);
+    process.stderr.write(`\n${c.bold(String(suggestions.length))} suggestion(s) for spec evolution\n`);
 
     // Group by priority
     const high = suggestions.filter(s => s.priority === 'high');
@@ -143,16 +144,16 @@ function runInteractiveMode(
     const low = suggestions.filter(s => s.priority === 'low');
 
     if (high.length > 0) {
-      process.stderr.write(`\n  High priority:\n`);
-      for (const s of high) process.stderr.write(`    - ${s.description}\n`);
+      process.stderr.write(`\n  ${c.boldRed('High priority:')}\n`);
+      for (const s of high) process.stderr.write(`    ${c.red('!')} ${s.description}\n`);
     }
     if (medium.length > 0) {
-      process.stderr.write(`\n  Medium priority:\n`);
-      for (const s of medium) process.stderr.write(`    - ${s.description}\n`);
+      process.stderr.write(`\n  ${c.boldYellow('Medium priority:')}\n`);
+      for (const s of medium) process.stderr.write(`    ${c.yellow('~')} ${s.description}\n`);
     }
     if (low.length > 0) {
-      process.stderr.write(`\n  Low priority:\n`);
-      for (const s of low) process.stderr.write(`    - ${s.description}\n`);
+      process.stderr.write(`\n  ${c.dim('Low priority:')}\n`);
+      for (const s of low) process.stderr.write(`    ${c.dim('·')} ${s.description}\n`);
     }
     process.stderr.write('\n');
   }

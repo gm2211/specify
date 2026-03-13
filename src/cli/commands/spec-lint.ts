@@ -10,6 +10,7 @@ import * as path from 'path';
 import { lintRaw } from '../../spec/lint.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
+import { c } from '../colors.js';
 
 export interface SpecLintOptions {
   spec: string;
@@ -44,20 +45,20 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
     const warnCount = result.errors.filter(e => e.severity === 'warning').length;
 
     if (result.valid) {
-      process.stderr.write(`Spec is valid`);
+      process.stderr.write(c.boldGreen('✓ Spec is valid'));
       if (warnCount > 0) {
-        process.stderr.write(` (${warnCount} warning${warnCount !== 1 ? 's' : ''})`);
+        process.stderr.write(c.yellow(` (${warnCount} warning${warnCount !== 1 ? 's' : ''})`));
       }
       process.stderr.write('\n');
     } else {
-      process.stderr.write(`Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`);
+      process.stderr.write(c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`));
       if (warnCount > 0) {
-        process.stderr.write(` and ${warnCount} warning${warnCount !== 1 ? 's' : ''}`);
+        process.stderr.write(c.yellow(` and ${warnCount} warning${warnCount !== 1 ? 's' : ''}`));
       }
       process.stderr.write('\n');
       for (const err of result.errors) {
-        const icon = err.severity === 'error' ? 'E' : 'W';
-        process.stderr.write(`  [${icon}] ${err.path}: ${err.message} (${err.rule})\n`);
+        const icon = err.severity === 'error' ? c.red('✗') : c.yellow('⚠');
+        process.stderr.write(`  ${icon} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`);
       }
     }
   }

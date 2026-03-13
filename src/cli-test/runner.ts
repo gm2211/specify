@@ -11,6 +11,7 @@ import type { Spec, CliSpec, CliCommandSpec, CliScenarioSpec } from '../spec/typ
 import type { CliGapReport, CliCommandResult, CliScenarioResult, CliCommandRun } from './types.js';
 import { executeCommand } from './executor.js';
 import { validateCommandRun } from './validator.js';
+import { c } from '../cli/colors.js';
 
 export interface CliRunConfig {
   spec: Spec;
@@ -37,13 +38,13 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
   const commandResults: CliCommandResult[] = [];
   const scenarioResults: CliScenarioResult[] = [];
 
-  log?.(`CLI Validation: ${spec.name}`);
-  log?.(`Binary: ${cliSpec.binary}`);
+  log?.(`${c.boldCyan('CLI Validation:')} ${c.bold(spec.name)}`);
+  log?.(`${c.dim('Binary:')} ${cliSpec.binary}`);
   log?.('');
 
   // Run individual commands
   if (cliSpec.commands?.length) {
-    log?.(`Running ${cliSpec.commands.length} command(s)...`);
+    log?.(`Running ${c.bold(String(cliSpec.commands.length))} command(s)...`);
     for (const cmd of cliSpec.commands) {
       const run = await executeCommand(cmd, cliSpec, log);
       allRuns.push(run);

@@ -6,12 +6,12 @@
   },
   "cli": {
     "binary": "node dist/src/cli/index.js",
-    "timestamp": "2026-03-13T20:05:45.268Z"
+    "timestamp": "2026-03-13T21:44:34.852Z"
   },
   "summary": {
     "total": 102,
-    "passed": 102,
-    "failed": 0,
+    "passed": 101,
+    "failed": 1,
     "untested": 0,
     "coverage": 100
   },
@@ -181,7 +181,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 70,
+      "durationMs": 68,
       "timedOut": false,
       "stdoutPreview": "{\n  \"name\": \"specify\",\n  \"version\": \"0.1.0\",\n  \"description\": \"Spec-driven functional verification for web applications\",\n  \"commands\": [\n    {\n      \"name\": \"spec validate\",\n      \"description\": \"Validate a spec against captured data\",\n      \"parameters\": [\n        {\n          \"name\": \"--spec\",\n          \"type\": \"string\",\n          \"required\": true,\n          \"description\": \"Path to spec file (or - for stdin)\"\n        },\n        {\n          \"name\": \"--capture\",\n          \"type\": \"string\",\n     \n... (12063 more chars)"
     },
@@ -191,7 +191,7 @@
       "args": [
         "--help"
       ],
-      "status": "passed",
+      "status": "failed",
       "exitCode": {
         "expected": 0,
         "actual": 0,
@@ -201,44 +201,45 @@
       "stderrAssertions": [
         {
           "type": "text_contains",
-          "status": "passed",
+          "status": "failed",
           "expected": "Usage: specify",
-          "actual": "Specify — spec-driven functional verification\n\nUsage: specify <noun> <verb> [options]\n\nCommands:\n  spec validate    Valid..."
+          "actual": "\u001b[1;36mSpecify\u001b[0m \u001b[2m—\u001b[0m spec-driven functional verification\n\n\u001b[1mUsage:\u001b[0m specify \u001b[36m<noun>\u001b[0m \u001b[36m<verb>\u001b[0m \u001b[2m[options]\u001b[0m\n\n\u001b[1mCommands:\u001b[0m\n  \u001b[36mspec validate\u001b[0m    Validate a spe... (1758 more chars)",
+          "reason": "Output does not contain \"Usage: specify\""
         },
         {
           "type": "text_contains",
           "status": "passed",
           "expected": "spec validate",
-          "actual": "...cation\n\nUsage: specify <noun> <verb> [options]\n\nCommands:\n  spec validate    Validate a spec against captured data\n  spec generate   ..."
+          "actual": "...\u001b[36m<verb>\u001b[0m \u001b[2m[options]\u001b[0m\n\n\u001b[1mCommands:\u001b[0m\n  \u001b[36mspec validate\u001b[0m    Validate a spec against captured data\n  \u001b[36mspec ge..."
         },
         {
           "type": "text_contains",
           "status": "passed",
           "expected": "agent run",
-          "actual": "...c guide       Output authoring guide for LLM spec writers\n  agent run        Run autonomous agent-driven verification\n  cli run  ..."
+          "actual": "...0m       Output authoring guide for LLM spec writers\n  \u001b[36magent run\u001b[0m        Run autonomous agent-driven verification\n  \u001b[36m..."
         },
         {
           "type": "text_contains",
           "status": "passed",
           "expected": "cli run",
-          "actual": "...agent run        Run autonomous agent-driven verification\n  cli run          Run CLI verification against a spec\n  report diff ..."
+          "actual": "...\u001b[0m        Run autonomous agent-driven verification\n  \u001b[36mcli run\u001b[0m          Run CLI verification against a spec\n  \u001b[36mrep..."
         },
         {
           "type": "text_contains",
           "status": "passed",
           "expected": "spec evolve",
-          "actual": "...ne      Refine a spec interactively or using a gap report\n  spec evolve      Evolve a spec from PR changes or interactively\n  spec ..."
+          "actual": "...   Refine a spec interactively or using a gap report\n  \u001b[36mspec evolve\u001b[0m      Evolve a spec from PR changes or interactively\n  \u001b..."
         },
         {
           "type": "text_contains",
           "status": "passed",
           "expected": "human",
-          "actual": "...cp              Start MCP server for LLM tool integration\n  human            Interactive mode (wizard, REPL, TUI)\n\nGlobal Opt..."
+          "actual": "...           Start MCP server for LLM tool integration\n  \u001b[36mhuman\u001b[0m            Interactive mode \u001b[2m(wizard, REPL, TUI)\u001b[0m..."
         }
       ],
-      "durationMs": 68,
+      "durationMs": 66,
       "timedOut": false,
-      "stderrPreview": "Specify — spec-driven functional verification\n\nUsage: specify <noun> <verb> [options]\n\nCommands:\n  spec validate    Validate a spec against captured data\n  spec generate    Generate a spec from capture data\n  spec refine      Refine a spec interactively or using a gap report\n  spec evolve      Evolve a spec from PR changes or interactively\n  spec import      Import existing e2e tests as spec items\n  spec export      Export spec items as e2e test code\n  spec sync        Compare spec against e2e t\n... (1312 more chars)"
+      "stderrPreview": "\u001b[1;36mSpecify\u001b[0m \u001b[2m—\u001b[0m spec-driven functional verification\n\n\u001b[1mUsage:\u001b[0m specify \u001b[36m<noun>\u001b[0m \u001b[36m<verb>\u001b[0m \u001b[2m[options]\u001b[0m\n\n\u001b[1mCommands:\u001b[0m\n  \u001b[36mspec validate\u001b[0m    Validate a spec against captured data\n  \u001b[36mspec generate\u001b[0m    Generate a spec from capture data\n  \u001b[36mspec refine\u001b[0m      Refine a spec interactively or using a gap report\n  \u001b[36mspec evolve\u001b[0m      Evolve a spec from PR changes or interactively\n  \u001b[36mspec import\u001b[0m      Import existing e2e tests as spec\n... (1458 more chars)"
     },
     {
       "commandId": "schema-commands",
@@ -263,7 +264,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 68,
+      "durationMs": 66,
       "timedOut": false,
       "stdoutPreview": "[\n  {\n    \"name\": \"spec validate\",\n    \"description\": \"Validate a spec against captured data\",\n    \"parameters\": [\n      {\n        \"name\": \"--spec\",\n        \"type\": \"string\",\n        \"required\": true,\n        \"description\": \"Path to spec file (or - for stdin)\"\n      },\n      {\n        \"name\": \"--capture\",\n        \"type\": \"string\",\n        \"required\": true,\n        \"description\": \"Path to capture directory\"\n      },\n      {\n        \"name\": \"--output\",\n        \"type\": \"string\",\n        \"required\":\n... (10262 more chars)"
     },
@@ -296,7 +297,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 85,
+      "durationMs": 66,
       "timedOut": false,
       "stdoutPreview": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Specify Spec\",\n  \"description\": \"Computational spec format for functional verification of web applications.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"version\",\n    \"name\"\n  ],\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"version\": {\n      \"type\": \"string\",\n      \"description\": \"Spec format version.\"\n    },\n    \"name\": {\n      \"type\": \"string\",\n      \"description\": \"Human-readable name for this spec.\"\n    },\n    \"de\n... (16613 more chars)"
     },
@@ -322,7 +323,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 75,
+      "durationMs": 68,
       "timedOut": false,
       "stdoutPreview": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Specify Gap Report\",\n  \"type\": \"object\",\n  \"required\": [\n    \"spec\",\n    \"capture\",\n    \"summary\",\n    \"pages\",\n    \"flows\"\n  ],\n  \"properties\": {\n    \"spec\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"name\": {\n          \"type\": \"string\"\n        },\n        \"version\": {\n          \"type\": \"string\"\n        },\n        \"description\": {\n          \"type\": \"string\"\n        }\n      }\n    },\n    \"capture\": {\n      \"type\": \n... (2896 more chars)"
     },
@@ -360,7 +361,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 67,
+      "durationMs": 63,
       "timedOut": false,
       "stdoutPreview": "{\"error\":\"unknown_command\",\"command\":\"foo bar\",\"hint\":\"Run \\\"specify schema commands\\\" for available commands\"}\n"
     },
@@ -396,7 +397,7 @@
           "actual": "Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonexistent-file-that-doe..."
         }
       ],
-      "durationMs": 176,
+      "durationMs": 174,
       "timedOut": false,
       "stderrPreview": "Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonexistent-file-that-does-not-exist.yaml\n"
     },
@@ -432,7 +433,7 @@
           "actual": "Unsupported framework: . Use 'playwright' or 'cypress'.\n"
         }
       ],
-      "durationMs": 171,
+      "durationMs": 182,
       "timedOut": false,
       "stderrPreview": "Unsupported framework: . Use 'playwright' or 'cypress'.\n"
     },
@@ -514,7 +515,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 173,
+      "durationMs": 172,
       "timedOut": false,
       "stdoutPreview": "[\n  {\n    \"filePath\": \"login-page-spec.cy.ts\",\n    \"content\": \"describe('login', () => {\\n  it('login — visual assertions', () => {\\n    cy.visit('${TARGET_BASE_URL}/login');\\n    cy.get('form').should('be.visible');\\n    cy.get('#email').should('be.visible');\\n    cy.get('#password').should('be.visible');\\n    cy.get('button[type=submit]').should('be.visible');\\n    cy.get('button[type=submit]').should('contain', 'Log In');\\n  });\\n\\n  it('successful-login — User logs in with valid credentials'\n... (763 more chars)"
     },
@@ -553,7 +554,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 177,
+      "durationMs": 174,
       "timedOut": false,
       "stdoutPreview": "[\n  {\n    \"filePath\": \"e-commerce-checkout-flow.spec.ts\",\n    \"content\": \"import { test, expect } from '@playwright/test';\\n\\ntest.beforeAll(async () => {\\n  // Create test user\\n  await fetch('{{base_url}}/api/test/users', {\\n    method: 'POST',\\n    body: JSON.stringify({\\\"email\\\":\\\"test@example.com\\\",\\\"password\\\":\\\"test123\\\"}),\\n  });\\n  // Seed product catalog\\n  await fetch('{{base_url}}/api/test/seed-products', {\\n    method: 'POST',\\n    body: JSON.stringify({\\\"count\\\":10}),\\n  });\\n});\\n\n... (3498 more chars)"
     },
@@ -589,10 +590,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 195,
+      "durationMs": 173,
       "timedOut": false,
       "stdoutPreview": "{\n  \"mode\": \"interactive\",\n  \"spec_summary\": {\n    \"name\": \"Login Page Spec\",\n    \"page_count\": 1,\n    \"flow_count\": 0,\n    \"scenario_count\": 2,\n    \"cli_command_count\": 0,\n    \"cli_scenario_count\": 0,\n    \"has_defaults\": false,\n    \"has_assumptions\": false,\n    \"has_hooks\": false\n  },\n  \"suggestions\": [\n    {\n      \"id\": \"int-1\",\n      \"category\": \"spec_hygiene\",\n      \"priority\": \"medium\",\n      \"description\": \"No default properties set\",\n      \"rationale\": \"Default properties like no_5xx, no_\n... (2540 more chars)",
-      "stderrPreview": "\nAnalyzing spec: Login Page Spec\n  Pages: 1  Flows: 0  Scenarios: 2\n\n\n4 suggestion(s) for spec evolution\n\n  Medium priority:\n    - No default properties set\n    - No assumptions (preconditions) defined\n    - Scenario \"successful-login\" has interactions but no assertions\n\n  Low priority:\n    - Page \"login\" has no expected API requests\n\n"
+      "stderrPreview": "\n\u001b[1;36mAnalyzing spec:\u001b[0m \u001b[1mLogin Page Spec\u001b[0m\n  \u001b[2mPages:\u001b[0m 1  \u001b[2mFlows:\u001b[0m 0  \u001b[2mScenarios:\u001b[0m 2\n\n\n\u001b[1m4\u001b[0m suggestion(s) for spec evolution\n\n  \u001b[1;33mMedium priority:\u001b[0m\n    \u001b[33m~\u001b[0m No default properties set\n    \u001b[33m~\u001b[0m No assumptions (preconditions) defined\n    \u001b[33m~\u001b[0m Scenario \"successful-login\" has interactions but no assertions\n\n  \u001b[2mLow priority:\u001b[0m\n    \u001b[2m·\u001b[0m Page \"login\" has no expected API requests\n\n"
     },
     {
       "commandId": "evolve-finds-gaps",
@@ -627,10 +628,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 176,
+      "durationMs": 178,
       "timedOut": false,
       "stdoutPreview": "{\n  \"mode\": \"interactive\",\n  \"spec_summary\": {\n    \"name\": \"Login Page Spec\",\n    \"page_count\": 1,\n    \"flow_count\": 0,\n    \"scenario_count\": 2,\n    \"cli_command_count\": 0,\n    \"cli_scenario_count\": 0,\n    \"has_defaults\": false,\n    \"has_assumptions\": false,\n    \"has_hooks\": false\n  },\n  \"suggestions\": [\n    {\n      \"id\": \"int-1\",\n      \"category\": \"spec_hygiene\",\n      \"priority\": \"medium\",\n      \"description\": \"No default properties set\",\n      \"rationale\": \"Default properties like no_5xx, no_\n... (2540 more chars)",
-      "stderrPreview": "\nAnalyzing spec: Login Page Spec\n  Pages: 1  Flows: 0  Scenarios: 2\n\n\n4 suggestion(s) for spec evolution\n\n  Medium priority:\n    - No default properties set\n    - No assumptions (preconditions) defined\n    - Scenario \"successful-login\" has interactions but no assertions\n\n  Low priority:\n    - Page \"login\" has no expected API requests\n\n"
+      "stderrPreview": "\n\u001b[1;36mAnalyzing spec:\u001b[0m \u001b[1mLogin Page Spec\u001b[0m\n  \u001b[2mPages:\u001b[0m 1  \u001b[2mFlows:\u001b[0m 0  \u001b[2mScenarios:\u001b[0m 2\n\n\n\u001b[1m4\u001b[0m suggestion(s) for spec evolution\n\n  \u001b[1;33mMedium priority:\u001b[0m\n    \u001b[33m~\u001b[0m No default properties set\n    \u001b[33m~\u001b[0m No assumptions (preconditions) defined\n    \u001b[33m~\u001b[0m Scenario \"successful-login\" has interactions but no assertions\n\n  \u001b[2mLow priority:\u001b[0m\n    \u001b[2m·\u001b[0m Page \"login\" has no expected API requests\n\n"
     },
     {
       "commandId": "evolve-no-pr-flag-ok",
@@ -664,10 +665,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 175,
+      "durationMs": 177,
       "timedOut": false,
       "stdoutPreview": "{\n  \"mode\": \"interactive\",\n  \"spec_summary\": {\n    \"name\": \"Specify CLI\",\n    \"page_count\": 0,\n    \"flow_count\": 0,\n    \"scenario_count\": 0,\n    \"cli_command_count\": 24,\n    \"cli_scenario_count\": 2,\n    \"has_defaults\": false,\n    \"has_assumptions\": false,\n    \"has_hooks\": false\n  },\n  \"suggestions\": [\n    {\n      \"id\": \"int-1\",\n      \"category\": \"spec_hygiene\",\n      \"priority\": \"medium\",\n      \"description\": \"No default properties set\",\n      \"rationale\": \"Default properties like no_5xx, no_con\n... (439 more chars)",
-      "stderrPreview": "\nAnalyzing spec: Specify CLI\n  Pages: 0  Flows: 0  Scenarios: 0\n  CLI commands: 24  CLI scenarios: 2\n\n\n1 suggestion(s) for spec evolution\n\n  Medium priority:\n    - No default properties set\n\n"
+      "stderrPreview": "\n\u001b[1;36mAnalyzing spec:\u001b[0m \u001b[1mSpecify CLI\u001b[0m\n  \u001b[2mPages:\u001b[0m 0  \u001b[2mFlows:\u001b[0m 0  \u001b[2mScenarios:\u001b[0m 0\n  \u001b[2mCLI commands:\u001b[0m 24  \u001b[2mCLI scenarios:\u001b[0m 2\n\n\n\u001b[1m1\u001b[0m suggestion(s) for spec evolution\n\n  \u001b[1;33mMedium priority:\u001b[0m\n    \u001b[33m~\u001b[0m No default properties set\n\n"
     },
     {
       "commandId": "import-nonexistent-dir",
@@ -693,7 +694,7 @@
           "actual": "Path not found: /Users/gmecocci/projects/specify/nonexistent-test-dir-xyz\n"
         }
       ],
-      "durationMs": 174,
+      "durationMs": 175,
       "timedOut": false,
       "stderrPreview": "Path not found: /Users/gmecocci/projects/specify/nonexistent-test-dir-xyz\n"
     },
@@ -721,7 +722,7 @@
           "actual": "Spec has no cli section.\n"
         }
       ],
-      "durationMs": 181,
+      "durationMs": 175,
       "timedOut": false,
       "stderrPreview": "Spec has no cli section.\n"
     },
@@ -766,9 +767,9 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 181,
+      "durationMs": 173,
       "timedOut": false,
-      "stdoutPreview": "{\n  \"spec\": {\n    \"name\": \"Login Page Spec\",\n    \"version\": \"1.0\",\n    \"description\": \"Simple login page with form submission and redirect\"\n  },\n  \"capture\": {\n    \"directory\": \"/Users/gmecocci/projects/specify/src/spec/examples\",\n    \"timestamp\": \"2026-03-13T20:05:43.552Z\",\n    \"targetUrl\": \"\",\n    \"totalRequests\": 0\n  },\n  \"summary\": {\n    \"total\": 20,\n    \"passed\": 1,\n    \"failed\": 0,\n    \"untested\": 19,\n    \"coverage\": 5\n  },\n  \"pages\": [\n    {\n      \"pageId\": \"login\",\n      \"path\": \"/login\"\n... (3953 more chars)"
+      "stdoutPreview": "{\n  \"spec\": {\n    \"name\": \"Login Page Spec\",\n    \"version\": \"1.0\",\n    \"description\": \"Simple login page with form submission and redirect\"\n  },\n  \"capture\": {\n    \"directory\": \"/Users/gmecocci/projects/specify/src/spec/examples\",\n    \"timestamp\": \"2026-03-13T21:44:33.146Z\",\n    \"targetUrl\": \"\",\n    \"totalRequests\": 0\n  },\n  \"summary\": {\n    \"total\": 20,\n    \"passed\": 1,\n    \"failed\": 0,\n    \"untested\": 19,\n    \"coverage\": 5\n  },\n  \"pages\": [\n    {\n      \"pageId\": \"login\",\n      \"path\": \"/login\"\n... (3953 more chars)"
     },
     {
       "commandId": "sync-no-test-files",
@@ -796,7 +797,7 @@
           "actual": "No test files found in: /Users/gmecocci/projects/specify/src/spec\n"
         }
       ],
-      "durationMs": 183,
+      "durationMs": 177,
       "timedOut": false,
       "stderrPreview": "No test files found in: /Users/gmecocci/projects/specify/src/spec\n"
     },
@@ -832,10 +833,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 172,
+      "durationMs": 183,
       "timedOut": false,
       "stdoutPreview": "{\n  \"mode\": \"interactive\",\n  \"spec_summary\": {\n    \"name\": \"Specify CLI\",\n    \"page_count\": 0,\n    \"flow_count\": 0,\n    \"scenario_count\": 0,\n    \"cli_command_count\": 24,\n    \"cli_scenario_count\": 2,\n    \"has_defaults\": false,\n    \"has_assumptions\": false,\n    \"has_hooks\": false\n  },\n  \"suggestions\": [\n    {\n      \"id\": \"int-1\",\n      \"category\": \"spec_hygiene\",\n      \"priority\": \"medium\",\n      \"description\": \"No default properties set\",\n      \"rationale\": \"Default properties like no_5xx, no_con\n... (439 more chars)",
-      "stderrPreview": "\nAnalyzing spec: Specify CLI\n  Pages: 0  Flows: 0  Scenarios: 0\n  CLI commands: 24  CLI scenarios: 2\n\n\n1 suggestion(s) for spec evolution\n\n  Medium priority:\n    - No default properties set\n\n"
+      "stderrPreview": "\n\u001b[1;36mAnalyzing spec:\u001b[0m \u001b[1mSpecify CLI\u001b[0m\n  \u001b[2mPages:\u001b[0m 0  \u001b[2mFlows:\u001b[0m 0  \u001b[2mScenarios:\u001b[0m 0\n  \u001b[2mCLI commands:\u001b[0m 24  \u001b[2mCLI scenarios:\u001b[0m 2\n\n\n\u001b[1m1\u001b[0m suggestion(s) for spec evolution\n\n  \u001b[1;33mMedium priority:\u001b[0m\n    \u001b[33m~\u001b[0m No default properties set\n\n"
     },
     {
       "commandId": "lint-valid-spec",
@@ -861,10 +862,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 178,
+      "durationMs": 175,
       "timedOut": false,
       "stdoutPreview": "{\n  \"valid\": true,\n  \"errors\": [\n    {\n      \"path\": \"/variables\",\n      \"severity\": \"warning\",\n      \"message\": \"Template variable \\\"{{test_user}}\\\" is used but not defined in variables (may be set by a hook save_as)\",\n      \"rule\": \"undefined-variable\"\n    }\n  ]\n}\n",
-      "stderrPreview": "Spec is valid (1 warning)\n"
+      "stderrPreview": "\u001b[1;32m✓ Spec is valid\u001b[0m\u001b[33m (1 warning)\u001b[0m\n"
     },
     {
       "commandId": "lint-self-spec",
@@ -896,10 +897,10 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 177,
+      "durationMs": 173,
       "timedOut": false,
       "stdoutPreview": "{\n  \"valid\": true,\n  \"errors\": []\n}\n",
-      "stderrPreview": "Spec is valid\n"
+      "stderrPreview": "\u001b[1;32m✓ Spec is valid\u001b[0m\n"
     },
     {
       "commandId": "lint-missing-spec",
@@ -925,7 +926,7 @@
           "actual": "Spec file not found: /Users/gmecocci/projects/specify/nonexistent.yaml\n"
         }
       ],
-      "durationMs": 176,
+      "durationMs": 169,
       "timedOut": false,
       "stderrPreview": "Spec file not found: /Users/gmecocci/projects/specify/nonexistent.yaml\n"
     },
@@ -966,7 +967,7 @@
         }
       ],
       "stderrAssertions": [],
-      "durationMs": 75,
+      "durationMs": 68,
       "timedOut": false,
       "stdoutPreview": "{\n  \"schema\": {\n    \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n    \"title\": \"Specify Spec\",\n    \"description\": \"Computational spec format for functional verification of web applications.\",\n    \"type\": \"object\",\n    \"required\": [\n      \"version\",\n      \"name\"\n    ],\n    \"additionalProperties\": false,\n    \"properties\": {\n      \"version\": {\n        \"type\": \"string\",\n        \"description\": \"Spec format version.\"\n      },\n      \"name\": {\n        \"type\": \"string\",\n        \"description\": \"Hu\n... (38695 more chars)"
     },
@@ -994,7 +995,7 @@
           "actual": "Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/none..."
         }
       ],
-      "durationMs": 178,
+      "durationMs": 175,
       "timedOut": false,
       "stderrPreview": "Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonexistent.yaml\n"
     }
@@ -1026,7 +1027,7 @@
             }
           ],
           "stderrAssertions": [],
-          "durationMs": 67,
+          "durationMs": 69,
           "timedOut": false,
           "stdoutPreview": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Specify Spec\",\n  \"description\": \"Computational spec format for functional verification of web applications.\",\n  \"type\": \"object\",\n  \"required\": [\n    \"version\",\n    \"name\"\n  ],\n  \"additionalProperties\": false,\n  \"properties\": {\n    \"version\": {\n      \"type\": \"string\",\n      \"description\": \"Spec format version.\"\n    },\n    \"name\": {\n      \"type\": \"string\",\n      \"description\": \"Human-readable name for this spec.\"\n    },\n    \"de\n... (16613 more chars)"
         },
@@ -1051,7 +1052,7 @@
             }
           ],
           "stderrAssertions": [],
-          "durationMs": 68,
+          "durationMs": 72,
           "timedOut": false,
           "stdoutPreview": "{\n  \"$schema\": \"http://json-schema.org/draft-07/schema#\",\n  \"title\": \"Specify Gap Report\",\n  \"type\": \"object\",\n  \"required\": [\n    \"spec\",\n    \"capture\",\n    \"summary\",\n    \"pages\",\n    \"flows\"\n  ],\n  \"properties\": {\n    \"spec\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"name\": {\n          \"type\": \"string\"\n        },\n        \"version\": {\n          \"type\": \"string\"\n        },\n        \"description\": {\n          \"type\": \"string\"\n        }\n      }\n    },\n    \"capture\": {\n      \"type\": \n... (2896 more chars)"
         },
@@ -1076,7 +1077,7 @@
             }
           ],
           "stderrAssertions": [],
-          "durationMs": 68,
+          "durationMs": 71,
           "timedOut": false,
           "stdoutPreview": "[\n  {\n    \"name\": \"spec validate\",\n    \"description\": \"Validate a spec against captured data\",\n    \"parameters\": [\n      {\n        \"name\": \"--spec\",\n        \"type\": \"string\",\n        \"required\": true,\n        \"description\": \"Path to spec file (or - for stdin)\"\n      },\n      {\n        \"name\": \"--capture\",\n        \"type\": \"string\",\n        \"required\": true,\n        \"description\": \"Path to capture directory\"\n      },\n      {\n        \"name\": \"--output\",\n        \"type\": \"string\",\n        \"required\":\n... (10262 more chars)"
         }
@@ -1113,7 +1114,7 @@
             }
           ],
           "stderrAssertions": [],
-          "durationMs": 171,
+          "durationMs": 179,
           "timedOut": false,
           "stdoutPreview": "[\n  {\n    \"filePath\": \"login-page-spec.spec.ts\",\n    \"content\": \"import { test, expect } from '@playwright/test';\\n\\ntest.describe('login', () => {\\n  test('login — visual assertions', async ({ page }) => {\\n    await page.goto('${TARGET_BASE_URL}/login');\\n    await expect(page.locator('form')).toBeVisible();\\n    await expect(page.locator('#email')).toBeVisible();\\n    await expect(page.locator('#password')).toBeVisible();\\n    await expect(page.locator('button[type=submit]')).toBeVisible();\\n\n... (1010 more chars)"
         },
@@ -1143,7 +1144,7 @@
             }
           ],
           "stderrAssertions": [],
-          "durationMs": 182,
+          "durationMs": 176,
           "timedOut": false,
           "stdoutPreview": "[\n  {\n    \"filePath\": \"login-page-spec.cy.ts\",\n    \"content\": \"describe('login', () => {\\n  it('login — visual assertions', () => {\\n    cy.visit('${TARGET_BASE_URL}/login');\\n    cy.get('form').should('be.visible');\\n    cy.get('#email').should('be.visible');\\n    cy.get('#password').should('be.visible');\\n    cy.get('button[type=submit]').should('be.visible');\\n    cy.get('button[type=submit]').should('contain', 'Log In');\\n  });\\n\\n  it('successful-login — User logs in with valid credentials'\n... (763 more chars)"
         }

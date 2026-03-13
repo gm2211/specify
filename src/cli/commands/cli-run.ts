@@ -8,6 +8,7 @@ import type { Spec } from '../../spec/types.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
+import { c } from '../colors.js';
 
 export interface CliRunOptions {
   spec: string;
@@ -56,7 +57,7 @@ export async function cliRun(options: CliRunOptions, ctx: CliContext): Promise<n
   // Summary to stderr
   if (!ctx.quiet) {
     const { summary } = report;
-    process.stderr.write(`\nPassed: ${summary.passed}  Failed: ${summary.failed}  Untested: ${summary.untested}  Coverage: ${summary.coverage}%\n`);
+    process.stderr.write(`\n${c.boldGreen(`✓ ${summary.passed} passed`)}  ${summary.failed > 0 ? c.boldRed(`✗ ${summary.failed} failed`) : c.dim(`✗ ${summary.failed} failed`)}  ${summary.untested > 0 ? c.boldYellow(`○ ${summary.untested} untested`) : c.dim(`○ ${summary.untested} untested`)}  ${c.boldCyan(`${summary.coverage}% coverage`)}\n`);
   }
 
   if (report.summary.failed > 0) return ExitCode.ASSERTION_FAILURE;

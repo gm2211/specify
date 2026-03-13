@@ -8,15 +8,15 @@
 | Field | Value |
 |-------|-------|
 | Binary | `node dist/src/cli/index.js` |
-| Timestamp | 2026-03-13T20:05:45.268Z |
+| Timestamp | 2026-03-13T21:44:34.852Z |
 | Spec version | `1.0` |
 
 ## Summary
 
 | Status | Count |
 |--------|-------|
-| ✅ Passed | 102 |
-| ❌ Failed | 0 |
+| ✅ Passed | 101 |
+| ❌ Failed | 1 |
 | ⬜ Untested | 0 |
 | **Total** | **102** |
 | **Coverage** | **100%** |
@@ -28,7 +28,7 @@
 ### ✅ `no-args-self-description`
 > No arguments emits agent-friendly JSON self-description to stdout
 
-**Args:** `` · **Duration:** 70ms
+**Args:** `` · **Duration:** 68ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -87,10 +87,10 @@
 | ✅ | `text_contains` | Includes human shell | `human shell` | `...    "examples": [         "specify human",         "specify human shell --spe...` |
 | ✅ | `text_contains` | Includes human watch | `human watch` | `...   "specify human shell --spec spec.yaml",         "specify human watch --spe...` |
 
-### ✅ `help-flag`
+### ❌ `help-flag`
 > The --help flag prints human-readable usage to stderr
 
-**Args:** `--help` · **Duration:** 68ms
+**Args:** `--help` · **Duration:** 66ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -98,19 +98,17 @@
 <summary>stderr preview</summary>
 
 ```
-Specify — spec-driven functional verification
+[1;36mSpecify[0m [2m—[0m spec-driven functional verification
 
-Usage: specify <noun> <verb> [options]
+[1mUsage:[0m specify [36m<noun>[0m [36m<verb>[0m [2m[options][0m
 
-Commands:
-  spec validate    Validate a spec against captured data
-  spec generate    Generate a spec from capture data
-  spec refine      Refine a spec interactively or using a gap report
-  spec evolve      Evolve a spec from PR changes or interactively
-  spec import      Import existing e2e tests as spec items
-  spec export      Export spec items as e2e test code
-  spec sync        Compare spec against e2e t
-... (1312 more chars)
+[1mCommands:[0m
+  [36mspec validate[0m    Validate a spec against captured data
+  [36mspec generate[0m    Generate a spec from capture data
+  [36mspec refine[0m      Refine a spec interactively or using a gap report
+  [36mspec evolve[0m      Evolve a spec from PR changes or interactively
+  [36mspec import[0m      Import existing e2e tests as spec
+... (1458 more chars)
 ```
 
 </details>
@@ -119,17 +117,17 @@ Commands:
 
 | Status | Type | Description | Expected | Actual |
 |--------|------|-------------|----------|--------|
-| ✅ | `text_contains` | — | `Usage: specify` | `Specify — spec-driven functional verification  Usage: specify <noun> <verb> [opt...` |
-| ✅ | `text_contains` | — | `spec validate` | `...cation  Usage: specify <noun> <verb> [options]  Commands:   spec validate    ...` |
-| ✅ | `text_contains` | — | `agent run` | `...c guide       Output authoring guide for LLM spec writers   agent run        ...` |
-| ✅ | `text_contains` | — | `cli run` | `...agent run        Run autonomous agent-driven verification   cli run          ...` |
-| ✅ | `text_contains` | — | `spec evolve` | `...ne      Refine a spec interactively or using a gap report   spec evolve      ...` |
-| ✅ | `text_contains` | — | `human` | `...cp              Start MCP server for LLM tool integration   human            ...` |
+| ❌ | `text_contains` | — | `Usage: specify` | `[1;36mSpecify[0m [2m—[0m spec-driven functional verification  [1mUsage:[0m...` |
+| ✅ | `text_contains` | — | `spec validate` | `...[36m<verb>[0m [2m[options][0m  [1mCommands:[0m   [36mspec validate[0m...` |
+| ✅ | `text_contains` | — | `agent run` | `...0m       Output authoring guide for LLM spec writers   [36magent run[0m    ...` |
+| ✅ | `text_contains` | — | `cli run` | `...[0m        Run autonomous agent-driven verification   [36mcli run[0m      ...` |
+| ✅ | `text_contains` | — | `spec evolve` | `...   Refine a spec interactively or using a gap report   [36mspec evolve[0m  ...` |
+| ✅ | `text_contains` | — | `human` | `...           Start MCP server for LLM tool integration   [36mhuman[0m        ...` |
 
 ### ✅ `schema-commands`
 > Schema commands returns array of command definitions
 
-**Args:** `schema commands` · **Duration:** 68ms
+**Args:** `schema commands` · **Duration:** 66ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -172,7 +170,7 @@ Commands:
 ### ✅ `schema-spec`
 > Schema spec returns a JSON Schema document
 
-**Args:** `schema spec` · **Duration:** 85ms
+**Args:** `schema spec` · **Duration:** 66ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -215,7 +213,7 @@ Commands:
 ### ✅ `schema-report`
 > Schema report returns a JSON Schema document
 
-**Args:** `schema report` · **Duration:** 75ms
+**Args:** `schema report` · **Duration:** 68ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -265,7 +263,7 @@ Commands:
 ### ✅ `unknown-command`
 > Unknown command returns exit code 10 with structured error
 
-**Args:** `foo bar` · **Duration:** 67ms
+**Args:** `foo bar` · **Duration:** 63ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -290,7 +288,7 @@ Commands:
 ### ✅ `missing-spec-file`
 > Validation with nonexistent spec returns exit code 10
 
-**Args:** `spec validate --spec nonexistent-file-that-does-not-exist.yaml --capture .` · **Duration:** 176ms
+**Args:** `spec validate --spec nonexistent-file-that-does-not-exist.yaml --capture .` · **Duration:** 174ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -314,7 +312,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 ### ✅ `missing-export-framework`
 > Export without framework argument fails
 
-**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework ` · **Duration:** 171ms
+**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework ` · **Duration:** 182ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -366,7 +364,7 @@ Unsupported framework: . Use 'playwright' or 'cypress'.
 ### ✅ `export-cypress`
 > Export spec as Cypress test code
 
-**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework cypress --json` · **Duration:** 173ms
+**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework cypress --json` · **Duration:** 172ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -393,7 +391,7 @@ Unsupported framework: . Use 'playwright' or 'cypress'.
 ### ✅ `export-multi-page-flow`
 > Export multi-page flow produces multi-step test
 
-**Args:** `spec export --spec src/spec/examples/multi-page-flow.yaml --framework playwright --json` · **Duration:** 177ms
+**Args:** `spec export --spec src/spec/examples/multi-page-flow.yaml --framework playwright --json` · **Duration:** 174ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -420,7 +418,7 @@ Unsupported framework: . Use 'playwright' or 'cypress'.
 ### ✅ `evolve-interactive`
 > Interactive evolve produces structured suggestions
 
-**Args:** `spec evolve --spec src/spec/examples/login-page.yaml --json` · **Duration:** 195ms
+**Args:** `spec evolve --spec src/spec/examples/login-page.yaml --json` · **Duration:** 173ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -458,19 +456,19 @@ Unsupported framework: . Use 'playwright' or 'cypress'.
 
 ```
 
-Analyzing spec: Login Page Spec
-  Pages: 1  Flows: 0  Scenarios: 2
+[1;36mAnalyzing spec:[0m [1mLogin Page Spec[0m
+  [2mPages:[0m 1  [2mFlows:[0m 0  [2mScenarios:[0m 2
 
 
-4 suggestion(s) for spec evolution
+[1m4[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
-    - No assumptions (preconditions) defined
-    - Scenario "successful-login" has interactions but no assertions
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
+    [33m~[0m No assumptions (preconditions) defined
+    [33m~[0m Scenario "successful-login" has interactions but no assertions
 
-  Low priority:
-    - Page "login" has no expected API requests
+  [2mLow priority:[0m
+    [2m·[0m Page "login" has no expected API requests
 
 
 ```
@@ -487,7 +485,7 @@ Analyzing spec: Login Page Spec
 ### ✅ `evolve-finds-gaps`
 > Interactive evolve finds real gaps in example spec
 
-**Args:** `spec evolve --spec src/spec/examples/login-page.yaml --json` · **Duration:** 176ms
+**Args:** `spec evolve --spec src/spec/examples/login-page.yaml --json` · **Duration:** 178ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -525,19 +523,19 @@ Analyzing spec: Login Page Spec
 
 ```
 
-Analyzing spec: Login Page Spec
-  Pages: 1  Flows: 0  Scenarios: 2
+[1;36mAnalyzing spec:[0m [1mLogin Page Spec[0m
+  [2mPages:[0m 1  [2mFlows:[0m 0  [2mScenarios:[0m 2
 
 
-4 suggestion(s) for spec evolution
+[1m4[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
-    - No assumptions (preconditions) defined
-    - Scenario "successful-login" has interactions but no assertions
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
+    [33m~[0m No assumptions (preconditions) defined
+    [33m~[0m Scenario "successful-login" has interactions but no assertions
 
-  Low priority:
-    - Page "login" has no expected API requests
+  [2mLow priority:[0m
+    [2m·[0m Page "login" has no expected API requests
 
 
 ```
@@ -554,7 +552,7 @@ Analyzing spec: Login Page Spec
 ### ✅ `evolve-no-pr-flag-ok`
 > Evolve without --pr uses interactive mode
 
-**Args:** `spec evolve --spec specify.spec.yaml --json` · **Duration:** 175ms
+**Args:** `spec evolve --spec specify.spec.yaml --json` · **Duration:** 177ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -592,15 +590,15 @@ Analyzing spec: Login Page Spec
 
 ```
 
-Analyzing spec: Specify CLI
-  Pages: 0  Flows: 0  Scenarios: 0
-  CLI commands: 24  CLI scenarios: 2
+[1;36mAnalyzing spec:[0m [1mSpecify CLI[0m
+  [2mPages:[0m 0  [2mFlows:[0m 0  [2mScenarios:[0m 0
+  [2mCLI commands:[0m 24  [2mCLI scenarios:[0m 2
 
 
-1 suggestion(s) for spec evolution
+[1m1[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
 
 
 ```
@@ -617,7 +615,7 @@ Analyzing spec: Specify CLI
 ### ✅ `import-nonexistent-dir`
 > Import from nonexistent path fails gracefully
 
-**Args:** `spec import --from nonexistent-test-dir-xyz` · **Duration:** 174ms
+**Args:** `spec import --from nonexistent-test-dir-xyz` · **Duration:** 175ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -640,7 +638,7 @@ Path not found: /Users/gmecocci/projects/specify/nonexistent-test-dir-xyz
 ### ✅ `cli-run-no-cli-section`
 > CLI run with spec that has no cli section fails
 
-**Args:** `cli run --spec src/spec/examples/login-page.yaml` · **Duration:** 181ms
+**Args:** `cli run --spec src/spec/examples/login-page.yaml` · **Duration:** 175ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -663,7 +661,7 @@ Spec has no cli section.
 ### ✅ `validate-with-empty-capture`
 > Validate spec against empty capture dir produces report
 
-**Args:** `spec validate --spec src/spec/examples/login-page.yaml --capture src/spec/examples --json` · **Duration:** 181ms
+**Args:** `spec validate --spec src/spec/examples/login-page.yaml --capture src/spec/examples --json` · **Duration:** 173ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -679,7 +677,7 @@ Spec has no cli section.
   },
   "capture": {
     "directory": "/Users/gmecocci/projects/specify/src/spec/examples",
-    "timestamp": "2026-03-13T20:05:43.552Z",
+    "timestamp": "2026-03-13T21:44:33.146Z",
     "targetUrl": "",
     "totalRequests": 0
   },
@@ -710,7 +708,7 @@ Spec has no cli section.
 ### ✅ `sync-no-test-files`
 > Spec sync fails when no test files found
 
-**Args:** `spec sync --spec src/spec/examples/login-page.yaml --tests src/spec` · **Duration:** 183ms
+**Args:** `spec sync --spec src/spec/examples/login-page.yaml --tests src/spec` · **Duration:** 177ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -733,7 +731,7 @@ No test files found in: /Users/gmecocci/projects/specify/src/spec
 ### ✅ `evolve-self-spec-finds-cli-gaps`
 > Evolve finds assertion gaps in own CLI spec
 
-**Args:** `spec evolve --spec specify.spec.yaml --json` · **Duration:** 172ms
+**Args:** `spec evolve --spec specify.spec.yaml --json` · **Duration:** 183ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -771,15 +769,15 @@ No test files found in: /Users/gmecocci/projects/specify/src/spec
 
 ```
 
-Analyzing spec: Specify CLI
-  Pages: 0  Flows: 0  Scenarios: 0
-  CLI commands: 24  CLI scenarios: 2
+[1;36mAnalyzing spec:[0m [1mSpecify CLI[0m
+  [2mPages:[0m 0  [2mFlows:[0m 0  [2mScenarios:[0m 0
+  [2mCLI commands:[0m 24  [2mCLI scenarios:[0m 2
 
 
-1 suggestion(s) for spec evolution
+[1m1[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
 
 
 ```
@@ -796,7 +794,7 @@ Analyzing spec: Specify CLI
 ### ✅ `lint-valid-spec`
 > Lint a valid spec returns valid=true
 
-**Args:** `spec lint --spec src/spec/examples/login-page.yaml` · **Duration:** 178ms
+**Args:** `spec lint --spec src/spec/examples/login-page.yaml` · **Duration:** 175ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -824,7 +822,7 @@ Analyzing spec: Specify CLI
 <summary>stderr preview</summary>
 
 ```
-Spec is valid (1 warning)
+[1;32m✓ Spec is valid[0m[33m (1 warning)[0m
 
 ```
 
@@ -839,7 +837,7 @@ Spec is valid (1 warning)
 ### ✅ `lint-self-spec`
 > Lint the self-spec returns valid=true
 
-**Args:** `spec lint --spec specify.spec.yaml` · **Duration:** 177ms
+**Args:** `spec lint --spec specify.spec.yaml` · **Duration:** 173ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -860,7 +858,7 @@ Spec is valid (1 warning)
 <summary>stderr preview</summary>
 
 ```
-Spec is valid
+[1;32m✓ Spec is valid[0m
 
 ```
 
@@ -876,7 +874,7 @@ Spec is valid
 ### ✅ `lint-missing-spec`
 > Lint a nonexistent spec fails
 
-**Args:** `spec lint --spec nonexistent.yaml` · **Duration:** 176ms
+**Args:** `spec lint --spec nonexistent.yaml` · **Duration:** 169ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -899,7 +897,7 @@ Spec file not found: /Users/gmecocci/projects/specify/nonexistent.yaml
 ### ✅ `guide-output`
 > Guide outputs schema, examples, patterns, and tips
 
-**Args:** `spec guide` · **Duration:** 75ms
+**Args:** `spec guide` · **Duration:** 68ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -942,7 +940,7 @@ Spec file not found: /Users/gmecocci/projects/specify/nonexistent.yaml
 ### ✅ `evolve-missing-spec`
 > Evolve with nonexistent spec fails
 
-**Args:** `spec evolve --spec nonexistent.yaml` · **Duration:** 178ms
+**Args:** `spec evolve --spec nonexistent.yaml` · **Duration:** 175ms
 
 **Exit code:** expected `10`, got `10` ✅
 
@@ -971,7 +969,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ### ✅ `schema-spec-step`
 
-**Args:** `schema spec` · **Duration:** 67ms
+**Args:** `schema spec` · **Duration:** 69ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -1012,7 +1010,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ### ✅ `schema-report-step`
 
-**Args:** `schema report` · **Duration:** 68ms
+**Args:** `schema report` · **Duration:** 72ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -1061,7 +1059,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ### ✅ `schema-commands-step`
 
-**Args:** `schema commands` · **Duration:** 68ms
+**Args:** `schema commands` · **Duration:** 71ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -1106,7 +1104,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ### ✅ `export-pw-step`
 
-**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework playwright --json` · **Duration:** 171ms
+**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework playwright --json` · **Duration:** 179ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -1131,7 +1129,7 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ### ✅ `export-cy-step`
 
-**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework cypress --json` · **Duration:** 182ms
+**Args:** `spec export --spec src/spec/examples/login-page.yaml --framework cypress --json` · **Duration:** 176ms
 
 **Exit code:** expected `0`, got `0` ✅
 
@@ -1156,4 +1154,4 @@ Failed to load spec: Spec file not found: /Users/gmecocci/projects/specify/nonex
 
 ---
 
-_Generated by Specify CLI validator · 2026-03-13T20:05:45.270Z_
+_Generated by Specify CLI validator · 2026-03-13T21:44:34.854Z_

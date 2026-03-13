@@ -5,6 +5,7 @@
 import { spawn } from 'child_process';
 import type { CliCommandSpec, CliSpec } from '../spec/types.js';
 import type { CliCommandRun } from './types.js';
+import { c } from '../cli/colors.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
@@ -22,7 +23,7 @@ export async function executeCommand(
   const command = binaryParts[0];
   const allArgs = [...binaryParts.slice(1), ...cmd.args];
 
-  log?.(`  Running: ${cliSpec.binary} ${cmd.args.join(' ')}`);
+  log?.(`  ${c.dim('Running:')} ${c.cyan(cliSpec.binary)} ${cmd.args.join(' ')}`);
 
   const startTime = Date.now();
   const timestamp = new Date().toISOString();
@@ -64,7 +65,8 @@ export async function executeCommand(
       const stdout = Buffer.concat(stdoutChunks).toString('utf-8');
       const stderr = Buffer.concat(stderrChunks).toString('utf-8');
 
-      log?.(`  Exit ${exitCode} (${durationMs}ms)${timedOut ? ' [TIMEOUT]' : ''}`);
+      const exitColor = exitCode === 0 ? c.green : c.red;
+      log?.(`  ${exitColor(`Exit ${exitCode}`)} ${c.dim(`(${durationMs}ms)`)}${timedOut ? c.boldRed(' [TIMEOUT]') : ''}`);
 
       resolve({
         id: cmd.id,

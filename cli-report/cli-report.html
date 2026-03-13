@@ -107,16 +107,16 @@
 <div class="meta">
   <span>Binary: <code>node dist/src/cli/index.js</code></span>
   <span>Version: <code>1.0</code></span>
-  <span>Timestamp: 2026-03-13T20:05:45.268Z</span>
+  <span>Timestamp: 2026-03-13T21:44:34.852Z</span>
 </div>
 
 <div class="summary">
-  <div class="stat stat-pass"><div class="number">102</div><div class="label">Passed</div></div>
-  <div class="stat stat-fail"><div class="number">0</div><div class="label">Failed</div></div>
+  <div class="stat stat-pass"><div class="number">101</div><div class="label">Passed</div></div>
+  <div class="stat stat-fail"><div class="number">1</div><div class="label">Failed</div></div>
   <div class="stat stat-untested"><div class="number">0</div><div class="label">Untested</div></div>
   <div class="stat" style="border:1px solid var(--border)"><div class="number">102</div><div class="label">Total Checks</div></div>
 </div>
-<div class="progress-bar"><div class="progress-fill progress-green" style="width:100%"></div></div>
+<div class="progress-bar"><div class="progress-fill progress-red" style="width:99%"></div></div>
 
 <div class="controls">
   <input type="text" id="search" placeholder="Filter commands..." oninput="filterCommands()">
@@ -134,7 +134,7 @@
     <span class="dot dot-passed"></span>
     <span class="cmd-id">no-args-self-description</span>
     <span class="cmd-args"></span>
-    <span class="cmd-duration">70ms</span>
+    <span class="cmd-duration">68ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">No arguments emits agent-friendly JSON self-description to stdout</div>
@@ -865,12 +865,12 @@
     
   </div>
 </details>
-<details class="command" data-status="passed">
+<details class="command failed" data-status="failed">
   <summary>
-    <span class="dot dot-passed"></span>
+    <span class="dot dot-failed"></span>
     <span class="cmd-id">help-flag</span>
     <span class="cmd-args">--help</span>
-    <span class="cmd-duration">68ms</span>
+    <span class="cmd-duration">66ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">The --help flag prints human-readable usage to stderr</div>
@@ -878,43 +878,40 @@
     
     
     <details class="output-block stderr">
-      <summary>stderr (1812 chars)</summary>
-      <pre>Specify — spec-driven functional verification
+      <summary>stderr (1958 chars)</summary>
+      <pre>[1;36mSpecify[0m [2m—[0m spec-driven functional verification
 
-Usage: specify &lt;noun&gt; &lt;verb&gt; [options]
+[1mUsage:[0m specify [36m&lt;noun&gt;[0m [36m&lt;verb&gt;[0m [2m[options][0m
 
-Commands:
-  spec validate    Validate a spec against captured data
-  spec generate    Generate a spec from capture data
-  spec refine      Refine a spec interactively or using a gap report
-  spec evolve      Evolve a spec from PR changes or interactively
-  spec import      Import existing e2e tests as spec items
-  spec export      Export spec items as e2e test code
-  spec sync        Compare spec against e2e tests bidirectionally
-  spec lint        Validate spec structure (no captures needed)
-  spec guide       Output authoring guide for LLM spec writers
-  agent run        Run autonomous agent-driven verification
-  cli run          Run CLI verification against a spec
-  report diff      Diff two gap reports
-  report stats     Show statistical confidence from history
-  schema           Output JSON Schema (spec, report, or commands)
-  mcp              Start MCP server for LLM tool integration
-  human            Interactive mode (wizard, REPL, TUI)
+[1mCommands:[0m
+  [36mspec validate[0m    Validate a spec against captured data
+  [36mspec generate[0m    Generate a spec from capture data
+  [36mspec refine[0m      Refine a spec interactively or using a gap report
+  [36mspec evolve[0m      Evolve a spec from PR changes or interactively
+  [36mspec import[0m      Import existing e2e tests as spec items
+  [36mspec export[0m      Export spec items as e2e test code
+  [36mspec sync[0m        Compare spec against e2e tests bidirectionally
+  [36mspec lint[0m        Validate spec structure [2m(no captures needed)[0m
+  [36mspec guide[0m       Output authoring guide for LLM spec writers
+  [36magent run[0m        Run autonomous agent-driven verification
+  [36mcli run[0m          Run CLI verification against a spec
+  [36mreport diff[0m      Diff two gap reports
+  [36mreport stats[0m     Show statistical confidence from history
+  [36mschema[0m           Output JSON Schema [2m(spec, report, or commands)[0m
+  [36mmcp[0m              Start MCP server for LLM tool integration
+  [36mhuman[0m            Interactive mode [2m(wizard, REPL, TUI)[0m
 
-Global Options:
-  --json                                        Force JSON output to stdout
-  --output-format &lt;json|text|markdown|ndjson&gt;   Output format (default: auto-detect)
-  --fields &lt;field1,field2,...&gt;                   Select specific fields from output
-  --quiet, -q                                   Suppress non-essential output
-  --help, -h                                    Show this help
+[1mGlobal Options:[0m
+  [33m--json[0m                                        Force JSON output to stdout
+  [33m--output-format[0m [2m&lt;json|text|markdown|ndjson&gt;[0m   Output format [2m(default: auto-detect)[0m
+  [33m--fields[0m [2m&lt;field1,field2,...&gt;[0m                   Select specific fields from output
+  [33m--quiet, -q[0m                                   Suppress non-essential output
+  [33m--help, -h[0m                                    Show this help
 
-Examples:
-  specify spec validate --spec ./spec.yaml --capture ./captures/latest
-  specify spec validate --spec ./spec.yaml --capture ./captures/latest --json --fields summary
-  specify agent run --spec ./spec.yaml --url http://localhost:3000
-  specify schema commands
-  cat spec.yaml | specify spec validate --spec - --capture ./captures/latest
-  specify human
+[1mExamples:[0m
+  [2m$[0m specify spec validate --spec ./spec.yaml --capture ./captures/latest
+  [2m$[0m specify agent run --spec ./spec.yaml --url http://localhost:3000
+  [2m$[0m specify human
 </pre>
     </details>
     
@@ -922,65 +919,57 @@ Examples:
     <div style="font-size:0.8rem;font-weight:600;margin:8px 0 4px;color:var(--text-dim)">stderr assertions</div>
     <table class="assert-table">
       <tr><th>Status</th><th>Type</th><th>Description</th><th>Expected</th><th>Actual</th></tr>
-      <tr>
-          <td><span class="dot dot-passed"></span></td>
+      <tr class="row-fail">
+          <td><span class="dot dot-failed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>Usage: specify</code></td>
-          <td><code>Specify — spec-driven functional verification
+          <td><code>[1;36mSpecify[0m [2m—[0m spec-driven functional verification
 
-Usage: specify &lt;noun&gt; &lt;verb&gt; [options]
-
-Commands:
-  spec validate    Vali...</code></td>
+[1mUsage:[0m specify [36m&lt;noun&gt;[0m [36m&lt;verb&gt;[0m...</code></td>
         </tr>
 <tr>
           <td><span class="dot dot-passed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>spec validate</code></td>
-          <td><code>...cation
+          <td><code>...[36m&lt;verb&gt;[0m [2m[options][0m
 
-Usage: specify &lt;noun&gt; &lt;verb&gt; [options]
-
-Commands:
-  spec validate    Validate a spec against captured data
-  ...</code></td>
+[1mCommands:[0m
+  [36mspec validate[0m    Validate a spec against captured dat...</code></td>
         </tr>
 <tr>
           <td><span class="dot dot-passed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>agent run</code></td>
-          <td><code>...c guide       Output authoring guide for LLM spec writers
-  agent run        Run autonomous agent-driven verification...</code></td>
+          <td><code>...0m       Output authoring guide for LLM spec writers
+  [36magent run[0m        Run autonomous agent-driven verifica...</code></td>
         </tr>
 <tr>
           <td><span class="dot dot-passed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>cli run</code></td>
-          <td><code>...agent run        Run autonomous agent-driven verification
-  cli run          Run CLI verification against a spec
-  re...</code></td>
+          <td><code>...[0m        Run autonomous agent-driven verification
+  [36mcli run[0m          Run CLI verification against a spec
+...</code></td>
         </tr>
 <tr>
           <td><span class="dot dot-passed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>spec evolve</code></td>
-          <td><code>...ne      Refine a spec interactively or using a gap report
-  spec evolve      Evolve a spec from PR changes or interac...</code></td>
+          <td><code>...   Refine a spec interactively or using a gap report
+  [36mspec evolve[0m      Evolve a spec from PR changes or int...</code></td>
         </tr>
 <tr>
           <td><span class="dot dot-passed"></span></td>
           <td><code>text_contains</code></td>
           <td><span class="dim">—</span></td>
           <td><code>human</code></td>
-          <td><code>...cp              Start MCP server for LLM tool integration
-  human            Interactive mode (wizard, REPL, TUI)
-
-Gl...</code></td>
+          <td><code>...           Start MCP server for LLM tool integration
+  [36mhuman[0m            Interactive mode [2m(wizard, REPL, ...</code></td>
         </tr>
     </table>
   </div>
@@ -990,7 +979,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-commands</span>
     <span class="cmd-args">schema commands</span>
-    <span class="cmd-duration">68ms</span>
+    <span class="cmd-duration">66ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Schema commands returns array of command definitions</div>
@@ -1448,7 +1437,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-spec</span>
     <span class="cmd-args">schema spec</span>
-    <span class="cmd-duration">85ms</span>
+    <span class="cmd-duration">66ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Schema spec returns a JSON Schema document</div>
@@ -2337,7 +2326,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-report</span>
     <span class="cmd-args">schema report</span>
-    <span class="cmd-duration">75ms</span>
+    <span class="cmd-duration">68ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Schema report returns a JSON Schema document</div>
@@ -2551,7 +2540,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">unknown-command</span>
     <span class="cmd-args">foo bar</span>
-    <span class="cmd-duration">67ms</span>
+    <span class="cmd-duration">63ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Unknown command returns exit code 10 with structured error</div>
@@ -2598,7 +2587,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">missing-spec-file</span>
     <span class="cmd-args">spec validate --spec nonexistent-file-that-does-not-exist.yaml --capture .</span>
-    <span class="cmd-duration">176ms</span>
+    <span class="cmd-duration">174ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Validation with nonexistent spec returns exit code 10</div>
@@ -2637,7 +2626,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">missing-export-framework</span>
     <span class="cmd-args">spec export --spec src/spec/examples/login-page.yaml --framework </span>
-    <span class="cmd-duration">171ms</span>
+    <span class="cmd-duration">182ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Export without framework argument fails</div>
@@ -2735,7 +2724,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">export-cypress</span>
     <span class="cmd-args">spec export --spec src/spec/examples/login-page.yaml --framework cypress --json</span>
-    <span class="cmd-duration">173ms</span>
+    <span class="cmd-duration">172ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Export spec as Cypress test code</div>
@@ -2783,7 +2772,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">export-multi-page-flow</span>
     <span class="cmd-args">spec export --spec src/spec/examples/multi-page-flow.yaml --framework playwright --json</span>
-    <span class="cmd-duration">177ms</span>
+    <span class="cmd-duration">174ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Export multi-page flow produces multi-step test</div>
@@ -2835,7 +2824,7 @@ Gl...</code></td>
     <span class="dot dot-passed"></span>
     <span class="cmd-id">evolve-interactive</span>
     <span class="cmd-args">spec evolve --spec src/spec/examples/login-page.yaml --json</span>
-    <span class="cmd-duration">195ms</span>
+    <span class="cmd-duration">173ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Interactive evolve produces structured suggestions</div>
@@ -2926,21 +2915,21 @@ Gl...</code></td>
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (337 chars)</summary>
+      <summary>stderr (442 chars)</summary>
       <pre>
-Analyzing spec: Login Page Spec
-  Pages: 1  Flows: 0  Scenarios: 2
+[1;36mAnalyzing spec:[0m [1mLogin Page Spec[0m
+  [2mPages:[0m 1  [2mFlows:[0m 0  [2mScenarios:[0m 2
 
 
-4 suggestion(s) for spec evolution
+[1m4[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
-    - No assumptions (preconditions) defined
-    - Scenario &quot;successful-login&quot; has interactions but no assertions
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
+    [33m~[0m No assumptions (preconditions) defined
+    [33m~[0m Scenario &quot;successful-login&quot; has interactions but no assertions
 
-  Low priority:
-    - Page &quot;login&quot; has no expected API requests
+  [2mLow priority:[0m
+    [2m·[0m Page &quot;login&quot; has no expected API requests
 
 </pre>
     </details>
@@ -2971,7 +2960,7 @@ Analyzing spec: Login Page Spec
     <span class="dot dot-passed"></span>
     <span class="cmd-id">evolve-finds-gaps</span>
     <span class="cmd-args">spec evolve --spec src/spec/examples/login-page.yaml --json</span>
-    <span class="cmd-duration">176ms</span>
+    <span class="cmd-duration">178ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Interactive evolve finds real gaps in example spec</div>
@@ -3062,21 +3051,21 @@ Analyzing spec: Login Page Spec
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (337 chars)</summary>
+      <summary>stderr (442 chars)</summary>
       <pre>
-Analyzing spec: Login Page Spec
-  Pages: 1  Flows: 0  Scenarios: 2
+[1;36mAnalyzing spec:[0m [1mLogin Page Spec[0m
+  [2mPages:[0m 1  [2mFlows:[0m 0  [2mScenarios:[0m 2
 
 
-4 suggestion(s) for spec evolution
+[1m4[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
-    - No assumptions (preconditions) defined
-    - Scenario &quot;successful-login&quot; has interactions but no assertions
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
+    [33m~[0m No assumptions (preconditions) defined
+    [33m~[0m Scenario &quot;successful-login&quot; has interactions but no assertions
 
-  Low priority:
-    - Page &quot;login&quot; has no expected API requests
+  [2mLow priority:[0m
+    [2m·[0m Page &quot;login&quot; has no expected API requests
 
 </pre>
     </details>
@@ -3109,7 +3098,7 @@ Analyzing spec: Login Page Spec
     <span class="dot dot-passed"></span>
     <span class="cmd-id">evolve-no-pr-flag-ok</span>
     <span class="cmd-args">spec evolve --spec specify.spec.yaml --json</span>
-    <span class="cmd-duration">175ms</span>
+    <span class="cmd-duration">177ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Evolve without --pr uses interactive mode</div>
@@ -3153,17 +3142,17 @@ Analyzing spec: Login Page Spec
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (191 chars)</summary>
+      <summary>stderr (278 chars)</summary>
       <pre>
-Analyzing spec: Specify CLI
-  Pages: 0  Flows: 0  Scenarios: 0
-  CLI commands: 24  CLI scenarios: 2
+[1;36mAnalyzing spec:[0m [1mSpecify CLI[0m
+  [2mPages:[0m 0  [2mFlows:[0m 0  [2mScenarios:[0m 0
+  [2mCLI commands:[0m 24  [2mCLI scenarios:[0m 2
 
 
-1 suggestion(s) for spec evolution
+[1m1[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
 
 </pre>
     </details>
@@ -3194,7 +3183,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">import-nonexistent-dir</span>
     <span class="cmd-args">spec import --from nonexistent-test-dir-xyz</span>
-    <span class="cmd-duration">174ms</span>
+    <span class="cmd-duration">175ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Import from nonexistent path fails gracefully</div>
@@ -3227,7 +3216,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">cli-run-no-cli-section</span>
     <span class="cmd-args">cli run --spec src/spec/examples/login-page.yaml</span>
-    <span class="cmd-duration">181ms</span>
+    <span class="cmd-duration">175ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">CLI run with spec that has no cli section fails</div>
@@ -3260,7 +3249,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">validate-with-empty-capture</span>
     <span class="cmd-args">spec validate --spec src/spec/examples/login-page.yaml --capture src/spec/examples --json</span>
-    <span class="cmd-duration">181ms</span>
+    <span class="cmd-duration">173ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Validate spec against empty capture dir produces report</div>
@@ -3276,7 +3265,7 @@ Analyzing spec: Specify CLI
   },
   &quot;capture&quot;: {
     &quot;directory&quot;: &quot;/Users/gmecocci/projects/specify/src/spec/examples&quot;,
-    &quot;timestamp&quot;: &quot;2026-03-13T20:05:43.552Z&quot;,
+    &quot;timestamp&quot;: &quot;2026-03-13T21:44:33.146Z&quot;,
     &quot;targetUrl&quot;: &quot;&quot;,
     &quot;totalRequests&quot;: 0
   },
@@ -3454,7 +3443,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">sync-no-test-files</span>
     <span class="cmd-args">spec sync --spec src/spec/examples/login-page.yaml --tests src/spec</span>
-    <span class="cmd-duration">183ms</span>
+    <span class="cmd-duration">177ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Spec sync fails when no test files found</div>
@@ -3487,7 +3476,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">evolve-self-spec-finds-cli-gaps</span>
     <span class="cmd-args">spec evolve --spec specify.spec.yaml --json</span>
-    <span class="cmd-duration">172ms</span>
+    <span class="cmd-duration">183ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Evolve finds assertion gaps in own CLI spec</div>
@@ -3531,17 +3520,17 @@ Analyzing spec: Specify CLI
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (191 chars)</summary>
+      <summary>stderr (278 chars)</summary>
       <pre>
-Analyzing spec: Specify CLI
-  Pages: 0  Flows: 0  Scenarios: 0
-  CLI commands: 24  CLI scenarios: 2
+[1;36mAnalyzing spec:[0m [1mSpecify CLI[0m
+  [2mPages:[0m 0  [2mFlows:[0m 0  [2mScenarios:[0m 0
+  [2mCLI commands:[0m 24  [2mCLI scenarios:[0m 2
 
 
-1 suggestion(s) for spec evolution
+[1m1[0m suggestion(s) for spec evolution
 
-  Medium priority:
-    - No default properties set
+  [1;33mMedium priority:[0m
+    [33m~[0m No default properties set
 
 </pre>
     </details>
@@ -3572,7 +3561,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">lint-valid-spec</span>
     <span class="cmd-args">spec lint --spec src/spec/examples/login-page.yaml</span>
-    <span class="cmd-duration">178ms</span>
+    <span class="cmd-duration">175ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Lint a valid spec returns valid=true</div>
@@ -3595,8 +3584,8 @@ Analyzing spec: Specify CLI
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (26 chars)</summary>
-      <pre>Spec is valid (1 warning)
+      <summary>stderr (48 chars)</summary>
+      <pre>[1;32m✓ Spec is valid[0m[33m (1 warning)[0m
 </pre>
     </details>
     
@@ -3619,7 +3608,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">lint-self-spec</span>
     <span class="cmd-args">spec lint --spec specify.spec.yaml</span>
-    <span class="cmd-duration">177ms</span>
+    <span class="cmd-duration">173ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Lint the self-spec returns valid=true</div>
@@ -3635,8 +3624,8 @@ Analyzing spec: Specify CLI
     </details>
     
     <details class="output-block stderr">
-      <summary>stderr (14 chars)</summary>
-      <pre>Spec is valid
+      <summary>stderr (27 chars)</summary>
+      <pre>[1;32m✓ Spec is valid[0m
 </pre>
     </details>
     
@@ -3666,7 +3655,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">lint-missing-spec</span>
     <span class="cmd-args">spec lint --spec nonexistent.yaml</span>
-    <span class="cmd-duration">176ms</span>
+    <span class="cmd-duration">169ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Lint a nonexistent spec fails</div>
@@ -3699,7 +3688,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">guide-output</span>
     <span class="cmd-args">spec guide</span>
-    <span class="cmd-duration">75ms</span>
+    <span class="cmd-duration">68ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Guide outputs schema, examples, patterns, and tips</div>
@@ -4732,7 +4721,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">evolve-missing-spec</span>
     <span class="cmd-args">spec evolve --spec nonexistent.yaml</span>
-    <span class="cmd-duration">178ms</span>
+    <span class="cmd-duration">175ms</span>
   </summary>
   <div class="command-body">
     <div class="cmd-desc">Evolve with nonexistent spec fails</div>
@@ -4772,7 +4761,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-spec-step</span>
     <span class="cmd-args">schema spec</span>
-    <span class="cmd-duration">67ms</span>
+    <span class="cmd-duration">69ms</span>
   </summary>
   <div class="command-body">
     
@@ -5654,7 +5643,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-report-step</span>
     <span class="cmd-args">schema report</span>
-    <span class="cmd-duration">68ms</span>
+    <span class="cmd-duration">72ms</span>
   </summary>
   <div class="command-body">
     
@@ -5868,7 +5857,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">schema-commands-step</span>
     <span class="cmd-args">schema commands</span>
-    <span class="cmd-duration">68ms</span>
+    <span class="cmd-duration">71ms</span>
   </summary>
   <div class="command-body">
     
@@ -6332,7 +6321,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">export-pw-step</span>
     <span class="cmd-args">spec export --spec src/spec/examples/login-page.yaml --framework playwright --json</span>
-    <span class="cmd-duration">171ms</span>
+    <span class="cmd-duration">179ms</span>
   </summary>
   <div class="command-body">
     
@@ -6374,7 +6363,7 @@ Analyzing spec: Specify CLI
     <span class="dot dot-passed"></span>
     <span class="cmd-id">export-cy-step</span>
     <span class="cmd-args">spec export --spec src/spec/examples/login-page.yaml --framework cypress --json</span>
-    <span class="cmd-duration">182ms</span>
+    <span class="cmd-duration">176ms</span>
   </summary>
   <div class="command-body">
     
@@ -6414,7 +6403,7 @@ Analyzing spec: Specify CLI
 
 </div>
 
-<div style="margin-top:24px;color:var(--text-dim);font-size:0.8rem;">Generated by Specify CLI validator · 2026-03-13T20:05:45.268Z</div>
+<div style="margin-top:24px;color:var(--text-dim);font-size:0.8rem;">Generated by Specify CLI validator · 2026-03-13T21:44:34.852Z</div>
 
 <script>
 let currentFilter = 'all';
