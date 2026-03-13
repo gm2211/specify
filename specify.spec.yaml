@@ -108,11 +108,21 @@ cli:
       description: "Validation with nonexistent spec returns exit code 10"
       args: ["spec", "validate", "--spec", "nonexistent-file-that-does-not-exist.yaml", "--capture", "."]
       expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Failed to load spec"
+        - type: text_contains
+          text: "Spec file not found"
 
     - id: missing-export-framework
       description: "Export without framework argument fails"
       args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", ""]
       expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Unsupported framework"
+        - type: text_contains
+          text: "playwright"
 
     # -------------------------------------------------------------------
     # Spec export (deterministic — no browser needed)
@@ -205,7 +215,7 @@ cli:
         - type: json_path
           description: "Sees our CLI commands"
           path: "spec_summary.cli_command_count"
-          value: 16
+          value: 20
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -214,14 +224,83 @@ cli:
       description: "Import from nonexistent path fails gracefully"
       args: ["spec", "import", "--from", "nonexistent-test-dir-xyz"]
       expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Path not found"
 
     # -------------------------------------------------------------------
-    # CLI run (self-validation — meta!)
+    # CLI run
     # -------------------------------------------------------------------
     - id: cli-run-no-cli-section
       description: "CLI run with spec that has no cli section fails"
       args: ["cli", "run", "--spec", "src/spec/examples/login-page.yaml"]
       expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "no cli section"
+
+    # -------------------------------------------------------------------
+    # Spec validate (passive validation — no browser)
+    # -------------------------------------------------------------------
+    - id: validate-with-empty-capture
+      description: "Validate spec against empty capture dir produces report"
+      args: ["spec", "validate", "--spec", "src/spec/examples/login-page.yaml", "--capture", "src/spec/examples", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          description: "Gap report structure"
+          schema:
+            type: object
+            required: ["spec", "capture", "summary", "pages"]
+        - type: json_path
+          path: "spec.name"
+          value: "Login Page Spec"
+        - type: json_path
+          description: "Most assertions untested since no traffic"
+          path: "summary.coverage"
+          value: 5
+
+    # -------------------------------------------------------------------
+    # Spec sync
+    # -------------------------------------------------------------------
+    - id: sync-no-test-files
+      description: "Spec sync fails when no test files found"
+      args: ["spec", "sync", "--spec", "src/spec/examples/login-page.yaml", "--tests", "src/spec"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "No test files found"
+
+    # -------------------------------------------------------------------
+    # Spec evolve (already partially covered above, add more)
+    # -------------------------------------------------------------------
+    - id: evolve-self-spec-finds-cli-gaps
+      description: "Evolve finds assertion gaps in own CLI spec"
+      args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "mode"
+          value: "interactive"
+        - type: json_schema
+          description: "Each suggestion has all required fields"
+          schema:
+            type: object
+            required: ["suggestions"]
+            properties:
+              suggestions:
+                type: array
+                items:
+                  type: object
+                  required: ["id", "category", "priority", "description", "question"]
+
+    - id: evolve-missing-spec
+      description: "Evolve with nonexistent spec fails"
+      args: ["spec", "evolve", "--spec", "nonexistent.yaml"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Failed to load spec"
 
   scenarios:
     # -------------------------------------------------------------------
