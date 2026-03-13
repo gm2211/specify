@@ -122,6 +122,9 @@ export interface Spec {
   /** Multi-page flows (e.g. login-to-dashboard). */
   flows?: FlowSpec[];
 
+  /** CLI command verification. */
+  cli?: CliSpec;
+
   /** Setup and teardown hooks. */
   hooks?: HooksSpec;
 
@@ -133,6 +136,136 @@ export interface Spec {
 
   /** Universal properties that apply across all pages by default. */
   defaults?: DefaultProperties;
+}
+
+// ---------------------------------------------------------------------------
+// CLI verification
+// ---------------------------------------------------------------------------
+
+/** Specification for verifying a CLI tool. */
+export interface CliSpec {
+  /** Binary or command to invoke (e.g. "node dist/cli.js", "cargo run --"). */
+  binary: string;
+
+  /** Environment variables to set for all commands. */
+  env?: Record<string, string>;
+
+  /** Default timeout in milliseconds for commands. */
+  timeout_ms?: number;
+
+  /** Individual commands to verify. */
+  commands?: CliCommandSpec[];
+
+  /** Multi-command scenarios (sequential commands with shared state). */
+  scenarios?: CliScenarioSpec[];
+}
+
+/** A single CLI command invocation with expected behavior. */
+export interface CliCommandSpec {
+  /** Unique identifier for this command. */
+  id: string;
+
+  /** Human-readable description. */
+  description?: string;
+
+  /** Command-line arguments (each element is one arg). */
+  args: string[];
+
+  /** Data to pipe to stdin. */
+  stdin?: string;
+
+  /** Per-command environment variables (merged with CliSpec.env). */
+  env?: Record<string, string>;
+
+  /** Timeout in milliseconds for this command (overrides CliSpec.timeout_ms). */
+  timeout_ms?: number;
+
+  /** Expected exit code (default: 0). */
+  expected_exit_code?: number;
+
+  /** Acceptable exit codes (alternative to single expected_exit_code). */
+  expected_exit_codes?: number[];
+
+  /** Assertions on stdout. */
+  stdout_assertions?: CliOutputAssertion[];
+
+  /** Assertions on stderr. */
+  stderr_assertions?: CliOutputAssertion[];
+}
+
+/** Assertions that can be applied to CLI stdout or stderr output. */
+export type CliOutputAssertion =
+  | CliTextContainsAssertion
+  | CliTextMatchesAssertion
+  | CliJsonSchemaAssertion
+  | CliJsonPathAssertion
+  | CliEmptyAssertion
+  | CliLineCountAssertion;
+
+/** Assert output contains a substring. */
+export interface CliTextContainsAssertion {
+  type: 'text_contains';
+  /** Substring that must appear. */
+  text: string;
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert output matches a regex pattern. */
+export interface CliTextMatchesAssertion {
+  type: 'text_matches';
+  /** Regex pattern. */
+  pattern: string;
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert output is valid JSON matching a JSON Schema. */
+export interface CliJsonSchemaAssertion {
+  type: 'json_schema';
+  /** JSON Schema to validate against. */
+  schema: JsonSchema;
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert a specific JSON path has an expected value. */
+export interface CliJsonPathAssertion {
+  type: 'json_path';
+  /** Dot-separated path (e.g. "name", "commands.0.name", "error"). */
+  path: string;
+  /** Expected value at that path. */
+  value: unknown;
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert output is empty. */
+export interface CliEmptyAssertion {
+  type: 'empty';
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** Assert line count of output. */
+export interface CliLineCountAssertion {
+  type: 'line_count';
+  /** Minimum line count (inclusive). */
+  min?: number;
+  /** Maximum line count (inclusive). */
+  max?: number;
+  /** Human-readable description. */
+  description?: string;
+}
+
+/** A multi-command CLI scenario. */
+export interface CliScenarioSpec {
+  /** Unique identifier. */
+  id: string;
+  /** Human-readable description. */
+  description?: string;
+  /** Commands to run in sequence. */
+  steps: CliCommandSpec[];
 }
 
 // ---------------------------------------------------------------------------

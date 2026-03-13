@@ -1,0 +1,224 @@
+version: "1.0"
+name: "Specify CLI"
+description: >
+  Self-spec for the Specify CLI tool. Validates that all commands
+  produce correct output, exit codes, and structured data formats.
+
+cli:
+  binary: "node dist/src/cli/index.js"
+
+  commands:
+    # -------------------------------------------------------------------
+    # Help and self-description
+    # -------------------------------------------------------------------
+    - id: no-args-self-description
+      description: "No arguments emits agent-friendly JSON self-description to stdout"
+      args: []
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "name"
+          value: "specify"
+        - type: json_path
+          path: "version"
+          value: "0.1.0"
+        - type: json_schema
+          description: "Self-description has required fields"
+          schema:
+            type: object
+            required: ["name", "version", "commands", "global_options", "exit_codes"]
+
+    - id: help-flag
+      description: "The --help flag prints human-readable usage to stderr"
+      args: ["--help"]
+      expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          text: "Usage: specify"
+        - type: text_contains
+          text: "spec validate"
+        - type: text_contains
+          text: "agent run"
+        - type: text_contains
+          text: "cli run"
+        - type: text_contains
+          text: "human"
+
+    # -------------------------------------------------------------------
+    # Schema introspection
+    # -------------------------------------------------------------------
+    - id: schema-commands
+      description: "Schema commands returns array of command definitions"
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          description: "Array of command objects"
+          schema:
+            type: array
+            minItems: 10
+            items:
+              type: object
+              required: ["name", "description", "parameters"]
+
+    - id: schema-spec
+      description: "Schema spec returns a JSON Schema document"
+      args: ["schema", "spec"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "type"
+          value: "object"
+        - type: json_schema
+          description: "Valid JSON Schema document"
+          schema:
+            type: object
+            required: ["type", "properties"]
+
+    - id: schema-report
+      description: "Schema report returns a JSON Schema document"
+      args: ["schema", "report"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          schema:
+            type: object
+            required: ["type", "properties"]
+
+    # -------------------------------------------------------------------
+    # Error handling
+    # -------------------------------------------------------------------
+    - id: unknown-command
+      description: "Unknown command returns exit code 10 with structured error"
+      args: ["foo", "bar"]
+      expected_exit_code: 10
+      stdout_assertions:
+        - type: json_path
+          path: "error"
+          value: "unknown_command"
+        - type: json_path
+          path: "command"
+          value: "foo bar"
+        - type: text_contains
+          text: "hint"
+
+    - id: missing-spec-file
+      description: "Validation with nonexistent spec returns exit code 10"
+      args: ["spec", "validate", "--spec", "nonexistent-file-that-does-not-exist.yaml", "--capture", "."]
+      expected_exit_code: 10
+
+    - id: missing-export-framework
+      description: "Export without framework argument fails"
+      args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", ""]
+      expected_exit_code: 10
+
+    # -------------------------------------------------------------------
+    # Spec export (deterministic — no browser needed)
+    # -------------------------------------------------------------------
+    - id: export-playwright
+      description: "Export spec as Playwright test code"
+      args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", "playwright", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          description: "Array of generated test files"
+          schema:
+            type: array
+            minItems: 1
+            items:
+              type: object
+              required: ["filePath", "content", "framework"]
+        - type: text_contains
+          text: "playwright"
+        - type: text_contains
+          description: "Generated code imports from @playwright/test"
+          text: "@playwright/test"
+
+    - id: export-cypress
+      description: "Export spec as Cypress test code"
+      args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", "cypress", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          text: "cy.visit"
+        - type: text_contains
+          text: "cy.get"
+
+    - id: export-multi-page-flow
+      description: "Export multi-page flow produces multi-step test"
+      args: ["spec", "export", "--spec", "src/spec/examples/multi-page-flow.yaml", "--framework", "playwright", "--json"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "Contains navigate calls for flow steps"
+          text: "page.goto"
+        - type: text_contains
+          description: "Contains interaction code"
+          text: "page.locator"
+
+    # -------------------------------------------------------------------
+    # Spec import (heuristic analysis)
+    # -------------------------------------------------------------------
+    - id: import-nonexistent-dir
+      description: "Import from nonexistent path fails gracefully"
+      args: ["spec", "import", "--from", "nonexistent-test-dir-xyz"]
+      expected_exit_code: 10
+
+    # -------------------------------------------------------------------
+    # CLI run (self-validation — meta!)
+    # -------------------------------------------------------------------
+    - id: cli-run-no-cli-section
+      description: "CLI run with spec that has no cli section fails"
+      args: ["cli", "run", "--spec", "src/spec/examples/login-page.yaml"]
+      expected_exit_code: 10
+
+  scenarios:
+    # -------------------------------------------------------------------
+    # Schema round-trip: all three schema targets work
+    # -------------------------------------------------------------------
+    - id: schema-introspection-suite
+      description: "All schema targets produce valid JSON"
+      steps:
+        - id: schema-spec-step
+          args: ["schema", "spec"]
+          expected_exit_code: 0
+          stdout_assertions:
+            - type: json_schema
+              schema:
+                type: object
+
+        - id: schema-report-step
+          args: ["schema", "report"]
+          expected_exit_code: 0
+          stdout_assertions:
+            - type: json_schema
+              schema:
+                type: object
+
+        - id: schema-commands-step
+          args: ["schema", "commands"]
+          expected_exit_code: 0
+          stdout_assertions:
+            - type: json_schema
+              schema:
+                type: array
+
+    # -------------------------------------------------------------------
+    # Export → valid structure for both frameworks
+    # -------------------------------------------------------------------
+    - id: export-both-frameworks
+      description: "Exporting the same spec to both frameworks succeeds"
+      steps:
+        - id: export-pw-step
+          args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", "playwright", "--json"]
+          expected_exit_code: 0
+          stdout_assertions:
+            - type: text_contains
+              text: "@playwright/test"
+
+        - id: export-cy-step
+          args: ["spec", "export", "--spec", "src/spec/examples/login-page.yaml", "--framework", "cypress", "--json"]
+          expected_exit_code: 0
+          stdout_assertions:
+            - type: text_contains
+              text: "cy.visit"

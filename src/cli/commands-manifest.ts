@@ -49,6 +49,14 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'cli run',
+    description: 'Run CLI verification against a spec',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
+    ],
+  },
+  {
     name: 'report diff',
     description: 'Diff two gap reports',
     parameters: [

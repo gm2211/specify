@@ -21,6 +21,7 @@
  *   specify spec export    --spec <path> --framework playwright|cypress
  *   specify spec sync      --spec <path> --tests <dir>
  *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
+ *   specify cli run         --spec <path|-> [--output <dir>]
  *   specify report diff     --a <path> --b <path>
  *   specify report stats    --history-dir <dir>
  *   specify schema spec|report|commands
@@ -126,6 +127,7 @@ Commands:
   spec export      Export spec items as e2e test code
   spec sync        Compare spec against e2e tests bidirectionally
   agent run        Run autonomous agent-driven verification
+  cli run          Run CLI verification against a spec
   report diff      Diff two gap reports
   report stats     Show statistical confidence from history
   schema           Output JSON Schema (spec, report, or commands)
@@ -268,6 +270,13 @@ async function main(): Promise<void> {
         noTeardown: hasFlag(rest, '--no-teardown'),
         timeout: getArg(rest, '--timeout') ? parseInt(getArg(rest, '--timeout')!) : undefined,
         noScreenshots: hasFlag(rest, '--no-screenshots'),
+      }, ctx);
+
+    } else if (noun === 'cli' && verb === 'run') {
+      const { cliRun } = await import('./commands/cli-run.js');
+      exitCode = await cliRun({
+        spec: getArg(rest, '--spec') ?? '',
+        output: getArg(rest, '--output'),
       }, ctx);
 
     } else if (noun === 'report' && verb === 'diff') {

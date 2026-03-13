@@ -34,6 +34,7 @@ export const specSchema = {
       type: 'array',
       items: { $ref: '#/$defs/FlowSpec' },
     },
+    cli: { $ref: '#/$defs/CliSpec' },
     hooks: { $ref: '#/$defs/HooksSpec' },
     variables: {
       type: 'object',
@@ -323,6 +324,85 @@ export const specSchema = {
           then: { required: ['command'] },
         },
       ],
+    },
+
+    // -------------------------------------------------------------------
+    // CliSpec (CLI verification)
+    // -------------------------------------------------------------------
+    CliSpec: {
+      type: 'object',
+      required: ['binary'],
+      additionalProperties: false,
+      properties: {
+        binary: { type: 'string' },
+        env: { type: 'object', additionalProperties: { type: 'string' } },
+        timeout_ms: { type: 'number' },
+        commands: {
+          type: 'array',
+          items: { $ref: '#/$defs/CliCommandSpec' },
+        },
+        scenarios: {
+          type: 'array',
+          items: { $ref: '#/$defs/CliScenarioSpec' },
+        },
+      },
+    },
+
+    CliCommandSpec: {
+      type: 'object',
+      required: ['id', 'args'],
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string' },
+        description: { type: 'string' },
+        args: { type: 'array', items: { type: 'string' } },
+        stdin: { type: 'string' },
+        env: { type: 'object', additionalProperties: { type: 'string' } },
+        timeout_ms: { type: 'number' },
+        expected_exit_code: { type: 'number' },
+        expected_exit_codes: { type: 'array', items: { type: 'number' } },
+        stdout_assertions: {
+          type: 'array',
+          items: { $ref: '#/$defs/CliOutputAssertion' },
+        },
+        stderr_assertions: {
+          type: 'array',
+          items: { $ref: '#/$defs/CliOutputAssertion' },
+        },
+      },
+    },
+
+    CliOutputAssertion: {
+      type: 'object',
+      required: ['type'],
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['text_contains', 'text_matches', 'json_schema', 'json_path', 'empty', 'line_count'],
+        },
+        description: { type: 'string' },
+        text: { type: 'string' },
+        pattern: { type: 'string' },
+        schema: { $ref: '#/$defs/JsonSchemaInline' },
+        path: { type: 'string' },
+        value: {},
+        min: { type: 'number' },
+        max: { type: 'number' },
+      },
+    },
+
+    CliScenarioSpec: {
+      type: 'object',
+      required: ['id', 'steps'],
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string' },
+        description: { type: 'string' },
+        steps: {
+          type: 'array',
+          items: { $ref: '#/$defs/CliCommandSpec' },
+        },
+      },
     },
 
     // -------------------------------------------------------------------
