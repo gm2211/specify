@@ -4,3 +4,7 @@ dist/
 .auth/
 captures/
 *.log
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db
