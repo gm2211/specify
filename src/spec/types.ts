@@ -633,34 +633,7 @@ export interface AssertPageFlowStep {
 }
 
 /** Perform an interactive action (same as scenario steps). */
-export interface ActionFlowStep extends BaseStep {
-  /** The action type — same as ScenarioStep.action. */
-  action: ScenarioStep['action'];
-
-  /** CSS selector (for click, fill, hover, etc). */
-  selector?: string;
-
-  /** Value for fill/select actions. */
-  value?: string;
-
-  /** Key for keypress action. */
-  key?: string;
-
-  /** URL pattern for wait_for_request / wait_for_navigation. */
-  url_pattern?: string;
-
-  /** HTTP method for wait_for_request. */
-  method?: string;
-
-  /** Text for assert_text. */
-  text?: string;
-
-  /** Duration for wait. */
-  duration?: number;
-
-  /** Scroll direction. */
-  direction?: 'top' | 'bottom';
-}
+export type ActionFlowStep = ScenarioStep;
 
 // ---------------------------------------------------------------------------
 // Hooks (setup / teardown)

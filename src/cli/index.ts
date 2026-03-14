@@ -16,13 +16,15 @@
  * Command structure:
  *   specify spec validate   --spec <path|-> --capture <dir>
  *   specify spec generate   --input <dir> --output <path> [--smart]
- *   specify spec refine     --spec <path> [--report <path>] [--url <url>]
  *   specify spec evolve    --spec <path> [--pr <number|url>] [--repo <owner/repo>]
+ *                                        [--report <path>] [--apply] [--output <path>] [--url <url>]
+ *   specify spec refine     --spec <path> [--report <path>] [--url <url>]  (DEPRECATED → delegates to evolve)
  *   specify spec import    --from <path> [--framework playwright|cypress]
  *   specify spec export    --spec <path> --framework playwright|cypress
  *   specify spec sync      --spec <path> --tests <dir>
  *   specify spec lint      --spec <path|->
  *   specify spec guide
+ *   specify capture          --url <url> --output <dir> [--headed] [--timeout <ms>] [--no-screenshots]
  *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
  *   specify cli run         --spec <path|-> [--output <dir>]
  *   specify report diff     --a <path> --b <path>
@@ -127,13 +129,14 @@ ${c.bold('Usage:')} specify ${c.cyan('<noun>')} ${c.cyan('<verb>')} ${c.dim('[op
 ${c.bold('Commands:')}
   ${c.cyan('spec validate')}    Validate a spec against captured data
   ${c.cyan('spec generate')}    Generate a spec from capture data
-  ${c.cyan('spec refine')}      Refine a spec interactively or using a gap report
-  ${c.cyan('spec evolve')}      Evolve a spec from PR changes or interactively
+  ${c.cyan('spec evolve')}      Evolve a spec from PR, gap report, or interactively
+  ${c.dim('spec refine')}      ${c.dim('(deprecated — use spec evolve)')}
   ${c.cyan('spec import')}      Import existing e2e tests as spec items
   ${c.cyan('spec export')}      Export spec items as e2e test code
   ${c.cyan('spec sync')}        Compare spec against e2e tests bidirectionally
   ${c.cyan('spec lint')}        Validate spec structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec guide')}       Output authoring guide for LLM spec writers
+  ${c.cyan('capture')}           Capture traffic, logs, and screenshots from a URL
   ${c.cyan('agent run')}        Run autonomous agent-driven verification
   ${c.cyan('cli run')}          Run CLI verification against a spec
   ${c.cyan('report diff')}      Diff two gap reports
@@ -244,6 +247,10 @@ async function main(): Promise<void> {
         spec: getArg(rest, '--spec') ?? '',
         pr: getArg(rest, '--pr'),
         repo: getArg(rest, '--repo'),
+        report: getArg(rest, '--report'),
+        apply: hasFlag(rest, '--apply'),
+        output: getArg(rest, '--output'),
+        url: getArg(rest, '--url'),
       }, ctx);
 
     } else if (noun === 'spec' && verb === 'import') {
@@ -279,6 +286,18 @@ async function main(): Promise<void> {
         spec: getArg(rest, '--spec') ?? '',
         tests: getArg(rest, '--tests') ?? '',
         framework: getArg(rest, '--framework'),
+      }, ctx);
+
+    } else if (noun === 'capture') {
+      // capture is a standalone command (no verb) — recombine args
+      const captureArgs = verb ? [verb, ...rest] : rest;
+      const { capture: captureCmd } = await import('./commands/capture.js');
+      exitCode = await captureCmd({
+        url: getArg(captureArgs, '--url') ?? '',
+        output: getArg(captureArgs, '--output') ?? '',
+        headed: hasFlag(captureArgs, '--headed'),
+        timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
+        noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
       }, ctx);
 
     } else if (noun === 'agent' && verb === 'run') {

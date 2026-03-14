@@ -24,12 +24,27 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'spec refine',
-    description: 'Refine a spec interactively or using a gap report',
+    description: 'DEPRECATED: Use "spec evolve" instead. Thin wrapper that delegates to spec evolve.',
     parameters: [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON (if omitted, enters interactive mode)' },
-      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (interactive mode only)' },
+      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON (maps to evolve --report)' },
+      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (maps to evolve --apply --url)' },
       { name: '--output', type: 'string', required: false, description: 'Output file path' },
+    ],
+  },
+  {
+    name: 'capture',
+    description: 'Capture network traffic, console logs, and screenshots from a URL',
+    parameters: [
+      { name: '--url', type: 'string', required: true, description: 'URL to capture' },
+      { name: '--output', type: 'string', required: true, description: 'Output directory for capture data' },
+      { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly' },
+      { name: '--timeout', type: 'number', required: false, description: 'Navigation timeout in ms', default: 30000 },
+      { name: '--no-screenshots', type: 'boolean', required: false, description: 'Disable screenshots' },
+    ],
+    examples: [
+      'specify capture --url http://localhost:3000 --output ./captures/my-app',
+      'specify capture --url https://example.com --output ./cap --headed --timeout 60000',
     ],
   },
   {
@@ -99,16 +114,23 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'spec evolve',
-    description: 'Evolve a spec from PR changes or interactive gap analysis',
+    description: 'Evolve a spec from PR changes, gap report, or interactive analysis',
     parameters: [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--pr', type: 'string', required: false, description: 'PR number or URL to analyze (omit for interactive mode)' },
+      { name: '--pr', type: 'string', required: false, description: 'PR number or URL to analyze' },
       { name: '--repo', type: 'string', required: false, description: 'GitHub repo (owner/repo) if not inferrable from PR URL' },
+      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON — analyze and suggest refinements' },
+      { name: '--apply', type: 'boolean', required: false, description: 'Enter interactive mode to walk through and apply gap fixes' },
+      { name: '--output', type: 'string', required: false, description: 'Write refined spec to this path (report & apply modes)' },
+      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (apply mode only)' },
     ],
     examples: [
       'specify spec evolve --spec spec.yaml --pr 42',
       'specify spec evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42',
       'specify spec evolve --spec spec.yaml',
+      'specify spec evolve --spec spec.yaml --report gap-report.json --output refined.yaml',
+      'specify spec evolve --spec spec.yaml --apply',
+      'specify spec evolve --spec spec.yaml --apply --url http://localhost:3000 --output refined.yaml',
     ],
   },
   {

@@ -34,7 +34,7 @@ cli:
             properties:
               commands:
                 type: array
-                minItems: 18
+                minItems: 19
                 items:
                   type: object
                   required: ["name", "description", "parameters"]
@@ -92,6 +92,9 @@ cli:
         - type: text_contains
           description: "Includes human watch"
           text: "human watch"
+        - type: text_contains
+          description: "Includes capture"
+          text: "\"name\": \"capture\""
 
     - id: help-flag
       description: "The --help flag prints human-readable usage to stderr"
@@ -280,7 +283,7 @@ cli:
         - type: json_path
           description: "Sees our CLI commands"
           path: "spec_summary.cli_command_count"
-          value: 24
+          value: 31
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -419,6 +422,84 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Failed to load spec"
+
+    # -------------------------------------------------------------------
+    # Spec generate errors
+    # -------------------------------------------------------------------
+    - id: generate-nonexistent-dir
+      description: "Generate from nonexistent input directory fails"
+      args: ["spec", "generate", "--input", "nonexistent-dir-xyz"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Input directory not found"
+
+    - id: generate-no-traffic
+      description: "Generate from directory without traffic.json fails"
+      args: ["spec", "generate", "--input", "src/spec/examples"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "traffic.json not found"
+
+    # -------------------------------------------------------------------
+    # Spec evolve errors (report flag)
+    # -------------------------------------------------------------------
+    - id: evolve-report-nonexistent
+      description: "Evolve with nonexistent report file fails"
+      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--report", "nonexistent.json"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Failed to load report"
+
+    # -------------------------------------------------------------------
+    # Report diff errors
+    # -------------------------------------------------------------------
+    - id: report-diff-missing-a
+      description: "Report diff with nonexistent report files fails"
+      args: ["report", "diff", "--a", "nonexistent.json", "--b", "nonexistent.json"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Failed to load report"
+
+    # -------------------------------------------------------------------
+    # Report stats errors
+    # -------------------------------------------------------------------
+    - id: report-stats-empty
+      description: "Report stats with no reports in history directory fails"
+      args: ["report", "stats", "--history-dir", "src/spec/examples"]
+      expected_exit_code: 2
+      stderr_assertions:
+        - type: text_contains
+          text: "No reports found"
+
+    # -------------------------------------------------------------------
+    # Schema invalid target
+    # -------------------------------------------------------------------
+    - id: schema-invalid-target
+      description: "Schema with invalid target fails"
+      args: ["schema", "foo"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Unknown schema target"
+
+    # -------------------------------------------------------------------
+    # Capture errors
+    # -------------------------------------------------------------------
+    - id: capture-no-url
+      description: "Capture without URL fails with missing parameter error"
+      args: ["capture", "--url", ""]
+      expected_exit_code: 10
+      stdout_assertions:
+        - type: json_path
+          path: "error"
+          value: "missing_parameter"
+        - type: json_path
+          path: "parameter"
+          value: "--url"
 
   scenarios:
     # -------------------------------------------------------------------

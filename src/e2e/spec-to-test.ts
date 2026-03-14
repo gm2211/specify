@@ -309,8 +309,8 @@ function generatePlaywrightFlowStep(step: FlowStep, spec: Spec, baseUrl?: string
     return lines;
   }
   if ('action' in step) {
-    const scenarioStep = buildScenarioStep(step);
-    return generatePlaywrightStep(scenarioStep);
+    // ActionFlowStep is now ScenarioStep — no conversion needed
+    return generatePlaywrightStep(step);
   }
   return [];
 }
@@ -488,8 +488,8 @@ function generateCypressFlowStep(step: FlowStep, spec: Spec, baseUrl?: string): 
     return lines;
   }
   if ('action' in step) {
-    const scenarioStep = buildScenarioStep(step);
-    return generateCypressStep(scenarioStep);
+    // ActionFlowStep is now ScenarioStep — no conversion needed
+    return generateCypressStep(step);
   }
   return [];
 }
@@ -497,12 +497,6 @@ function generateCypressFlowStep(step: FlowStep, spec: Spec, baseUrl?: string): 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-/** Convert ActionFlowStep to ScenarioStep for code generation. */
-function buildScenarioStep(step: FlowStep & { action: string }): ScenarioStep {
-  // Type narrowing: ActionFlowStep has 'action' property
-  return step as unknown as ScenarioStep;
-}
 
 function resolveUrl(pagePath: string, baseUrl?: string): string {
   if (pagePath.startsWith('http://') || pagePath.startsWith('https://')) return pagePath;

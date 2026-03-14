@@ -25,7 +25,6 @@ import type {
   KeypressStep,
   ScrollStep,
   WaitStep,
-  ActionFlowStep,
 } from '../spec/types.js';
 import type { CaptureCollector } from './capture.js';
 import { substituteVars, type HookContext } from './hooks.js';
@@ -274,18 +273,8 @@ export async function executeFlowStep(
   }
 
   if ('action' in step) {
-    // Convert ActionFlowStep to a ScenarioStep-compatible shape
-    const actionStep = step as ActionFlowStep;
-    const scenarioStep = buildScenarioStepFromAction(actionStep);
-    if (scenarioStep) {
-      return executeStep(page, scenarioStep, capture, ctx, options);
-    }
-    return {
-      action: actionStep.action,
-      description: step.description,
-      success: false,
-      error: `Could not convert flow action step: ${actionStep.action}`,
-    };
+    // ActionFlowStep is now ScenarioStep — no conversion needed
+    return executeStep(page, step, capture, ctx, options);
   }
 
   return { action: 'unknown', success: false, error: 'Unknown flow step type' };
@@ -337,45 +326,3 @@ function resolveUrl(urlOrPath: string, baseUrl: string): string {
   return `${base}${suffix}`;
 }
 
-function buildScenarioStepFromAction(step: ActionFlowStep): ScenarioStep | null {
-  const base = { description: step.description };
-  switch (step.action) {
-    case 'click':
-      if (!step.selector) return null;
-      return { ...base, action: 'click', selector: step.selector };
-    case 'fill':
-      if (!step.selector || step.value === undefined) return null;
-      return { ...base, action: 'fill', selector: step.selector, value: step.value };
-    case 'select':
-      if (!step.selector || step.value === undefined) return null;
-      return { ...base, action: 'select', selector: step.selector, value: step.value };
-    case 'hover':
-      if (!step.selector) return null;
-      return { ...base, action: 'hover', selector: step.selector };
-    case 'wait_for_request':
-      if (!step.url_pattern) return null;
-      return { ...base, action: 'wait_for_request', url_pattern: step.url_pattern, method: step.method };
-    case 'wait_for_navigation':
-      if (!step.url_pattern) return null;
-      return { ...base, action: 'wait_for_navigation', url_pattern: step.url_pattern };
-    case 'assert_visible':
-      if (!step.selector) return null;
-      return { ...base, action: 'assert_visible', selector: step.selector };
-    case 'assert_text':
-      if (!step.selector || step.text === undefined) return null;
-      return { ...base, action: 'assert_text', selector: step.selector, text: step.text };
-    case 'assert_not_visible':
-      if (!step.selector) return null;
-      return { ...base, action: 'assert_not_visible', selector: step.selector };
-    case 'keypress':
-      if (!step.key) return null;
-      return { ...base, action: 'keypress', key: step.key };
-    case 'scroll':
-      return { ...base, action: 'scroll', selector: step.selector, direction: step.direction };
-    case 'wait':
-      if (step.duration === undefined) return null;
-      return { ...base, action: 'wait', duration: step.duration };
-    default:
-      return null;
-  }
-}

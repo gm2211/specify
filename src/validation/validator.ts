@@ -561,14 +561,14 @@ function validateFlowStep(
     };
   }
 
-  // ActionFlowStep
+  // ActionFlowStep (ScenarioStep discriminated union)
   if ('action' in step) {
-    if (step.action === 'wait_for_request' && step.url_pattern) {
+    if (step.action === 'wait_for_request') {
       const method = step.method?.toUpperCase();
       const found = capture.traffic.some(
         (t) =>
           (!method || t.method.toUpperCase() === method) &&
-          matchUrlPattern(t.url, step.url_pattern!),
+          matchUrlPattern(t.url, step.url_pattern),
       );
       return {
         type: 'action',
@@ -579,9 +579,9 @@ function validateFlowStep(
       };
     }
 
-    if (step.action === 'wait_for_navigation' && step.url_pattern) {
+    if (step.action === 'wait_for_navigation') {
       const found = navigationTraffic.some((t) =>
-        matchUrlPattern(t.url, step.url_pattern!),
+        matchUrlPattern(t.url, step.url_pattern),
       );
       return {
         type: 'action',
