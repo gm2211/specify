@@ -63,7 +63,7 @@ export async function runRepl(options: { spec?: string; url?: string } = {}): Pr
     fs.mkdirSync(path.dirname(historyPath), { recursive: true });
   } catch { /* ignore */ }
 
-  console.log('Specify REPL -- type "help" for commands, "exit" to quit');
+  console.error('Specify REPL -- type "help" for commands, "exit" to quit');
   printState(state);
   rl.prompt();
 

@@ -322,6 +322,11 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   const validRefs = new Set<string>();
   validRefs.add('overview');
   validRefs.add('defaults');
+  validRefs.add('meta');
+  validRefs.add('variables');
+  validRefs.add('assumptions');
+  validRefs.add('requirements');
+  validRefs.add('cli');
 
   for (const page of spec.pages ?? []) {
     validRefs.add(`page:${page.id}`);
@@ -334,6 +339,17 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   }
   for (const flow of spec.flows ?? []) {
     validRefs.add(`flow:${flow.id}`);
+  }
+  // CLI command refs
+  for (const cmd of spec.cli?.commands ?? []) {
+    validRefs.add(`cli:${cmd.id}`);
+  }
+  for (const scenario of spec.cli?.scenarios ?? []) {
+    validRefs.add(`cli:${scenario.id}`);
+  }
+  // Requirement refs
+  for (const req of spec.requirements ?? []) {
+    validRefs.add(`requirement:${req.id}`);
   }
 
   // Collect all refs from the narrative

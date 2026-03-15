@@ -47,14 +47,30 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--no-generate', type: 'boolean', required: false, description: 'Skip automatic spec generation (--from live only)' },
       { name: '--spec-output', type: 'string', required: false, description: 'Output path for generated spec (default: <output>/../spec.yaml)' },
       { name: '--spec-name', type: 'string', required: false, description: 'Name for the generated spec (default: hostname)' },
+      { name: '--interactive', type: 'boolean', required: false, description: 'Open a headed browser for manual recording (--from live only)' },
+      { name: '--explore', type: 'boolean', required: false, description: 'Autonomously explore and discover pages (--from live only)' },
     ],
     modes: [
       {
         name: 'from_live',
-        description: 'Capture from a live system (default)',
+        description: 'Navigate to URL, record traffic and screenshots (passive, single page)',
         required_parameters: ['--url', '--output'],
         optional_parameters: ['--headed', '--timeout', '--no-screenshots', '--no-generate', '--spec-output', '--spec-name'],
-        condition: '--from is "live" or omitted',
+        condition: '--from is "live" or omitted, no --interactive or --explore',
+      },
+      {
+        name: 'from_live_interactive',
+        description: 'Open a headed browser for human recording — browse the site and all traffic is captured',
+        required_parameters: ['--url', '--output', '--interactive'],
+        optional_parameters: ['--timeout', '--no-screenshots', '--no-generate', '--spec-output', '--spec-name'],
+        condition: '--interactive is set',
+      },
+      {
+        name: 'from_live_explore',
+        description: 'Autonomously discover pages by following links and recording traffic for each',
+        required_parameters: ['--url', '--output', '--explore'],
+        optional_parameters: ['--headed', '--timeout', '--no-screenshots', '--no-generate', '--spec-output', '--spec-name'],
+        condition: '--explore is set',
       },
       {
         name: 'from_code',
@@ -66,6 +82,8 @@ export const COMMANDS: CommandDefinition[] = [
     ],
     examples: [
       'specify capture --url http://localhost:3000 --output ./captures/my-app',
+      'specify capture --url http://localhost:3000 --output ./cap --interactive',
+      'specify capture --url http://localhost:3000 --output ./cap --explore',
       'specify capture --url https://example.com --output ./cap --no-generate',
       'specify capture --from code --input ./tests --output spec.yaml',
     ],

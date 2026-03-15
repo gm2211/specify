@@ -820,4 +820,4 @@ Running `specify evolve --spec specify.spec.yaml` against the self-spec produces
 
 This self-referential quality is intentional. If Specify cannot specify its own behavior completely and verify it reliably, it has no business asking other projects to do the same.
 
-The companion document you are reading now is itself the narrative for the self-spec. The `narrative_path` field in `specify.spec.yaml` points to this file, and the `<!-- spec:... -->` annotations throughout link prose sections to specific spec items. Running `specify review --spec specify.spec.yaml` renders this narrative alongside the spec structure in an interactive HTML browser, with validation results overlaid on each section.
+The companion document you are reading now is itself the narrative for the self-spec. The `narrative_path` field in `specify.spec.yaml` points to this file, and the `<!~~ spec:... ~~>` annotations throughout link prose sections to specific spec items. Running `specify review --spec specify.spec.yaml` renders this narrative alongside the spec structure in an interactive HTML browser, with validation results overlaid on each section.

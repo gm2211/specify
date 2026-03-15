@@ -772,6 +772,10 @@ cli:
         availability without triggering errors.
       args: ["create"]
       expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          description: "Identifies itself as the spec creator"
+          text: "Spec Creator"
 
     # -------------------------------------------------------------------
     # Review command
@@ -1193,6 +1197,10 @@ cli:
         its availability.
       args: ["human", "shell"]
       expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          description: "Identifies itself as the REPL"
+          text: "REPL"
 
     - id: human-watch-non-tty
       description: >
@@ -1218,6 +1226,10 @@ cli:
         without triggering errors.
       args: ["human"]
       expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          description: "Identifies itself as the interactive guide"
+          text: "Interactive Guide"
 
     - id: human-shows-lifecycle
       description: >

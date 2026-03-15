@@ -612,6 +612,11 @@ export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): Evol
   const validRefs = new Set<string>();
   validRefs.add('overview');
   validRefs.add('defaults');
+  validRefs.add('meta');
+  validRefs.add('variables');
+  validRefs.add('assumptions');
+  validRefs.add('requirements');
+  validRefs.add('cli');
 
   for (const page of spec.pages ?? []) {
     validRefs.add(`page:${page.id}`);
@@ -624,6 +629,15 @@ export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): Evol
   }
   for (const flow of spec.flows ?? []) {
     validRefs.add(`flow:${flow.id}`);
+  }
+  for (const cmd of spec.cli?.commands ?? []) {
+    validRefs.add(`cli:${cmd.id}`);
+  }
+  for (const scenario of spec.cli?.scenarios ?? []) {
+    validRefs.add(`cli:${scenario.id}`);
+  }
+  for (const req of spec.requirements ?? []) {
+    validRefs.add(`requirement:${req.id}`);
   }
 
   // Collect all refs from narrative

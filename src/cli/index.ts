@@ -446,15 +446,19 @@ async function main(): Promise<void> {
         }, ctx);
       } else {
         const { capture: captureCmd } = await import('./commands/capture.js');
+        const interactive = hasFlag(captureArgs, '--interactive');
+        const explore = hasFlag(captureArgs, '--explore');
         exitCode = await captureCmd({
           url: getArg(captureArgs, '--url') ?? '',
           output: getArg(captureArgs, '--output') ?? '',
-          headed: hasFlag(captureArgs, '--headed'),
+          headed: hasFlag(captureArgs, '--headed') || interactive,  // interactive implies headed
           timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
           noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
           noGenerate: hasFlag(captureArgs, '--no-generate'),
           specOutput: getArg(captureArgs, '--spec-output'),
           specName: getArg(captureArgs, '--spec-name'),
+          interactive,
+          explore,
         }, ctx);
       }
 

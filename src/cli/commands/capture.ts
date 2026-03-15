@@ -23,6 +23,8 @@ export interface CaptureOptions {
   specOutput?: string;
   specName?: string;
   ignoreHttpsErrors?: boolean;
+  interactive?: boolean;
+  explore?: boolean;
 }
 
 export async function capture(options: CaptureOptions, ctx: CliContext): Promise<number> {
@@ -129,8 +131,79 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       await collector.screenshot(page, 'initial');
     }
 
-    // Wait a moment for any deferred API calls to complete
-    await page.waitForTimeout(2000);
+    if (options.interactive) {
+      // Interactive mode: keep browser open, let human browse
+      log('');
+      log('Interactive capture mode — browse the site in the opened browser.');
+      log('All traffic, console logs, and interactions are being recorded.');
+      log('Press Enter in this terminal when done...');
+      log('');
+      await new Promise<void>(resolve => {
+        process.stdin.resume();
+        process.stdin.once('data', () => {
+          process.stdin.pause();
+          resolve();
+        });
+        // Also resolve on stdin end (non-TTY)
+        process.stdin.once('end', () => resolve());
+      });
+      log('Stopping capture...');
+    } else if (options.explore) {
+      // Explore mode: autonomous discovery of pages and interactions
+      log('Explore mode — autonomously discovering pages...');
+      const visited = new Set<string>([navigateUrl]);
+      const toVisit: string[] = [];
+
+      // Discover links on the current page
+      const links = await page.$$eval('a[href]', (els: Element[]) =>
+        els.map(el => (el as HTMLAnchorElement).href).filter(h => h.startsWith('http'))
+      );
+      const baseHost = new URL(navigateUrl).hostname;
+      for (const link of links) {
+        try {
+          if (new URL(link).hostname === baseHost && !visited.has(link)) {
+            toVisit.push(link);
+          }
+        } catch { /* invalid URL */ }
+      }
+
+      const maxPages = 10;
+      let explored = 0;
+      while (toVisit.length > 0 && explored < maxPages) {
+        const url = toVisit.shift()!;
+        if (visited.has(url)) continue;
+        visited.add(url);
+        explored++;
+
+        log(`  Exploring: ${url}`);
+        try {
+          await page.goto(url, { waitUntil: 'networkidle', timeout: timeout / 2 });
+          if (!options.noScreenshots) {
+            const slug = new URL(url).pathname.replace(/\//g, '_').replace(/^_/, '') || 'root';
+            await collector.screenshot(page, `explore-${slug}`);
+          }
+          await page.waitForTimeout(1000);
+
+          // Discover more links
+          const moreLinks = await page.$$eval('a[href]', (els: Element[]) =>
+            els.map(el => (el as HTMLAnchorElement).href).filter(h => h.startsWith('http'))
+          );
+          for (const link of moreLinks) {
+            try {
+              if (new URL(link).hostname === baseHost && !visited.has(link)) {
+                toVisit.push(link);
+              }
+            } catch { /* invalid URL */ }
+          }
+        } catch (err) {
+          log(`  Failed to explore ${url}: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+      log(`Explored ${explored} page(s)`);
+    } else {
+      // Default passive mode: wait for deferred API calls
+      await page.waitForTimeout(2000);
+    }
 
     // Take a post-settle screenshot
     if (!options.noScreenshots) {
