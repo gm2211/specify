@@ -326,6 +326,9 @@ assumptions:
       'Flows connect pages into user journeys — use assert_page to verify you landed on the right page.',
       'The "quantifier" field (always/sometimes) marks whether an assertion must hold on every run or just some.',
       'The "confidence" field (observed/inferred/reviewed) tracks how an assertion was established.',
+      'A spec is a behavioral contract, not just a test suite. Include both mechanically verifiable assertions (exit codes, json_path) AND behavioral requirements that describe what should be true — agents will figure out how to validate them.',
+      'For behavioral requirements that need judgment to verify, include a validation plan in comments: what steps an agent should take, what evidence to produce, and what "passing" looks like.',
+      'Write descriptions as if briefing an agent: clear enough that an agent can read the requirement, make a plan to validate it, and provide structured evidence without needing to ask for clarification.',
     ],
   };
 }

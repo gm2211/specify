@@ -13,6 +13,7 @@ import type { GenerateOptions } from '../../e2e/types.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
+import { readStdin } from '../stdin.js';
 
 export interface SpecExportOptions {
   spec: string;
@@ -90,13 +91,4 @@ export async function specExport(options: SpecExportOptions, ctx: CliContext): P
   }
 
   return ExitCode.SUCCESS;
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    process.stdin.on('error', reject);
-  });
 }

@@ -1,0 +1,11 @@
+version: "1.0"
+name: "Nested App Spec"
+description: "Test spec in a subdirectory with relative narrative_path"
+narrative_path: "app.narrative.md"
+
+pages:
+  - id: home
+    path: /
+    visual_assertions:
+      - type: element_exists
+        selector: "h1"

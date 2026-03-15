@@ -8,6 +8,7 @@ import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
 import type { Spec } from '../../spec/types.js';
+import { readStdin } from '../stdin.js';
 
 export interface SpecValidateOptions {
   spec: string; // path or '-' for stdin
@@ -100,13 +101,4 @@ export async function specValidate(options: SpecValidateOptions, ctx: CliContext
   if (report.summary.failed > 0) return ExitCode.ASSERTION_FAILURE;
   if (report.summary.passed === 0 && report.summary.untested === report.summary.total) return ExitCode.ALL_UNTESTED;
   return ExitCode.SUCCESS;
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    process.stdin.on('error', reject);
-  });
 }

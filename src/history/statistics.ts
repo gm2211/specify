@@ -6,6 +6,7 @@
  */
 
 import type { GapReport, CheckStatus } from '../validation/types.js';
+import type { CliGapReport } from '../cli-test/types.js';
 
 export interface AssertionStats {
   assertion: string;
@@ -27,8 +28,13 @@ export interface StatsReport {
   overallConfidence: number;
 }
 
-/** Compute statistical confidence from a history of gap reports. */
-export function computeStats(reports: GapReport[]): StatsReport {
+/** Detect whether a report is a CLI report or web gap report. */
+function isCliReport(report: unknown): report is CliGapReport {
+  return typeof report === 'object' && report !== null && 'cli' in report && 'commands' in report;
+}
+
+/** Compute statistical confidence from a history of gap reports (web or CLI). */
+export function computeStats(reports: (GapReport | CliGapReport)[]): StatsReport {
   if (reports.length === 0) {
     return { totalRuns: 0, assertions: [], overallConfidence: 0 };
   }
@@ -40,38 +46,76 @@ export function computeStats(reports: GapReport[]): StatsReport {
   >();
 
   for (const report of reports) {
-    for (const page of report.pages) {
-      for (const req of page.requests) {
-        const key = `${page.pageId}:request:${req.method}:${req.urlPattern}`;
-        const entry = assertionHistory.get(key) ?? {
-          pageId: page.pageId,
-          statuses: [],
-          quantifier: req.quantifier,
-        };
-        entry.statuses.push(req.status);
-        assertionHistory.set(key, entry);
+    if (isCliReport(report)) {
+      // CLI report: extract statuses from command results
+      for (const cmd of report.commands) {
+        // Exit code check
+        const exitKey = `cli:${cmd.commandId}:exit_code`;
+        const exitEntry = assertionHistory.get(exitKey) ?? { pageId: 'cli', statuses: [] };
+        exitEntry.statuses.push(cmd.exitCode.status);
+        assertionHistory.set(exitKey, exitEntry);
+
+        // Stdout assertions
+        for (const a of cmd.stdoutAssertions) {
+          const key = `cli:${cmd.commandId}:stdout:${a.type}:${a.description ?? ''}`;
+          const entry = assertionHistory.get(key) ?? { pageId: 'cli', statuses: [] };
+          entry.statuses.push(a.status);
+          assertionHistory.set(key, entry);
+        }
+
+        // Stderr assertions
+        for (const a of cmd.stderrAssertions) {
+          const key = `cli:${cmd.commandId}:stderr:${a.type}:${a.description ?? ''}`;
+          const entry = assertionHistory.get(key) ?? { pageId: 'cli', statuses: [] };
+          entry.statuses.push(a.status);
+          assertionHistory.set(key, entry);
+        }
       }
 
-      for (const va of page.visualAssertions) {
-        const key = `${page.pageId}:visual:${va.type}:${va.selector ?? ''}`;
-        const entry = assertionHistory.get(key) ?? {
-          pageId: page.pageId,
-          statuses: [],
-          quantifier: va.quantifier,
-        };
-        entry.statuses.push(va.status);
-        assertionHistory.set(key, entry);
+      // Scenario steps
+      for (const scenario of report.scenarios) {
+        for (const step of scenario.steps) {
+          const exitKey = `cli:${scenario.scenarioId}:${step.commandId}:exit_code`;
+          const exitEntry = assertionHistory.get(exitKey) ?? { pageId: 'cli', statuses: [] };
+          exitEntry.statuses.push(step.exitCode.status);
+          assertionHistory.set(exitKey, exitEntry);
+        }
       }
+    } else {
+      // Web gap report: extract from pages
+      for (const page of (report as GapReport).pages) {
+        for (const req of page.requests) {
+          const key = `${page.pageId}:request:${req.method}:${req.urlPattern}`;
+          const entry = assertionHistory.get(key) ?? {
+            pageId: page.pageId,
+            statuses: [],
+            quantifier: req.quantifier,
+          };
+          entry.statuses.push(req.status);
+          assertionHistory.set(key, entry);
+        }
 
-      for (const ce of page.consoleExpectations) {
-        const key = `${page.pageId}:console:${ce.level}`;
-        const entry = assertionHistory.get(key) ?? {
-          pageId: page.pageId,
-          statuses: [],
-          quantifier: ce.quantifier,
-        };
-        entry.statuses.push(ce.status);
-        assertionHistory.set(key, entry);
+        for (const va of page.visualAssertions) {
+          const key = `${page.pageId}:visual:${va.type}:${va.selector ?? ''}`;
+          const entry = assertionHistory.get(key) ?? {
+            pageId: page.pageId,
+            statuses: [],
+            quantifier: va.quantifier,
+          };
+          entry.statuses.push(va.status);
+          assertionHistory.set(key, entry);
+        }
+
+        for (const ce of page.consoleExpectations) {
+          const key = `${page.pageId}:console:${ce.level}`;
+          const entry = assertionHistory.get(key) ?? {
+            pageId: page.pageId,
+            statuses: [],
+            quantifier: ce.quantifier,
+          };
+          entry.statuses.push(ce.status);
+          assertionHistory.set(key, entry);
+        }
       }
     }
   }

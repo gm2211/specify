@@ -19,6 +19,9 @@ export interface CaptureOptions {
   headed?: boolean;
   timeout?: number;
   noScreenshots?: boolean;
+  noGenerate?: boolean;
+  specOutput?: string;
+  specName?: string;
 }
 
 export async function capture(options: CaptureOptions, ctx: CliContext): Promise<number> {
@@ -45,7 +48,9 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
   try {
     hostFilter = new URL(options.url).hostname;
   } catch {
-    // leave empty
+    const err = { error: 'invalid_url', url: options.url, hint: 'Provide a valid URL (e.g. https://example.com)' };
+    process.stdout.write(JSON.stringify(err) + '\n');
+    return ExitCode.PARSE_ERROR;
   }
 
   log(`Capturing ${options.url} → ${outputDir}`);
@@ -130,6 +135,33 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     };
 
     log(`Capture complete: ${summary.totalRequests} requests, ${summary.totalScreenshots} screenshots in ${durationMs}ms`);
+
+    // Auto-generate spec from captured data (unless --no-generate)
+    if (!options.noGenerate) {
+      try {
+        const { generateSpec } = await import('../../spec/generator.js');
+        const { specToYaml } = await import('../../spec/parser.js');
+
+        const spec = generateSpec({
+          inputDir: outputDir,
+          specName: options.specName ?? new URL(options.url).hostname,
+          smart: false,
+        });
+
+        const specFile = options.specOutput
+          ?? path.join(path.dirname(outputDir), 'spec.yaml');
+        const resolvedSpecFile = path.resolve(specFile);
+        fs.mkdirSync(path.dirname(resolvedSpecFile), { recursive: true });
+        fs.writeFileSync(resolvedSpecFile, specToYaml(spec), 'utf-8');
+        log(`Spec generated: ${resolvedSpecFile} (${spec.pages?.length ?? 0} pages)`);
+
+        (summary as Record<string, unknown>).spec = resolvedSpecFile;
+        (summary as Record<string, unknown>).specPages = spec.pages?.length ?? 0;
+      } catch (err) {
+        log(`Warning: spec generation failed: ${(err as Error).message}`);
+        log('Run "specify spec generate" manually to generate a spec from the capture data.');
+      }
+    }
 
     process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
     return ExitCode.SUCCESS;

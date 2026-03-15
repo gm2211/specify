@@ -30,39 +30,43 @@ npm install
 npm run build
 ```
 
-## Core loop
+## Lifecycle
 
 ```bash
-# 1. Write a spec (or have an LLM write one via MCP)
-specify spec guide              # schema + examples + tips for authoring
+# 1. Create a contract
+specify create                   # interactive interview → spec + narrative
 
-# 2. Validate it
-specify spec lint --spec app.spec.yaml
+# 2. Capture existing behavior
+specify capture --url http://localhost:3000 --output ./captures
 
-# 3. Run against captures or a live CLI
-specify spec validate --spec app.spec.yaml --capture ./captures
-specify cli run --spec app.spec.yaml --output report/
+# 3. Evolve the contract as the product changes
+specify evolve --spec app.spec.yaml --pr 42
 
-# 4. Read the report
-open report/cli-report.html     # interactive, self-contained, zero dependencies
+# 4. Review the contract
+specify review --spec app.spec.yaml
+
+# 5. Verify the implementation
+specify verify --spec app.spec.yaml --capture ./captures
+specify verify cli --spec app.spec.yaml
 ```
 
-## What it does
+## Commands
 
 | Command | What |
 |---------|------|
-| `spec validate` | Gap analysis: spec vs captured behavior |
-| `spec generate` | Infer a spec from capture data |
-| `spec evolve` | Find gaps and suggest spec improvements |
-| `spec lint` | Structural validation (no captures needed) |
+| **`create`** | Interactive interview → spec + narrative |
+| **`capture`** | Capture from live system (`--url`) or code (`--from code`) |
+| **`evolve`** | Reason through contract changes (PR, report, interactive) |
+| **`review`** | Inspect the contract in a browser |
+| **`verify`** | Verify against captures (`--capture`) or live (`--url`) |
+| `verify cli` | Run CLI commands defined in spec, validate output |
+| `lint` | Structural validation (no captures needed) |
 | `spec export` | Generate Playwright or Cypress tests from spec |
 | `spec import` | Import existing e2e tests as spec items |
 | `spec sync` | Bidirectional diff: spec vs e2e tests |
-| `cli run` | Run CLI commands defined in spec, validate output |
-| `agent run` | Autonomous headless verification |
+| `bootstrap` | Set up specify-driven development workflow |
 | `schema` | Emit JSON Schema for spec, report, or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
-| `human` | Interactive wizard / REPL |
 
 ## Reports you can trust
 
@@ -132,7 +136,7 @@ scenarios:
 
 ## Self-verifying
 
-Specify eats its own dogfood. The repo includes `specify.spec.yaml` — a spec for Specify itself — validated on every run. Current status: **102 assertions, 100% coverage, 0 failures.** [See the report →](cli-report/cli-report.md)
+Specify eats its own dogfood. The repo includes `specify.spec.yaml` — a spec for Specify itself — validated on every run. Current status: **178 assertions, 100% coverage, 0 failures.** [See the report →](cli-report/cli-report.md)
 
 ## License
 

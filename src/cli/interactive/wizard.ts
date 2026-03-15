@@ -253,7 +253,7 @@ function createPromptHelpers(rl: readline.Interface) {
 // Main wizard
 // ---------------------------------------------------------------------------
 
-export async function runWizard(options: { fromCapture?: string } = {}): Promise<number> {
+export async function runWizard(options: { fromCapture?: string; action?: string; subAction?: string; spec?: string } = {}): Promise<number> {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stderr,
@@ -269,6 +269,11 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
 
     // Detect project state
     const state = detectProjectState();
+
+    // Override spec if --spec was passed
+    if (options.spec) {
+      state.specs = [options.spec];
+    }
 
     // Show what we found
     console.error('');
@@ -294,68 +299,65 @@ export async function runWizard(options: { fromCapture?: string } = {}): Promise
       console.error('  No existing specs or captures found.');
     }
 
-    // Always show all workflows — prompt for missing paths as needed
+    // Lifecycle-aligned menu — 5 primary flows
     const menuOptions: { label: string; action: string }[] = [
-      { label: 'Validate a spec against capture data', action: 'validate' },
-      { label: 'Run the agent against a live URL', action: 'agent' },
-      { label: 'Generate a spec from capture data', action: 'generate' },
-      { label: 'Refine a spec using a gap report', action: 'refine' },
-      { label: 'Improve a spec interactively', action: 'improve' },
-      { label: 'Diff two reports to detect regressions', action: 'diff' },
-      { label: 'Show statistical confidence from run history', action: 'stats' },
-      { label: 'Import e2e tests as spec items', action: 'import-tests' },
-      { label: 'Sync spec against e2e tests', action: 'sync-tests' },
-      { label: 'Create a new spec from scratch', action: 'create' },
-      { label: 'Open the interactive REPL shell', action: 'shell' },
+      { label: 'Create   — create a new contract', action: 'create' },
+      { label: 'Capture  — capture behavior from a live system or code', action: 'capture' },
+      { label: 'Evolve   — change an existing contract', action: 'evolve' },
+      { label: 'Review   — inspect the contract in a browser', action: 'review' },
+      { label: 'Verify   — verify implementation against a contract', action: 'verify' },
     ];
 
-    // Use arrow-key selector directly (don't go through readline)
-    rl.pause();
-    const choice = await arrowSelect(menuOptions.map(o => o.label), 'What would you like to do?');
-    rl.resume();
-    const action = menuOptions[choice].action;
+    let action: string;
+
+    if (options.action) {
+      // Direct path access: `specify human verify`, `specify human evolve`, etc.
+      const match = menuOptions.find(o => o.action === options.action);
+      if (match) {
+        action = match.action;
+        console.error(`\n  → ${match.label}\n`);
+      } else {
+        console.error(`\n  Unknown action: ${options.action}`);
+        console.error('  Available: create, capture, evolve, review, verify\n');
+        rl.close();
+        return ExitCode.PARSE_ERROR;
+      }
+    } else {
+      // Interactive menu
+      console.error('');
+      console.error('  What would you like to do?');
+      console.error('');
+      for (const opt of menuOptions) {
+        console.error(`    ${opt.label}`);
+      }
+      console.error('');
+
+      rl.pause();
+      const choice = await arrowSelect(menuOptions.map(o => o.label), 'Select:');
+      rl.resume();
+      action = menuOptions[choice].action;
+    }
 
     let exitCode: number;
 
     const prompts = { ask, askPath, confirm, choose };
 
     switch (action) {
-      case 'validate':
-        exitCode = await flowValidate(state, prompts);
-        break;
-      case 'agent':
-        exitCode = await flowAgent(state, prompts);
-        break;
-      case 'refine':
-        exitCode = await flowRefine(state, prompts);
-        break;
-      case 'improve':
-        exitCode = await flowImprove(state, prompts);
-        break;
-      case 'diff':
-        exitCode = await flowDiff(state, prompts);
-        break;
-      case 'stats':
-        exitCode = await flowStats(state, prompts);
-        break;
-      case 'generate':
-        exitCode = await flowGenerate(state, prompts);
-        break;
-      case 'import-tests':
-        exitCode = await flowImportTests(state, prompts);
-        break;
-      case 'sync-tests':
-        exitCode = await flowSyncTests(state, prompts);
-        break;
       case 'create':
         exitCode = await flowCreate(prompts, options.fromCapture);
         break;
-      case 'shell':
-        rl.close();
-        const { runRepl } = await import('./repl.js');
-        return await runRepl({
-          spec: state.specs[0],
-        });
+      case 'capture':
+        exitCode = await flowCaptureMenu(state, prompts, options.subAction);
+        break;
+      case 'evolve':
+        exitCode = await flowEvolveMenu(state, prompts, options.subAction);
+        break;
+      case 'review':
+        exitCode = await flowReview(state, prompts);
+        break;
+      case 'verify':
+        exitCode = await flowVerifyMenu(state, prompts, options.subAction);
+        break;
       default:
         exitCode = ExitCode.SUCCESS;
     }
@@ -710,6 +712,159 @@ async function flowCreate(
   }
 
   return ExitCode.SUCCESS;
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Capture (sub-menu)
+// ---------------------------------------------------------------------------
+
+async function flowCaptureMenu(state: ProjectState, prompts: PromptFns, subAction?: string): Promise<number> {
+  const { choose } = prompts;
+
+  const options = [
+    { label: 'From a live URL', action: 'live' },
+    { label: 'From existing test code', action: 'code' },
+    { label: 'Generate spec from capture data', action: 'generate' },
+  ];
+
+  let action: string;
+  if (subAction) {
+    const match = options.find(o => o.action === subAction);
+    action = match ? match.action : subAction;
+  } else {
+    const idx = await choose('Capture from where?', options.map(o => o.label));
+    action = options[idx].action;
+  }
+
+  switch (action) {
+    case 'live':
+      return await flowCaptureLive(prompts);
+    case 'code':
+      return await flowImportTests(state, prompts);
+    case 'generate':
+      return await flowGenerate(state, prompts);
+    default:
+      return ExitCode.SUCCESS;
+  }
+}
+
+async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
+  const url = await ask('URL to capture', 'http://localhost:3000');
+  const outputDir = await askPath('Output directory', './captures/latest');
+
+  console.error('\n  Launching capture...\n');
+
+  const { capture: captureCmd } = await import('../commands/capture.js');
+  return await captureCmd(
+    { url, output: outputDir, headed: false, noScreenshots: false, noGenerate: false },
+    { outputFormat: 'text', quiet: false },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Evolve (sub-menu)
+// ---------------------------------------------------------------------------
+
+async function flowEvolveMenu(state: ProjectState, prompts: PromptFns, subAction?: string): Promise<number> {
+  const { choose } = prompts;
+
+  const options = [
+    { label: 'Interactively — analyze and suggest improvements', action: 'interactive' },
+    { label: 'From a PR — evolve based on code changes', action: 'pr' },
+    { label: 'From a gap report — refine based on validation results', action: 'report' },
+  ];
+
+  let action: string;
+  if (subAction) {
+    const match = options.find(o => o.action === subAction);
+    action = match ? match.action : subAction;
+  } else {
+    const idx = await choose('How would you like to evolve the contract?', options.map(o => o.label));
+    action = options[idx].action;
+  }
+
+  const specPath = await pickSpec(state, prompts);
+
+  switch (action) {
+    case 'interactive':
+      return await flowImprove(state, prompts);
+    case 'pr': {
+      const pr = await prompts.ask('PR number or URL');
+      console.error('\n  Analyzing PR...\n');
+      const { specEvolve } = await import('../commands/spec-evolve.js');
+      return await specEvolve(
+        { spec: specPath, pr, apply: false },
+        { outputFormat: 'text', quiet: false },
+      );
+    }
+    case 'report':
+      return await flowRefine(state, prompts);
+    default:
+      return ExitCode.SUCCESS;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Review
+// ---------------------------------------------------------------------------
+
+async function flowReview(state: ProjectState, prompts: PromptFns): Promise<number> {
+  const specPath = await pickSpec(state, prompts);
+
+  console.error('\n  Generating review...\n');
+
+  const { review: reviewCmd } = await import('../commands/review.js');
+  return await reviewCmd(
+    { spec: specPath, noOpen: false },
+    { outputFormat: 'text', quiet: false },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Verify (sub-menu)
+// ---------------------------------------------------------------------------
+
+async function flowVerifyMenu(state: ProjectState, prompts: PromptFns, subAction?: string): Promise<number> {
+  const { choose } = prompts;
+
+  const options = [
+    { label: 'Against captured data — offline validation', action: 'data' },
+    { label: 'Against a live URL — autonomous agent verification', action: 'agent' },
+    { label: 'CLI commands — run and validate command output', action: 'cli' },
+    { label: 'Diff two reports — detect regressions', action: 'diff' },
+    { label: 'Statistical confidence — analyze run history', action: 'stats' },
+  ];
+
+  let action: string;
+  if (subAction) {
+    const match = options.find(o => o.action === subAction);
+    action = match ? match.action : subAction;
+  } else {
+    const idx = await choose('How would you like to verify?', options.map(o => o.label));
+    action = options[idx].action;
+  }
+
+  switch (action) {
+    case 'data':
+      return await flowValidate(state, prompts);
+    case 'agent':
+      return await flowAgent(state, prompts);
+    case 'cli': {
+      const specPath = await pickSpec(state, prompts);
+      console.error('\n  Running CLI verification...\n');
+      const { cliRun } = await import('../commands/cli-run.js');
+      return await cliRun(
+        { spec: specPath },
+        { outputFormat: 'text', quiet: false },
+      );
+    }
+    case 'diff':
+      return await flowDiff(state, prompts);
+    case 'stats':
+      return await flowStats(state, prompts);
+    default:
+      return ExitCode.SUCCESS;
+  }
 }
 
 // ---------------------------------------------------------------------------

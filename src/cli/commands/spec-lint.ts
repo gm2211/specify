@@ -11,6 +11,7 @@ import { lintRaw } from '../../spec/lint.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { c } from '../colors.js';
+import { readStdin } from '../stdin.js';
 
 export interface SpecLintOptions {
   spec: string;
@@ -35,10 +36,12 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
     return ExitCode.PARSE_ERROR;
   }
 
-  const result = lintRaw(content, options.spec);
+  const result = lintRaw(content, options.spec, options.spec !== '-' ? options.spec : undefined);
 
-  // Output
-  process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  // Output — JSON to stdout only in structured output modes (matches other commands)
+  if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
+    process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+  }
 
   if (!ctx.quiet) {
     const errorCount = result.errors.filter(e => e.severity === 'error').length;
@@ -64,13 +67,4 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
   }
 
   return result.valid ? ExitCode.SUCCESS : ExitCode.PARSE_ERROR;
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    process.stdin.on('error', reject);
-  });
 }

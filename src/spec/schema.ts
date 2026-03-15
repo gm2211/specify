@@ -50,6 +50,22 @@ export const specSchema = {
       type: 'string',
       description: 'Path to companion narrative document (relative to spec file).',
     },
+    requirements: {
+      type: 'array',
+      description: 'Behavioral requirements that need agent intelligence to validate.',
+      items: {
+        type: 'object',
+        required: ['id', 'description', 'verification'],
+        additionalProperties: false,
+        properties: {
+          id: { type: 'string', description: 'Unique identifier for this requirement.' },
+          description: { type: 'string', description: 'What should be true — clear enough for an agent to plan validation.' },
+          verification: { type: 'string', enum: ['mechanical', 'agent'], description: 'How this requirement is verified.' },
+          validation_plan: { type: 'string', description: 'Steps an agent should take to validate this requirement.' },
+          evidence_format: { type: 'string', description: 'What evidence the agent should produce.' },
+        },
+      },
+    },
   },
 
   $defs: {

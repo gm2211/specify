@@ -32,6 +32,7 @@ import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
 import { c } from '../colors.js';
+import { readStdin } from '../stdin.js';
 
 export interface SpecEvolveOptions {
   spec: string;
@@ -71,7 +72,7 @@ export async function specEvolve(options: SpecEvolveOptions, ctx: CliContext): P
     return runApplyMode(spec, options, ctx);
   } else {
     // Default: analyze spec gaps, output structured suggestions
-    return runInteractiveMode(spec, specSummary, ctx);
+    return runInteractiveMode(spec, specSummary, ctx, options.spec !== '-' ? options.spec : undefined);
   }
 }
 
@@ -102,7 +103,7 @@ async function runPrMode(
     process.stderr.write(`  ${prContext.changed_files.length} files changed (+${prContext.additions} -${prContext.deletions})\n\n`);
   }
 
-  const suggestions = analyzePr(spec, prContext);
+  const suggestions = analyzePr(spec, prContext, options.spec !== '-' ? options.spec : undefined);
 
   const result: EvolveResult = {
     mode: 'pr',
@@ -134,6 +135,7 @@ function runInteractiveMode(
   spec: Spec,
   specSummary: ReturnType<typeof summarizeSpec>,
   ctx: CliContext,
+  specPath?: string,
 ): number {
   if (!ctx.quiet) {
     process.stderr.write(`\n${c.boldCyan('Analyzing spec:')} ${c.bold(spec.name)}\n`);
@@ -144,7 +146,7 @@ function runInteractiveMode(
     process.stderr.write('\n');
   }
 
-  const suggestions = analyzeInteractive(spec);
+  const suggestions = analyzeInteractive(spec, specPath);
 
   const result: EvolveResult = {
     mode: 'interactive',
@@ -462,15 +464,3 @@ function parseDiffToFiles(diff: string): Map<string, string> {
   return result;
 }
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    process.stdin.on('error', reject);
-  });
-}

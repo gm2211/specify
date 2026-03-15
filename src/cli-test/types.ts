@@ -52,6 +52,22 @@ export interface CliGapReport {
   };
   commands: CliCommandResult[];
   scenarios: CliScenarioResult[];
+  /** Behavioral requirements from the spec, with verification status. */
+  requirements?: RequirementResult[];
+}
+
+/** Result for a behavioral requirement. */
+export interface RequirementResult {
+  /** Requirement ID from the spec. */
+  id: string;
+  /** Requirement description. */
+  description: string;
+  /** Verification type: mechanical or agent. */
+  verification: string;
+  /** Current status: "verified", "unverified", or "failed". */
+  status: 'verified' | 'unverified' | 'failed';
+  /** Evidence provided by an agent (empty until an agent validates it). */
+  evidence?: unknown;
 }
 
 /** Result of validating one CLI command. */

@@ -50,7 +50,7 @@ export interface LintResult {
  * Lint a spec from raw YAML/JSON string.
  * Combines parse errors, schema validation errors, and semantic lint rules.
  */
-export function lintRaw(content: string, sourceName = '<string>'): LintResult {
+export function lintRaw(content: string, sourceName = '<string>', specPath?: string): LintResult {
   const errors: LintError[] = [];
 
   // 1. Parse
@@ -101,7 +101,7 @@ export function lintRaw(content: string, sourceName = '<string>'): LintResult {
 
   // 3. Semantic lint
   const spec = data as Spec;
-  errors.push(...lintSpec(spec));
+  errors.push(...lintSpec(spec, specPath));
 
   const hasErrors = errors.some(e => e.severity === 'error');
   return { valid: !hasErrors, errors };
@@ -115,7 +115,7 @@ export function lintRaw(content: string, sourceName = '<string>'): LintResult {
  * Run semantic lint rules on a parsed and schema-validated spec.
  * Returns warnings and errors beyond what JSON Schema can catch.
  */
-export function lintSpec(spec: Spec): LintError[] {
+export function lintSpec(spec: Spec, specPath?: string): LintError[] {
   const errors: LintError[] = [];
 
   // Rule: duplicate page IDs
@@ -266,7 +266,7 @@ export function lintSpec(spec: Spec): LintError[] {
 
   // Rule: narrative sync (when narrative_path is set)
   if (spec.narrative_path) {
-    errors.push(...lintNarrativeSync(spec, spec.narrative_path));
+    errors.push(...lintNarrativeSync(spec, spec.narrative_path, specPath));
   }
 
   return errors;
@@ -281,13 +281,16 @@ export function lintSpec(spec: Spec): LintError[] {
  * Checks that all spec refs in the narrative point to existing spec items,
  * and warns about spec items that have no narrative coverage.
  */
-export function lintNarrativeSync(spec: Spec, narrativePath: string): LintError[] {
+export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: string): LintError[] {
   const errors: LintError[] = [];
 
-  // Try to load the narrative file
+  // Resolve narrative path relative to the spec file's directory, not cwd
+  const specDir = specPath ? path.dirname(path.resolve(specPath)) : process.cwd();
   let resolvedPath: string;
   try {
-    resolvedPath = path.resolve(narrativePath);
+    resolvedPath = path.isAbsolute(narrativePath)
+      ? narrativePath
+      : path.resolve(specDir, narrativePath);
     if (!fs.existsSync(resolvedPath)) {
       errors.push({
         path: '/narrative_path',

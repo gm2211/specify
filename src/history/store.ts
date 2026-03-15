@@ -8,13 +8,16 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { GapReport } from '../validation/types.js';
+import type { CliGapReport } from '../cli-test/types.js';
+
+type AnyReport = GapReport | CliGapReport;
 
 export interface HistoryStore {
   dir: string;
-  save(report: GapReport, runId?: string): string;
-  load(runId: string): GapReport;
+  save(report: AnyReport, runId?: string): string;
+  load(runId: string): AnyReport;
   list(): string[];
-  loadLatest(n: number): GapReport[];
+  loadLatest(n: number): AnyReport[];
 }
 
 export function createHistoryStore(dir: string): HistoryStore {
@@ -23,7 +26,7 @@ export function createHistoryStore(dir: string): HistoryStore {
   return {
     dir: resolved,
 
-    save(report: GapReport, runId?: string): string {
+    save(report: AnyReport, runId?: string): string {
       fs.mkdirSync(resolved, { recursive: true });
       const id = runId ?? new Date().toISOString().replace(/[:.]/g, '-');
       const filePath = path.join(resolved, `${id}.json`);
@@ -31,12 +34,12 @@ export function createHistoryStore(dir: string): HistoryStore {
       return id;
     },
 
-    load(runId: string): GapReport {
+    load(runId: string): AnyReport {
       const filePath = path.join(resolved, `${runId}.json`);
       if (!fs.existsSync(filePath)) {
         throw new Error(`Report not found: ${runId}`);
       }
-      return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as GapReport;
+      return JSON.parse(fs.readFileSync(filePath, 'utf-8')) as AnyReport;
     },
 
     list(): string[] {
@@ -48,7 +51,7 @@ export function createHistoryStore(dir: string): HistoryStore {
         .sort();
     },
 
-    loadLatest(n: number): GapReport[] {
+    loadLatest(n: number): AnyReport[] {
       const ids = this.list();
       const latest = ids.slice(-n);
       return latest.map(id => this.load(id));

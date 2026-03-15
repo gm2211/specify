@@ -16,22 +16,25 @@
  * Command structure:
  *   specify spec validate   --spec <path|-> --capture <dir>
  *   specify spec generate   --input <dir> --output <path> [--smart]
- *   specify spec evolve    --spec <path> [--pr <number|url>] [--repo <owner/repo>]
- *                                        [--report <path>] [--apply] [--output <path>] [--url <url>]
- *   specify spec refine     --spec <path> [--report <path>] [--url <url>]  (DEPRECATED → delegates to evolve)
- *   specify spec import    --from <path> [--framework playwright|cypress]
- *   specify spec export    --spec <path> --framework playwright|cypress
- *   specify spec sync      --spec <path> --tests <dir>
- *   specify spec lint      --spec <path|->
+ *   specify spec evolve     --spec <path> [--pr <number|url>] [--report <path>] [--apply]
+ *   specify spec refine     --spec <path> [--report <path>]  (DEPRECATED → delegates to evolve)
+ *   specify spec import     --from <path> [--framework playwright|cypress]
+ *   specify spec export     --spec <path> --framework playwright|cypress
+ *   specify spec sync       --spec <path> --tests <dir>
+ *   specify spec lint       --spec <path|->
  *   specify spec guide
- *   specify capture          --url <url> --output <dir> [--headed] [--timeout <ms>] [--no-screenshots]
- *   specify agent run       --spec <path|-> --url <url> [--explore] [--headed]
- *   specify cli run         --spec <path|-> [--output <dir>]
- *   specify report diff     --a <path> --b <path>
- *   specify report stats    --history-dir <dir>
+ *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
+ *   specify review           --spec <path> [--report <path>] [--no-open]
+ *   specify create           [--output <path>] [--narrative <path>]
+ *   specify agent run        --spec <path|-> --url <url> [--explore] [--headed]
+ *   specify cli run          --spec <path|-> [--output <dir>]
+ *   specify report diff      --a <path> --b <path>
+ *   specify report stats     --history-dir <dir>
  *   specify schema spec|report|commands
- *   specify mcp             MCP server for LLM tool integration
- *   specify human           Interactive mode (wizard / REPL / TUI)
+ *   specify mcp              MCP server for LLM tool integration
+ *   specify human            Interactive mode (wizard / REPL / TUI)
+ *
+ * All commands auto-discover --spec from cwd when omitted.
  */
 
 import { detectOutputFormat } from './output.js';
@@ -40,6 +43,7 @@ import type { CliContext, OutputFormat } from './types.js';
 import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
+import { resolveSpecPath } from './spec-finder.js';
 
 // Re-export for external consumers
 export { COMMANDS };
@@ -85,6 +89,41 @@ function getArg(args: string[], flag: string): string | undefined {
   return args[idx + 1];
 }
 
+/**
+ * Resolve --spec: use the provided value, or auto-discover a spec file in cwd.
+ * Returns the spec path or '' if not found (commands handle empty string as missing).
+ * Logs discovery info to stderr when auto-discovering.
+ */
+function resolveSpecArg(args: string[], ctx: CliContext): string {
+  const explicit = getArg(args, '--spec');
+  // If --spec was explicitly provided (even if empty), use it as-is
+  if (explicit !== undefined) {
+    if (explicit !== '') return explicit;
+    // Explicit empty string means the flag was there but value was empty — treat as missing
+    return '';
+  }
+
+  // --spec not provided at all — try auto-discovery
+  const result = resolveSpecPath(undefined);
+
+  if (result.path) {
+    if (result.autoDiscovered && !ctx.quiet) {
+      process.stderr.write(`Using auto-discovered spec: ${result.path}\n`);
+    }
+    return result.path;
+  }
+
+  if (!ctx.quiet) {
+    process.stderr.write(`${result.error}\n`);
+    if (result.candidates) {
+      for (const candidate of result.candidates) {
+        process.stderr.write(`  - ${candidate}\n`);
+      }
+    }
+  }
+  return '';
+}
+
 function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
 }
@@ -122,28 +161,39 @@ function printHelp(asJson: boolean): void {
   } else {
     // Human-readable to stderr
     process.stderr.write(`
-${c.boldCyan('Specify')} ${c.dim('—')} spec-driven functional verification
+${c.boldCyan('Specify')} ${c.dim('—')} contract lifecycle for web applications
 
-${c.bold('Usage:')} specify ${c.cyan('<noun>')} ${c.cyan('<verb>')} ${c.dim('[options]')}
+${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 
-${c.bold('Commands:')}
-  ${c.cyan('spec validate')}    Validate a spec against captured data
-  ${c.cyan('spec generate')}    Generate a spec from capture data
-  ${c.cyan('spec evolve')}      Evolve a spec from PR, gap report, or interactively
-  ${c.dim('spec refine')}      ${c.dim('(deprecated — use spec evolve)')}
+${c.bold('Primary Flows:')}
+  ${c.cyan('create')}            Create a contract from human intent
+  ${c.cyan('capture')}           Capture a contract from a live system or codebase
+  ${c.cyan('evolve')}            Evolve a contract from PR, report, or interactively
+  ${c.cyan('review')}            Inspect the contract in a browser
+  ${c.cyan('verify')}            Verify an implementation against a contract
+
+${c.bold('Advanced:')}
+  ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec import')}      Import existing e2e tests as spec items
   ${c.cyan('spec export')}      Export spec items as e2e test code
-  ${c.cyan('spec sync')}        Compare spec against e2e tests bidirectionally
-  ${c.cyan('spec lint')}        Validate spec structure ${c.dim('(no captures needed)')}
-  ${c.cyan('spec guide')}       Output authoring guide for LLM spec writers
-  ${c.cyan('capture')}           Capture traffic, logs, and screenshots from a URL
-  ${c.cyan('agent run')}        Run autonomous agent-driven verification
-  ${c.cyan('cli run')}          Run CLI verification against a spec
+  ${c.cyan('spec sync')}        Compare contract vs e2e tests
   ${c.cyan('report diff')}      Diff two gap reports
   ${c.cyan('report stats')}     Show statistical confidence from history
-  ${c.cyan('schema')}           Output JSON Schema ${c.dim('(spec, report, or commands)')}
-  ${c.cyan('mcp')}              Start MCP server for LLM tool integration
-  ${c.cyan('human')}            Interactive mode ${c.dim('(wizard, REPL, TUI)')}
+
+${c.bold('Infrastructure:')}
+  ${c.cyan('bootstrap')}         Set up specify-driven development workflow
+  ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
+  ${c.cyan('mcp')}               MCP server for agent integration
+
+${c.dim(`Run "specify human" for interactive guided mode`)}
+${c.dim(`Run "specify <command> --help" for command-specific help`)}
+
+${c.bold('Common tasks:')}
+  ${c.dim('New project:')}       specify create
+  ${c.dim('Add a feature:')}     specify evolve --spec spec.yaml
+  ${c.dim('After a PR:')}        specify evolve --spec spec.yaml --pr 42
+  ${c.dim('Check it works:')}    specify verify --spec spec.yaml
+  ${c.dim('See the contract:')}  specify review --spec spec.yaml
 
 ${c.bold('Global Options:')}
   ${c.yellow('--json')}                                        Force JSON output to stdout
@@ -153,10 +203,64 @@ ${c.bold('Global Options:')}
   ${c.yellow('--help, -h')}                                    Show this help
 
 ${c.bold('Examples:')}
-  ${c.dim('$')} specify spec validate --spec ./spec.yaml --capture ./captures/latest
-  ${c.dim('$')} specify agent run --spec ./spec.yaml --url http://localhost:3000
-  ${c.dim('$')} specify human
+  ${c.dim('$')} specify create
+  ${c.dim('$')} specify capture --url http://localhost:3000 --output ./captures
+  ${c.dim('$')} specify verify --spec ./spec.yaml --capture ./captures/latest
+  ${c.dim('$')} specify evolve --spec ./spec.yaml --pr 42
+  ${c.dim('$')} specify review --spec ./spec.yaml
 `.trimStart());
+  }
+}
+
+function printCommandHelp(noun: string, args: string[]): void {
+  const verb = args.find(a => a !== noun && a !== '--help' && a !== '-h' && !a.startsWith('-'));
+  const searchName = verb ? `${noun} ${verb}` : noun;
+
+  // Find matching commands in manifest
+  const matches = COMMANDS.filter(cmd =>
+    cmd.name === searchName || cmd.name.startsWith(searchName + ' ') || cmd.name === noun
+  );
+
+  if (matches.length === 0) {
+    process.stderr.write(`Unknown command: ${searchName}\n\n`);
+    printHelp(false);
+    return;
+  }
+
+  for (const cmd of matches) {
+    process.stderr.write(`\n${c.boldCyan('specify ' + cmd.name)}\n`);
+    process.stderr.write(`  ${cmd.description}\n\n`);
+
+    if (cmd.parameters.length > 0) {
+      process.stderr.write(`${c.bold('Parameters:')}\n`);
+      for (const p of cmd.parameters) {
+        const req = p.required ? c.red('(required)') : c.dim('(optional)');
+        const def = p.default !== undefined ? c.dim(` [default: ${p.default}]`) : '';
+        process.stderr.write(`  ${c.yellow(p.name)} ${c.dim(p.type)} ${req}${def}\n`);
+        process.stderr.write(`    ${p.description}\n`);
+      }
+      process.stderr.write('\n');
+    }
+
+    if (cmd.modes?.length) {
+      process.stderr.write(`${c.bold('Modes:')}\n`);
+      for (const mode of cmd.modes) {
+        process.stderr.write(`  ${c.cyan(mode.name)} — ${mode.description}\n`);
+        process.stderr.write(`    Required: ${mode.required_parameters.join(', ')}\n`);
+        if (mode.condition) {
+          process.stderr.write(`    ${c.dim('When: ' + mode.condition)}\n`);
+        }
+      }
+      process.stderr.write('\n');
+    }
+
+    if (cmd.examples?.length) {
+      process.stderr.write(`${c.bold('Examples:')}\n`);
+      for (const ex of cmd.examples) {
+        process.stderr.write(`  ${c.dim('$')} ${ex}\n`);
+      }
+      process.stderr.write('\n');
+    }
   }
 }
 
@@ -167,9 +271,15 @@ ${c.bold('Examples:')}
 async function main(): Promise<void> {
   const { ctx, remaining } = parseGlobalOptions(process.argv.slice(2));
 
-  // --help flag: always human-readable text to stderr
+  // --help flag
   if (hasFlag(remaining, '--help') || hasFlag(remaining, '-h')) {
-    printHelp(false);
+    const helpNoun = remaining.find(a => a !== '--help' && a !== '-h');
+    if (helpNoun) {
+      // Subcommand help — show command-specific info from manifest
+      printCommandHelp(helpNoun, remaining);
+    } else {
+      printHelp(false);
+    }
     process.exit(ExitCode.SUCCESS);
     return;
   }
@@ -194,20 +304,26 @@ async function main(): Promise<void> {
       if (verb === 'shell' || verb === 'repl') {
         const { runRepl } = await import('./interactive/repl.js');
         exitCode = await runRepl({
-          spec: getArg(rest, '--spec'),
+          spec: resolveSpecArg(rest, ctx) || undefined,
           url: getArg(rest, '--url'),
         });
       } else if (verb === 'watch' || verb === 'tui') {
         const { runTui } = await import('./interactive/tui.js');
         exitCode = await runTui({
-          spec: getArg(rest, '--spec') ?? '',
+          spec: resolveSpecArg(rest, ctx),
           url: getArg(rest, '--url') ?? '',
         });
       } else {
-        // Default: wizard (covers `specify human` and `specify human init`)
+        // Default: wizard — pass verb as action for direct path access
+        // e.g. `specify human verify` → action='verify'
+        //      `specify human verify stats` → action='verify', subAction='stats'
+        const wizardArgs = verb ? [verb, ...rest] : rest;
         const { runWizard } = await import('./interactive/wizard.js');
         exitCode = await runWizard({
-          fromCapture: getArg(remaining.slice(1), '--from-capture'),
+          fromCapture: getArg(wizardArgs, '--from-capture'),
+          action: verb && verb !== 'init' ? verb : undefined,
+          subAction: verb && rest.length > 0 && !rest[0].startsWith('-') ? rest[0] : undefined,
+          spec: getArg(wizardArgs, '--spec'),
         });
       }
 
@@ -217,7 +333,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'validate') {
       const { specValidate } = await import('./commands/spec-validate.js');
       exitCode = await specValidate({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         capture: getArg(rest, '--capture') ?? '',
         output: getArg(rest, '--output'),
         historyDir: getArg(rest, '--history-dir'),
@@ -235,7 +351,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'refine') {
       const { specRefine } = await import('./commands/spec-refine.js');
       exitCode = await specRefine({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         report: getArg(rest, '--report'),
         url: getArg(rest, '--url'),
         output: getArg(rest, '--output'),
@@ -244,7 +360,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'evolve') {
       const { specEvolve } = await import('./commands/spec-evolve.js');
       exitCode = await specEvolve({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         pr: getArg(rest, '--pr'),
         repo: getArg(rest, '--repo'),
         report: getArg(rest, '--report'),
@@ -264,7 +380,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'export') {
       const { specExport } = await import('./commands/spec-export.js');
       exitCode = await specExport({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         framework: getArg(rest, '--framework') ?? '',
         output: getArg(rest, '--output'),
         splitFiles: hasFlag(rest, '--split-files'),
@@ -273,7 +389,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'lint') {
       const { specLint } = await import('./commands/spec-lint.js');
       exitCode = await specLint({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
       }, ctx);
 
     } else if (noun === 'spec' && verb === 'guide') {
@@ -283,7 +399,7 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'sync') {
       const { specSync } = await import('./commands/spec-sync.js');
       exitCode = await specSync({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         tests: getArg(rest, '--tests') ?? '',
         framework: getArg(rest, '--framework'),
       }, ctx);
@@ -291,19 +407,33 @@ async function main(): Promise<void> {
     } else if (noun === 'capture') {
       // capture is a standalone command (no verb) — recombine args
       const captureArgs = verb ? [verb, ...rest] : rest;
-      const { capture: captureCmd } = await import('./commands/capture.js');
-      exitCode = await captureCmd({
-        url: getArg(captureArgs, '--url') ?? '',
-        output: getArg(captureArgs, '--output') ?? '',
-        headed: hasFlag(captureArgs, '--headed'),
-        timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
-        noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
-      }, ctx);
+      const from = getArg(captureArgs, '--from') ?? 'live';
+      if (from === 'code') {
+        // capture --from code delegates to spec import
+        const { specImport } = await import('./commands/spec-import.js');
+        exitCode = await specImport({
+          from: getArg(captureArgs, '--input') ?? '',
+          framework: getArg(captureArgs, '--framework'),
+          output: getArg(captureArgs, '--output'),
+        }, ctx);
+      } else {
+        const { capture: captureCmd } = await import('./commands/capture.js');
+        exitCode = await captureCmd({
+          url: getArg(captureArgs, '--url') ?? '',
+          output: getArg(captureArgs, '--output') ?? '',
+          headed: hasFlag(captureArgs, '--headed'),
+          timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
+          noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
+          noGenerate: hasFlag(captureArgs, '--no-generate'),
+          specOutput: getArg(captureArgs, '--spec-output'),
+          specName: getArg(captureArgs, '--spec-name'),
+        }, ctx);
+      }
 
     } else if (noun === 'agent' && verb === 'run') {
       const { agentRun } = await import('./commands/agent-run.js');
       exitCode = await agentRun({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         url: getArg(rest, '--url') ?? '',
         headed: hasFlag(rest, '--headed'),
         output: getArg(rest, '--output'),
@@ -318,8 +448,9 @@ async function main(): Promise<void> {
     } else if (noun === 'cli' && verb === 'run') {
       const { cliRun } = await import('./commands/cli-run.js');
       exitCode = await cliRun({
-        spec: getArg(rest, '--spec') ?? '',
+        spec: resolveSpecArg(rest, ctx),
         output: getArg(rest, '--output'),
+        historyDir: getArg(rest, '--history-dir'),
       }, ctx);
 
     } else if (noun === 'report' && verb === 'diff') {
@@ -349,15 +480,16 @@ async function main(): Promise<void> {
       // MCP server runs until client disconnects — don't exit
       return;
 
-    } else if (noun === 'site') {
-      // site is a standalone command (no verb) — recombine args
-      const siteArgs = verb ? [verb, ...rest] : rest;
-      const { site: siteCmd } = await import('./commands/site.js');
-      exitCode = await siteCmd({
-        spec: getArg(siteArgs, '--spec') ?? '',
-        narrative: getArg(siteArgs, '--narrative'),
-        report: getArg(siteArgs, '--report'),
-        output: getArg(siteArgs, '--output'),
+    } else if (noun === 'review') {
+      // review is a standalone command (no verb) — recombine args
+      const reviewArgs = verb ? [verb, ...rest] : rest;
+      const { review: reviewCmd } = await import('./commands/review.js');
+      exitCode = await reviewCmd({
+        spec: resolveSpecArg(reviewArgs, ctx),
+        narrative: getArg(reviewArgs, '--narrative'),
+        report: getArg(reviewArgs, '--report'),
+        output: getArg(reviewArgs, '--output'),
+        noOpen: hasFlag(reviewArgs, '--no-open'),
       }, ctx);
 
     } else if (noun === 'create') {
@@ -366,6 +498,108 @@ async function main(): Promise<void> {
         output: getArg(rest, '--output'),
         narrative: getArg(rest, '--narrative'),
       });
+
+    // -----------------------------------------------------------------
+    // Top-level lifecycle aliases
+    // -----------------------------------------------------------------
+    } else if (noun === 'evolve') {
+      // Top-level alias for spec evolve
+      const evolveArgs = verb ? [verb, ...rest] : rest;
+      const { specEvolve } = await import('./commands/spec-evolve.js');
+      exitCode = await specEvolve({
+        spec: resolveSpecArg(evolveArgs, ctx),
+        pr: getArg(evolveArgs, '--pr'),
+        repo: getArg(evolveArgs, '--repo'),
+        report: getArg(evolveArgs, '--report'),
+        apply: hasFlag(evolveArgs, '--apply'),
+        output: getArg(evolveArgs, '--output'),
+        url: getArg(evolveArgs, '--url'),
+      }, ctx);
+
+    } else if (noun === 'verify') {
+      // Unified verification dispatcher
+      // Routing: explicit flags > spec auto-detection
+      const verifyArgs = verb && verb !== 'cli' ? [verb, ...rest] : rest;
+      const specPath = verb === 'cli' ? resolveSpecArg(rest, ctx) : resolveSpecArg(verifyArgs, ctx);
+      const url = getArg(verifyArgs, '--url');
+      const capture = getArg(verifyArgs, '--capture');
+
+      if (verb === 'cli') {
+        // Explicit: verify cli → cli run (backward compat)
+        const { cliRun } = await import('./commands/cli-run.js');
+        exitCode = await cliRun({
+          spec: specPath,
+          output: getArg(rest, '--output'),
+          historyDir: getArg(rest, '--history-dir'),
+        }, ctx);
+      } else if (url && !capture) {
+        // verify --url (no --capture) → agent run
+        const { agentRun } = await import('./commands/agent-run.js');
+        exitCode = await agentRun({
+          spec: specPath,
+          url: url,
+          headed: hasFlag(verifyArgs, '--headed'),
+          output: getArg(verifyArgs, '--output'),
+          explore: hasFlag(verifyArgs, '--explore'),
+          maxExplorationRounds: getArg(verifyArgs, '--max-exploration-rounds') ? parseInt(getArg(verifyArgs, '--max-exploration-rounds')!) : undefined,
+          noSetup: hasFlag(verifyArgs, '--no-setup'),
+          noTeardown: hasFlag(verifyArgs, '--no-teardown'),
+          timeout: getArg(verifyArgs, '--timeout') ? parseInt(getArg(verifyArgs, '--timeout')!) : undefined,
+          noScreenshots: hasFlag(verifyArgs, '--no-screenshots'),
+        }, ctx);
+      } else if (capture) {
+        // verify --capture → spec validate
+        const { specValidate } = await import('./commands/spec-validate.js');
+        exitCode = await specValidate({
+          spec: specPath,
+          capture: capture,
+          output: getArg(verifyArgs, '--output'),
+          historyDir: getArg(verifyArgs, '--history-dir'),
+        }, ctx);
+      } else {
+        // No explicit target — auto-detect from spec
+        // Load the spec to check what sections it has
+        const { loadSpec } = await import('../spec/parser.js');
+        try {
+          const spec = loadSpec(specPath);
+          if (spec.cli) {
+            // Spec has a cli section → run CLI verification
+            const { cliRun } = await import('./commands/cli-run.js');
+            exitCode = await cliRun({
+              spec: specPath,
+              output: getArg(verifyArgs, '--output'),
+              historyDir: getArg(verifyArgs, '--history-dir'),
+            }, ctx);
+          } else if (spec.pages?.length) {
+            // Spec has pages but no URL — can't verify without a target
+            process.stderr.write('Spec has pages but no --url or --capture provided. Provide a target to verify against.\n');
+            exitCode = ExitCode.PARSE_ERROR;
+          } else {
+            process.stderr.write('Spec has no verifiable sections (no cli, no pages). Nothing to verify.\n');
+            exitCode = ExitCode.PARSE_ERROR;
+          }
+        } catch (err) {
+          process.stderr.write(`Failed to load spec: ${(err as Error).message}\n`);
+          exitCode = ExitCode.PARSE_ERROR;
+        }
+      }
+
+    } else if (noun === 'lint') {
+      // Top-level alias for spec lint
+      const lintArgs = verb ? [verb, ...rest] : rest;
+      const { specLint } = await import('./commands/spec-lint.js');
+      exitCode = await specLint({
+        spec: resolveSpecArg(lintArgs, ctx),
+      }, ctx);
+
+    } else if (noun === 'bootstrap') {
+      const bootstrapArgs = verb ? [verb, ...rest] : rest;
+      const { bootstrap: bootstrapCmd } = await import('./commands/bootstrap.js');
+      exitCode = await bootstrapCmd({
+        dryRun: hasFlag(bootstrapArgs, '--dry-run'),
+        targetDir: getArg(bootstrapArgs, '--target-dir') ?? '.',
+        spec: getArg(bootstrapArgs, '--spec') || resolveSpecArg(bootstrapArgs, ctx) || undefined,
+      }, ctx);
 
     } else {
       // Unknown command — structured error

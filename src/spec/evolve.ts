@@ -9,6 +9,8 @@
  * to act on — not auto-applied.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import type {
   Spec,
   PageSpec,
@@ -18,6 +20,7 @@ import type {
   FlowSpec,
   VisualAssertion,
 } from './types.js';
+import { markdownToNarrative, type NarrativeDocument, type NarrativeSection } from './narrative.js';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -37,7 +40,10 @@ export interface EvolveSuggestion {
     | 'add_flow'
     | 'add_error_path'
     | 'add_cli_command'
-    | 'spec_hygiene';
+    | 'spec_hygiene'
+    | 'update_narrative'
+    | 'add_narrative'
+    | 'remove_narrative';
 
   /** Priority: high = likely needed, medium = worth considering, low = nice-to-have. */
   priority: 'high' | 'medium' | 'low';
@@ -134,7 +140,7 @@ export function summarizeSpec(spec: Spec): SpecSummary {
 // PR-based evolution
 // ---------------------------------------------------------------------------
 
-export function analyzePr(spec: Spec, pr: PrContext): EvolveSuggestion[] {
+export function analyzePr(spec: Spec, pr: PrContext, specPath?: string): EvolveSuggestion[] {
   const suggestions: EvolveSuggestion[] = [];
   let nextId = 1;
   const sid = () => `pr-${nextId++}`;
@@ -284,6 +290,12 @@ export function analyzePr(spec: Spec, pr: PrContext): EvolveSuggestion[] {
     });
   }
 
+  // Narrative alignment for PR mode
+  const prNarrative = loadNarrativeForSpec(spec, specPath);
+  if (prNarrative) {
+    suggestions.push(...analyzeNarrative(spec, prNarrative));
+  }
+
   return suggestions;
 }
 
@@ -291,7 +303,7 @@ export function analyzePr(spec: Spec, pr: PrContext): EvolveSuggestion[] {
 // Interactive evolution (for LLM agent with askUser)
 // ---------------------------------------------------------------------------
 
-export function analyzeInteractive(spec: Spec): EvolveSuggestion[] {
+export function analyzeInteractive(spec: Spec, specPath?: string): EvolveSuggestion[] {
   const suggestions: EvolveSuggestion[] = [];
   let nextId = 1;
   const sid = () => `int-${nextId++}`;
@@ -514,7 +526,13 @@ export function analyzeInteractive(spec: Spec): EvolveSuggestion[] {
     }
   }
 
-  // 11. Scenarios without assertion steps
+  // 11. Narrative alignment (if narrative is available)
+  const narrative = loadNarrativeForSpec(spec, specPath);
+  if (narrative) {
+    suggestions.push(...analyzeNarrative(spec, narrative));
+  }
+
+  // 12. Scenarios without assertion steps
   for (const page of spec.pages ?? []) {
     for (const scenario of page.scenarios ?? []) {
       const hasAssertions = scenario.steps.some(s =>
@@ -536,6 +554,143 @@ export function analyzeInteractive(spec: Spec): EvolveSuggestion[] {
         });
       }
     }
+  }
+
+  return suggestions;
+}
+
+// ---------------------------------------------------------------------------
+// Narrative ↔ spec alignment analysis
+// ---------------------------------------------------------------------------
+
+/**
+ * Try to load the narrative companion for a spec.
+ * Resolves relative paths against the spec file's directory, not cwd.
+ *
+ * @param spec - The parsed spec (may contain narrative_path)
+ * @param specPath - Path to the spec file on disk (used to resolve relative narrative paths)
+ */
+export function loadNarrativeForSpec(spec: Spec, specPath?: string): NarrativeDocument | undefined {
+  if (!spec.narrative_path && !specPath) return undefined;
+
+  const specDir = specPath ? path.dirname(path.resolve(specPath)) : process.cwd();
+
+  const candidates: string[] = [];
+  if (spec.narrative_path) {
+    candidates.push(spec.narrative_path);
+  }
+  if (specPath) {
+    candidates.push(path.basename(specPath).replace(/\.(ya?ml|json)$/, '.narrative.md'));
+  }
+
+  for (const candidate of candidates) {
+    // Resolve relative paths against the spec file's directory
+    const resolved = path.isAbsolute(candidate)
+      ? candidate
+      : path.resolve(specDir, candidate);
+    if (fs.existsSync(resolved)) {
+      try {
+        const md = fs.readFileSync(resolved, 'utf-8');
+        return markdownToNarrative(md);
+      } catch {
+        // skip
+      }
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Analyze narrative ↔ spec alignment and produce suggestions.
+ */
+export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): EvolveSuggestion[] {
+  const suggestions: EvolveSuggestion[] = [];
+  let nextId = 1;
+  const sid = () => `nar-${nextId++}`;
+
+  // Build set of valid spec refs
+  const validRefs = new Set<string>();
+  validRefs.add('overview');
+  validRefs.add('defaults');
+
+  for (const page of spec.pages ?? []) {
+    validRefs.add(`page:${page.id}`);
+    for (const scenario of page.scenarios ?? []) {
+      validRefs.add(`scenario:${page.id}/${scenario.id}`);
+    }
+    for (const req of page.expected_requests ?? []) {
+      validRefs.add(`request:${page.id}/${req.method}:${req.url_pattern}`);
+    }
+  }
+  for (const flow of spec.flows ?? []) {
+    validRefs.add(`flow:${flow.id}`);
+  }
+
+  // Collect all refs from narrative
+  const narrativeRefs = new Set<string>();
+  function collectRefs(sections: NarrativeSection[]) {
+    for (const s of sections) {
+      for (const ref of s.specRefs) narrativeRefs.add(ref);
+      collectRefs(s.children);
+    }
+  }
+  collectRefs(narrative.sections);
+
+  // Stale refs: narrative points to nonexistent spec items
+  for (const ref of narrativeRefs) {
+    if (ref === 'overview' || ref === 'defaults' || ref === 'meta') continue;
+    if (!validRefs.has(ref)) {
+      suggestions.push({
+        id: sid(),
+        category: 'remove_narrative',
+        priority: 'high',
+        description: `Narrative references deleted spec item "${ref}"`,
+        rationale: `The narrative has a section linked to "${ref}" but this item no longer exists in the spec. The narrative section is stale and should be updated or removed.`,
+        proposed_change: {
+          action: 'custom',
+          description: `Remove or update narrative section referencing "${ref}"`,
+          spec_fragment: { stale_ref: ref },
+        },
+        question: `The narrative references "${ref}" which no longer exists in the spec. Should we remove this narrative section or update it to reference a different spec item?`,
+      });
+    }
+  }
+
+  // Missing coverage: spec items with no narrative section
+  for (const ref of validRefs) {
+    if (ref === 'overview' || ref === 'defaults') continue;
+    if (!narrativeRefs.has(ref)) {
+      suggestions.push({
+        id: sid(),
+        category: 'add_narrative',
+        priority: 'medium',
+        description: `Spec item "${ref}" has no narrative documentation`,
+        rationale: `The spec defines "${ref}" but the narrative companion has no section describing it in human-readable form. This creates a gap between what's tested and what's documented.`,
+        proposed_change: {
+          action: 'custom',
+          description: `Add narrative section for "${ref}"`,
+          spec_fragment: { missing_ref: ref },
+        },
+        question: `The spec item "${ref}" has no human-readable description in the narrative. Would you like to add one?`,
+      });
+    }
+  }
+
+  // Missing narrative_path on spec
+  if (!spec.narrative_path && narrative) {
+    suggestions.push({
+      id: sid(),
+      category: 'update_narrative',
+      priority: 'low',
+      description: 'Spec does not declare its narrative companion',
+      rationale: 'Setting narrative_path on the spec enables automatic sync validation via spec lint and linking in the review browser.',
+      proposed_change: {
+        action: 'custom',
+        description: 'Add narrative_path field to spec',
+        spec_fragment: { narrative_path: '' },
+      },
+      question: 'Should we link the narrative file to the spec via the narrative_path field?',
+    });
   }
 
   return suggestions;

@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Spec, CliSpec, CliCommandSpec, CliScenarioSpec } from '../spec/types.js';
-import type { CliGapReport, CliCommandResult, CliScenarioResult, CliCommandRun } from './types.js';
+import type { CliGapReport, CliCommandResult, CliScenarioResult, CliCommandRun, RequirementResult } from './types.js';
 import { executeCommand } from './executor.js';
 import { validateCommandRun } from './validator.js';
 import { c } from '../cli/colors.js';
@@ -90,6 +90,55 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
     }
   }
 
+  // Include behavioral requirements from the spec
+  // Check .specify/evidence/<id>.json for agent-provided evidence
+  const evidenceDir = path.join(process.cwd(), '.specify', 'evidence');
+  const requirements: RequirementResult[] = (spec.requirements ?? []).map(req => {
+    const evidencePath = path.join(evidenceDir, `${req.id}.json`);
+    try {
+      if (fs.existsSync(evidencePath)) {
+        const raw = fs.readFileSync(evidencePath, 'utf-8');
+        const evidence = JSON.parse(raw) as {
+          requirement_id: string;
+          status: 'passed' | 'failed';
+          timestamp?: string;
+          agent?: string;
+          evidence?: unknown;
+        };
+        if (evidence.status === 'passed') {
+          log?.(`  ${c.green('✓')} Requirement ${c.bold(req.id)}: evidence found (passed)`);
+          return {
+            id: req.id,
+            description: req.description,
+            verification: req.verification,
+            status: 'verified' as const,
+            evidence: evidence,
+          };
+        }
+        log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: evidence found (failed)`);
+        return {
+          id: req.id,
+          description: req.description,
+          verification: req.verification,
+          status: 'failed' as const,
+          evidence: evidence,
+        };
+      }
+    } catch {
+      // Evidence file is malformed or unreadable — treat as failed
+    }
+    log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: no evidence`);
+    return {
+      id: req.id,
+      description: req.description,
+      verification: req.verification,
+      status: 'failed' as const,
+    };
+  });
+
+  const requirementPasses = requirements.filter(r => r.status === 'verified').length;
+  const requirementFailures = requirements.filter(r => r.status === 'failed').length;
+
   const report: CliGapReport = {
     spec: {
       name: spec.name,
@@ -101,14 +150,17 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
       timestamp: new Date().toISOString(),
     },
     summary: {
-      total: totalChecks,
-      passed,
-      failed,
+      total: totalChecks + requirements.length,
+      passed: passed + requirementPasses,
+      failed: failed + requirementFailures,
       untested,
-      coverage: totalChecks > 0 ? Math.round(((passed + failed) / totalChecks) * 100) : 0,
+      coverage: (totalChecks + requirements.length) > 0
+        ? Math.round(((passed + requirementPasses) / (totalChecks + requirements.length)) * 100)
+        : 0,
     },
     commands: commandResults,
     scenarios: scenarioResults,
+    requirements,
   };
 
   // Save output

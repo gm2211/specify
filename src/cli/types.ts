@@ -1,9 +1,18 @@
 export type OutputFormat = 'json' | 'text' | 'markdown' | 'ndjson';
 
+export interface CommandMode {
+  name: string;
+  description: string;
+  required_parameters: string[];
+  optional_parameters?: string[];
+  condition?: string;
+}
+
 export interface CommandDefinition {
   name: string;
   description: string;
   parameters: ParameterDefinition[];
+  modes?: CommandMode[];
   examples?: string[];
 }
 

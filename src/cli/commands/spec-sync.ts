@@ -14,6 +14,7 @@ import type { TestFramework, SyncReport } from '../../e2e/types.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
+import { readStdin } from '../stdin.js';
 
 export interface SpecSyncOptions {
   spec: string;
@@ -110,13 +111,4 @@ function syncReportToText(report: SyncReport): string {
   }
 
   return lines.join('\n');
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    process.stdin.on('data', (chunk) => chunks.push(chunk));
-    process.stdin.on('end', () => resolve(Buffer.concat(chunks).toString('utf-8')));
-    process.stdin.on('error', reject);
-  });
 }

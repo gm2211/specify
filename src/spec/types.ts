@@ -139,6 +139,31 @@ export interface Spec {
 
   /** Path to companion narrative document (relative to spec file). */
   narrative_path?: string;
+
+  /** Behavioral requirements that need agent intelligence to validate. */
+  requirements?: Requirement[];
+}
+
+// ---------------------------------------------------------------------------
+// Behavioral requirements
+// ---------------------------------------------------------------------------
+
+/** A behavioral requirement — a property that needs judgment to validate. */
+export interface Requirement {
+  /** Unique identifier. */
+  id: string;
+
+  /** What should be true — clear enough for an agent to plan validation. */
+  description: string;
+
+  /** How this requirement is verified: "mechanical" or "agent". */
+  verification: 'mechanical' | 'agent';
+
+  /** Steps an agent should take to validate this requirement. */
+  validation_plan?: string;
+
+  /** What evidence the agent should produce. */
+  evidence_format?: string;
 }
 
 // ---------------------------------------------------------------------------

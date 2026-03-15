@@ -1,0 +1,21 @@
+version: "1.0"
+name: "Requirements Test Spec"
+description: "Minimal spec with a behavioral requirement to test verify cli reporting"
+
+requirements:
+  - id: example-requirement
+    description: "This is an example behavioral requirement for testing"
+    verification: agent
+    validation_plan: "An agent should verify this somehow"
+
+cli:
+  binary: "echo"
+
+  commands:
+    - id: echo-test
+      description: "Simple echo test"
+      args: ["hello"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          text: "hello"
