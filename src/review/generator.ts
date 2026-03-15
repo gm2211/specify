@@ -37,10 +37,6 @@ ${CSS}
       <span id="spec-version" class="badge badge-neutral"></span>
     </div>
     <div class="header-right">
-      <div class="toggle-group">
-        <button id="btn-narrative" class="toggle-btn active" onclick="setView('narrative')">Narrative</button>
-        <button id="btn-spec" class="toggle-btn" onclick="setView('spec')">Spec</button>
-      </div>
       <div id="summary-badges"></div>
     </div>
   </header>
@@ -50,7 +46,6 @@ ${CSS}
     </nav>
     <main id="content">
       <div id="narrative-view"></div>
-      <div id="spec-view" class="hidden"></div>
     </main>
     <aside id="detail-panel" class="hidden">
       <div id="detail-header">
@@ -259,19 +254,7 @@ body {
   text-decoration: line-through;
 }
 
-/* Spec view */
-#spec-view {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  padding: 20px 24px;
-  background: var(--bg-surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-}
+/* Spec view (inline per card, see .inline-spec) */
 
 /* Detail panel */
 #detail-panel {
@@ -339,6 +322,110 @@ body {
 }
 
 .hidden { display: none !important; }
+
+/* Per-card spec toggle */
+.spec-toggle-btn {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.spec-toggle-btn:hover { background: var(--bg-hover); color: var(--text); }
+.spec-toggle-btn.active { background: rgba(88,166,255,0.15); color: var(--accent); border-color: var(--accent); }
+
+.inline-spec {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
+}
+.inline-spec .spec-key { color: var(--accent); }
+.inline-spec .spec-val { color: var(--text); }
+.inline-spec .spec-comment { color: var(--text-dim); font-style: italic; }
+
+/* CLI assertion detail styles */
+.cli-args {
+  padding: 4px 8px;
+  background: rgba(0,0,0,0.25);
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  margin: 4px 0;
+}
+.cli-assertion-group {
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.cli-assertion-group-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.cli-assertion {
+  font-size: 12px;
+  padding: 3px 0;
+  margin-left: 8px;
+}
+.cli-assertion.pass .cli-assert-icon { color: var(--green); }
+.cli-assertion.fail .cli-assert-icon { color: var(--red); }
+.cli-assertion.untested .cli-assert-icon { color: var(--text-dim); }
+.cli-assert-type {
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cli-assert-desc { color: var(--text-muted); }
+.cli-assert-values {
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-left: 16px;
+  margin-top: 2px;
+}
+.cli-assert-values code {
+  background: rgba(0,0,0,0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.cli-assert-reason {
+  font-size: 11px;
+  color: var(--red);
+  margin-left: 16px;
+}
+.cli-rerun {
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+.cli-rerun code {
+  background: rgba(0,0,0,0.25);
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.exit-code code {
+  background: rgba(0,0,0,0.25);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.exit-code.passed { color: var(--green); }
+.exit-code.failed { color: var(--red); }
 
 /* Sync warnings */
 .sync-warn {
@@ -504,26 +591,31 @@ const JS = `
       }
     }
 
-    if (type === 'cli') {
+    if (ref === 'cli') {
       if (spec.cli) {
         results.push({ kind: 'cli-summary', binary: spec.cli.binary, commandCount: (spec.cli.commands || []).length, status: 'passed' });
       }
     }
 
-    if (ref.startsWith('cli:')) {
-      var cmdId = ref.substring(4);
+    if (type === 'cli' && parts.length > 1) {
+      var cmdId = parts.slice(1).join(':');
       if (cliReport) {
         var cmd = (cliReport.commands || []).find(function(c) { return c.commandId === cmdId; });
         if (cmd) {
           results.push({ kind: 'cli-command', commandId: cmd.commandId, status: cmd.status,
-            description: cmd.description, exitCode: cmd.exitCode,
-            stdoutAssertions: cmd.stdoutAssertions, stderrAssertions: cmd.stderrAssertions });
+            description: cmd.description, args: cmd.args, exitCode: cmd.exitCode,
+            stdoutAssertions: cmd.stdoutAssertions, stderrAssertions: cmd.stderrAssertions,
+            durationMs: cmd.durationMs, timedOut: cmd.timedOut,
+            stdoutPreview: cmd.stdoutPreview, stderrPreview: cmd.stderrPreview });
         }
       }
       if (results.length === 0 && spec.cli) {
         var specCmd = (spec.cli.commands || []).find(function(c) { return c.id === cmdId; });
         if (specCmd) {
-          results.push({ kind: 'cli-spec', commandId: specCmd.id, description: specCmd.description, args: specCmd.args, expectedExitCode: specCmd.expected_exit_code, status: 'untested' });
+          results.push({ kind: 'cli-spec', commandId: specCmd.id, description: specCmd.description,
+            args: specCmd.args, expectedExitCode: specCmd.expected_exit_code,
+            stdoutAssertions: specCmd.stdout_assertions, stderrAssertions: specCmd.stderr_assertions,
+            status: 'untested' });
         }
       }
     }
@@ -766,14 +858,16 @@ const JS = `
         html += '</div>';
       }
 
-      // Spec refs
+      // Spec refs + toggle
       if (s.refs.length > 0) {
         html += '<div class="section-refs">';
         for (const ref of s.refs) {
           const stale = isStaleRef(ref) ? ' stale' : '';
           html += '<span class="ref-tag' + stale + '">' + esc(ref) + (stale ? ' (stale)' : '') + '</span>';
         }
+        html += '<button class="spec-toggle-btn" data-section-idx="' + i + '" onclick="event.stopPropagation(); toggleInlineSpec(' + i + ', this)">Show spec</button>';
         html += '</div>';
+        html += '<div class="inline-spec hidden" id="inline-spec-' + i + '"></div>';
       }
 
       html += '</div>';
@@ -789,11 +883,7 @@ const JS = `
     });
   }
 
-  function renderSpec() {
-    const container = $('spec-view');
-    // Pretty-print the spec as indented JSON (YAML would need a lib)
-    container.textContent = JSON.stringify(spec, null, 2);
-  }
+  // renderSpec removed — spec is now shown inline per-card via toggleInlineSpec
 
   // ---- Detail panel ----
 
@@ -891,16 +981,59 @@ const JS = `
   }
 
   function renderCliCommand(item) {
-    let h = '<div class="assertion-type">CLI Command</div>';
+    let h = '<div class="assertion-type">CLI Command \\u2014 ' + esc(item.commandId) + '</div>';
     h += '<div class="assertion-desc">' + esc(item.description || item.commandId) + '</div>';
+    if (item.args && item.args.length > 0) {
+      h += '<div class="assertion-detail cli-args">' + esc((spec.cli ? spec.cli.binary : 'specify') + ' ' + item.args.join(' ')) + '</div>';
+    }
     if (item.exitCode) {
-      h += '<div class="assertion-detail">Exit: expected=' + item.exitCode.expected + ' actual=' + item.exitCode.actual + ' ' + item.exitCode.status + '</div>';
+      var ecIcon = item.exitCode.status === 'passed' ? '\\u2713' : '\\u2717';
+      h += '<div class="assertion-detail exit-code ' + item.exitCode.status + '">' + ecIcon + ' Exit code: expected <code>' + esc(String(item.exitCode.expected)) + '</code> actual <code>' + esc(String(item.exitCode.actual)) + '</code></div>';
     }
-    const allAssertions = (item.stdoutAssertions || []).concat(item.stderrAssertions || []);
-    for (const a of allAssertions) {
-      const icon = a.status === 'passed' ? '\\u2713' : a.status === 'failed' ? '\\u2717' : '\\u25cb';
-      h += '<div class="assertion-detail">' + icon + ' ' + esc(a.description || a.type || '') + '</div>';
+    if (item.timedOut) {
+      h += '<div class="assertion-detail" style="color:var(--red)">\\u26a0 Timed out</div>';
     }
+    if (item.durationMs !== undefined) {
+      h += '<div class="assertion-detail">' + item.durationMs + 'ms</div>';
+    }
+    var stdoutA = item.stdoutAssertions || [];
+    var stderrA = item.stderrAssertions || [];
+    if (stdoutA.length > 0) {
+      h += '<div class="cli-assertion-group"><div class="cli-assertion-group-label">stdout assertions</div>';
+      for (var ai = 0; ai < stdoutA.length; ai++) {
+        h += renderCliAssertion(stdoutA[ai]);
+      }
+      h += '</div>';
+    }
+    if (stderrA.length > 0) {
+      h += '<div class="cli-assertion-group"><div class="cli-assertion-group-label">stderr assertions</div>';
+      for (var ai2 = 0; ai2 < stderrA.length; ai2++) {
+        h += renderCliAssertion(stderrA[ai2]);
+      }
+      h += '</div>';
+    }
+    h += '<div class="cli-rerun">Re-run: <code>' + esc((spec.cli ? spec.cli.binary : './specify') + ' ' + (item.args || []).join(' ')) + '</code></div>';
+    return h;
+  }
+
+  function renderCliAssertion(a) {
+    var icon = a.status === 'passed' ? '\\u2713' : a.status === 'failed' ? '\\u2717' : '\\u25cb';
+    var cls = a.status === 'passed' ? 'pass' : a.status === 'failed' ? 'fail' : 'untested';
+    var h = '<div class="cli-assertion ' + cls + '">';
+    h += '<span class="cli-assert-icon">' + icon + '</span> ';
+    h += '<span class="cli-assert-type">' + esc(a.type || '') + '</span>';
+    if (a.description) h += ' <span class="cli-assert-desc">' + esc(a.description) + '</span>';
+    if (a.expected !== undefined) {
+      h += '<div class="cli-assert-values">expected: <code>' + esc(JSON.stringify(a.expected)) + '</code>';
+      if (a.actual !== undefined) {
+        h += ' actual: <code>' + esc(JSON.stringify(a.actual)) + '</code>';
+      }
+      h += '</div>';
+    }
+    if (a.reason) {
+      h += '<div class="cli-assert-reason">' + esc(a.reason) + '</div>';
+    }
+    h += '</div>';
     return h;
   }
 
@@ -972,22 +1105,137 @@ const JS = `
   }
 
   function renderCliSpec(item) {
-    var h = '<div class="assertion-type">CLI Command (spec)</div>';
+    var h = '<div class="assertion-type">CLI Command (untested) \\u2014 ' + esc(item.commandId) + '</div>';
     h += '<div class="assertion-desc">' + esc(item.description || item.commandId) + '</div>';
-    h += '<div class="assertion-detail">Args: ' + esc((item.args || []).join(' ')) + '</div>';
-    h += '<div class="assertion-detail">Expected exit: ' + item.expectedExitCode + '</div>';
+    if (item.args && item.args.length > 0) {
+      h += '<div class="assertion-detail cli-args">' + esc((spec.cli ? spec.cli.binary : 'specify') + ' ' + item.args.join(' ')) + '</div>';
+    }
+    h += '<div class="assertion-detail">Expected exit code: <code>' + esc(String(item.expectedExitCode)) + '</code></div>';
+    var stdoutA = item.stdoutAssertions || [];
+    var stderrA = item.stderrAssertions || [];
+    if (stdoutA.length > 0) {
+      h += '<div class="cli-assertion-group"><div class="cli-assertion-group-label">stdout assertions (' + stdoutA.length + ')</div>';
+      for (var i = 0; i < stdoutA.length; i++) {
+        var a = stdoutA[i];
+        h += '<div class="cli-assertion untested"><span class="cli-assert-icon">\\u25cb</span> <span class="cli-assert-type">' + esc(a.type || '') + '</span>';
+        if (a.description) h += ' <span class="cli-assert-desc">' + esc(a.description) + '</span>';
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    if (stderrA.length > 0) {
+      h += '<div class="cli-assertion-group"><div class="cli-assertion-group-label">stderr assertions (' + stderrA.length + ')</div>';
+      for (var j = 0; j < stderrA.length; j++) {
+        var b = stderrA[j];
+        h += '<div class="cli-assertion untested"><span class="cli-assert-icon">\\u25cb</span> <span class="cli-assert-type">' + esc(b.type || '') + '</span>';
+        if (b.description) h += ' <span class="cli-assert-desc">' + esc(b.description) + '</span>';
+        h += '</div>';
+      }
+      h += '</div>';
+    }
+    h += '<div class="cli-rerun">Run: <code>' + esc((spec.cli ? spec.cli.binary : './specify') + ' ' + (item.args || []).join(' ')) + '</code></div>';
     return h;
   }
 
-  // ---- View toggle ----
+  // ---- Per-card spec toggle ----
 
-  function setView(view) {
-    $('btn-narrative').classList.toggle('active', view === 'narrative');
-    $('btn-spec').classList.toggle('active', view === 'spec');
-    $('narrative-view').classList.toggle('hidden', view !== 'narrative');
-    $('spec-view').classList.toggle('hidden', view !== 'spec');
+  function toggleInlineSpec(idx, btn) {
+    var el = $('inline-spec-' + idx);
+    if (!el) return;
+    var isHidden = el.classList.contains('hidden');
+    if (isHidden) {
+      el.innerHTML = buildInlineSpec(sections[idx]);
+      el.classList.remove('hidden');
+      btn.textContent = 'Hide spec';
+      btn.classList.add('active');
+    } else {
+      el.classList.add('hidden');
+      btn.textContent = 'Show spec';
+      btn.classList.remove('active');
+    }
   }
-  window.setView = setView;
+  window.toggleInlineSpec = toggleInlineSpec;
+
+  function buildInlineSpec(section) {
+    var lines = [];
+    for (var ri = 0; ri < section.refs.length; ri++) {
+      var ref = section.refs[ri];
+      var refParts = ref.split(':');
+      var refType = refParts[0];
+
+      if (ref === 'overview') {
+        if (spec.description) {
+          lines.push('<span class="spec-key">description:</span> <span class="spec-val">' + esc(spec.description.substring(0, 200)) + (spec.description.length > 200 ? '...' : '') + '</span>');
+        }
+      } else if (ref === 'defaults' && spec.defaults) {
+        lines.push('<span class="spec-key">defaults:</span>');
+        Object.entries(spec.defaults).forEach(function(e) {
+          lines.push('  <span class="spec-key">' + esc(e[0]) + ':</span> <span class="spec-val">' + esc(String(e[1])) + '</span>');
+        });
+      } else if (ref === 'variables' && spec.variables) {
+        lines.push('<span class="spec-key">variables:</span>');
+        Object.entries(spec.variables).forEach(function(e) {
+          lines.push('  <span class="spec-key">' + esc(e[0]) + ':</span> <span class="spec-val">' + esc(String(e[1])) + '</span>');
+        });
+      } else if (ref === 'assumptions' && spec.assumptions) {
+        lines.push('<span class="spec-key">assumptions:</span>');
+        spec.assumptions.forEach(function(a) {
+          lines.push('  - <span class="spec-key">type:</span> <span class="spec-val">' + esc(a.type) + '</span>');
+          if (a.description) lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(a.description) + '</span>');
+        });
+      } else if (ref === 'requirements' && spec.requirements) {
+        lines.push('<span class="spec-key">requirements:</span>');
+        spec.requirements.forEach(function(r) {
+          lines.push('  - <span class="spec-key">id:</span> <span class="spec-val">' + esc(r.id) + '</span>');
+          lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(r.description || '') + '</span>');
+          lines.push('    <span class="spec-key">verification:</span> <span class="spec-val">' + esc(r.verification || 'agent') + '</span>');
+        });
+      } else if (ref === 'cli' && spec.cli) {
+        lines.push('<span class="spec-key">cli:</span>');
+        lines.push('  <span class="spec-key">binary:</span> <span class="spec-val">' + esc(spec.cli.binary) + '</span>');
+        lines.push('  <span class="spec-comment"># ' + (spec.cli.commands || []).length + ' commands, ' + (spec.cli.scenarios || []).length + ' scenarios</span>');
+      } else if (refType === 'cli' && refParts.length > 1 && spec.cli) {
+        var cid = refParts.slice(1).join(':');
+        var specCmd = (spec.cli.commands || []).find(function(c) { return c.id === cid; });
+        if (specCmd) {
+          lines.push('<span class="spec-key">- id:</span> <span class="spec-val">' + esc(specCmd.id) + '</span>');
+          if (specCmd.description) lines.push('  <span class="spec-key">description:</span> <span class="spec-val">' + esc(specCmd.description.substring(0, 120)) + (specCmd.description.length > 120 ? '...' : '') + '</span>');
+          lines.push('  <span class="spec-key">args:</span> <span class="spec-val">[' + (specCmd.args || []).map(function(a) { return JSON.stringify(a); }).join(', ') + ']</span>');
+          lines.push('  <span class="spec-key">expected_exit_code:</span> <span class="spec-val">' + esc(String(specCmd.expected_exit_code)) + '</span>');
+          if (specCmd.stdout_assertions && specCmd.stdout_assertions.length > 0) {
+            lines.push('  <span class="spec-key">stdout_assertions:</span> <span class="spec-comment"># ' + specCmd.stdout_assertions.length + ' assertions</span>');
+            specCmd.stdout_assertions.forEach(function(a) {
+              lines.push('    - <span class="spec-key">type:</span> <span class="spec-val">' + esc(a.type) + '</span>');
+              if (a.description) lines.push('      <span class="spec-key">description:</span> <span class="spec-val">' + esc(a.description.substring(0, 100)) + (a.description.length > 100 ? '...' : '') + '</span>');
+            });
+          }
+          if (specCmd.stderr_assertions && specCmd.stderr_assertions.length > 0) {
+            lines.push('  <span class="spec-key">stderr_assertions:</span> <span class="spec-comment"># ' + specCmd.stderr_assertions.length + ' assertions</span>');
+          }
+        }
+      } else if (refType === 'page' && refParts[1]) {
+        var page = (spec.pages || []).find(function(p) { return p.id === refParts[1]; });
+        if (page) {
+          lines.push('<span class="spec-key">- id:</span> <span class="spec-val">' + esc(page.id) + '</span>');
+          lines.push('  <span class="spec-key">path:</span> <span class="spec-val">' + esc(page.path) + '</span>');
+          if (page.description) lines.push('  <span class="spec-key">description:</span> <span class="spec-val">' + esc(page.description) + '</span>');
+          if (page.scenarios) lines.push('  <span class="spec-comment"># ' + page.scenarios.length + ' scenarios</span>');
+        }
+      } else if (refType === 'flow' && refParts[1]) {
+        var flow = (spec.flows || []).find(function(f) { return f.id === refParts[1]; });
+        if (flow) {
+          lines.push('<span class="spec-key">- id:</span> <span class="spec-val">' + esc(flow.id) + '</span>');
+          if (flow.description) lines.push('  <span class="spec-key">description:</span> <span class="spec-val">' + esc(flow.description) + '</span>');
+          lines.push('  <span class="spec-key">steps:</span> <span class="spec-comment"># ' + (flow.steps || []).length + ' steps</span>');
+        }
+      }
+
+      if (ri < section.refs.length - 1 && lines.length > 0) {
+        lines.push('');
+      }
+    }
+    return lines.join('\\n');
+  }
 
   // ---- Summary badges ----
 
@@ -1032,7 +1280,6 @@ const JS = `
 
     renderToc();
     renderNarrative();
-    renderSpec();
     renderSummary();
   }
 
