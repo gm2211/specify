@@ -193,4 +193,24 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--url', type: 'string', required: true, description: 'Target URL' },
     ],
   },
+  {
+    name: 'site',
+    description: 'Generate a self-contained HTML spec browser with narrative view, spec toggle, and validation results',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
+      { name: '--narrative', type: 'string', required: false, description: 'Path to narrative companion file (auto-discovered if omitted)' },
+      { name: '--report', type: 'string', required: false, description: 'Path to validation report JSON (gap-report.json or cli-report.json)' },
+      { name: '--output', type: 'string', required: false, description: 'Output HTML file path (default: <spec>.site.html)' },
+    ],
+    examples: ['specify site --spec spec.yaml', 'specify site --spec spec.yaml --report gap-report.json --output docs/spec.html'],
+  },
+  {
+    name: 'create',
+    description: 'Interactive interview that produces a computable spec (YAML) and narrative companion (Markdown)',
+    parameters: [
+      { name: '--output', type: 'string', required: false, description: 'Output spec file path (default: spec.yaml)' },
+      { name: '--narrative', type: 'string', required: false, description: 'Output narrative file path (default: <spec>.narrative.md)' },
+    ],
+    examples: ['specify create', 'specify create --output my-app.spec.yaml'],
+  },
 ];

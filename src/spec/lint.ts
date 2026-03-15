@@ -9,10 +9,13 @@
  *   - Pages with no assertions at all
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import { specSchema } from './schema.js';
 import type { Spec, FlowStep } from './types.js';
+import { markdownToNarrative, type NarrativeSection } from './narrative.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -258,6 +261,113 @@ export function lintSpec(spec: Spec): LintError[] {
       });
     } else {
       cliCmdIds.set(cmd.id, i);
+    }
+  }
+
+  // Rule: narrative sync (when narrative_path is set)
+  if (spec.narrative_path) {
+    errors.push(...lintNarrativeSync(spec, spec.narrative_path));
+  }
+
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Narrative ↔ spec sync validation
+// ---------------------------------------------------------------------------
+
+/**
+ * Validate that a narrative companion file stays in sync with the spec.
+ * Checks that all spec refs in the narrative point to existing spec items,
+ * and warns about spec items that have no narrative coverage.
+ */
+export function lintNarrativeSync(spec: Spec, narrativePath: string): LintError[] {
+  const errors: LintError[] = [];
+
+  // Try to load the narrative file
+  let resolvedPath: string;
+  try {
+    resolvedPath = path.resolve(narrativePath);
+    if (!fs.existsSync(resolvedPath)) {
+      errors.push({
+        path: '/narrative_path',
+        severity: 'warning',
+        message: `Narrative file not found: ${narrativePath}`,
+        rule: 'narrative-missing',
+      });
+      return errors;
+    }
+  } catch {
+    return errors;
+  }
+
+  let narrative;
+  try {
+    const md = fs.readFileSync(resolvedPath, 'utf-8');
+    narrative = markdownToNarrative(md);
+  } catch (err) {
+    errors.push({
+      path: '/narrative_path',
+      severity: 'warning',
+      message: `Failed to parse narrative: ${(err as Error).message}`,
+      rule: 'narrative-parse-error',
+    });
+    return errors;
+  }
+
+  // Build a set of all valid spec item refs
+  const validRefs = new Set<string>();
+  validRefs.add('overview');
+  validRefs.add('defaults');
+
+  for (const page of spec.pages ?? []) {
+    validRefs.add(`page:${page.id}`);
+    for (const scenario of page.scenarios ?? []) {
+      validRefs.add(`scenario:${page.id}/${scenario.id}`);
+    }
+    for (const req of page.expected_requests ?? []) {
+      validRefs.add(`request:${page.id}/${req.method}:${req.url_pattern}`);
+    }
+  }
+  for (const flow of spec.flows ?? []) {
+    validRefs.add(`flow:${flow.id}`);
+  }
+
+  // Collect all refs from the narrative
+  const narrativeRefs = new Set<string>();
+  function collectRefs(sections: NarrativeSection[]) {
+    for (const s of sections) {
+      for (const ref of s.specRefs) {
+        narrativeRefs.add(ref);
+      }
+      collectRefs(s.children);
+    }
+  }
+  collectRefs(narrative.sections);
+
+  // Check for invalid refs (narrative points to nonexistent spec item)
+  for (const ref of narrativeRefs) {
+    if (ref === 'overview' || ref === 'defaults' || ref === 'meta') continue;
+    if (!validRefs.has(ref)) {
+      errors.push({
+        path: '/narrative_path',
+        severity: 'warning',
+        message: `Narrative references nonexistent spec item: "${ref}"`,
+        rule: 'narrative-ref-invalid',
+      });
+    }
+  }
+
+  // Check for missing coverage (spec items with no narrative section)
+  for (const ref of validRefs) {
+    if (ref === 'overview' || ref === 'defaults') continue;
+    if (!narrativeRefs.has(ref)) {
+      errors.push({
+        path: '/narrative_path',
+        severity: 'warning',
+        message: `Spec item "${ref}" has no corresponding narrative section`,
+        rule: 'narrative-ref-missing',
+      });
     }
   }
 

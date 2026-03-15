@@ -349,6 +349,24 @@ async function main(): Promise<void> {
       // MCP server runs until client disconnects — don't exit
       return;
 
+    } else if (noun === 'site') {
+      // site is a standalone command (no verb) — recombine args
+      const siteArgs = verb ? [verb, ...rest] : rest;
+      const { site: siteCmd } = await import('./commands/site.js');
+      exitCode = await siteCmd({
+        spec: getArg(siteArgs, '--spec') ?? '',
+        narrative: getArg(siteArgs, '--narrative'),
+        report: getArg(siteArgs, '--report'),
+        output: getArg(siteArgs, '--output'),
+      }, ctx);
+
+    } else if (noun === 'create') {
+      const { create: createCmd } = await import('./commands/create.js');
+      exitCode = await createCmd({
+        output: getArg(rest, '--output'),
+        narrative: getArg(rest, '--narrative'),
+      });
+
     } else {
       // Unknown command — structured error
       const error = { error: 'unknown_command', command: `${noun} ${verb ?? ''}`.trim(), hint: 'Run "specify schema commands" for available commands' };

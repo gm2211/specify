@@ -46,6 +46,10 @@ export const specSchema = {
       description: 'Preconditions that must hold for this spec to be validly tested.',
     },
     defaults: { $ref: '#/$defs/DefaultProperties' },
+    narrative_path: {
+      type: 'string',
+      description: 'Path to companion narrative document (relative to spec file).',
+    },
   },
 
   $defs: {

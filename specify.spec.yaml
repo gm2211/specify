@@ -283,7 +283,7 @@ cli:
         - type: json_path
           description: "Sees our CLI commands"
           path: "spec_summary.cli_command_count"
-          value: 31
+          value: 37
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -500,6 +500,67 @@ cli:
         - type: json_path
           path: "parameter"
           value: "--url"
+
+    # -------------------------------------------------------------------
+    # Create command
+    # -------------------------------------------------------------------
+    - id: create-in-schema
+      description: "Create command appears in schema commands output"
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "Create command is registered"
+          text: "create"
+
+    - id: create-non-interactive
+      description: "Create without TTY exits gracefully"
+      args: ["create"]
+      expected_exit_code: 0
+
+    # -------------------------------------------------------------------
+    # Site command
+    # -------------------------------------------------------------------
+    - id: site-no-spec
+      description: "Site without --spec fails with missing parameter error"
+      args: ["site", "--spec", ""]
+      expected_exit_code: 10
+      stdout_assertions:
+        - type: json_path
+          path: "error"
+          value: "missing_parameter"
+        - type: json_path
+          path: "parameter"
+          value: "--spec"
+
+    - id: site-missing-spec-file
+      description: "Site with nonexistent spec file fails"
+      args: ["site", "--spec", "nonexistent-spec-file.yaml"]
+      expected_exit_code: 10
+      stderr_assertions:
+        - type: text_contains
+          text: "Spec file not found"
+
+    - id: site-generates-html
+      description: "Site generates HTML from example spec"
+      args: ["site", "--spec", "src/spec/examples/login-page.yaml", "--output", "/tmp/specify-test-site.html"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          path: "spec"
+          value: "Login Page Spec"
+        - type: text_contains
+          description: "Output path is in result"
+          text: "specify-test-site.html"
+
+    - id: site-in-schema
+      description: "Site command appears in schema commands output"
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "Site command is registered"
+          text: "site"
 
   scenarios:
     # -------------------------------------------------------------------

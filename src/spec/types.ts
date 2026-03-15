@@ -136,6 +136,9 @@ export interface Spec {
 
   /** Universal properties that apply across all pages by default. */
   defaults?: DefaultProperties;
+
+  /** Path to companion narrative document (relative to spec file). */
+  narrative_path?: string;
 }
 
 // ---------------------------------------------------------------------------
