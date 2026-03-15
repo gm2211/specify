@@ -37,6 +37,9 @@
  * All commands auto-discover --spec from cwd when omitted.
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
+import { fileURLToPath } from 'url';
 import { detectOutputFormat } from './output.js';
 import { ExitCode } from './exit-codes.js';
 import type { CliContext, OutputFormat } from './types.js';
@@ -44,6 +47,24 @@ import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 import { resolveSpecPath } from './spec-finder.js';
+
+// Read version from package.json at startup
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+function readVersion(): string {
+  // Walk up from src/cli/ or dist/src/cli/ to find package.json
+  let dir = __dirname;
+  for (let i = 0; i < 5; i++) {
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
+      return pkg.version ?? '0.0.0';
+    }
+    dir = path.dirname(dir);
+  }
+  return '0.0.0';
+}
+const VERSION = readVersion();
 
 // Re-export for external consumers
 export { COMMANDS };
@@ -137,7 +158,7 @@ function printHelp(asJson: boolean): void {
     // Agent-friendly: emit command manifest as JSON to stdout
     process.stdout.write(JSON.stringify({
       name: 'specify',
-      version: '0.1.0',
+      version: VERSION,
       description: 'Spec-driven functional verification for web applications',
       commands: COMMANDS,
       global_options: [
@@ -270,6 +291,13 @@ function printCommandHelp(noun: string, args: string[]): void {
 
 async function main(): Promise<void> {
   const { ctx, remaining } = parseGlobalOptions(process.argv.slice(2));
+
+  // --version flag
+  if (hasFlag(remaining, '--version') || hasFlag(remaining, '-V')) {
+    process.stdout.write(VERSION + '\n');
+    process.exit(ExitCode.SUCCESS);
+    return;
+  }
 
   // --help flag
   if (hasFlag(remaining, '--help') || hasFlag(remaining, '-h')) {

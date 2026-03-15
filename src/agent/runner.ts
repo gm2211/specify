@@ -74,7 +74,7 @@ function defaultOutputDir(specPath: string): string {
     .replace('T', '_')
     .slice(0, 19);
   const specName = path.basename(specPath, path.extname(specPath));
-  return path.resolve('agent-runs', `${specName}_${timestamp}`);
+  return path.resolve('.specify', 'agent-runs', `${specName}_${timestamp}`);
 }
 
 function resolveUrl(urlOrPath: string, baseUrl: string): string {

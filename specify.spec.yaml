@@ -58,9 +58,14 @@ cli:
         - type: json_path
           path: "name"
           value: "specify"
-        - type: json_path
-          path: "version"
-          value: "0.1.0"
+        - type: json_schema
+          description: "The version field is a non-empty string (semver, read from package.json)"
+          schema:
+            type: object
+            properties:
+              version:
+                type: string
+                minLength: 3
         - type: json_schema
           description: "The self-description JSON object must contain top-level keys for name, version, the full commands array, global options, and exit codes so agents can fully understand the CLI contract"
           schema:
@@ -149,6 +154,36 @@ cli:
         - type: text_contains
           description: "The bootstrap command (scaffold specify-driven development workflow with CLAUDE.md and git hooks) must appear as a standalone command"
           text: "\"name\": \"bootstrap\""
+
+    - id: version-flag
+      description: >
+        When invoked with --version, Specify prints the current semver version to stdout
+        and exits with code 0. The version is read from package.json, not hardcoded. This
+        is the standard way for users and agents to check which version is installed.
+      args: ["--version"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_matches
+          description: "Outputs a valid semver version (major.minor.patch)"
+          pattern: "^\\d+\\.\\d+\\.\\d+"
+
+    - id: version-in-self-description
+      description: >
+        The no-args JSON self-description must include a version field with a semver-shaped
+        string. The version is read dynamically from package.json so it stays in sync with
+        the npm package version and git tags.
+      args: []
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_schema
+          description: "The self-description has a version field that is a non-empty string"
+          schema:
+            type: object
+            required: ["version"]
+            properties:
+              version:
+                type: string
+                minLength: 3
 
     - id: help-flag
       description: >
@@ -399,7 +434,7 @@ cli:
         - type: json_path
           description: "The evolve summary reports the exact number of CLI command test entries in this spec file"
           path: "spec_summary.cli_command_count"
-          value: 77
+          value: 79
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)

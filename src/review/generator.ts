@@ -462,13 +462,74 @@ const JS = `
     }
 
     if (type === 'defaults') {
+      if (spec.defaults) {
+        Object.entries(spec.defaults).forEach(function(e) {
+          results.push({ kind: 'default', property: e[0], details: String(e[1]), status: 'untested' });
+        });
+      }
       if (webReport && webReport.defaults) {
+        results.length = 0;
         webReport.defaults.forEach(d => results.push({ kind: 'default', ...d }));
       }
     }
 
-    // CLI report — match by command ID pattern
-    if (cliReport) {
+    if (type === 'variables') {
+      if (spec.variables) {
+        Object.entries(spec.variables).forEach(function(e) {
+          results.push({ kind: 'variable', name: e[0], value: e[1], status: 'passed' });
+        });
+      }
+    }
+
+    if (type === 'assumptions') {
+      if (spec.assumptions) {
+        spec.assumptions.forEach(function(a) {
+          results.push({ kind: 'assumption', type: a.type, description: a.description, reason: a.reason, status: 'untested' });
+        });
+      }
+      if (webReport && webReport.assumptions) {
+        webReport.assumptions.forEach(function(a) { results.push({ kind: 'assumption', ...a }); });
+      }
+    }
+
+    if (type === 'requirements') {
+      if (spec.requirements) {
+        spec.requirements.forEach(function(r) {
+          results.push({ kind: 'requirement', id: r.id, description: r.description, verification: r.verification, status: 'untested' });
+        });
+      }
+      if (cliReport && cliReport.requirements) {
+        results.length = 0;
+        cliReport.requirements.forEach(function(r) { results.push({ kind: 'requirement', ...r }); });
+      }
+    }
+
+    if (type === 'cli') {
+      if (spec.cli) {
+        results.push({ kind: 'cli-summary', binary: spec.cli.binary, commandCount: (spec.cli.commands || []).length, status: 'passed' });
+      }
+    }
+
+    if (ref.startsWith('cli:')) {
+      var cmdId = ref.substring(4);
+      if (cliReport) {
+        var cmd = (cliReport.commands || []).find(function(c) { return c.commandId === cmdId; });
+        if (cmd) {
+          results.push({ kind: 'cli-command', commandId: cmd.commandId, status: cmd.status,
+            description: cmd.description, exitCode: cmd.exitCode,
+            stdoutAssertions: cmd.stdoutAssertions, stderrAssertions: cmd.stderrAssertions });
+        }
+      }
+      if (results.length === 0 && spec.cli) {
+        var specCmd = (spec.cli.commands || []).find(function(c) { return c.id === cmdId; });
+        if (specCmd) {
+          results.push({ kind: 'cli-spec', commandId: specCmd.id, description: specCmd.description, args: specCmd.args, expectedExitCode: specCmd.expected_exit_code, status: 'untested' });
+        }
+      }
+    }
+
+    // CLI report — match by command ID pattern (legacy non-prefixed refs)
+    if (type !== 'cli' && !ref.startsWith('cli:') && cliReport) {
       for (const cmd of (cliReport.commands || [])) {
         if (cmd.commandId === ref || cmd.commandId === parts[1]) {
           results.push({ kind: 'cli-command', commandId: cmd.commandId, status: cmd.status,
@@ -492,13 +553,16 @@ const JS = `
 
   // ---- Stale ref detection ----
 
-  const validSpecRefs = new Set(['overview', 'defaults', 'meta']);
+  const validSpecRefs = new Set(['overview', 'defaults', 'meta', 'variables', 'assumptions', 'requirements', 'cli']);
   for (const page of (spec.pages || [])) {
     validSpecRefs.add('page:' + page.id);
     for (const s of (page.scenarios || [])) validSpecRefs.add('scenario:' + page.id + '/' + s.id);
     for (const r of (page.expected_requests || [])) validSpecRefs.add('request:' + page.id + '/' + r.method + ':' + r.url_pattern);
   }
   for (const f of (spec.flows || [])) validSpecRefs.add('flow:' + f.id);
+  if (spec.cli) {
+    for (const cmd of (spec.cli.commands || [])) validSpecRefs.add('cli:' + cmd.id);
+  }
 
   function isStaleRef(ref) { return !validSpecRefs.has(ref); }
 
@@ -545,17 +609,63 @@ const JS = `
     if (spec.description) {
       sections.push({ title: 'Overview', body: spec.description, refs: ['overview'], depth: 1, children: [] });
     }
+
+    // Defaults
+    if (spec.defaults) {
+      sections.push({
+        title: 'Spec Format \\u203a Defaults',
+        body: 'Universal properties applied across all pages: ' + Object.entries(spec.defaults).map(function(e) { return e[0] + '=' + e[1]; }).join(', '),
+        refs: ['defaults'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    // Variables
+    if (spec.variables && Object.keys(spec.variables).length > 0) {
+      sections.push({
+        title: 'Spec Format \\u203a Variables',
+        body: 'Template variables: ' + Object.keys(spec.variables).join(', '),
+        refs: ['variables'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    // Assumptions
+    if (spec.assumptions && spec.assumptions.length > 0) {
+      sections.push({
+        title: 'Spec Format \\u203a Assumptions',
+        body: spec.assumptions.map(function(a) { return a.type + (a.description ? ': ' + a.description : ''); }).join('\\n'),
+        refs: ['assumptions'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    // Requirements
+    if (spec.requirements && spec.requirements.length > 0) {
+      sections.push({
+        title: 'Behavioral Requirements',
+        body: spec.requirements.map(function(r) { return r.id + ': ' + r.description; }).join('\\n\\n'),
+        refs: ['requirements'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    // Pages
     for (const page of (spec.pages || [])) {
       sections.push({
-        title: page.id,
-        body: 'Page: ' + page.path + (page.description ? ' — ' + page.description : ''),
+        title: 'Pages \\u203a ' + page.id,
+        body: 'Page: ' + page.path + (page.description ? ' \\u2014 ' + page.description : ''),
         refs: ['page:' + page.id],
         depth: 1,
         children: []
       });
       for (const scenario of (page.scenarios || [])) {
         sections.push({
-          title: scenario.id,
+          title: 'Pages \\u203a ' + page.id + ' \\u203a ' + scenario.id,
           body: scenario.description || '',
           refs: ['scenario:' + page.id + '/' + scenario.id],
           depth: 2,
@@ -563,14 +673,36 @@ const JS = `
         });
       }
     }
+
+    // Flows
     for (const flow of (spec.flows || [])) {
       sections.push({
-        title: flow.id,
+        title: 'Flows \\u203a ' + flow.id,
         body: flow.description || 'Flow with ' + flow.steps.length + ' steps',
         refs: ['flow:' + flow.id],
         depth: 1,
         children: []
       });
+    }
+
+    // CLI section
+    if (spec.cli) {
+      sections.push({
+        title: 'CLI Verification',
+        body: 'Binary: ' + spec.cli.binary + '\\n' + (spec.cli.commands || []).length + ' command tests, ' + (spec.cli.scenarios || []).length + ' scenarios',
+        refs: ['cli'],
+        depth: 1,
+        children: []
+      });
+      for (const cmd of (spec.cli.commands || [])) {
+        sections.push({
+          title: 'CLI \\u203a ' + cmd.id,
+          body: cmd.description || '',
+          refs: ['cli:' + cmd.id],
+          depth: 2,
+          children: []
+        });
+      }
     }
   }
 
@@ -582,9 +714,11 @@ const JS = `
       const allResults = s.refs.flatMap(r => resolveRef(r));
       const hasStale = s.refs.some(r => isStaleRef(r));
       const status = hasStale ? 'stale' : aggregateStatus(allResults);
-      html += '<div class="toc-item depth-' + s.depth + (i === activeSectionIdx ? ' active' : '') + '" data-idx="' + i + '">'
-        + (hasStale ? '<span class="toc-status" style="background:var(--orange)"></span>' : statusIcon(status))
-        + '<span>' + esc(s.title) + (hasStale ? ' ⚠' : '') + '</span>'
+      html += '<div class="toc-item depth-' + s.depth + (i === activeSectionIdx ? ' active' : '') + '" data-idx="' + i + '"'
+        + (hasStale ? ' title="Stale reference: narrative mentions a spec item that no longer exists"' : '')
+        + '>'
+        + (hasStale ? '<span class="toc-status" style="background:var(--orange)" title="Stale reference"></span>' : statusIcon(status))
+        + '<span>' + esc(s.title) + (hasStale ? ' \\u26a0' : '') + '</span>'
         + '</div>';
     }
     toc.innerHTML = html;
@@ -675,7 +809,12 @@ const JS = `
     const body = $('detail-body');
 
     if (allResults.length === 0) {
-      body.innerHTML = '<div class="sync-warn">No validation results linked to this section.</div>';
+      var staleRefs = s.refs.filter(function(r) { return isStaleRef(r); });
+      if (staleRefs.length > 0) {
+        body.innerHTML = '<div class="sync-warn">\\u26a0 Stale references: the narrative mentions spec items that no longer exist: ' + staleRefs.map(function(r) { return '<code>' + esc(r) + '</code>'; }).join(', ') + '. Update the narrative to fix these.</div>';
+      } else {
+        body.innerHTML = '<div class="sync-warn">No validation results linked to this section. Run <code>specify verify</code> to generate results.</div>';
+      }
     } else {
       let html = '';
 
@@ -709,6 +848,16 @@ const JS = `
             html += renderDefault(item);
           } else if (item.kind === 'console') {
             html += renderConsole(item);
+          } else if (item.kind === 'variable') {
+            html += renderVariable(item);
+          } else if (item.kind === 'assumption') {
+            html += renderAssumption(item);
+          } else if (item.kind === 'requirement') {
+            html += renderRequirement(item);
+          } else if (item.kind === 'cli-spec') {
+            html += renderCliSpec(item);
+          } else if (item.kind === 'cli-summary') {
+            html += '<div class="assertion-type">CLI Section</div><div class="assertion-desc">Binary: ' + esc(item.binary) + '</div><div class="assertion-detail">' + item.commandCount + ' command tests</div>';
           } else {
             html += '<div class="assertion-desc">' + esc(item.description || item.status || 'Unknown') + '</div>';
           }
@@ -796,6 +945,37 @@ const JS = `
     let h = '<div class="assertion-type">Console — ' + esc(item.level || '') + '</div>';
     h += '<div class="assertion-desc">' + esc(item.description || 'Console expectation') + '</div>';
     if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  function renderVariable(item) {
+    var h = '<div class="assertion-type">Variable</div>';
+    h += '<div class="assertion-desc">' + esc(item.name) + '</div>';
+    h += '<div class="assertion-detail">' + esc(String(item.value)) + '</div>';
+    return h;
+  }
+
+  function renderAssumption(item) {
+    var h = '<div class="assertion-type">Assumption</div>';
+    h += '<div class="assertion-desc">' + esc(item.type || item.description || '') + '</div>';
+    if (item.description && item.type) h += '<div class="assertion-detail">' + esc(item.description) + '</div>';
+    if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  function renderRequirement(item) {
+    var h = '<div class="assertion-type">Behavioral Requirement \\u2014 ' + esc(item.verification || 'agent') + '</div>';
+    h += '<div class="assertion-desc">' + esc(item.id || '') + '</div>';
+    h += '<div class="assertion-detail">' + esc(item.description || '') + '</div>';
+    if (item.evidence) h += '<div class="assertion-detail">Evidence: ' + esc(JSON.stringify(item.evidence).substring(0, 200)) + '</div>';
+    return h;
+  }
+
+  function renderCliSpec(item) {
+    var h = '<div class="assertion-type">CLI Command (spec)</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || item.commandId) + '</div>';
+    h += '<div class="assertion-detail">Args: ' + esc((item.args || []).join(' ')) + '</div>';
+    h += '<div class="assertion-detail">Expected exit: ' + item.expectedExitCode + '</div>';
     return h;
   }
 

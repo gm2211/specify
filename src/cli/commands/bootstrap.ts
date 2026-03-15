@@ -110,6 +110,44 @@ echo "✓ specify checks passed"
 `;
 }
 
+function prePushHook(): string {
+  return `#!/bin/sh
+# specify-bootstrap: pre-push hook
+# Bumps patch version in package.json before pushing
+
+PACKAGE_JSON="package.json"
+if ! [ -f "$PACKAGE_JSON" ]; then
+  exit 0
+fi
+
+# Read current version
+CURRENT_VERSION=$(node -e "console.log(require('./package.json').version)" 2>/dev/null)
+if [ -z "$CURRENT_VERSION" ]; then
+  exit 0
+fi
+
+# Bump patch version
+NEW_VERSION=$(node -e "
+  const parts = '$CURRENT_VERSION'.split('.');
+  parts[2] = parseInt(parts[2] || 0) + 1;
+  console.log(parts.join('.'));
+")
+
+# Update package.json
+node -e "
+  const fs = require('fs');
+  const pkg = JSON.parse(fs.readFileSync('$PACKAGE_JSON', 'utf-8'));
+  pkg.version = '$NEW_VERSION';
+  fs.writeFileSync('$PACKAGE_JSON', JSON.stringify(pkg, null, 2) + '\\n');
+"
+
+git add "$PACKAGE_JSON"
+git commit --amend --no-edit --no-verify
+
+echo "✓ Version bumped: $CURRENT_VERSION → $NEW_VERSION"
+`;
+}
+
 // ---------------------------------------------------------------------------
 // Bootstrap logic
 // ---------------------------------------------------------------------------
@@ -149,6 +187,22 @@ function planActions(targetDir: string, specPath?: string): BootstrapAction[] {
     actions.push({ type: 'create', path: preCommitPath, description: 'Create pre-commit hook with specify lint + verify cli' });
   }
 
+  // 3. Git pre-push hook (semver bump)
+  const prePushPath = path.join(gitHooksDir, 'pre-push');
+
+  if (!fs.existsSync(path.join(targetDir, '.git'))) {
+    actions.push({ type: 'skip', path: prePushPath, description: 'No .git directory found — skipping pre-push hook' });
+  } else if (fs.existsSync(prePushPath)) {
+    const content = fs.readFileSync(prePushPath, 'utf-8');
+    if (content.includes('specify-bootstrap')) {
+      actions.push({ type: 'skip', path: prePushPath, description: 'Pre-push hook already has version bump' });
+    } else {
+      actions.push({ type: 'skip', path: prePushPath, description: 'Pre-push hook exists (not managed by specify) — skipping' });
+    }
+  } else {
+    actions.push({ type: 'create', path: prePushPath, description: 'Create pre-push hook for semver patch bump on push' });
+  }
+
   return actions;
 }
 
@@ -167,6 +221,13 @@ function executeActions(actions: BootstrapAction[], targetDir: string, specPath?
       }
     } else if (action.path.includes('pre-commit')) {
       const hook = preCommitHook(specPath);
+      const dir = path.dirname(action.path);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(action.path, hook, { mode: 0o755 });
+    } else if (action.path.includes('pre-push')) {
+      const hook = prePushHook();
       const dir = path.dirname(action.path);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });

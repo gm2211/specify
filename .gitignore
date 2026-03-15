@@ -2,9 +2,22 @@ node_modules/
 dist/
 .env
 .auth/
+*.log
+
+# Specify runtime data (all ephemeral data lives under .specify/)
+# .specify/evidence/   — behavioral requirement evidence
+# .specify/history/    — verification run history
+# .specify/agent-runs/ — agent verification output
+# .specify/captures/   — capture command output
+.specify/
+
+# Legacy paths (before consolidation into .specify/)
 captures/
 agent-runs/
-*.log
+cli-report/
+
+# Generated review files
+*.review.html
 
 # Dolt database files (added by bd init)
 .dolt/

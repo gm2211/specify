@@ -43,17 +43,22 @@ function detectProjectState(): ProjectState {
     } catch { /* ignore */ }
   }
 
+  // All runtime data lives under .specify/
+  const specifyDir = path.join(cwd, '.specify');
+
   // Find capture directories (contain traffic.json)
   const captures: string[] = [];
-  const capturesDir = path.join(cwd, 'captures');
-  if (fs.existsSync(capturesDir)) {
-    try {
-      const subdirs = fs.readdirSync(capturesDir).filter(d => {
-        const full = path.join(capturesDir, d);
-        return fs.statSync(full).isDirectory() && fs.existsSync(path.join(full, 'traffic.json'));
-      });
-      captures.push(...subdirs.map(d => path.join('captures', d)));
-    } catch { /* ignore */ }
+  // Check .specify/captures/ (preferred) and legacy captures/
+  for (const capturesBase of [path.join(specifyDir, 'captures'), path.join(cwd, 'captures')]) {
+    if (fs.existsSync(capturesBase)) {
+      try {
+        const subdirs = fs.readdirSync(capturesBase).filter(d => {
+          const full = path.join(capturesBase, d);
+          return fs.statSync(full).isDirectory() && fs.existsSync(path.join(full, 'traffic.json'));
+        });
+        captures.push(...subdirs.map(d => path.relative(cwd, path.join(capturesBase, d))));
+      } catch { /* ignore */ }
+    }
   }
   // Also check cwd for traffic.json
   if (fs.existsSync(path.join(cwd, 'traffic.json'))) {
@@ -69,22 +74,23 @@ function detectProjectState(): ProjectState {
     reports.push(...files);
   } catch { /* ignore */ }
 
-  // Check for agent-runs directory
+  // Check for agent-runs directory (.specify/agent-runs/ or legacy agent-runs/)
   const agentRuns: string[] = [];
-  const agentRunsDir = path.join(cwd, 'agent-runs');
-  if (fs.existsSync(agentRunsDir)) {
-    try {
-      const subdirs = fs.readdirSync(agentRunsDir)
-        .filter(d => fs.statSync(path.join(agentRunsDir, d)).isDirectory())
-        .sort()
-        .reverse()
-        .slice(0, 5);
-      agentRuns.push(...subdirs.map(d => path.join('agent-runs', d)));
-    } catch { /* ignore */ }
+  for (const agentRunsBase of [path.join(specifyDir, 'agent-runs'), path.join(cwd, 'agent-runs')]) {
+    if (fs.existsSync(agentRunsBase)) {
+      try {
+        const subdirs = fs.readdirSync(agentRunsBase)
+          .filter(d => fs.statSync(path.join(agentRunsBase, d)).isDirectory())
+          .sort()
+          .reverse()
+          .slice(0, 5);
+        agentRuns.push(...subdirs.map(d => path.relative(cwd, path.join(agentRunsBase, d))));
+      } catch { /* ignore */ }
+    }
   }
 
   // Check for history directory
-  const historyDir = fs.existsSync(path.join(cwd, '.specify', 'history'))
+  const historyDir = fs.existsSync(path.join(specifyDir, 'history'))
     ? '.specify/history'
     : null;
 
@@ -299,13 +305,13 @@ export async function runWizard(options: { fromCapture?: string; action?: string
       console.error('  No existing specs or captures found.');
     }
 
-    // Lifecycle-aligned menu — 5 primary flows
+    // Lifecycle-aligned menu — task-oriented labels
     const menuOptions: { label: string; action: string }[] = [
-      { label: 'Create   — create a new contract', action: 'create' },
-      { label: 'Capture  — capture behavior from a live system or code', action: 'capture' },
-      { label: 'Evolve   — change an existing contract', action: 'evolve' },
-      { label: 'Review   — inspect the contract in a browser', action: 'review' },
-      { label: 'Verify   — verify implementation against a contract', action: 'verify' },
+      { label: 'Create   — start a new spec from scratch', action: 'create' },
+      { label: 'Capture  — derive a spec from a running app or existing tests', action: 'capture' },
+      { label: 'Evolve   — add a feature, fix a gap, or update an existing spec', action: 'evolve' },
+      { label: 'Review   — read the spec in a browser', action: 'review' },
+      { label: 'Verify   — check that the implementation matches the spec', action: 'verify' },
     ];
 
     let action: string;
@@ -769,9 +775,9 @@ async function flowEvolveMenu(state: ProjectState, prompts: PromptFns, subAction
   const { choose } = prompts;
 
   const options = [
-    { label: 'Interactively — analyze and suggest improvements', action: 'interactive' },
-    { label: 'From a PR — evolve based on code changes', action: 'pr' },
-    { label: 'From a gap report — refine based on validation results', action: 'report' },
+    { label: 'Interactively — I want to add a feature or improve the spec', action: 'interactive' },
+    { label: 'From a PR — a pull request changed the code, update the spec to match', action: 'pr' },
+    { label: 'From a report — verification found gaps, fix them', action: 'report' },
   ];
 
   let action: string;
@@ -779,7 +785,7 @@ async function flowEvolveMenu(state: ProjectState, prompts: PromptFns, subAction
     const match = options.find(o => o.action === subAction);
     action = match ? match.action : subAction;
   } else {
-    const idx = await choose('How would you like to evolve the contract?', options.map(o => o.label));
+    const idx = await choose('What changed?', options.map(o => o.label));
     action = options[idx].action;
   }
 
@@ -789,7 +795,7 @@ async function flowEvolveMenu(state: ProjectState, prompts: PromptFns, subAction
     case 'interactive':
       return await flowImprove(state, prompts);
     case 'pr': {
-      const pr = await prompts.ask('PR number or URL');
+      const pr = await prompts.ask('Which PR? (number or URL)');
       console.error('\n  Analyzing PR...\n');
       const { specEvolve } = await import('../commands/spec-evolve.js');
       return await specEvolve(
