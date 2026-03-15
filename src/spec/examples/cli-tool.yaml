@@ -1,0 +1,71 @@
+version: "1.0"
+name: "Example CLI Tool Spec"
+description: >
+  Example spec demonstrating how to define behavioral contracts for a
+  CLI tool. Each command entry specifies the args, expected exit code,
+  and output assertions. This is the pattern used to verify that a CLI
+  produces correct structured output, handles errors gracefully, and
+  maintains backward compatibility.
+
+cli:
+  binary: "echo"
+
+  commands:
+    # Happy path: command produces expected output
+    - id: hello-world
+      description: >
+        The simplest possible test: running the binary with "hello" should
+        output "hello" to stdout and exit with code 0. This validates that
+        the binary is executable and produces basic output.
+      args: ["hello"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "Output contains the input argument"
+          text: "hello"
+
+    # JSON output: verify structured data
+    - id: json-output
+      description: >
+        When the tool produces JSON output, use json_path assertions to
+        check specific values without validating the entire structure.
+        This is more resilient than text_contains for structured data
+        because it doesn't break when formatting changes.
+      args: ["{\"name\":\"test\",\"version\":\"1.0\"}"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: json_path
+          description: "The name field has the expected value"
+          path: "name"
+          value: "test"
+        - type: json_path
+          description: "The version field has the expected value"
+          path: "version"
+          value: "1.0"
+
+    # Regex matching: verify output format
+    - id: version-format
+      description: >
+        Use text_matches (regex) assertions to verify output format
+        without hardcoding specific values. This is useful for things
+        like version strings, timestamps, or UUIDs where the exact value
+        changes but the format is stable.
+      args: ["v2.1.0"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_matches
+          description: "Output matches semver format"
+          pattern: "^v\\d+\\.\\d+\\.\\d+"
+
+requirements:
+  - id: cli-help-exists
+    description: >
+      The CLI tool should provide a --help flag that outputs usage
+      information to stderr and exits with code 0. This is a behavioral
+      requirement because it describes intent, not a specific test.
+    verification: agent
+    validation_plan: |
+      1. Run the binary with --help
+      2. Check that stderr contains usage information
+      3. Check that exit code is 0
+    evidence_format: "{ stdout, stderr, exit_code }"

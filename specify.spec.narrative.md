@@ -265,6 +265,7 @@ When exported to test code via `specify spec export`, multi-page flows produce m
 
 
 ### CLI
+<!-- spec:cli -->
 <!-- spec:cli:cli-run-no-cli-section -->
 
 The `cli` section defines command-line verification. It specifies a binary to invoke and a set of commands with expected behavior:
@@ -300,6 +301,7 @@ cli:
 
 
 ### Requirements
+<!-- spec:requirements -->
 <!-- spec:cli:verify-requirements-fail-not-untested -->
 
 Requirements describe behavioral properties that need agent intelligence to validate. They cannot be checked by exit codes or string matching alone:
@@ -320,6 +322,7 @@ Each requirement has a `validation_plan` that tells an agent exactly how to veri
 
 
 ### Variables
+<!-- spec:variables -->
 
 Template variables make specs portable across environments:
 
@@ -354,6 +357,7 @@ These are safety nets. `no_5xx` means no HTTP response should return a 5xx statu
 
 
 ### Assumptions
+<!-- spec:assumptions -->
 
 Preconditions that must hold for the spec to be validly tested:
 
@@ -399,6 +403,7 @@ These are deterministic checks that the tool evaluates directly:
 These are checked by `verify cli` for CLI specs, and by `verify --url` or `verify --capture` for page specs. No judgment is needed. The tool compares expected against actual and reports pass or fail.
 
 ### Behavioral Requirements
+<!-- spec:requirement:full-path-coverage -->
 
 These are properties that need agent intelligence to validate. The classic example from the self-spec: "Every reachable path through the CLI has well-defined behavior captured in this spec."
 
@@ -440,11 +445,22 @@ Running `specify` with no arguments produces a JSON self-description to stdout:
 
 This is the entry point for any agent encountering Specify for the first time. The self-description includes the command list, global options, exit code meanings, and a hint pointing to deeper introspection.
 
+<!-- spec:cli:version-flag -->
+<!-- spec:cli:version-in-self-description -->
+<!-- spec:cli:help-flag -->
 Human-readable help goes to stderr via `--help`. JSON goes to stdout with no arguments. This split is intentional: agents pipe stdout, humans read stderr.
 
 ### Schema Introspection
 <!-- spec:cli:schema-spec -->
 <!-- spec:cli:schema-report -->
+<!-- spec:cli:create-non-interactive -->
+<!-- spec:cli:review-in-schema -->
+<!-- spec:cli:lint-top-level -->
+<!-- spec:cli:bootstrap-in-schema -->
+<!-- spec:cli:spec-refine-deprecated -->
+<!-- spec:cli:capture-explore-mode-in-schema -->
+<!-- spec:cli:capture-interactive-mode-in-schema -->
+<!-- spec:cli:schema-introspection-suite -->
 
 `specify schema` exposes three introspection targets:
 
@@ -547,6 +563,13 @@ Global options control output format:
 <!-- spec:cli:unknown-command -->
 <!-- spec:cli:missing-spec-file -->
 <!-- spec:cli:missing-export-framework -->
+<!-- spec:cli:evolve-missing-spec -->
+<!-- spec:cli:generate-nonexistent-dir -->
+<!-- spec:cli:generate-no-traffic -->
+<!-- spec:cli:evolve-report-nonexistent -->
+<!-- spec:cli:schema-invalid-target -->
+<!-- spec:cli:capture-no-output -->
+<!-- spec:cli:agent-run-no-url -->
 
 Errors are structured, not strings. An unknown command returns:
 
@@ -578,6 +601,7 @@ This structure lets agents handle errors without string parsing. An agent can ch
 <!-- spec:cli:export-playwright -->
 <!-- spec:cli:export-cypress -->
 <!-- spec:cli:export-multi-page-flow -->
+<!-- spec:cli:export-both-frameworks -->
 
 ### Guide
 
@@ -626,6 +650,8 @@ Lint computes facts. It does not suggest improvements (that is evolve's job) or 
 ## Interactive Mode
 <!-- spec:cli:human-non-tty-exit -->
 <!-- spec:cli:human-shows-lifecycle -->
+<!-- spec:cli:human-shell-non-tty -->
+<!-- spec:cli:human-watch-non-tty -->
 <!-- spec:cli:human-create-path -->
 <!-- spec:cli:human-capture-live-path -->
 <!-- spec:cli:human-capture-code-path -->
