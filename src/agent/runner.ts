@@ -283,9 +283,24 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
 
   try {
     browser = await chromium.launch({ headless });
-    context = await browser.newContext({
+
+    // Extract HTTP Basic Auth credentials from URL if present
+    const parsedUrl = new URL(config.targetUrl);
+    const contextOptions: Parameters<typeof browser.newContext>[0] = {
       viewport: { width: 1440, height: 900 },
-    });
+      ignoreHTTPSErrors: true,
+    };
+    let navigateUrl = config.targetUrl;
+    if (parsedUrl.username) {
+      contextOptions.httpCredentials = {
+        username: decodeURIComponent(parsedUrl.username),
+        password: decodeURIComponent(parsedUrl.password),
+      };
+      parsedUrl.username = '';
+      parsedUrl.password = '';
+      navigateUrl = parsedUrl.toString();
+    }
+    context = await browser.newContext(contextOptions);
 
     const page = await context.newPage();
 
@@ -311,7 +326,7 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
       if (skipped > 0) log(`[agent] Skipping ${skipped} page(s) already captured`);
     }
     try {
-      await executePages(specToExecute, page, capture, ctx, config.targetUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
+      await executePages(specToExecute, page, capture, ctx, navigateUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
     } catch (err) {
       const msg = `Page execution error: ${err instanceof Error ? err.message : String(err)}`;
       log(`[agent] ERROR: ${msg}`);
@@ -324,7 +339,7 @@ export async function runAgent(config: AgentConfig): Promise<AgentRunResult> {
     if ((spec.flows ?? []).length > 0) {
       log('[agent] Executing flows...');
       try {
-        await executeFlows(spec, page, capture, ctx, config.targetUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
+        await executeFlows(spec, page, capture, ctx, navigateUrl, { screenshotOnEveryStep, stepTimeoutMs }, log);
       } catch (err) {
         const msg = `Flow execution error: ${err instanceof Error ? err.message : String(err)}`;
         log(`[agent] ERROR: ${msg}`);

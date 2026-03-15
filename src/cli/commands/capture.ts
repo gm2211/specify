@@ -22,6 +22,7 @@ export interface CaptureOptions {
   noGenerate?: boolean;
   specOutput?: string;
   specName?: string;
+  ignoreHttpsErrors?: boolean;
 }
 
 export async function capture(options: CaptureOptions, ctx: CliContext): Promise<number> {
@@ -78,9 +79,25 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
   }
 
   try {
-    const context = await browser.newContext({
+    // Extract HTTP Basic Auth credentials from URL if present
+    const parsedUrl = new URL(options.url);
+    const contextOptions: Parameters<typeof browser.newContext>[0] = {
       viewport: { width: 1440, height: 900 },
-    });
+      ignoreHTTPSErrors: true,
+    };
+    let navigateUrl = options.url;
+    if (parsedUrl.username) {
+      contextOptions.httpCredentials = {
+        username: decodeURIComponent(parsedUrl.username),
+        password: decodeURIComponent(parsedUrl.password),
+      };
+      // Strip credentials from the URL for navigation
+      parsedUrl.username = '';
+      parsedUrl.password = '';
+      navigateUrl = parsedUrl.toString();
+    }
+
+    const context = await browser.newContext(contextOptions);
 
     // Attach traffic interception
     await collector.attachToContext(context);
@@ -91,14 +108,14 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     collector.attachToPage(page);
 
     // Navigate
-    log(`Navigating to ${options.url}...`);
+    log(`Navigating to ${navigateUrl}...`);
     try {
-      await page.goto(options.url, { waitUntil: 'networkidle', timeout });
+      await page.goto(navigateUrl, { waitUntil: 'networkidle', timeout });
     } catch (err) {
       // networkidle can time out on busy pages — fall back to load
       log(`networkidle timed out, waiting for load...`);
       try {
-        await page.goto(options.url, { waitUntil: 'load', timeout });
+        await page.goto(navigateUrl, { waitUntil: 'load', timeout });
       } catch (err2) {
         const msg = err2 instanceof Error ? err2.message : String(err2);
         log(`Navigation failed: ${msg}`);
