@@ -434,7 +434,7 @@ cli:
         - type: json_path
           description: "The evolve summary reports the exact number of CLI command test entries in this spec file"
           path: "spec_summary.cli_command_count"
-          value: 79
+          value: 81
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -1408,6 +1408,29 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Verify"
+
+    - id: capture-explore-mode-in-schema
+      description: >
+        The capture command's explore mode (--explore flag) must be discoverable via
+        schema commands. The manifest should include "from_live_explore" as a mode,
+        confirming agents can discover autonomous page exploration as a capture option.
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "The explore mode is listed in the capture command's modes"
+          text: "from_live_explore"
+
+    - id: capture-interactive-mode-in-schema
+      description: >
+        The capture command's interactive mode (--interactive flag) must be discoverable
+        via schema commands. The manifest should include "from_live_interactive" as a mode.
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "The interactive mode is listed in the capture command's modes"
+          text: "from_live_interactive"
 
     - id: capture-from-code-missing
       description: >
