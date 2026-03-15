@@ -268,7 +268,30 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--output', type: 'string', required: false, description: 'Write refined spec to this path (report & apply modes)' },
       { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (apply mode only)' },
     ],
+    modes: [
+      {
+        name: 'interactive',
+        description: 'Analyze spec structure and suggest improvements (default when no --pr or --report)',
+        required_parameters: ['--spec'],
+        condition: 'Neither --pr nor --report is provided',
+      },
+      {
+        name: 'pr_driven',
+        description: 'Analyze a pull request and suggest spec updates to match code changes',
+        required_parameters: ['--spec', '--pr'],
+        optional_parameters: ['--repo', '--output'],
+        condition: '--pr is provided',
+      },
+      {
+        name: 'report_driven',
+        description: 'Analyze a gap report and suggest targeted spec refinements',
+        required_parameters: ['--spec', '--report'],
+        optional_parameters: ['--apply', '--output', '--url'],
+        condition: '--report is provided',
+      },
+    ],
     examples: [
+      'specify evolve --spec spec.yaml',
       'specify evolve --spec spec.yaml --pr 42',
       'specify evolve --spec spec.yaml --report gap-report.json',
       'specify evolve --spec spec.yaml --apply',
