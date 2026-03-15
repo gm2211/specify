@@ -110,7 +110,7 @@ The review interface has three panels:
 
 - **Sidebar**: A table of contents with status indicators. Each item shows a colored dot -- green for passed, red for failed, yellow for mixed results, gray for untested, orange for stale references.
 
-- **Main content**: Toggles between two views. The **Narrative view** shows prose sections from the narrative companion, each linked to spec items via `<!-- spec:page:login -->` annotations. The **Spec view** shows the raw spec as formatted JSON.
+- **Main content**: Toggles between two views. The **Narrative view** shows prose sections from the narrative companion, each linked to spec items via `<!~~ spec:page:login ~~>` annotations (using HTML comment syntax). The **Spec view** shows the raw spec as formatted JSON.
 
 - **Detail panel**: Clicking any section reveals its linked validation results -- CLI command outcomes, visual assertion results, request matching status, scenario step results. Each assertion shows its type, description, and pass/fail status.
 
@@ -124,7 +124,7 @@ $ specify review --spec spec.yaml --no-open
 
 When a narrative companion exists (pointed to by `narrative_path` in the spec), the review HTML includes prose alongside the structural data. When no narrative exists, the review builds sections from the spec structure itself -- pages become sections, scenarios become subsections.
 
-If a narrative references a spec item that no longer exists (e.g., `<!-- spec:page:old-login -->` after the page was renamed), the review marks it with an orange indicator and a "(stale)" label. This is the narrative sync validation -- it tells you when the prose has drifted from the contract.
+If a narrative references a spec item that no longer exists (e.g., `<!~~ spec:page:old-login ~~>` after the page was renamed), the review marks it with an orange indicator and a "(stale)" label. This is the narrative sync validation -- it tells you when the prose has drifted from the contract.
 
 
 ### Verify
@@ -616,7 +616,7 @@ Export is useful for teams transitioning to Specify from an existing test framew
 2. **Schema**: Does the structure conform to the spec JSON Schema?
 3. **Semantic**: Are IDs unique? Do flow `assert_page` references point to real pages? Are there empty step arrays? Are template variables defined but unused? Are there pages with no assertions at all?
 
-Lint also validates the narrative companion when `narrative_path` is set. It checks that the narrative file exists, parses correctly, and that its `<!-- spec:page:xxx -->` references match actual spec items.
+Lint also validates the narrative companion when `narrative_path` is set. It checks that the narrative file exists, parses correctly, and that its `<!~~ spec:page:xxx ~~>` references match actual spec items.
 
 The result is a structured `{ valid: boolean, errors: [...] }` object. Each error includes a JSON-pointer path, severity (`error` or `warning`), message, and rule identifier.
 
@@ -766,7 +766,7 @@ Explicit `--spec` always takes precedence over auto-discovery.
 <!-- spec:cli:narrative-relative-path-lint -->
 <!-- spec:cli:narrative-relative-path-review -->
 
-The narrative companion and the spec are separate files that reference each other. The `narrative_path` field in the spec points to the narrative. The `<!-- spec:page:xxx -->` annotations in the narrative point back to spec items.
+The narrative companion and the spec are separate files that reference each other. The `narrative_path` field in the spec points to the narrative. The `<!~~ spec:page:xxx ~~>` annotations in the narrative point back to spec items.
 
 This bidirectional linking creates a sync problem: either side can change without the other. Specify handles this in three places:
 
