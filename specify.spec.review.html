@@ -1,0 +1,3164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specify CLI — Specify</title>
+<style>
+
+:root {
+  --bg: #0d1117;
+  --bg-surface: #161b22;
+  --bg-hover: #1c2128;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --text-dim: #6e7681;
+  --accent: #58a6ff;
+  --green: #3fb950;
+  --red: #f85149;
+  --yellow: #d29922;
+  --orange: #db6d28;
+  --sidebar-w: 260px;
+  --detail-w: 380px;
+  --header-h: 56px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.6;
+}
+
+#app { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* Header */
+#header {
+  height: var(--header-h);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: var(--bg-surface);
+  position: sticky; top: 0; z-index: 10;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left h1 { font-size: 18px; font-weight: 600; }
+.header-right { display: flex; align-items: center; gap: 16px; }
+
+/* Toggle */
+.toggle-group {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+.toggle-btn:hover { background: var(--bg-hover); }
+.toggle-btn.active { background: var(--accent); color: #fff; }
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+.badge-pass { background: rgba(63,185,80,0.15); color: var(--green); }
+.badge-fail { background: rgba(248,81,73,0.15); color: var(--red); }
+.badge-untested { background: rgba(110,118,129,0.15); color: var(--text-dim); }
+.badge-neutral { background: rgba(88,166,255,0.15); color: var(--accent); }
+.badge-warn { background: rgba(210,153,34,0.15); color: var(--yellow); }
+
+#summary-badges { display: flex; gap: 8px; }
+
+/* Layout */
+#layout {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - var(--header-h));
+}
+
+/* Sidebar */
+#sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 12px 0;
+  background: var(--bg-surface);
+}
+
+.toc-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: background 0.1s;
+  border-left: 2px solid transparent;
+}
+.toc-item:hover { background: var(--bg-hover); color: var(--text); }
+.toc-item.active { border-left-color: var(--accent); color: var(--text); background: var(--bg-hover); }
+.toc-item.depth-1 { padding-left: 16px; font-weight: 600; }
+.toc-item.depth-2 { padding-left: 32px; }
+.toc-item.depth-3 { padding-left: 48px; font-size: 12px; }
+
+.toc-status {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.toc-status.pass { background: var(--green); }
+.toc-status.fail { background: var(--red); }
+.toc-status.untested { background: var(--text-dim); }
+.toc-status.mixed { background: var(--yellow); }
+
+/* Main content */
+#content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 48px;
+  max-width: 900px;
+}
+
+.section {
+  margin-bottom: 32px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+.section:hover { border-color: var(--accent); }
+.section.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.section-header h2 { font-size: 18px; font-weight: 600; }
+.section-header h3 { font-size: 15px; font-weight: 600; }
+.section-badges { display: flex; gap: 6px; }
+
+.section-body { color: var(--text-muted); font-size: 14px; }
+.section-body p { margin-bottom: 8px; }
+.section-refs {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ref-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(88,166,255,0.1);
+  color: var(--accent);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+.ref-tag.stale {
+  background: rgba(248,81,73,0.15);
+  color: var(--red);
+  text-decoration: line-through;
+}
+
+/* Spec view */
+#spec-view {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  padding: 20px 24px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+}
+
+/* Detail panel */
+#detail-panel {
+  width: var(--detail-w);
+  min-width: var(--detail-w);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--bg-surface);
+  padding: 16px;
+}
+#detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+#detail-header h3 { font-size: 15px; }
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.close-btn:hover { color: var(--text); }
+
+.assertion-item {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.assertion-item.pass { border-left: 3px solid var(--green); }
+.assertion-item.fail { border-left: 3px solid var(--red); }
+.assertion-item.untested { border-left: 3px solid var(--text-dim); }
+
+.assertion-type {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 2px;
+}
+.assertion-desc { color: var(--text); }
+.assertion-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+
+.detail-section {
+  margin-bottom: 16px;
+}
+.detail-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+
+.hidden { display: none !important; }
+
+/* Sync warnings */
+.sync-warn {
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  border-radius: 6px;
+  background: rgba(210,153,34,0.1);
+  border: 1px solid rgba(210,153,34,0.3);
+  font-size: 13px;
+  color: var(--yellow);
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  #sidebar { display: none; }
+  #content { padding: 16px; }
+  #detail-panel { position: fixed; right: 0; top: var(--header-h); bottom: 0; z-index: 20; box-shadow: -4px 0 12px rgba(0,0,0,0.4); }
+}
+
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <div class="header-left">
+      <h1 id="spec-title"></h1>
+      <span id="spec-version" class="badge badge-neutral"></span>
+    </div>
+    <div class="header-right">
+      <div class="toggle-group">
+        <button id="btn-narrative" class="toggle-btn active" onclick="setView('narrative')">Narrative</button>
+        <button id="btn-spec" class="toggle-btn" onclick="setView('spec')">Spec</button>
+      </div>
+      <div id="summary-badges"></div>
+    </div>
+  </header>
+  <div id="layout">
+    <nav id="sidebar">
+      <div id="toc"></div>
+    </nav>
+    <main id="content">
+      <div id="narrative-view"></div>
+      <div id="spec-view" class="hidden"></div>
+    </main>
+    <aside id="detail-panel" class="hidden">
+      <div id="detail-header">
+        <h3 id="detail-title"></h3>
+        <button onclick="closeDetail()" class="close-btn">&times;</button>
+      </div>
+      <div id="detail-body"></div>
+    </aside>
+  </div>
+</div>
+<script>
+// Embedded data
+const DATA = {
+  "spec": {
+    "version": "1.0",
+    "name": "Specify CLI",
+    "description": "Complete behavioral contract for Specify, a deterministic CLI tool for spec-driven functional verification of web applications. Specify follows an agent-first design: structured JSON goes to stdout for machine consumption, human-readable messages go to stderr, and meaningful exit codes enable branching without parsing. The CLI uses a noun-verb command pattern (e.g., spec validate, cli run, report diff) and provides schema introspection so agents can discover capabilities at runtime. This spec serves as both (1) a mechanically verifiable test suite executed by `specify verify cli`, and (2) a set of behavioral requirements that guide agents to validate properties requiring judgment. The tool itself is fully deterministic — no API keys, no LLM calls — intelligence comes from the agent layer that drives it.\n",
+    "narrative_path": "specify.spec.narrative.md",
+    "requirements": [
+      {
+        "id": "full-path-coverage",
+        "description": "Every reachable path through the CLI has well-defined behavior captured in this spec. A \"path\" is a sequence of commands and subcommands that a user can follow — for example: specify human → Verify → Against captured data, specify capture --from code --input ..., specify verify cli --spec ....\n",
+        "verification": "agent",
+        "validation_plan": "1. Discover all command paths:\n   - Run `specify schema commands` to get the manifest\n   - Run `specify --help` and parse the command tree\n   - Explore interactive menus (human wizard) to find sub-paths\n   - Fuzz subcommands to discover hidden paths\n2. For each discovered path, search this spec for a test entry\n   whose args exercise that path\n3. Produce a coverage table: path → test ID (or \"MISSING\")\n4. Verify the table is internally consistent (no duplicate IDs\n   used for different paths, no test IDs that don't exist)\n5. The assertion passes if every path maps to at least one test ID\n",
+        "evidence_format": "A table of { path, test_id, status } entries where status is 'covered' or 'missing'"
+      }
+    ],
+    "cli": {
+      "binary": "./specify",
+      "commands": [
+        {
+          "id": "no-args-self-description",
+          "description": "When invoked with no arguments, Specify outputs a complete JSON manifest of all available commands, their parameters, and exit codes to stdout. This is the primary discovery mechanism for agents — they call the binary with no args to learn what it can do. The manifest must include every registered command with its name, description, and parameters array, so an agent can construct valid invocations without prior knowledge.\n",
+          "args": [],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "name",
+              "value": "specify"
+            },
+            {
+              "type": "json_path",
+              "path": "version",
+              "value": "0.1.0"
+            },
+            {
+              "type": "json_schema",
+              "description": "The self-description JSON object must contain top-level keys for name, version, the full commands array, global options, and exit codes so agents can fully understand the CLI contract",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "name",
+                  "version",
+                  "commands",
+                  "global_options",
+                  "exit_codes"
+                ]
+              }
+            },
+            {
+              "type": "json_schema",
+              "description": "The commands array must list at least 26 entries (all registered commands), each with name, description, and parameters so agents know every available operation",
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "commands": {
+                    "type": "array",
+                    "minItems": 26,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "name",
+                        "description",
+                        "parameters"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec validate command (offline validation of a spec against captured data) must appear in the manifest",
+              "text": "spec validate"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec generate command (create a spec from captured traffic data) must appear in the manifest",
+              "text": "spec generate"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec refine command (deprecated alias for spec evolve) must still appear in the manifest for backward compatibility",
+              "text": "spec refine"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec evolve command (gap analysis and spec improvement suggestions) must appear in the manifest",
+              "text": "spec evolve"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec import command (convert existing e2e tests into spec items) must appear in the manifest",
+              "text": "spec import"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec export command (generate e2e test code from a spec) must appear in the manifest",
+              "text": "spec export"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec sync command (bidirectional comparison between spec and existing tests) must appear in the manifest",
+              "text": "spec sync"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec lint command (structural validation of a spec without captures) must appear in the manifest",
+              "text": "spec lint"
+            },
+            {
+              "type": "text_contains",
+              "description": "The spec guide command (authoring guidance for LLM spec writers) must appear in the manifest",
+              "text": "spec guide"
+            },
+            {
+              "type": "text_contains",
+              "description": "The agent run command (autonomous browser-driven verification against a live system) must appear in the manifest",
+              "text": "agent run"
+            },
+            {
+              "type": "text_contains",
+              "description": "The cli run command (execute CLI-section tests defined in a spec) must appear in the manifest",
+              "text": "cli run"
+            },
+            {
+              "type": "text_contains",
+              "description": "The report diff command (compare two gap reports to see what changed) must appear in the manifest",
+              "text": "report diff"
+            },
+            {
+              "type": "text_contains",
+              "description": "The report stats command (statistical confidence from report history) must appear in the manifest",
+              "text": "report stats"
+            },
+            {
+              "type": "text_contains",
+              "description": "The schema command (JSON Schema introspection for spec, report, or commands) must appear as a standalone command",
+              "text": "\"name\": \"schema\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The mcp command (Model Context Protocol server for LLM tool integration) must appear as a standalone command",
+              "text": "\"name\": \"mcp\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The human command (interactive wizard that detects project state and guides the user) must appear as a standalone command",
+              "text": "\"name\": \"human\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The human shell subcommand (interactive REPL for iterative spec development) must appear in the manifest",
+              "text": "human shell"
+            },
+            {
+              "type": "text_contains",
+              "description": "The human watch subcommand (live TUI dashboard for monitoring agent runs) must appear in the manifest",
+              "text": "human watch"
+            },
+            {
+              "type": "text_contains",
+              "description": "The capture command (record a contract from a live system or codebase) must appear as a standalone command",
+              "text": "\"name\": \"capture\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The top-level evolve alias (convenience shortcut that delegates to spec evolve) must appear as a standalone command",
+              "text": "\"name\": \"evolve\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The top-level verify alias (unified verification dispatcher for data, agent, or CLI modes) must appear as a standalone command",
+              "text": "\"name\": \"verify\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The verify cli subcommand (explicit path to CLI test runner) must appear in the manifest",
+              "text": "verify cli"
+            },
+            {
+              "type": "text_contains",
+              "description": "The top-level lint alias (convenience shortcut that delegates to spec lint) must appear as a standalone command",
+              "text": "\"name\": \"lint\""
+            },
+            {
+              "type": "text_contains",
+              "description": "The bootstrap command (scaffold specify-driven development workflow with CLAUDE.md and git hooks) must appear as a standalone command",
+              "text": "\"name\": \"bootstrap\""
+            }
+          ]
+        },
+        {
+          "id": "help-flag",
+          "description": "When invoked with --help, Specify prints human-readable usage information to stderr (not stdout, which is reserved for structured data). The help text must show the five primary lifecycle flows (Create, Capture, Evolve, Review, Verify) and the interactive human mode, giving users a clear mental model of the tool's workflow.\n",
+          "args": [
+            "--help"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Usage: specify"
+            },
+            {
+              "type": "text_contains",
+              "description": "The help output organizes commands under a 'Primary Flows' heading to communicate the intended lifecycle",
+              "text": "Primary Flows"
+            },
+            {
+              "type": "text_contains",
+              "text": "create"
+            },
+            {
+              "type": "text_contains",
+              "text": "capture"
+            },
+            {
+              "type": "text_contains",
+              "text": "evolve"
+            },
+            {
+              "type": "text_contains",
+              "text": "review"
+            },
+            {
+              "type": "text_contains",
+              "text": "verify"
+            },
+            {
+              "type": "text_contains",
+              "description": "The interactive human mode is mentioned in help so users know they can get guided assistance",
+              "text": "human"
+            }
+          ]
+        },
+        {
+          "id": "schema-commands",
+          "description": "The schema commands subcommand outputs the full command manifest as a JSON array, where each entry describes a command's name, description, and parameter definitions. Agents use this to discover available operations and construct valid invocations programmatically, without needing to parse help text.\n",
+          "args": [
+            "schema",
+            "commands"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "Returns a JSON array of at least 10 command objects, each with name, description, and parameters fields that an agent needs to construct valid CLI calls",
+              "schema": {
+                "type": "array",
+                "minItems": 10,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "description",
+                    "parameters"
+                  ]
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "schema-spec",
+          "description": "The schema spec subcommand outputs the JSON Schema that defines the structure of a Specify spec file. Agents and editors use this to validate spec files, provide autocomplete, and understand what fields are available when authoring specs.\n",
+          "args": [
+            "schema",
+            "spec"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "type",
+              "value": "object"
+            },
+            {
+              "type": "json_schema",
+              "description": "The output is a valid JSON Schema document with type and properties, suitable for spec file validation",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "properties"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "schema-report",
+          "description": "The schema report subcommand outputs the JSON Schema that defines the structure of a Specify gap report (the output of spec validate). Agents use this to understand and programmatically process validation results.\n",
+          "args": [
+            "schema",
+            "report"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "properties"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "unknown-command",
+          "description": "When an unrecognized command is given, Specify returns exit code 10 (parse_error) and outputs a structured JSON error to stdout containing the error type, the unrecognized command string, and a hint directing the user to schema commands for the valid command list. This enables agents to detect and recover from typos or outdated command names programmatically.\n",
+          "args": [
+            "foo",
+            "bar"
+          ],
+          "expected_exit_code": 10,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "error",
+              "value": "unknown_command"
+            },
+            {
+              "type": "json_path",
+              "path": "command",
+              "value": "foo bar"
+            },
+            {
+              "type": "text_contains",
+              "text": "hint"
+            }
+          ]
+        },
+        {
+          "id": "missing-spec-file",
+          "description": "When spec validate is called with a --spec path that does not exist on disk, the command fails with exit code 10 (parse_error) and prints both \"Failed to load spec\" and \"Spec file not found\" to stderr. This validates early failure with a clear, actionable error message rather than a cryptic stack trace.\n",
+          "args": [
+            "spec",
+            "validate",
+            "--spec",
+            "nonexistent-file-that-does-not-exist.yaml",
+            "--capture",
+            "."
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Failed to load spec"
+            },
+            {
+              "type": "text_contains",
+              "text": "Spec file not found"
+            }
+          ]
+        },
+        {
+          "id": "missing-export-framework",
+          "description": "When spec export is called with an empty --framework argument, the command fails with exit code 10 and reports \"Unsupported framework\" to stderr, listing the valid options (playwright, cypress). This prevents silent failure and guides the user to provide a valid framework.\n",
+          "args": [
+            "spec",
+            "export",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--framework",
+            ""
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Unsupported framework"
+            },
+            {
+              "type": "text_contains",
+              "text": "playwright"
+            }
+          ]
+        },
+        {
+          "id": "export-playwright",
+          "description": "The spec export command transforms a spec file into runnable Playwright test code. Given a spec and --framework playwright, it outputs a JSON array of generated test files, each containing a filePath, the generated test code content, and the framework identifier. The generated code must import from @playwright/test. This is a fully deterministic code generation step — no browser or network access needed.\n",
+          "args": [
+            "spec",
+            "export",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--framework",
+            "playwright",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "Output is a JSON array of file objects, each with filePath (where to write), content (the generated test code), and framework (which framework was targeted)",
+              "schema": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "filePath",
+                    "content",
+                    "framework"
+                  ]
+                }
+              }
+            },
+            {
+              "type": "text_contains",
+              "text": "playwright"
+            },
+            {
+              "type": "text_contains",
+              "description": "The generated Playwright test code imports from @playwright/test, confirming it produces valid Playwright syntax",
+              "text": "@playwright/test"
+            }
+          ]
+        },
+        {
+          "id": "export-cypress",
+          "description": "The spec export command also supports Cypress as a target framework. Given the same spec and --framework cypress, it generates Cypress-flavored test code using cy.visit for navigation and cy.get for element selection. This verifies that the code generator adapts its output syntax to the target framework.\n",
+          "args": [
+            "spec",
+            "export",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--framework",
+            "cypress",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "text": "cy.visit"
+            },
+            {
+              "type": "text_contains",
+              "text": "cy.get"
+            }
+          ]
+        },
+        {
+          "id": "export-multi-page-flow",
+          "description": "When a spec defines a multi-page flow (a sequence of pages with navigation steps), the export command generates test code that navigates between pages using page.goto and interacts with elements using page.locator. This verifies that the code generator handles multi-step user journeys, not just single-page specs.\n",
+          "args": [
+            "spec",
+            "export",
+            "--spec",
+            "src/spec/examples/multi-page-flow.yaml",
+            "--framework",
+            "playwright",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Generated code includes page.goto calls to navigate between flow steps",
+              "text": "page.goto"
+            },
+            {
+              "type": "text_contains",
+              "description": "Generated code includes page.locator calls to interact with elements on each page",
+              "text": "page.locator"
+            }
+          ]
+        },
+        {
+          "id": "evolve-interactive",
+          "description": "When spec evolve is called without --pr or --report, it runs in interactive mode, performing a deterministic gap analysis of the spec. It outputs structured JSON containing the mode (\"interactive\"), a spec_summary with metadata, and a suggestions array. Each suggestion has an id, category, priority, description, rationale, proposed_change, and a question for the user to consider. This gives agents a machine-readable list of improvements to propose to the user.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "mode",
+              "value": "interactive"
+            },
+            {
+              "type": "json_schema",
+              "description": "The evolve output must contain mode, spec_summary, and suggestions, where each suggestion includes actionable fields: id, category, priority, description, rationale, proposed_change, and a question prompting the user for a decision",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "mode",
+                  "spec_summary",
+                  "suggestions"
+                ],
+                "properties": {
+                  "suggestions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "category",
+                        "priority",
+                        "description",
+                        "rationale",
+                        "proposed_change",
+                        "question"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "evolve-finds-gaps",
+          "description": "The evolve command's gap analysis is substantive, not just structural. When analyzing the login-page example spec (which has 1 page with some scenarios that have interactions but no assertions), evolve must detect and report the \"interactions but no assertions\" pattern as a real gap. This validates that the analyzer finds meaningful quality issues, not just schema violations.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "description": "Correctly identifies the login-page spec as having exactly 1 page",
+              "path": "spec_summary.page_count",
+              "value": 1
+            },
+            {
+              "type": "text_contains",
+              "description": "Detects scenarios that have user interactions defined but are missing assertions to verify the outcome",
+              "text": "interactions but no assertions"
+            }
+          ]
+        },
+        {
+          "id": "evolve-no-pr-flag-ok",
+          "description": "When spec evolve is called on a spec that has a cli section (like specify.spec.yaml itself), it correctly counts the CLI command entries in its summary. Running evolve against the self-spec with --json confirms interactive mode and validates the cli_command_count, which serves as a regression check that the spec's own command inventory is tracked accurately.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "specify.spec.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "mode",
+              "value": "interactive"
+            },
+            {
+              "type": "json_path",
+              "description": "The evolve summary reports the exact number of CLI command test entries in this spec file",
+              "path": "spec_summary.cli_command_count",
+              "value": 77
+            }
+          ]
+        },
+        {
+          "id": "import-nonexistent-dir",
+          "description": "When spec import is given a --from path that does not exist, it fails with exit code 10 and prints \"Path not found\" to stderr. This ensures early validation of the source path before attempting any file scanning or heuristic analysis.\n",
+          "args": [
+            "spec",
+            "import",
+            "--from",
+            "nonexistent-test-dir-xyz"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Path not found"
+            }
+          ]
+        },
+        {
+          "id": "cli-run-no-cli-section",
+          "description": "The cli run command executes the test entries defined in a spec's cli section. When pointed at a spec that has no cli section (like the login-page example, which only has pages), it fails with exit code 10 and reports \"no cli section\" to stderr. This validates that cli run requires the spec to contain CLI test definitions.\n",
+          "args": [
+            "cli",
+            "run",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "no cli section"
+            }
+          ]
+        },
+        {
+          "id": "validate-with-empty-capture",
+          "description": "The spec validate command compares a spec's assertions against captured data (HAR files, screenshots, etc.) in a directory. When the capture directory exists but contains no matching traffic data, the command still succeeds (exit 0) and produces a structured gap report showing low coverage. The report includes the spec metadata, capture path, a summary with coverage percentage, and per-page results. A coverage of 5% indicates that only structural checks passed while content assertions remain untested due to missing traffic.\n",
+          "args": [
+            "spec",
+            "validate",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--capture",
+            "src/spec/examples",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "The gap report must include spec metadata, capture path, overall summary, and per-page breakdown",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "capture",
+                  "summary",
+                  "pages"
+                ]
+              }
+            },
+            {
+              "type": "json_path",
+              "path": "spec.name",
+              "value": "Login Page Spec"
+            },
+            {
+              "type": "json_path",
+              "description": "Coverage is 5% because the directory has no traffic data, so only structural assertions can pass",
+              "path": "summary.coverage",
+              "value": 5
+            }
+          ]
+        },
+        {
+          "id": "sync-no-test-files",
+          "description": "The spec sync command performs bidirectional comparison between a spec and existing e2e test files. When the --tests directory contains no recognized test files (no Playwright or Cypress tests), it fails with exit code 10 and reports \"No test files found\" to stderr, rather than producing a misleading empty sync report.\n",
+          "args": [
+            "spec",
+            "sync",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--tests",
+            "src/spec"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "No test files found"
+            }
+          ]
+        },
+        {
+          "id": "evolve-self-spec-finds-cli-gaps",
+          "description": "When evolve analyzes the self-spec (specify.spec.yaml), it runs in interactive mode and produces suggestions where each one has the required fields (id, category, priority, description, question). This tests that evolve works on complex CLI-focused specs, not just simple page specs, and that its suggestions are always well-structured.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "specify.spec.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "mode",
+              "value": "interactive"
+            },
+            {
+              "type": "json_schema",
+              "description": "Every suggestion in the array must have all required fields so agents can programmatically present them to users",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "suggestions"
+                ],
+                "properties": {
+                  "suggestions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "id",
+                        "category",
+                        "priority",
+                        "description",
+                        "question"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "lint-valid-spec",
+          "description": "The spec lint command validates a spec file's structure (schema compliance, semantic checks like unique IDs, valid selectors) without needing any captured data or a running application. When given a valid spec, it returns valid=true. This is the cheapest verification step — suitable for pre-commit hooks and CI.\n",
+          "args": [
+            "spec",
+            "lint",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "valid",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": "lint-self-spec",
+          "description": "Specify eats its own dog food: linting the self-spec (specify.spec.yaml) must pass. The lint output is a JSON object with valid (boolean) and errors (array) fields. If the self-spec ever fails lint, it means we shipped a broken contract definition.\n",
+          "args": [
+            "spec",
+            "lint",
+            "--spec",
+            "specify.spec.yaml"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "valid",
+              "value": true
+            },
+            {
+              "type": "json_schema",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "valid",
+                  "errors"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "id": "lint-missing-spec",
+          "description": "When spec lint is given a --spec path that does not exist, it fails with exit code 10 and prints \"Spec file not found\" to stderr. This validates the consistent error handling pattern: all spec-loading commands fail the same way for missing files.\n",
+          "args": [
+            "spec",
+            "lint",
+            "--spec",
+            "nonexistent.yaml"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Spec file not found"
+            }
+          ]
+        },
+        {
+          "id": "guide-output",
+          "description": "The spec guide command outputs a comprehensive authoring reference for LLM-based spec writers. It includes the JSON schema for spec files, example specs (like the Login Page Spec), common patterns, all available assertion types (like element_exists), template variables, and tips. Agents use this to learn how to write specs without needing external documentation.\n",
+          "args": [
+            "spec",
+            "guide"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "The guide must include all six reference sections: schema, examples, patterns, assertion_types, template_variables, and tips",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "schema",
+                  "examples",
+                  "patterns",
+                  "assertion_types",
+                  "template_variables",
+                  "tips"
+                ]
+              }
+            },
+            {
+              "type": "text_contains",
+              "description": "The guide includes real example specs (like Login Page Spec) so agents can learn by example",
+              "text": "Login Page Spec"
+            },
+            {
+              "type": "text_contains",
+              "description": "The guide documents available assertion types (like element_exists) so agents know what checks they can define",
+              "text": "element_exists"
+            }
+          ]
+        },
+        {
+          "id": "evolve-missing-spec",
+          "description": "When spec evolve is given a --spec path that does not exist, it fails with exit code 10 and prints \"Failed to load spec\" to stderr. This is the same error pattern used by all commands that load specs, ensuring consistent behavior across the CLI.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "nonexistent.yaml"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Failed to load spec"
+            }
+          ]
+        },
+        {
+          "id": "generate-nonexistent-dir",
+          "description": "The spec generate command creates a spec from captured data (traffic.json, screenshots). When the --input directory does not exist, it fails with exit code 10 and prints \"Input directory not found\" to stderr, validating the path before attempting to read capture files.\n",
+          "args": [
+            "spec",
+            "generate",
+            "--input",
+            "nonexistent-dir-xyz"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Input directory not found"
+            }
+          ]
+        },
+        {
+          "id": "generate-no-traffic",
+          "description": "When spec generate is pointed at a directory that exists but does not contain a traffic.json file (the required capture artifact), it fails with exit code 10 and reports \"traffic.json not found\". The generate command requires captured HTTP traffic as its primary input — without it, there is nothing to generate a spec from.\n",
+          "args": [
+            "spec",
+            "generate",
+            "--input",
+            "src/spec/examples"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "traffic.json not found"
+            }
+          ]
+        },
+        {
+          "id": "evolve-report-nonexistent",
+          "description": "When spec evolve is called with --report pointing to a nonexistent JSON file, it fails with exit code 10 and prints \"Failed to load report\" to stderr. The --report flag puts evolve in report-driven mode where it analyzes a gap report to suggest targeted improvements — the report file must exist for this mode to work.\n",
+          "args": [
+            "spec",
+            "evolve",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--report",
+            "nonexistent.json"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Failed to load report"
+            }
+          ]
+        },
+        {
+          "id": "report-diff-missing-a",
+          "description": "The report diff command compares two gap reports to show what changed between verification runs (e.g., coverage improvements, new failures). When either report file does not exist, it fails with exit code 10 and prints \"Failed to load report\" to stderr, validating both inputs before attempting the diff.\n",
+          "args": [
+            "report",
+            "diff",
+            "--a",
+            "nonexistent.json",
+            "--b",
+            "nonexistent.json"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Failed to load report"
+            }
+          ]
+        },
+        {
+          "id": "report-stats-empty",
+          "description": "The report stats command calculates statistical confidence (trends, stability) from a history of gap reports stored in a directory. When the directory contains no report files, it exits with code 2 (all_untested) and prints \"No reports found\" to stderr. Exit code 2 (rather than 10) signals that the command ran correctly but found no data to analyze.\n",
+          "args": [
+            "report",
+            "stats",
+            "--history-dir",
+            "src/spec/examples"
+          ],
+          "expected_exit_code": 2,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "No reports found"
+            }
+          ]
+        },
+        {
+          "id": "schema-invalid-target",
+          "description": "The schema command accepts exactly three targets: spec, report, and commands. When given an unrecognized target, it fails with exit code 10 and prints \"Unknown schema target\" to stderr. This prevents silent failure when an agent misspells a target name.\n",
+          "args": [
+            "schema",
+            "foo"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Unknown schema target"
+            }
+          ]
+        },
+        {
+          "id": "capture-no-url",
+          "description": "The capture command records a contract from a live system by visiting a URL with a browser. When --url is empty, it outputs a structured JSON error to stdout with error=\"missing_parameter\" and parameter=\"--url\", and exits with code 10. The structured error format enables agents to detect which parameter is missing and prompt the user for it.\n",
+          "args": [
+            "capture",
+            "--url",
+            ""
+          ],
+          "expected_exit_code": 10,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "error",
+              "value": "missing_parameter"
+            },
+            {
+              "type": "json_path",
+              "path": "parameter",
+              "value": "--url"
+            }
+          ]
+        },
+        {
+          "id": "capture-invalid-url",
+          "description": "When capture is given a --url that is not a valid URL (e.g., \"not-a-valid-url\" instead of \"https://...\"), it outputs a structured JSON error with error=\"invalid_url\" and exits with code 10. URL validation happens early, before any browser launch, so the user gets immediate feedback rather than a browser timeout.\n",
+          "args": [
+            "capture",
+            "--url",
+            "not-a-valid-url",
+            "--output",
+            "/tmp/specify-test-capture"
+          ],
+          "expected_exit_code": 10,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "error",
+              "value": "invalid_url"
+            }
+          ]
+        },
+        {
+          "id": "capture-no-output",
+          "description": "The capture command in live mode requires both --url and --output (the directory to save captured data). When --output is empty, it outputs a structured JSON error with error=\"missing_parameter\" and parameter=\"--output\", and exits with code 10.\n",
+          "args": [
+            "capture",
+            "--url",
+            "https://example.com",
+            "--output",
+            ""
+          ],
+          "expected_exit_code": 10,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "error",
+              "value": "missing_parameter"
+            },
+            {
+              "type": "json_path",
+              "path": "parameter",
+              "value": "--output"
+            }
+          ]
+        },
+        {
+          "id": "create-in-schema",
+          "description": "The create command (an interactive interview that produces a spec and narrative) must be registered in the command manifest. This verifies that schema commands includes \"create\" in its output, confirming the command is discoverable by agents.\n",
+          "args": [
+            "schema",
+            "commands"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "description": "The create command is present in the schema commands output, confirming it is a registered CLI command",
+              "text": "create"
+            }
+          ]
+        },
+        {
+          "id": "create-non-interactive",
+          "description": "The create command launches an interactive interview to build a spec from human intent. When invoked without a TTY (e.g., from a script or agent), it exits cleanly with code 0 instead of crashing. This ensures agents can safely probe the command to check its availability without triggering errors.\n",
+          "args": [
+            "create"
+          ],
+          "expected_exit_code": 0
+        },
+        {
+          "id": "review-no-spec",
+          "description": "The review command generates an interactive HTML browser for inspecting a spec. When --spec is empty, it outputs a structured JSON error with error=\"missing_parameter\" and parameter=\"--spec\" to stdout and exits with code 10, following the same parameter validation pattern as capture.\n",
+          "args": [
+            "review",
+            "--spec",
+            ""
+          ],
+          "expected_exit_code": 10,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "error",
+              "value": "missing_parameter"
+            },
+            {
+              "type": "json_path",
+              "path": "parameter",
+              "value": "--spec"
+            }
+          ]
+        },
+        {
+          "id": "review-missing-spec-file",
+          "description": "When review is given a --spec path that does not exist on disk, it fails with exit code 10 and prints \"Spec file not found\" to stderr. The --no-open flag is used here to prevent the test from attempting to open a browser.\n",
+          "args": [
+            "review",
+            "--spec",
+            "nonexistent-spec-file.yaml",
+            "--no-open"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Spec file not found"
+            }
+          ]
+        },
+        {
+          "id": "review-generates-html",
+          "description": "When review is given a valid spec, an --output path for the HTML file, and --no-open (to suppress browser launch), it generates an interactive HTML review page and outputs a JSON result to stdout containing the spec name and the output file path. The HTML file provides a narrative view with spec toggle and validation results overlay.\n",
+          "args": [
+            "review",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--output",
+            "/tmp/specify-test-review.html",
+            "--no-open"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "spec",
+              "value": "Login Page Spec"
+            },
+            {
+              "type": "text_contains",
+              "description": "The JSON result includes the output file path so agents can locate the generated HTML",
+              "text": "specify-test-review.html"
+            }
+          ]
+        },
+        {
+          "id": "review-in-schema",
+          "description": "The review command must be registered in the command manifest so agents can discover it via schema commands. This verifies that \"review\" appears in the manifest output.\n",
+          "args": [
+            "schema",
+            "commands"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "description": "The review command appears in schema commands output, confirming agent discoverability",
+              "text": "review"
+            }
+          ]
+        },
+        {
+          "id": "narrative-relative-path-lint",
+          "description": "Specs can reference a companion narrative file via the narrative_path field. When the path is relative (e.g., \"../narrative.md\"), it must be resolved relative to the spec file's directory, not the current working directory. Linting a nested spec that references a narrative via a relative path must pass (valid=true), proving the narrative was found and no missing-narrative warning was raised.\n",
+          "args": [
+            "spec",
+            "lint",
+            "--spec",
+            "src/spec/examples/nested/app.spec.yaml"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "description": "The spec passes lint, which means the relative narrative_path was resolved correctly and the file was found",
+              "path": "valid",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": "narrative-relative-path-review",
+          "description": "The review command must also resolve narrative_path relative to the spec file's directory, not the cwd. When reviewing a nested spec with a relative narrative path, the command logs \"Loaded narrative\" to stderr and reports hasNarrative=true in the JSON output, confirming the narrative was found and embedded in the HTML.\n",
+          "args": [
+            "review",
+            "--spec",
+            "src/spec/examples/nested/app.spec.yaml",
+            "--output",
+            "/tmp/specify-test-nested-review.html",
+            "--no-open"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Stderr confirms the narrative file was found and loaded from the relative path",
+              "text": "Loaded narrative"
+            }
+          ],
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "hasNarrative",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": "spec-auto-discovery",
+          "description": "When --spec is omitted, commands that require a spec file automatically search the current working directory for files matching *.spec.yaml, *.spec.yml, or *.spec.json. Running spec lint without --spec from the project root should auto-discover specify.spec.yaml and log \"Using auto-discovered spec\" to stderr, so the user knows which file was selected.\n",
+          "args": [
+            "spec",
+            "lint"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Stderr reports which spec file was auto-discovered, so the user knows what is being linted",
+              "text": "Using auto-discovered spec"
+            }
+          ]
+        },
+        {
+          "id": "evolve-top-level",
+          "description": "The top-level \"evolve\" command is a convenience alias that delegates directly to \"spec evolve\". Running \"specify evolve --spec ...\" must produce identical output to \"specify spec evolve --spec ...\". This verifies the alias works by checking that it returns interactive mode and correctly summarizes the login-page spec (1 page).\n",
+          "args": [
+            "evolve",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "mode",
+              "value": "interactive"
+            },
+            {
+              "type": "json_path",
+              "path": "spec_summary.page_count",
+              "value": 1
+            }
+          ]
+        },
+        {
+          "id": "verify-cli-top-level",
+          "description": "The \"verify cli\" subcommand routes to the CLI test runner (cli run), which executes command entries defined in a spec's cli section. When the target spec has no cli section (like login-page.yaml which only has pages), it fails with exit code 10 and reports \"no cli section\". This verifies the routing from the top-level verify dispatcher to the CLI runner.\n",
+          "args": [
+            "verify",
+            "cli",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "no cli section"
+            }
+          ]
+        },
+        {
+          "id": "verify-capture-top-level",
+          "description": "The \"verify --capture\" flag routes to spec validate (offline data validation mode). Running \"specify verify --spec ... --capture ...\" must produce the same gap report as \"specify spec validate --spec ... --capture ...\". This verifies the unified verify dispatcher correctly delegates to the data validation path.\n",
+          "args": [
+            "verify",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--capture",
+            "src/spec/examples",
+            "--json"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "The gap report has the same structure as spec validate output: spec metadata, capture path, summary, and pages",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "spec",
+                  "capture",
+                  "summary",
+                  "pages"
+                ]
+              }
+            },
+            {
+              "type": "json_path",
+              "path": "spec.name",
+              "value": "Login Page Spec"
+            }
+          ]
+        },
+        {
+          "id": "lint-top-level",
+          "description": "The top-level \"lint\" command is a convenience alias that delegates directly to \"spec lint\". Running \"specify lint --spec ...\" must produce identical output to \"specify spec lint --spec ...\". This verifies the alias works by checking valid=true for the login-page example.\n",
+          "args": [
+            "lint",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "valid",
+              "value": true
+            }
+          ]
+        },
+        {
+          "id": "bootstrap-dry-run",
+          "description": "The bootstrap command sets up a specify-driven development workflow in a target directory by creating CLAUDE.md (agent instructions) and a git pre-commit hook. With --dry-run, it previews the planned actions as structured JSON without writing any files. The output includes dry_run=true and an actions array where each action specifies what would be created (type, path, description).\n",
+          "args": [
+            "bootstrap",
+            "--dry-run",
+            "--target-dir",
+            "/tmp/specify-bootstrap-test"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "The dry run output describes planned file operations: each action has a type (create/update), file path, and human-readable description",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actions",
+                  "dry_run"
+                ],
+                "properties": {
+                  "dry_run": {
+                    "type": "boolean"
+                  },
+                  "actions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "required": [
+                        "type",
+                        "path",
+                        "description"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "bootstrap-in-schema",
+          "description": "The bootstrap command must be registered in the command manifest so agents can discover it. This verifies \"bootstrap\" appears in the schema commands output.\n",
+          "args": [
+            "schema",
+            "commands"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Bootstrap is present in the schema commands output",
+              "text": "bootstrap"
+            }
+          ]
+        },
+        {
+          "id": "schema-commands-has-modes",
+          "description": "Some commands (like verify and capture) support multiple modes of operation with different required parameters depending on the mode. The schema commands output must include a \"modes\" key for these commands, with entries like data_validation (offline verification against captures), agent_verification (live browser-driven verification), and from_code (importing from test code). Agents use modes to understand which parameters are required for each usage pattern.\n",
+          "args": [
+            "schema",
+            "commands"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "text_contains",
+              "description": "The modes key exists in the command manifest, indicating commands with conditional parameter requirements",
+              "text": "\"modes\":"
+            },
+            {
+              "type": "text_contains",
+              "description": "The verify command has a data_validation mode for offline verification against captured data",
+              "text": "data_validation"
+            },
+            {
+              "type": "text_contains",
+              "description": "The verify command has an agent_verification mode for live browser-driven verification",
+              "text": "agent_verification"
+            },
+            {
+              "type": "text_contains",
+              "description": "The capture command has a from_code mode for importing contracts from existing test code",
+              "text": "from_code"
+            }
+          ]
+        },
+        {
+          "id": "bootstrap-writes-files",
+          "description": "When bootstrap runs without --dry-run, it actually creates files in the target directory. It writes a CLAUDE.md file (containing agent instructions for working with the project) and a git pre-commit hook (that runs specify lint before each commit). The JSON output reports dry_run=false and lists the actions taken, including references to CLAUDE.md and pre-commit.\n",
+          "args": [
+            "bootstrap",
+            "--target-dir",
+            "/tmp/specify-bootstrap-test-write"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "Output reports what files were written, with the same structure as dry run",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "actions",
+                  "dry_run"
+                ]
+              }
+            },
+            {
+              "type": "json_path",
+              "path": "dry_run",
+              "value": false
+            },
+            {
+              "type": "text_contains",
+              "description": "Reports that CLAUDE.md was created or updated with agent instructions",
+              "text": "CLAUDE.md"
+            },
+            {
+              "type": "text_contains",
+              "description": "Reports that a pre-commit git hook was created for automated linting",
+              "text": "pre-commit"
+            }
+          ]
+        },
+        {
+          "id": "bootstrap-idempotent",
+          "description": "Running bootstrap a second time on the same target directory must succeed (exit 0) without errors. This verifies idempotency — bootstrap should update or skip existing files rather than failing because they already exist. Agents and CI pipelines can safely run bootstrap on every setup without worrying about state.\n",
+          "args": [
+            "bootstrap",
+            "--target-dir",
+            "/tmp/specify-bootstrap-test-write"
+          ],
+          "expected_exit_code": 0,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "path": "dry_run",
+              "value": false
+            }
+          ]
+        },
+        {
+          "id": "verify-auto-detects-cli",
+          "description": "When \"verify\" is called without the explicit \"cli\" subcommand and without --capture or --url, it auto-detects the spec's structure. If the spec has a cli section, it automatically runs CLI verification. If it also has behavioral requirements (agent- verified properties), the report includes both commands and requirements arrays plus a summary. This test uses a spec that has both a cli section and requirements: the mechanical CLI test passes, but the unverified requirement causes exit code 1.\n",
+          "args": [
+            "verify",
+            "--spec",
+            "src/spec/examples/with-requirements.spec.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 1,
+          "stdout_assertions": [
+            {
+              "type": "json_schema",
+              "description": "The report combines both CLI command results and behavioral requirement results in a unified structure",
+              "schema": {
+                "type": "object",
+                "required": [
+                  "commands",
+                  "requirements",
+                  "summary"
+                ]
+              }
+            },
+            {
+              "type": "json_path",
+              "description": "The mechanical CLI test (command entry) ran and passed successfully",
+              "path": "commands.0.status",
+              "value": "passed"
+            }
+          ]
+        },
+        {
+          "id": "verify-requirements-fail-not-untested",
+          "description": "Behavioral requirements that have not been verified by an agent must count as failures (not \"untested\") in the verify report. This is a deliberate design choice: unverified requirements are a risk, so they are surfaced as failures to force attention. The summary shows failed=1 and untested=0, meaning everything has a definitive status — nothing is left in an ambiguous \"untested\" state.\n",
+          "args": [
+            "verify",
+            "--spec",
+            "src/spec/examples/with-requirements.spec.yaml",
+            "--json"
+          ],
+          "expected_exit_code": 1,
+          "stdout_assertions": [
+            {
+              "type": "json_path",
+              "description": "The unverified behavioral requirement is marked as 'failed', not 'untested', to force attention",
+              "path": "requirements.0.status",
+              "value": "failed"
+            },
+            {
+              "type": "json_path",
+              "description": "The summary counts unverified requirements as failures, reflecting the risk of unverified behavior",
+              "path": "summary.failed",
+              "value": 1
+            },
+            {
+              "type": "json_path",
+              "description": "Nothing is left as 'untested' — every requirement and command has a definitive pass/fail status",
+              "path": "summary.untested",
+              "value": 0
+            }
+          ]
+        },
+        {
+          "id": "subcommand-help-verify",
+          "description": "Each command supports --help for command-specific usage information. Running \"verify --help\" must show the verify-specific parameters (like --spec), its available modes (like data_validation), and usage examples (like \"specify verify\"). This is printed to stderr, leaving stdout clean for structured output.\n",
+          "args": [
+            "verify",
+            "--help"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Shows the --spec parameter, which is required for all verify modes",
+              "text": "--spec"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows the data_validation mode so users know about offline verification",
+              "text": "data_validation"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows example invocations starting with 'specify verify'",
+              "text": "specify verify"
+            }
+          ]
+        },
+        {
+          "id": "subcommand-help-evolve",
+          "description": "Running \"evolve --help\" shows the evolve-specific parameters, including --pr (for PR-driven evolution) and --report (for report-driven gap analysis). This helps users understand the three evolution modes: interactive (default), PR-driven, and report-driven.\n",
+          "args": [
+            "evolve",
+            "--help"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "--pr"
+            },
+            {
+              "type": "text_contains",
+              "text": "--report"
+            }
+          ]
+        },
+        {
+          "id": "spec-refine-deprecated",
+          "description": "The spec refine command is deprecated in favor of spec evolve. When invoked, it still works (exit 0) but prints a deprecation warning to stderr so users know to migrate. The command delegates to spec evolve internally, ensuring backward compatibility while guiding users toward the current API.\n",
+          "args": [
+            "spec",
+            "refine",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Warns the user that spec refine is deprecated and they should use spec evolve instead",
+              "text": "deprecated"
+            }
+          ]
+        },
+        {
+          "id": "mcp-help",
+          "description": "The mcp command starts a Model Context Protocol server that exposes Specify's capabilities as LLM tools. Running \"mcp --help\" must show MCP-related information to stderr, confirming the command is registered and discoverable. Agents that integrate via MCP can use this to verify the server is available.\n",
+          "args": [
+            "mcp",
+            "--help"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "MCP"
+            }
+          ]
+        },
+        {
+          "id": "agent-run-no-url",
+          "description": "The agent run command launches a browser to autonomously verify a spec against a live system. When --url is empty, it attempts to start the browser and fails with exit code 14 (browser_error), printing \"Browser\" to stderr. Exit code 14 specifically signals browser-related failures, distinguishing them from parse errors (10) or network errors (11).\n",
+          "args": [
+            "agent",
+            "run",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--url",
+            ""
+          ],
+          "expected_exit_code": 14,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Browser"
+            }
+          ]
+        },
+        {
+          "id": "verify-url-no-browser",
+          "description": "When \"verify --url\" is used (agent verification mode) but no browser is available in the environment, the command fails with exit code 14 (browser_error). This tests the verify dispatcher's routing to agent mode and confirms it surfaces browser availability errors clearly rather than hanging or crashing.\n",
+          "args": [
+            "verify",
+            "--spec",
+            "src/spec/examples/login-page.yaml",
+            "--url",
+            "http://localhost:99999"
+          ],
+          "expected_exit_code": 14,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Browser"
+            }
+          ]
+        },
+        {
+          "id": "human-shell-non-tty",
+          "description": "The human shell subcommand starts an interactive REPL for iterative spec development. When invoked without a TTY (e.g., piped or from an agent), it exits cleanly with code 0 instead of crashing. This ensures agents can safely probe the command to check its availability.\n",
+          "args": [
+            "human",
+            "shell"
+          ],
+          "expected_exit_code": 0
+        },
+        {
+          "id": "human-watch-non-tty",
+          "description": "The human watch subcommand starts a live TUI dashboard that requires a real terminal for rendering. When invoked without a TTY, it fails with exit code 10 and prints \"interactive terminal\" to stderr, clearly communicating that this command needs a TTY. Unlike shell (which exits silently), watch explicitly reports the requirement because it cannot function at all without a terminal.\n",
+          "args": [
+            "human",
+            "watch"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "interactive terminal"
+            }
+          ]
+        },
+        {
+          "id": "human-non-tty-exit",
+          "description": "The human command launches an interactive wizard that detects project state and guides users through the spec lifecycle. When invoked without a TTY, it exits cleanly with code 0. This ensures agents can safely call \"specify human\" to check availability without triggering errors.\n",
+          "args": [
+            "human"
+          ],
+          "expected_exit_code": 0
+        },
+        {
+          "id": "human-shows-lifecycle",
+          "description": "When the human wizard starts (even without a TTY), it outputs the five lifecycle flows to stderr: Create (author a new spec), Capture (record from live or code), Evolve (improve an existing spec), Review (inspect in browser), and Verify (check implementation). These are the core product concepts that organize all of Specify's functionality.\n",
+          "args": [
+            "human"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "description": "Shows the Create flow for authoring new specs from human intent",
+              "text": "Create"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows the Capture flow for recording contracts from live systems or code",
+              "text": "Capture"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows the Evolve flow for improving specs via gap analysis, PR changes, or reports",
+              "text": "Evolve"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows the Review flow for inspecting specs in an interactive browser view",
+              "text": "Review"
+            },
+            {
+              "type": "text_contains",
+              "description": "Shows the Verify flow for checking implementations against contracts",
+              "text": "Verify"
+            }
+          ]
+        },
+        {
+          "id": "human-create-path",
+          "description": "The wizard supports direct path addressing: \"human create\" jumps directly to the Create flow without showing the top-level menu. This lets agents and power users skip navigation. The command outputs \"Create\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "create"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Create"
+            }
+          ]
+        },
+        {
+          "id": "human-capture-live-path",
+          "description": "The wizard's Capture flow has sub-paths for different capture sources. \"human capture live\" jumps directly to the live-capture workflow (browser-based recording from a running site). The command outputs \"Capture\" to stderr confirming the correct flow.\n",
+          "args": [
+            "human",
+            "capture",
+            "live"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Capture"
+            }
+          ]
+        },
+        {
+          "id": "human-capture-code-path",
+          "description": "\"human capture code\" jumps directly to the code-capture workflow, which imports contracts from existing e2e test files (Playwright or Cypress). The command outputs \"Capture\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "capture",
+            "code"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Capture"
+            }
+          ]
+        },
+        {
+          "id": "human-capture-generate-path",
+          "description": "\"human capture generate\" jumps directly to the spec-generation workflow, which creates a spec from previously captured traffic data. The command outputs \"Capture\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "capture",
+            "generate"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Capture"
+            }
+          ]
+        },
+        {
+          "id": "human-evolve-interactive-path",
+          "description": "\"human evolve interactive\" jumps directly to the interactive evolution workflow, which performs gap analysis on a spec and suggests improvements. The command outputs \"Evolve\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "evolve",
+            "interactive"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Evolve"
+            }
+          ]
+        },
+        {
+          "id": "human-evolve-pr-path",
+          "description": "\"human evolve pr\" jumps directly to the PR-driven evolution workflow, which analyzes a pull request's changes and suggests spec updates to match. The command outputs \"Evolve\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "evolve",
+            "pr"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Evolve"
+            }
+          ]
+        },
+        {
+          "id": "human-evolve-report-path",
+          "description": "\"human evolve report\" jumps directly to the report-driven evolution workflow, which analyzes a gap report to suggest targeted spec improvements based on validation results. The command outputs \"Evolve\" to stderr confirming the correct flow.\n",
+          "args": [
+            "human",
+            "evolve",
+            "report"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Evolve"
+            }
+          ]
+        },
+        {
+          "id": "human-review-path",
+          "description": "\"human review\" jumps directly to the Review flow, which generates an interactive HTML view of the spec. The command outputs \"Review\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "review"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Review"
+            }
+          ]
+        },
+        {
+          "id": "human-verify-data-path",
+          "description": "\"human verify data\" jumps directly to the data validation workflow, which verifies a spec against captured data (offline, no browser needed). The command outputs \"Verify\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "verify",
+            "data"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Verify"
+            }
+          ]
+        },
+        {
+          "id": "human-verify-agent-path",
+          "description": "\"human verify agent\" jumps directly to the agent verification workflow, which uses a browser to autonomously verify a spec against a live system. The command outputs \"Verify\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "verify",
+            "agent"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Verify"
+            }
+          ]
+        },
+        {
+          "id": "human-verify-cli-path",
+          "description": "\"human verify cli\" jumps directly to the CLI verification workflow and then delegates to cli run. When pointed at a spec with no cli section (login-page.yaml), it fails with exit code 10 and reports both \"Verify\" (confirming the wizard path) and \"no cli section\" (the underlying error from cli run). This tests the full routing chain from wizard to CLI runner.\n",
+          "args": [
+            "human",
+            "verify",
+            "cli",
+            "--spec",
+            "src/spec/examples/login-page.yaml"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Verify"
+            },
+            {
+              "type": "text_contains",
+              "description": "The wizard delegates to cli run, which reports the spec has no cli section to execute",
+              "text": "no cli section"
+            }
+          ]
+        },
+        {
+          "id": "human-verify-diff-path",
+          "description": "\"human verify diff\" jumps directly to the report diff workflow, which compares two gap reports. The command outputs \"Verify\" to stderr confirming the correct flow was entered. Without report arguments, it exits cleanly rather than crashing.\n",
+          "args": [
+            "human",
+            "verify",
+            "diff"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Verify"
+            }
+          ]
+        },
+        {
+          "id": "human-verify-stats-path",
+          "description": "\"human verify stats\" jumps directly to the report stats workflow, which shows statistical confidence from report history. The command outputs \"Verify\" to stderr confirming the correct flow was entered.\n",
+          "args": [
+            "human",
+            "verify",
+            "stats"
+          ],
+          "expected_exit_code": 0,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Verify"
+            }
+          ]
+        },
+        {
+          "id": "capture-from-code-missing",
+          "description": "The capture command supports \"--from code\" mode, which delegates to spec import to convert existing e2e test files into a spec. When the --input path does not exist, it fails with exit code 10 and prints \"Path not found\" to stderr. This confirms that capture's code mode correctly routes to spec import and surfaces its errors.\n",
+          "args": [
+            "capture",
+            "--from",
+            "code",
+            "--input",
+            "nonexistent-test-dir-xyz"
+          ],
+          "expected_exit_code": 10,
+          "stderr_assertions": [
+            {
+              "type": "text_contains",
+              "text": "Path not found"
+            }
+          ]
+        }
+      ],
+      "scenarios": [
+        {
+          "id": "schema-introspection-suite",
+          "description": "All three schema introspection targets (spec, report, commands) must produce valid JSON in a single test run. This scenario verifies the complete schema introspection surface: spec returns an object (the spec file JSON Schema), report returns an object (the gap report JSON Schema), and commands returns an array (the command manifest). An agent can use these three calls to fully understand Specify's data model.\n",
+          "steps": [
+            {
+              "id": "schema-spec-step",
+              "args": [
+                "schema",
+                "spec"
+              ],
+              "expected_exit_code": 0,
+              "stdout_assertions": [
+                {
+                  "type": "json_schema",
+                  "schema": {
+                    "type": "object"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "schema-report-step",
+              "args": [
+                "schema",
+                "report"
+              ],
+              "expected_exit_code": 0,
+              "stdout_assertions": [
+                {
+                  "type": "json_schema",
+                  "schema": {
+                    "type": "object"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "schema-commands-step",
+              "args": [
+                "schema",
+                "commands"
+              ],
+              "expected_exit_code": 0,
+              "stdout_assertions": [
+                {
+                  "type": "json_schema",
+                  "schema": {
+                    "type": "array"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "export-both-frameworks",
+          "description": "A single spec can be exported to both Playwright and Cypress in sequence, producing valid framework-specific test code each time. This scenario verifies that the export command is stateless — exporting to one framework does not affect subsequent exports to another framework.\n",
+          "steps": [
+            {
+              "id": "export-pw-step",
+              "args": [
+                "spec",
+                "export",
+                "--spec",
+                "src/spec/examples/login-page.yaml",
+                "--framework",
+                "playwright",
+                "--json"
+              ],
+              "expected_exit_code": 0,
+              "stdout_assertions": [
+                {
+                  "type": "text_contains",
+                  "text": "@playwright/test"
+                }
+              ]
+            },
+            {
+              "id": "export-cy-step",
+              "args": [
+                "spec",
+                "export",
+                "--spec",
+                "src/spec/examples/login-page.yaml",
+                "--framework",
+                "cypress",
+                "--json"
+              ],
+              "expected_exit_code": 0,
+              "stdout_assertions": [
+                {
+                  "type": "text_contains",
+                  "text": "cy.visit"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "narrative": {
+    "title": "Specify",
+    "overview": "Specify is a behavioral contract tool for web applications and CLIs. It creates a formal, computable description of how a system should behave, then provides deterministic tools to verify that the implementation matches the description.\n\nThe core design decision is a separation of concerns: the tool stays fully deterministic. There are no API keys, no `--llm` flags, no probabilistic outputs. Intelligence comes from the agent layer -- an LLM using Specify through its CLI, MCP server, or structured JSON output. Specify computes facts and produces structured data. Agents interpret those facts, make decisions, and drive the workflow.\n\nA spec should be complete enough that an agent can implement and validate an entire system from it. This is the standard: if someone hands an agent a Specify spec and nothing else, the agent should be able to build the system, verify it works, and know exactly where it falls short.\n\nThe tool is designed for three audiences simultaneously. Humans read the narrative companion and review the interactive HTML browser. Agents consume structured JSON from stdout, use meaningful exit codes for branching, and discover capabilities through schema introspection. CI/CD pipelines run the deterministic CLI directly and gate on exit codes.",
+    "sections": [
+      {
+        "title": "The Lifecycle",
+        "body": "Specify organizes around five primary flows. Each flow corresponds to a stage in the lifecycle of a behavioral contract. The `--help` output presents them in this order, the interactive wizard (`specify human`) offers them as the top-level menu, and each is available as a top-level command.",
+        "specRefs": [
+          "meta"
+        ],
+        "children": [
+          {
+            "title": "Create",
+            "body": "Creating a spec from nothing. `specify create` starts an interactive interview that captures human intent and produces two artifacts: a YAML spec file and a Markdown narrative companion.\n\nThe interview is context-aware. It detects the current project state -- existing specs, capture directories, test files, e2e framework configuration -- and adapts its questions accordingly. If a project already has Playwright tests, the wizard offers to import them. If there are capture directories with `traffic.json` files, it offers to load pages from captured data.\n\nThe interview covers identity (name, base URL, description), page discovery (manual entry or crawling), and default properties (no 5xx responses, no console errors). The result is a spec that immediately works with `specify lint` and `specify verify`.\n\nFor agents, `create` is less relevant -- agents typically start from `capture` or `evolve`. But for humans starting a greenfield project, it provides a structured way to express intent before writing any code.\n\n```\n$ specify create\n$ specify create --output my-app.spec.yaml\n```",
+            "specRefs": [
+              "cli:create-in-schema"
+            ],
+            "children": []
+          },
+          {
+            "title": "Capture",
+            "body": "Deriving a behavioral contract from an existing system. Capture has two modes, selected via `--from`:\n\n**From a live URL** (`--from live`, the default): Specify launches a browser, navigates to the target URL, and records everything -- network traffic, console output, screenshots, DOM snapshots. The captured data lands in an output directory as structured JSON. By default, Specify then generates a spec from the captured data automatically. Use `--no-generate` to capture data without generating a spec.\n\n```\n$ specify capture --url http://localhost:3000 --output ./captures/my-app\n$ specify capture --url https://example.com --output ./cap --no-generate\n```\n\n**From existing test code** (`--from code`): Specify analyzes existing Playwright or Cypress test files and imports them as spec items. It auto-detects the framework from configuration files or accepts an explicit `--framework` flag. This is useful when a project already has e2e tests and wants to layer Specify's contract model on top of them.\n\n```\n$ specify capture --from code --input ./tests --output spec.yaml\n```\n\nCapture validates its inputs early. An empty `--url` returns a structured `missing_parameter` error. An invalid URL returns an `invalid_url` error. These are not silent failures -- they produce JSON with error type, parameter name, and hint text, so agents can recover programmatically.",
+            "specRefs": [
+              "cli:capture-no-url",
+              "cli:capture-invalid-url",
+              "cli:capture-from-code-missing"
+            ],
+            "children": []
+          },
+          {
+            "title": "Evolve",
+            "body": "Changing a contract as the product changes. Evolve is the thinking step -- it guides reasoning about what the contract should say, without making deterministic assertions about correctness.\n\nEvolve operates in three modes:\n\n**Interactive** (default, no flags): Analyzes the current spec for structural gaps and produces prioritized suggestions. Each suggestion has a category (`new_coverage`, `add_scenario`, `add_assertion`, `spec_hygiene`, etc.), a priority level, a rationale explaining why the change matters, a proposed spec fragment, and a question for the agent to ask the user.\n\n```\n$ specify evolve --spec spec.yaml\n$ specify spec evolve --spec spec.yaml --json\n```\n\nFor example, running evolve against the login page example spec finds that the `failed-login` scenario has interactions but no assertions verifying the outcome. That is a real gap -- the scenario clicks the submit button but never checks what happens. Evolve surfaces this as a suggestion with a concrete proposed change.\n\nRunning evolve against the self-spec (`specify.spec.yaml`) produces a summary showing the full command count and suggestions for improving coverage.\n\n**PR-based** (`--pr`): Analyzes a pull request diff to identify which parts of the spec are affected by the code changes. This mode accepts a PR number or URL and optionally a `--repo` flag for disambiguation.\n\n```\n$ specify evolve --spec spec.yaml --pr 42\n$ specify evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42\n```\n\n**Report-based** (`--report`): Analyzes a gap report from a previous validation run and suggests spec refinements based on failures and coverage gaps.\n\n```\n$ specify evolve --spec spec.yaml --report gap-report.json\n$ specify evolve --spec spec.yaml --report gap-report.json --output refined.yaml\n```\n\nThe `--apply` flag enters an interactive mode where the agent walks through suggestions one by one, optionally applying them to produce a refined spec. Combined with `--url`, it can crawl a live system for additional context.\n\nAn important design boundary: `evolve` guides reasoning. It does not compute facts about the spec's structural validity (that is `lint`'s job). Do not confuse them. Lint tells you \"this ID is duplicated\" or \"this flow references a nonexistent page.\" Evolve tells you \"this scenario has no assertions -- consider adding one.\" Both are valuable, but they serve different purposes and should not be merged.",
+            "specRefs": [
+              "cli:evolve-interactive",
+              "cli:evolve-finds-gaps",
+              "cli:evolve-no-pr-flag-ok",
+              "cli:evolve-self-spec-finds-cli-gaps",
+              "cli:evolve-top-level"
+            ],
+            "children": []
+          },
+          {
+            "title": "Review",
+            "body": "Inspecting the contract. `specify review` generates a self-contained HTML file and opens it in the default browser. The HTML embeds all data (spec, narrative, validation reports) and uses vanilla JavaScript for interactivity -- no external dependencies at runtime.\n\nThe review interface has three panels:\n\n- **Sidebar**: A table of contents with status indicators. Each item shows a colored dot -- green for passed, red for failed, yellow for mixed results, gray for untested, orange for stale references.\n\n\n- **Detail panel**: Clicking any section reveals its linked validation results -- CLI command outcomes, visual assertion results, request matching status, scenario step results. Each assertion shows its type, description, and pass/fail status.\n\nThe review tool resolves `narrative_path` relative to the spec file's directory, not the current working directory. This matters for nested project structures where the spec and narrative live in subdirectories.\n\n```\n$ specify review --spec spec.yaml\n$ specify review --spec spec.yaml --report gap-report.json\n$ specify review --spec spec.yaml --no-open\n```\n\nWhen a narrative companion exists (pointed to by `narrative_path` in the spec), the review HTML includes prose alongside the structural data. When no narrative exists, the review builds sections from the spec structure itself -- pages become sections, scenarios become subsections.",
+            "specRefs": [
+              "cli:review-generates-html",
+              "cli:review-no-spec",
+              "cli:review-missing-spec-file",
+              "page:login",
+              "page:old-login"
+            ],
+            "children": []
+          },
+          {
+            "title": "Verify",
+            "body": "Checking that an implementation matches the contract. Verify is the assertion engine -- it produces pass/fail results with evidence.\n\nVerify auto-detects its mode from the spec content and the flags provided:\n\n**CLI verification** (`verify cli` or auto-detected when spec has a `cli` section): Runs each command defined in the spec's `cli.commands` array, checks exit codes, and evaluates stdout/stderr assertions. This is fully deterministic -- the tool executes the binary, captures output, and compares against the spec.\n\n```\n$ specify verify cli --spec spec.yaml\n$ specify verify --spec spec.yaml   # auto-detects cli section\n```\n\n**Agent verification** (`verify --url`): Launches a browser against a live URL and runs autonomous agent-driven verification. The agent navigates pages, executes scenarios, checks visual assertions, and validates network requests.\n\n```\n$ specify verify --spec spec.yaml --url http://localhost:3000\n```\n\n**Data validation** (`verify --capture`): Validates a spec against previously captured data (offline, no browser needed). Useful for CI/CD where browser access may not be available.\n\n```\n$ specify verify --spec spec.yaml --capture ./captures/latest\n```\n\nThe routing logic is explicit: `--url` without `--capture` routes to agent verification. `--capture` routes to data validation. Neither flag routes to auto-detection from the spec. If the spec has a `cli` section, it runs CLI verification. If it has pages but no target, it tells you to provide one.\n\nExit codes encode the result: `0` for all passed, `1` for assertion failures, `2` for all untested, `10` for parse errors, `14` for browser errors. These are designed for agent branching -- an agent can check the exit code and decide its next action without parsing output.",
+            "specRefs": [
+              "cli:verify-auto-detects-cli",
+              "cli:verify-requirements-fail-not-untested",
+              "cli:verify-cli-top-level",
+              "cli:verify-capture-top-level",
+              "cli:verify-url-no-browser"
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "The Spec Format",
+        "body": "A Specify spec is a YAML (or JSON) document that describes behavioral expectations. The format is designed to be both human-readable and machine-verifiable.",
+        "specRefs": [
+          "cli:lint-valid-spec",
+          "cli:lint-self-spec",
+          "cli:schema-spec"
+        ],
+        "children": [
+          {
+            "title": "Identity",
+            "body": "Every spec starts with identity fields:\n\n```yaml\nversion: \"1.0\"\nname: \"Login Page Spec\"\ndescription: \"Simple login page with form submission and redirect\"\n```\n\n`version` is the spec format version. `name` is human-readable, used in review output and reports. `description` explains what the spec covers.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Pages",
+            "body": "Pages describe individual views in the application. Each page has an `id` (used for cross-referencing), a `path` (URL path or pattern), and optional assertions:\n\n```yaml\npages:\n  - id: login\n    path: /login\n    title: \"Login\"\n\n    visual_assertions:\n      - type: element_exists\n        selector: \"form\"\n        description: \"Login form is present\"\n      - type: text_contains\n        selector: \"button[type=submit]\"\n        text: \"Log In\"\n\n    console_expectations:\n      - level: error\n        count: 0\n\n    expected_requests:\n      - method: POST\n        url_pattern: \"/api/auth/login\"\n        response:\n          status: 200\n\n    scenarios:\n      - id: successful-login\n        steps:\n          - action: fill\n            selector: \"#email\"\n            value: \"{{test_user.email}}\"\n          - action: click\n            selector: \"button[type=submit]\"\n          - action: wait_for_navigation\n            url_pattern: \"/dashboard\"\n```\n\nVisual assertions check what a user sees: `element_exists`, `text_contains`, `text_matches`, `screenshot_region`, `element_count`. Each can carry a `quantifier` (`always` or `sometimes`) and a `confidence` level (`observed`, `inferred`, `reviewed`).\n\nExpected requests check network behavior: what HTTP calls should happen when a page loads or an action is performed. Requests can assert on method, URL pattern (exact, glob, or regex), request body shape, and response properties.\n\nConsole expectations check browser console output: no errors, specific warning patterns, expected log messages.\n\nScenarios describe interactive workflows within a single page. Steps include `click`, `fill`, `select`, `hover`, `keypress`, `scroll`, `wait`, `wait_for_request`, `wait_for_navigation`, `assert_visible`, `assert_text`, and `assert_not_visible`.",
+            "specRefs": [
+              "cli:validate-with-empty-capture"
+            ],
+            "children": []
+          },
+          {
+            "title": "Flows",
+            "body": "Flows describe multi-page user journeys -- sequences of navigation and interaction that span multiple pages:\n\n```yaml\nflows:\n  - id: login-to-dashboard\n    description: \"User logs in and sees the dashboard\"\n    steps:\n      - navigate: \"/login\"\n      - assert_page: login\n      - action: fill\n        selector: \"#email\"\n        value: \"{{test_user.email}}\"\n      - action: click\n        selector: \"button[type=submit]\"\n      - navigate: \"/dashboard\"\n      - assert_page: dashboard\n```\n\nFlow steps come in three types:\n\n- **Navigate**: Go to a URL path. Supports `{{var}}` templates for portability.\n- **Assert page**: Verify the current page matches a page spec by `id`. This runs all of that page's visual assertions, console expectations, and expected request checks.\n- **Action**: Perform an interaction (same step types as scenarios -- click, fill, hover, etc.).\n\nFlow steps reference pages by their `id` via `assert_page`, creating a compositional structure where page-level assertions are reused in flow-level verification. A page defined once can be asserted in multiple flows, and changes to the page spec automatically propagate to every flow that references it.\n\nWhen exported to test code via `specify spec export`, multi-page flows produce multi-step tests with `page.goto` calls for navigation and `page.locator` calls for interactions. The generated code preserves the flow structure, making it readable and debuggable.",
+            "specRefs": [
+              "cli:export-multi-page-flow"
+            ],
+            "children": []
+          },
+          {
+            "title": "CLI",
+            "body": "The `cli` section defines command-line verification. It specifies a binary to invoke and a set of commands with expected behavior:\n\n```yaml\ncli:\n  binary: \"./specify\"\n  commands:\n    - id: help-flag\n      args: [\"--help\"]\n      expected_exit_code: 0\n      stderr_assertions:\n        - type: text_contains\n          text: \"Usage: specify\"\n```\n\nEach command specifies `args` (the argument array), `expected_exit_code`, and assertions on `stdout` and `stderr`. Assertion types include `text_contains`, `text_matches`, `json_schema`, `json_path`, `empty`, and `line_count`.\n\nMulti-command scenarios allow sequential commands with shared state:\n\n```yaml\ncli:\n  scenarios:\n    - id: schema-round-trip\n      steps:\n        - id: get-schema\n          args: [\"schema\", \"spec\"]\n          expected_exit_code: 0\n        - id: get-commands\n          args: [\"schema\", \"commands\"]\n          expected_exit_code: 0\n```",
+            "specRefs": [
+              "cli:cli-run-no-cli-section"
+            ],
+            "children": []
+          },
+          {
+            "title": "Requirements",
+            "body": "Requirements describe behavioral properties that need agent intelligence to validate. They cannot be checked by exit codes or string matching alone:\n\n```yaml\nrequirements:\n  - id: full-path-coverage\n    description: \"Every reachable path through the CLI has well-defined behavior\"\n    verification: agent\n    validation_plan: |\n      1. Discover all command paths\n      2. For each path, search the spec for a test entry\n      3. Produce a coverage table\n    evidence_format: \"A table of { path, test_id, status } entries\"\n```\n\nEach requirement has a `validation_plan` that tells an agent exactly how to verify it, and an `evidence_format` that specifies the structure of the evidence the agent should produce. This is not a suggestion -- it is a contract with the agent.",
+            "specRefs": [
+              "cli:verify-requirements-fail-not-untested"
+            ],
+            "children": []
+          },
+          {
+            "title": "Variables",
+            "body": "Template variables make specs portable across environments:\n\n```yaml\nvariables:\n  base_url: \"${TARGET_BASE_URL}\"\n  test_user:\n    email: \"test@example.com\"\n    password: \"secret123\"\n```\n\nVariables use two template syntaxes:\n\n- `{{var}}` for spec-level variables: `{{base_url}}`, `{{test_user.email}}`. These are defined in the spec's `variables` section and expanded at verification time.\n- `${ENV_VAR}` for environment variable expansion: `${TARGET_BASE_URL}`, `${API_KEY}`. These are read from the process environment.\n\nThis dual syntax allows the same spec to run against localhost in development and a staging URL in CI/CD. The spec defines the variable names, the environment provides the values. An agent running verification in CI sets environment variables; a human running locally uses different values.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Defaults",
+            "body": "Universal properties that apply to all pages unless overridden:\n\n```yaml\ndefaults:\n  no_5xx: true\n  no_console_errors: true\n  page_load_timeout_ms: 10000\n```\n\nThese are safety nets. `no_5xx` means no HTTP response should return a 5xx status code. `no_console_errors` means no `console.error` messages should appear. They apply globally and save you from adding the same assertions to every page.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Assumptions",
+            "body": "Preconditions that must hold for the spec to be validly tested:\n\n```yaml\nassumptions:\n  - type: url_reachable\n    url: \"{{base_url}}\"\n    description: \"Target application must be running\"\n  - type: env_var_set\n    name: \"TARGET_BASE_URL\"\n```\n\nAssumption types include `url_reachable` (URL responds with 2xx), `env_var_set` (environment variable is non-empty), `api_returns` (endpoint returns expected status), and `selector_exists` (CSS selector exists on a page). Failed assumptions produce exit code `13`, distinct from assertion failures (`1`), so agents know the test environment was not valid.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Narrative Path",
+            "body": "The `narrative_path` field points to the companion narrative document:\n\n```yaml\nnarrative_path: \"specify.spec.narrative.md\"\n```\n\nThis path is resolved relative to the spec file's directory. When present, `specify lint` validates that the narrative references match actual spec items. `specify review` loads the narrative and renders it alongside the spec structure.",
+            "specRefs": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Verification Model",
+        "body": "Specify uses two distinct verification mechanisms, and they are not interchangeable.",
+        "specRefs": [],
+        "children": [
+          {
+            "title": "Mechanical Assertions",
+            "body": "These are deterministic checks that the tool evaluates directly:\n\n- **Exit codes**: The command exited with the expected code.\n- **json_path**: A specific JSON path in the output has a specific value (e.g., `path: \"error\"`, `value: \"unknown_command\"`).\n- **json_schema**: The output is valid JSON conforming to a JSON Schema (e.g., the output is an array of objects with `name`, `description`, and `parameters` fields).\n- **text_contains**: The output contains a specific substring.\n- **text_matches**: The output matches a regex pattern.\n- **element_exists**: A CSS selector matches at least one DOM element.\n- **element_count**: The count of matching elements is within bounds.\n\nThese are checked by `verify cli` for CLI specs, and by `verify --url` or `verify --capture` for page specs. No judgment is needed. The tool compares expected against actual and reports pass or fail.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Behavioral Requirements",
+            "body": "These are properties that need agent intelligence to validate. The classic example from the self-spec: \"Every reachable path through the CLI has well-defined behavior captured in this spec.\"\n\nNo deterministic check can verify this. An agent needs to:\n1. Discover all command paths (via schema introspection, help parsing, fuzzing)\n2. Map each path to a test entry in the spec\n3. Produce evidence that the mapping is complete\n\nAgents validate behavioral requirements and write evidence files to `.specify/evidence/<requirement-id>.json`. When `verify` runs, it reads evidence files and marks requirements as passed (evidence exists and validates) or failed (no evidence).",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "No \"Untested\" State",
+            "body": "This is a deliberate design decision. In the verification model, everything is either passed or failed. If a behavioral requirement has no evidence, it is a failure -- not \"untested.\" This matters because \"untested\" creates a gray zone where requirements can slip through indefinitely. Making it a failure forces action: either verify the requirement or remove it from the spec.\n\nThe `summary.untested` field in reports exists for mechanical assertions that could not be evaluated (e.g., a page that was not captured). But behavioral requirements are always either verified or failed.",
+            "specRefs": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Agent Integration",
+        "body": "Specify is built for agent consumption. Every design decision reflects this.",
+        "specRefs": [
+          "cli:no-args-self-description",
+          "cli:schema-commands",
+          "cli:schema-commands-has-modes"
+        ],
+        "children": [
+          {
+            "title": "Self-Description",
+            "body": "Running `specify` with no arguments produces a JSON self-description to stdout:\n\n```json\n{\n  \"name\": \"specify\",\n  \"version\": \"0.1.0\",\n  \"commands\": [...],\n  \"global_options\": [...],\n  \"exit_codes\": { \"0\": \"success\", \"1\": \"assertion_failure\", ... },\n  \"hint\": \"Run \\\"specify schema commands\\\" for full parameter schemas.\"\n}\n```\n\nThis is the entry point for any agent encountering Specify for the first time. The self-description includes the command list, global options, exit code meanings, and a hint pointing to deeper introspection.\n\nHuman-readable help goes to stderr via `--help`. JSON goes to stdout with no arguments. This split is intentional: agents pipe stdout, humans read stderr.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Schema Introspection",
+            "body": "`specify schema` exposes three introspection targets:\n\n- `specify schema commands`: Returns the full command manifest -- every command with its parameters, types, required/optional status, defaults, modes, and examples. This is the same manifest used internally for routing and help generation.\n\n- `specify schema spec`: Returns the JSON Schema for spec documents. Agents use this to validate specs they generate or to understand what fields are available.\n\n- `specify schema report`: Returns the JSON Schema for validation reports. Agents use this to parse and reason about verification results.\n\nCommands with multiple modes (like `verify` and `capture`) include a `modes` array describing each mode's required parameters and activation condition. For example, `verify` has `data_validation` mode (requires `--spec` and `--capture`) and `agent_verification` mode (requires `--spec` and `--url`).",
+            "specRefs": [
+              "cli:schema-spec",
+              "cli:schema-report"
+            ],
+            "children": []
+          },
+          {
+            "title": "Subcommand Help",
+            "body": "`specify <command> --help` shows command-specific help with parameters, modes, and examples. This is not a fallback to top-level help -- it is targeted information about the specific command.\n\nFor example, `specify verify --help` shows verify-specific parameters (`--spec`, `--capture`, `--url`, `--headed`), the two modes (`data_validation` and `agent_verification`), and concrete examples. `specify evolve --help` shows evolve-specific parameters (`--pr`, `--report`, `--apply`).\n\nThis matters for discoverability. An agent encountering `verify` for the first time can run `verify --help` and learn everything it needs to invoke the command correctly, including which parameter combinations activate which modes.",
+            "specRefs": [
+              "cli:subcommand-help-verify",
+              "cli:subcommand-help-evolve"
+            ],
+            "children": []
+          },
+          {
+            "title": "MCP Server",
+            "body": "`specify mcp` starts a Model Context Protocol server that exposes Specify's capabilities as MCP tools. Any MCP-compatible client -- Claude Desktop, Cursor, Claude Code, or custom integrations -- can discover and invoke these tools.\n\nThe server supports two transports:\n\n- **stdio** (default): For local use. The MCP client spawns `specify mcp` as a subprocess.\n- **HTTP** (`--http`): For remote access. The server binds to a port and accepts MCP requests over HTTP.\n\n```json\n{\n  \"mcpServers\": {\n    \"specify\": { \"command\": \"specify\", \"args\": [\"mcp\"] }\n  }\n}\n```\n\n```json\n{\n  \"mcpServers\": {\n    \"specify\": { \"url\": \"http://host:8080/mcp\" }\n  }\n}\n```",
+            "specRefs": [
+              "cli:mcp-help"
+            ],
+            "children": []
+          },
+          {
+            "title": "Evidence Loop",
+            "body": "The evidence loop is how agents close the gap between behavioral requirements and verification:\n\n1. `verify` runs and identifies unverified behavioral requirements. It reports them as failures with a message like \"1 behavioral requirement(s) need agent verification.\"\n\n2. The agent reads the requirement's `validation_plan` and `evidence_format`.\n\n3. The agent executes the validation plan -- running commands, analyzing output, checking coverage.\n\n4. The agent writes evidence to `.specify/evidence/<requirement-id>.json` in the format specified by `evidence_format`.\n\n5. On the next `verify` run, Specify reads the evidence file and marks the requirement as passed or failed based on the evidence content.\n\nThis loop is asymmetric by design. The tool does not know how to validate behavioral requirements -- that requires judgment. The agent does not know what to validate -- that requires the spec. Together they form a complete verification system.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Structured Output and Exit Codes",
+            "body": "Every command follows the same output contract:\n\n- **stdout**: Structured data (JSON by default). This is what agents parse.\n- **stderr**: Human-readable messages, progress indicators, summaries. This is what humans read.\n- **Exit codes**: Encode the result type for branching.\n\nExit codes are granular:\n\n| Code | Meaning |\n|------|---------|\n| 0 | Success |\n| 1 | Assertion failure (some tests failed) |\n| 2 | All untested (no assertions could be evaluated) |\n| 10 | Parse error (invalid spec, unknown command, missing parameter) |\n| 11 | Network error |\n| 12 | Timeout |\n| 13 | Assumption failure (preconditions not met) |\n| 14 | Browser error (Playwright not available) |\n\nAn agent can distinguish between \"the spec failed validation\" (1) and \"the spec file could not be parsed\" (10) and \"the target URL was unreachable\" (11) without ever reading the output.\n\nGlobal options control output format:\n\n- `--json`: Force JSON output (even in TTY contexts).\n- `--output-format <format>`: Choose between `json`, `text`, `markdown`, `ndjson`.\n- `--fields <field1,field2>`: Select specific fields from the output (context window discipline).\n- `--quiet`: Suppress non-essential stderr output.",
+            "specRefs": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Error Handling",
+        "body": "Errors are structured, not strings. An unknown command returns:\n\n```json\n{\n  \"error\": \"unknown_command\",\n  \"command\": \"foo bar\",\n  \"hint\": \"Run \\\"specify schema commands\\\" for available commands\"\n}\n```\n\nA missing parameter returns:\n\n```json\n{\n  \"error\": \"missing_parameter\",\n  \"parameter\": \"--url\",\n  \"hint\": \"Provide the URL to capture\"\n}\n```\n\nEach error includes an `error` type (for programmatic matching), context fields (which command, which parameter), and a `hint` (for recovery). The exit code is always `10` for parse/input errors.\n\nThis structure lets agents handle errors without string parsing. An agent can check `error === \"missing_parameter\"` and then provide the missing parameter, rather than trying to regex-match an error message.",
+        "specRefs": [
+          "cli:unknown-command",
+          "cli:missing-spec-file",
+          "cli:missing-export-framework"
+        ],
+        "children": []
+      },
+      {
+        "title": "Spec Authoring Support",
+        "body": "",
+        "specRefs": [
+          "cli:guide-output",
+          "cli:export-playwright",
+          "cli:export-cypress",
+          "cli:export-multi-page-flow"
+        ],
+        "children": [
+          {
+            "title": "Guide",
+            "body": "`specify spec guide` outputs a comprehensive authoring guide for agents writing specs. It includes the JSON Schema, example specs, common patterns, assertion type documentation, template variable syntax, and tips. This is designed to be consumed by an agent's context window so it can write valid specs without trial and error.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Export",
+            "body": "`specify spec export` converts a spec into runnable test code for Playwright or Cypress:\n\n```\n$ specify spec export --spec spec.yaml --framework playwright --json\n$ specify spec export --spec spec.yaml --framework cypress --json\n```\n\nThe generated code imports from the appropriate test framework, creates page objects from page specs, and translates scenarios and flows into test steps. Multi-page flows produce multi-step tests with `page.goto` and `page.locator` calls.\n\nExport is useful for teams transitioning to Specify from an existing test framework, or for generating a baseline test suite from a spec.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Import and Sync",
+            "body": "`specify spec import` converts existing Playwright or Cypress tests into spec items. It analyzes test file structure, extracts page visits, selectors, assertions, and flows, and produces a spec.\n\n`specify spec sync` performs bidirectional comparison between a spec and existing tests. It identifies spec items not covered by tests, tests not reflected in the spec, and drift between the two. This is useful for maintaining alignment as the spec and tests evolve independently.",
+            "specRefs": [
+              "cli:import-nonexistent-dir",
+              "cli:sync-no-test-files"
+            ],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Lint",
+        "body": "`specify lint` (or `specify spec lint`) validates spec structure without captures or a running system. It performs three levels of validation:\n\n1. **Parse**: Can the file be read as YAML or JSON?\n2. **Schema**: Does the structure conform to the spec JSON Schema?\n3. **Semantic**: Are IDs unique? Do flow `assert_page` references point to real pages? Are there empty step arrays? Are template variables defined but unused? Are there pages with no assertions at all?\n\n\nThe result is a structured `{ valid: boolean, errors: [...] }` object. Each error includes a JSON-pointer path, severity (`error` or `warning`), message, and rule identifier.\n\nLint computes facts. It does not suggest improvements (that is evolve's job) or verify behavior (that is verify's job). This boundary is deliberate. A tool that mixes structural validation with improvement suggestions creates confusion about what needs fixing versus what might be nice to add.",
+        "specRefs": [
+          "cli:lint-valid-spec",
+          "cli:lint-self-spec",
+          "cli:lint-missing-spec",
+          "page:xxx"
+        ],
+        "children": []
+      },
+      {
+        "title": "Interactive Mode",
+        "body": "`specify human` enters an interactive mode designed for humans who want guidance through the lifecycle. The wizard detects project state and presents the five lifecycle flows as an arrow-key menu.\n\nEvery path through the wizard is directly addressable via command-line arguments:\n\n```\n$ specify human create\n$ specify human capture live\n$ specify human capture code\n$ specify human evolve interactive\n$ specify human evolve pr\n$ specify human evolve report\n$ specify human review\n$ specify human verify data\n$ specify human verify agent\n$ specify human verify cli\n$ specify human verify diff\n$ specify human verify stats\n```\n\nThis direct-path access matters for two reasons. First, it lets users skip the menu when they know what they want. Second, it makes every sub-path testable -- the self-spec exercises each path with expected output.\n\nTwo additional interactive modes complement the wizard:\n\n- `specify human shell`: A REPL for iterative spec development with tab completion. Useful for exploring and modifying specs interactively.\n\n- `specify human watch`: A live TUI dashboard for monitoring agent runs and spec status. Requires a TTY and reports an error when run without one.\n\nAll interactive modes exit gracefully when no TTY is available. This is important for CI/CD environments and automated testing where stdin is not connected to a terminal.",
+        "specRefs": [
+          "cli:human-non-tty-exit",
+          "cli:human-shows-lifecycle",
+          "cli:human-create-path",
+          "cli:human-capture-live-path",
+          "cli:human-capture-code-path",
+          "cli:human-capture-generate-path",
+          "cli:human-evolve-interactive-path",
+          "cli:human-evolve-pr-path",
+          "cli:human-evolve-report-path",
+          "cli:human-review-path",
+          "cli:human-verify-data-path",
+          "cli:human-verify-agent-path",
+          "cli:human-verify-cli-path",
+          "cli:human-verify-diff-path",
+          "cli:human-verify-stats-path"
+        ],
+        "children": []
+      },
+      {
+        "title": "Development Workflow",
+        "body": "`specify bootstrap` sets up a specify-driven development workflow. It writes two files:\n\n1. **CLAUDE.md section**: Instructions for AI agents describing the red-green TDD workflow with Specify. The section is wrapped in marker comments (`<!-- specify-bootstrap -->`) for idempotent updates.\n\n2. **Git pre-commit hook**: A shell script that runs `specify lint` and `specify verify cli` before allowing commits. It finds the specify binary (checking `./specify` first, then `PATH`), runs both checks, and blocks the commit if either fails.\n\nThe workflow the bootstrap section teaches is:\n\n1. **Evolve** -- reason through what the contract should say. Run `specify evolve` for structural signals. Use judgment, not just tool output.\n\n2. **Write assertions first (RED)** -- update the spec with assertions that reflect intended behavior. They should fail against the current implementation.\n\n3. **Implement the change (GREEN)** -- write code to make the failing assertions pass.\n\n4. **Verify** -- run `specify lint` (structure valid?) then `specify verify cli` (assertions pass?).\n\n5. **Commit spec + code together** -- the contract and implementation travel as one unit.\n\nBootstrap is idempotent. Running it twice is safe -- it skips files that already have the specify section. It reports structured results showing what was created, updated, or skipped.\n\n```\n$ specify bootstrap\n$ specify bootstrap --dry-run\n$ specify bootstrap --target-dir ./my-project\n```",
+        "specRefs": [
+          "cli:bootstrap-dry-run",
+          "cli:bootstrap-writes-files",
+          "cli:bootstrap-idempotent"
+        ],
+        "children": [
+          {
+            "title": "Rules for Agents",
+            "body": "The bootstrap instructions include explicit rules:\n\n- Never skip the evolve step, even for \"obvious\" changes.\n- If `verify cli` fails, fix the code -- not the spec (unless the spec is genuinely wrong).\n- `lint` computes facts. `evolve` guides thinking. Do not confuse them.",
+            "specRefs": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Report Analysis",
+        "body": "Verification produces reports. Reports accumulate over time. Two commands support longitudinal analysis of these reports.",
+        "specRefs": [
+          "cli:report-diff-missing-a",
+          "cli:report-stats-empty"
+        ],
+        "children": [
+          {
+            "title": "Report Diff",
+            "body": "`specify report diff` compares two gap reports to detect regressions. It takes two report paths (`--a` for baseline, `--b` for new) and produces a structured diff:\n\n```\n$ specify report diff --a baseline-report.json --b new-report.json\n```\n\nThe diff identifies:\n- **New failures**: assertions that passed in the baseline but fail in the new report.\n- **Resolved failures**: assertions that failed in the baseline but pass in the new report.\n- **Changed coverage**: overall coverage percentage change.\n\nNew failures produce exit code `1`, enabling CI/CD gating. A pipeline can run `report diff` against the last known-good report and block deploys when regressions appear.",
+            "specRefs": [],
+            "children": []
+          },
+          {
+            "title": "Report Stats",
+            "body": "`specify report stats` computes statistical confidence from a history of reports:\n\n```\n$ specify report stats --history-dir .specify/history\n```\n\nIt reads all reports from the history directory and calculates trends, flaky assertion detection, and confidence levels. An assertion that passes in 95 out of 100 runs has different reliability than one that passes in 100 out of 100 runs. Stats makes this distinction visible.\n\nThe history directory is populated by `verify` when run with `--history-dir`. Each run appends a timestamped report, building a longitudinal record of system behavior.",
+            "specRefs": [],
+            "children": []
+          }
+        ]
+      },
+      {
+        "title": "Spec Auto-Discovery",
+        "body": "Commands that take `--spec` auto-discover the spec file when the flag is omitted. The discovery logic searches the current working directory for files matching common spec patterns: `spec.yaml`, `spec.yml`, `spec.json`, `*.spec.yaml`, `*.spec.yml`.\n\nWhen auto-discovery finds a spec, it logs the path to stderr: `Using auto-discovered spec: specify.spec.yaml`. When it finds multiple candidates, it reports them and asks for clarification.\n\nThis means most commands work without flags in a project that has a single spec file:\n\n```\n$ specify lint                     # finds spec.yaml or *.spec.yaml\n$ specify evolve                   # finds and analyzes the spec\n$ specify verify cli               # finds the spec and runs CLI checks\n```\n\nExplicit `--spec` always takes precedence over auto-discovery.",
+        "specRefs": [
+          "cli:spec-auto-discovery"
+        ],
+        "children": []
+      },
+      {
+        "title": "Narrative Sync",
+        "body": "This bidirectional linking creates a sync problem: either side can change without the other. Specify handles this in three places:\n\n1. **Lint**: When `narrative_path` is set, lint checks that the narrative file exists and that its spec references match actual spec items. A reference to a deleted page produces a warning.\n\n2. **Review**: The HTML browser shows stale references with an orange indicator and \"(stale)\" label. A human reviewing the contract can see immediately where the narrative has drifted.\n\n3. **Evolve**: When analyzing a spec that has a narrative, evolve can suggest narrative updates as part of its suggestions (category `update_narrative`). This guides the agent to keep the prose aligned with the contract.\n\nPath resolution is relative to the spec file's directory, not the current working directory. A spec at `src/spec/examples/nested/app.spec.yaml` with `narrative_path: \"../narrative.md\"` resolves to `src/spec/examples/narrative.md`.",
+        "specRefs": [
+          "cli:narrative-relative-path-lint",
+          "cli:narrative-relative-path-review",
+          "page:xxx"
+        ],
+        "children": []
+      },
+      {
+        "title": "Design Boundaries",
+        "body": "Several boundaries in Specify's design are deliberate and should be preserved.\n\n**Lint computes facts. Evolve guides reasoning.** Lint tells you \"this flow references page `foo` which does not exist.\" Evolve tells you \"this login page has no error-state scenario -- consider adding one.\" Both are valuable. Both should stay separate. Mixing them creates a tool that gives structural errors and improvement suggestions in the same output, making it unclear what must be fixed versus what could be improved.\n\n**The tool stays deterministic.** No API keys. No LLM calls. No probabilistic outputs. Every time you run the same command with the same inputs, you get the same result. This makes Specify safe for CI/CD, reproducible for debugging, and trustworthy for verification. Intelligence comes from the agent layer -- the LLM that reads the structured output and makes decisions.\n\n**A spec is not a test suite.** A test suite is a collection of executable checks. A spec is a behavioral contract that serves both humans and agents. The narrative makes it readable. The structured format makes it verifiable. The agent integration makes it actionable. Test suites can be generated from a spec (via `export`), but the spec is the source of truth, not the tests.\n\n**Unverified requirements are failures, not \"untested.\"** If a behavioral requirement exists in the spec and no agent has provided evidence for it, that is a failure. This prevents requirements from accumulating without verification. If you cannot verify a requirement, remove it from the spec or dispatch an agent to verify it.\n\n**Structured output to stdout, human text to stderr.** This is not a style choice -- it is a contract with agents. Agents parse stdout. Humans read stderr. Mixing them breaks both consumers. Every command in Specify follows this contract.\n\n**Errors are typed, not strings.** An `unknown_command` error has an `error` field set to `\"unknown_command\"`, a `command` field with the attempted command, and a `hint` with recovery guidance. Agents match on the `error` field. They never need to regex-match an error message.\n\n**Exit codes are meaningful.** The difference between exit code 1 (assertion failure) and exit code 10 (parse error) and exit code 13 (assumption failure) matters. An agent seeing exit code 13 knows the test environment was not ready -- it should fix the environment, not the spec.",
+        "specRefs": [],
+        "children": []
+      },
+      {
+        "title": "Self-Specification",
+        "body": "Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines 77 CLI commands with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage).\n\nRunning `specify verify cli --spec specify.spec.yaml` executes every command in the self-spec and reports pass/fail results. This is the primary test suite for the Specify CLI -- the tool verifies itself using its own verification engine.\n\nThe self-spec covers several categories:\n\n- **Self-description**: Running with no arguments produces valid JSON with name, version, commands, global options, and exit codes. Every registered command appears in the output.\n- **Schema introspection**: All three schema targets (spec, report, commands) produce valid JSON conforming to expected schemas.\n- **Error handling**: Invalid inputs produce structured error JSON with error type, context, and hints. Unknown commands, missing files, invalid URLs, and empty parameters all have dedicated test entries.\n- **Feature verification**: Each command is tested with representative inputs -- exports produce framework-specific code, evolve finds real gaps, lint validates structure, review generates HTML.\n- **Scenario sequences**: Multi-command scenarios test round-trips (schema for all targets) and cross-framework consistency (export to both Playwright and Cypress).\n- **Interactive paths**: Every sub-path through the `human` wizard is directly addressable and tested.\n- **Behavioral requirements**: Properties like \"every reachable CLI path has a test entry\" that need agent intelligence to verify.\n\nRunning `specify evolve --spec specify.spec.yaml` against the self-spec produces a summary showing the full command count (77) and suggestions for improving coverage. This is the feedback loop: the tool uses its own analysis capabilities to identify gaps in its own specification.\n\nThis self-referential quality is intentional. If Specify cannot specify its own behavior completely and verify it reliably, it has no business asking other projects to do the same.",
+        "specRefs": [
+          "cli:no-args-self-description",
+          "cli:evolve-no-pr-flag-ok",
+          "..."
+        ],
+        "children": []
+      }
+    ],
+    "specPath": "specify.spec.yaml"
+  }
+};
+</script>
+<script>
+
+(function() {
+  'use strict';
+
+  const spec = DATA.spec;
+  const narrative = DATA.narrative;
+  const webReport = DATA.webReport;
+  const cliReport = DATA.cliReport;
+
+  // ---- Helpers ----
+
+  function esc(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function $(id) { return document.getElementById(id); }
+
+  function statusIcon(status) {
+    if (status === 'passed') return '<span class="toc-status pass"></span>';
+    if (status === 'failed') return '<span class="toc-status fail"></span>';
+    if (status === 'mixed') return '<span class="toc-status mixed"></span>';
+    return '<span class="toc-status untested"></span>';
+  }
+
+  function badgeFor(status, label) {
+    const cls = status === 'passed' ? 'pass' : status === 'failed' ? 'fail' : 'untested';
+    return '<span class="badge badge-' + cls + '">' + esc(label) + '</span>';
+  }
+
+  // ---- Resolve spec ref to report results ----
+
+  function resolveRef(ref) {
+    const results = [];
+    const parts = ref.split(':');
+    const type = parts[0];
+
+    if (type === 'page' && parts[1]) {
+      const pageId = parts[1];
+      if (webReport) {
+        const pr = webReport.pages?.find(p => p.pageId === pageId);
+        if (pr) {
+          (pr.visualAssertions || []).forEach(a => results.push({ kind: 'visual', ...a }));
+          (pr.requests || []).forEach(a => results.push({ kind: 'request', ...a }));
+          (pr.consoleExpectations || []).forEach(a => results.push({ kind: 'console', ...a }));
+        }
+      }
+    }
+
+    if (type === 'scenario') {
+      const slash = (parts[1] || '').indexOf('/');
+      if (slash > 0) {
+        const pageId = parts[1].substring(0, slash);
+        const scenarioId = parts[1].substring(slash + 1);
+        if (webReport) {
+          const pr = webReport.pages?.find(p => p.pageId === pageId);
+          if (pr) {
+            const sr = (pr.scenarios || []).find(s => s.scenarioId === scenarioId);
+            if (sr) {
+              (sr.steps || []).forEach(step => results.push({ kind: 'scenario-step', ...step }));
+              results.push({ kind: 'scenario', scenarioId: sr.scenarioId, status: sr.status, description: sr.description });
+            }
+          }
+        }
+      }
+    }
+
+    if (type === 'flow' && parts[1]) {
+      const flowId = parts[1];
+      if (webReport) {
+        const fr = (webReport.flows || []).find(f => f.flowId === flowId);
+        if (fr) {
+          (fr.steps || []).forEach(step => results.push({ kind: 'flow-step', ...step }));
+          results.push({ kind: 'flow', flowId: fr.flowId, status: fr.status, description: fr.description });
+        }
+      }
+    }
+
+    if (type === 'request') {
+      const rest = parts.slice(1).join(':');
+      const slash = rest.indexOf('/');
+      if (slash > 0) {
+        const pageId = rest.substring(0, slash);
+        const reqKey = rest.substring(slash + 1);
+        if (webReport) {
+          const pr = webReport.pages?.find(p => p.pageId === pageId);
+          if (pr) {
+            (pr.requests || []).forEach(r => {
+              if ((r.method + ':' + r.urlPattern) === reqKey) {
+                results.push({ kind: 'request', ...r });
+              }
+            });
+          }
+        }
+      }
+    }
+
+    if (type === 'defaults') {
+      if (webReport && webReport.defaults) {
+        webReport.defaults.forEach(d => results.push({ kind: 'default', ...d }));
+      }
+    }
+
+    // CLI report — match by command ID pattern
+    if (cliReport) {
+      for (const cmd of (cliReport.commands || [])) {
+        if (cmd.commandId === ref || cmd.commandId === parts[1]) {
+          results.push({ kind: 'cli-command', commandId: cmd.commandId, status: cmd.status,
+            description: cmd.description, exitCode: cmd.exitCode,
+            stdoutAssertions: cmd.stdoutAssertions, stderrAssertions: cmd.stderrAssertions });
+        }
+      }
+    }
+
+    return results;
+  }
+
+  function aggregateStatus(results) {
+    if (results.length === 0) return 'untested';
+    const hasPass = results.some(r => r.status === 'passed');
+    const hasFail = results.some(r => r.status === 'failed');
+    if (hasFail) return hasPass ? 'mixed' : 'failed';
+    if (hasPass) return 'passed';
+    return 'untested';
+  }
+
+  // ---- Stale ref detection ----
+
+  const validSpecRefs = new Set(['overview', 'defaults', 'meta']);
+  for (const page of (spec.pages || [])) {
+    validSpecRefs.add('page:' + page.id);
+    for (const s of (page.scenarios || [])) validSpecRefs.add('scenario:' + page.id + '/' + s.id);
+    for (const r of (page.expected_requests || [])) validSpecRefs.add('request:' + page.id + '/' + r.method + ':' + r.url_pattern);
+  }
+  for (const f of (spec.flows || [])) validSpecRefs.add('flow:' + f.id);
+
+  function isStaleRef(ref) { return !validSpecRefs.has(ref); }
+
+  // ---- Build TOC & narrative ----
+
+  let sections = [];
+  let activeSectionIdx = -1;
+
+  function buildFromNarrative() {
+    if (!narrative) return;
+
+    // Overview
+    if (narrative.overview) {
+      sections.push({
+        title: 'Overview',
+        body: narrative.overview,
+        refs: ['overview'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    function addSection(ns, depth) {
+      const idx = sections.length;
+      sections.push({
+        title: ns.title,
+        body: ns.body,
+        refs: ns.specRefs || [],
+        depth: depth,
+        children: []
+      });
+      for (const child of (ns.children || [])) {
+        addSection(child, depth + 1);
+      }
+    }
+
+    for (const s of narrative.sections) {
+      addSection(s, 1);
+    }
+  }
+
+  function buildFromSpec() {
+    // Fallback: build sections from spec structure when no narrative
+    if (spec.description) {
+      sections.push({ title: 'Overview', body: spec.description, refs: ['overview'], depth: 1, children: [] });
+    }
+    for (const page of (spec.pages || [])) {
+      sections.push({
+        title: page.id,
+        body: 'Page: ' + page.path + (page.description ? ' — ' + page.description : ''),
+        refs: ['page:' + page.id],
+        depth: 1,
+        children: []
+      });
+      for (const scenario of (page.scenarios || [])) {
+        sections.push({
+          title: scenario.id,
+          body: scenario.description || '',
+          refs: ['scenario:' + page.id + '/' + scenario.id],
+          depth: 2,
+          children: []
+        });
+      }
+    }
+    for (const flow of (spec.flows || [])) {
+      sections.push({
+        title: flow.id,
+        body: flow.description || 'Flow with ' + flow.steps.length + ' steps',
+        refs: ['flow:' + flow.id],
+        depth: 1,
+        children: []
+      });
+    }
+  }
+
+  function renderToc() {
+    const toc = $('toc');
+    let html = '';
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      const allResults = s.refs.flatMap(r => resolveRef(r));
+      const hasStale = s.refs.some(r => isStaleRef(r));
+      const status = hasStale ? 'stale' : aggregateStatus(allResults);
+      html += '<div class="toc-item depth-' + s.depth + (i === activeSectionIdx ? ' active' : '') + '" data-idx="' + i + '">'
+        + (hasStale ? '<span class="toc-status" style="background:var(--orange)"></span>' : statusIcon(status))
+        + '<span>' + esc(s.title) + (hasStale ? ' ⚠' : '') + '</span>'
+        + '</div>';
+    }
+    toc.innerHTML = html;
+
+    // Bind clicks
+    toc.querySelectorAll('.toc-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.idx);
+        selectSection(idx);
+      });
+    });
+  }
+
+  function renderNarrative() {
+    const container = $('narrative-view');
+    let html = '';
+    for (let i = 0; i < sections.length; i++) {
+      const s = sections[i];
+      const allResults = s.refs.flatMap(r => resolveRef(r));
+      const status = aggregateStatus(allResults);
+      const counts = { passed: 0, failed: 0, untested: 0 };
+      allResults.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
+
+      const tag = s.depth === 1 ? 'h2' : 'h3';
+      html += '<div class="section' + (i === activeSectionIdx ? ' active' : '') + '" data-idx="' + i + '">';
+      html += '<div class="section-header">';
+      html += '<' + tag + '>' + esc(s.title) + '</' + tag + '>';
+      html += '<div class="section-badges">';
+      if (allResults.length > 0) {
+        if (counts.passed) html += badgeFor('passed', counts.passed + ' passed');
+        if (counts.failed) html += badgeFor('failed', counts.failed + ' failed');
+        if (counts.untested) html += badgeFor('untested', counts.untested + ' untested');
+      } else {
+        html += '<span class="badge badge-neutral">no tests</span>';
+      }
+      html += '</div></div>';
+
+      // Body text (simple markdown-ish rendering)
+      if (s.body) {
+        const paragraphs = s.body.split('\n\n').filter(Boolean);
+        html += '<div class="section-body">';
+        for (const p of paragraphs) {
+          html += '<p>' + esc(p) + '</p>';
+        }
+        html += '</div>';
+      }
+
+      // Spec refs
+      if (s.refs.length > 0) {
+        html += '<div class="section-refs">';
+        for (const ref of s.refs) {
+          const stale = isStaleRef(ref) ? ' stale' : '';
+          html += '<span class="ref-tag' + stale + '">' + esc(ref) + (stale ? ' (stale)' : '') + '</span>';
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+    container.innerHTML = html;
+
+    // Bind clicks
+    container.querySelectorAll('.section').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.idx);
+        selectSection(idx);
+      });
+    });
+  }
+
+  function renderSpec() {
+    const container = $('spec-view');
+    // Pretty-print the spec as indented JSON (YAML would need a lib)
+    container.textContent = JSON.stringify(spec, null, 2);
+  }
+
+  // ---- Detail panel ----
+
+  function selectSection(idx) {
+    activeSectionIdx = idx;
+    renderToc();
+    renderNarrative();
+
+    const s = sections[idx];
+    const allResults = s.refs.flatMap(r => resolveRef(r));
+
+    $('detail-title').textContent = s.title;
+    const body = $('detail-body');
+
+    if (allResults.length === 0) {
+      body.innerHTML = '<div class="sync-warn">No validation results linked to this section.</div>';
+    } else {
+      let html = '';
+
+      // Group by kind
+      const groups = {};
+      for (const r of allResults) {
+        const k = r.kind || 'other';
+        if (!groups[k]) groups[k] = [];
+        groups[k].push(r);
+      }
+
+      for (const [kind, items] of Object.entries(groups)) {
+        html += '<div class="detail-section">';
+        html += '<div class="detail-section-title">' + esc(formatKind(kind)) + '</div>';
+
+        for (const item of items) {
+          const cls = item.status === 'passed' ? 'pass' : item.status === 'failed' ? 'fail' : 'untested';
+          html += '<div class="assertion-item ' + cls + '">';
+
+          if (item.kind === 'cli-command') {
+            html += renderCliCommand(item);
+          } else if (item.kind === 'request') {
+            html += renderRequest(item);
+          } else if (item.kind === 'visual') {
+            html += renderVisual(item);
+          } else if (item.kind === 'scenario' || item.kind === 'flow') {
+            html += renderFlowOrScenario(item);
+          } else if (item.kind === 'scenario-step' || item.kind === 'flow-step') {
+            html += renderStep(item);
+          } else if (item.kind === 'default') {
+            html += renderDefault(item);
+          } else if (item.kind === 'console') {
+            html += renderConsole(item);
+          } else {
+            html += '<div class="assertion-desc">' + esc(item.description || item.status || 'Unknown') + '</div>';
+          }
+
+          html += '</div>';
+        }
+
+        html += '</div>';
+      }
+
+      body.innerHTML = html;
+    }
+
+    $('detail-panel').classList.remove('hidden');
+
+    // Scroll to section in narrative
+    const el = document.querySelector('.section[data-idx="' + idx + '"]');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  function closeDetail() {
+    activeSectionIdx = -1;
+    $('detail-panel').classList.add('hidden');
+    renderToc();
+    renderNarrative();
+  }
+  window.closeDetail = closeDetail;
+
+  function formatKind(k) {
+    return k.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  function renderCliCommand(item) {
+    let h = '<div class="assertion-type">CLI Command</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || item.commandId) + '</div>';
+    if (item.exitCode) {
+      h += '<div class="assertion-detail">Exit: expected=' + item.exitCode.expected + ' actual=' + item.exitCode.actual + ' ' + item.exitCode.status + '</div>';
+    }
+    const allAssertions = (item.stdoutAssertions || []).concat(item.stderrAssertions || []);
+    for (const a of allAssertions) {
+      const icon = a.status === 'passed' ? '\u2713' : a.status === 'failed' ? '\u2717' : '\u25cb';
+      h += '<div class="assertion-detail">' + icon + ' ' + esc(a.description || a.type || '') + '</div>';
+    }
+    return h;
+  }
+
+  function renderRequest(item) {
+    let h = '<div class="assertion-type">Request</div>';
+    h += '<div class="assertion-desc">' + esc((item.method || '') + ' ' + (item.urlPattern || '')) + '</div>';
+    if (item.description) h += '<div class="assertion-detail">' + esc(item.description) + '</div>';
+    if (item.matchedUrl) h += '<div class="assertion-detail">Matched: ' + esc(item.matchedUrl) + '</div>';
+    if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  function renderVisual(item) {
+    let h = '<div class="assertion-type">Visual — ' + esc(item.type || '') + '</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || item.selector || '') + '</div>';
+    if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  function renderFlowOrScenario(item) {
+    let h = '<div class="assertion-type">' + esc(item.kind) + '</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || item.flowId || item.scenarioId || '') + '</div>';
+    return h;
+  }
+
+  function renderStep(item) {
+    let h = '<div class="assertion-type">Step</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || item.action || item.type || '') + '</div>';
+    if (item.evidence) h += '<div class="assertion-detail">' + esc(item.evidence) + '</div>';
+    if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  function renderDefault(item) {
+    let h = '<div class="assertion-type">Default</div>';
+    h += '<div class="assertion-desc">' + esc(item.property || '') + '</div>';
+    if (item.details) h += '<div class="assertion-detail">' + esc(item.details) + '</div>';
+    return h;
+  }
+
+  function renderConsole(item) {
+    let h = '<div class="assertion-type">Console — ' + esc(item.level || '') + '</div>';
+    h += '<div class="assertion-desc">' + esc(item.description || 'Console expectation') + '</div>';
+    if (item.reason) h += '<div class="assertion-detail">' + esc(item.reason) + '</div>';
+    return h;
+  }
+
+  // ---- View toggle ----
+
+  function setView(view) {
+    $('btn-narrative').classList.toggle('active', view === 'narrative');
+    $('btn-spec').classList.toggle('active', view === 'spec');
+    $('narrative-view').classList.toggle('hidden', view !== 'narrative');
+    $('spec-view').classList.toggle('hidden', view !== 'spec');
+  }
+  window.setView = setView;
+
+  // ---- Summary badges ----
+
+  function renderSummary() {
+    const badges = $('summary-badges');
+    const reports = [webReport, cliReport].filter(Boolean);
+    if (reports.length === 0) {
+      badges.innerHTML = '<span class="badge badge-neutral">No reports</span>';
+      return;
+    }
+    let total = 0, passed = 0, failed = 0;
+    for (const r of reports) {
+      if (r.summary) {
+        total += r.summary.total || 0;
+        passed += r.summary.passed || 0;
+        failed += r.summary.failed || 0;
+      }
+    }
+    const untested = total - passed - failed;
+    let html = '';
+    if (passed) html += badgeFor('passed', passed + ' passed');
+    if (failed) html += badgeFor('failed', failed + ' failed');
+    if (untested > 0) html += badgeFor('untested', untested + ' untested');
+    if (total > 0) {
+      const pct = Math.round((passed / total) * 100);
+      html += '<span class="badge badge-neutral">' + pct + '% coverage</span>';
+    }
+    badges.innerHTML = html;
+  }
+
+  // ---- Init ----
+
+  function init() {
+    $('spec-title').textContent = spec.name;
+    $('spec-version').textContent = 'v' + spec.version;
+
+    if (narrative) {
+      buildFromNarrative();
+    } else {
+      buildFromSpec();
+    }
+
+    renderToc();
+    renderNarrative();
+    renderSpec();
+    renderSummary();
+  }
+
+  init();
+})();
+
+</script>
+</body>
+</html>
