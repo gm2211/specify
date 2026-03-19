@@ -6,7 +6,7 @@
 
 Specify is a behavioral contract tool for web applications and CLIs. It creates a formal, computable description of how a system should behave, then provides deterministic tools to verify that the implementation matches the description.
 
-The core design decision is a separation of concerns: the tool stays fully deterministic. There are no API keys, no `--llm` flags, no probabilistic outputs. Intelligence comes from the agent layer -- an LLM using Specify through its CLI, MCP server, or structured JSON output. Specify computes facts and produces structured data. Agents interpret those facts, make decisions, and drive the workflow.
+The core design is a hybrid: deterministic tools for mechanical checks (exit codes, JSON matching, schema validation), and structured prompts that guide agents through behavioral verification. Specify does not make LLM calls itself — it orchestrates the agent's work by generating property-specific prompts and evaluating the evidence the agent produces.
 
 A spec should be complete enough that an agent can implement and validate an entire system from it. This is the standard: if someone hands an agent a Specify spec and nothing else, the agent should be able to build the system, verify it works, and know exactly where it falls short.
 
@@ -16,7 +16,7 @@ The tool is designed for three audiences simultaneously. Humans read the narrati
 ## The Lifecycle
 <!-- spec:meta -->
 
-Specify organizes around five primary flows. Each flow corresponds to a stage in the lifecycle of a behavioral contract. The `--help` output presents them in this order, the interactive wizard (`specify human`) offers them as the top-level menu, and each is available as a top-level command.
+Specify organizes around four primary flows. Each flow corresponds to a stage in the lifecycle of a behavioral contract. The `--help` output presents them in this order, the interactive wizard (`specify human`) offers them as the top-level menu, and each is available as a top-level command.
 
 ### Create
 <!-- spec:cli:create-in-schema -->
@@ -27,7 +27,7 @@ The interview is context-aware. It detects the current project state -- existing
 
 The interview covers identity (name, base URL, description), page discovery (manual entry or crawling), and default properties (no 5xx responses, no console errors). The result is a spec that immediately works with `specify lint` and `specify verify`.
 
-For agents, `create` is less relevant -- agents typically start from `capture` or `evolve`. But for humans starting a greenfield project, it provides a structured way to express intent before writing any code.
+For agents, `create` is less relevant -- agents typically start from `capture` or by editing the spec directly. But for humans starting a greenfield project, it provides a structured way to express intent before writing any code.
 
 ```
 $ specify create
@@ -58,47 +58,22 @@ $ specify capture --from code --input ./tests --output spec.yaml
 Capture validates its inputs early. An empty `--url` returns a structured `missing_parameter` error. An invalid URL returns an `invalid_url` error. These are not silent failures -- they produce JSON with error type, parameter name, and hint text, so agents can recover programmatically.
 
 
-### Evolve
-<!-- spec:cli:evolve-interactive -->
-<!-- spec:cli:evolve-finds-gaps -->
-<!-- spec:cli:evolve-no-pr-flag-ok -->
-<!-- spec:cli:evolve-self-spec-finds-cli-gaps -->
-<!-- spec:cli:evolve-top-level -->
-<!-- spec:requirement:evolve-user-intent-guidance -->
-<!-- spec:claim:evolve-intent-guidance-contract -->
+### Spec Editing
 
-Changing a contract as the product changes. Evolve is the agent-guidance step -- it helps an LLM turn user intent into concrete spec edits, without making deterministic assertions about correctness by itself.
+Specify does not have a dedicated command for modifying specs. Instead, agents use `specify spec guide` to discover the full schema (types, examples, patterns, assertion types) and directly edit the spec YAML. This is intentional -- an agent with full schema context makes better editing decisions than a deterministic suggestion engine.
 
-Evolve operates in three modes:
+The three common triggers for spec changes are: (1) the user wants to add or modify a feature, (2) a pull request changed the code and the spec needs to match, (3) a verification report found gaps. In all cases, the agent reads the relevant context (user intent, PR diff, or gap report), consults `spec guide` for schema understanding, and edits the YAML directly.
 
-**Interactive** (default, no flags): Analyzes the current spec and produces prioritized editing guidance. Each suggestion has a category (`new_coverage`, `add_scenario`, `add_assertion`, `spec_hygiene`, etc.), a priority level, a rationale explaining why the change matters, a proposed spec fragment, and a question for the agent to ask the user. The goal is not to "lint" the spec; the goal is to help the agent add, remove, or reshape behavior in the contract based on the user's prompt.
 
-```
-$ specify evolve --spec spec.yaml
-$ specify spec evolve --spec spec.yaml --json
-```
+### Product Pillars
 
-For example, running evolve against the login page example spec finds that the `failed-login` scenario has interactions but no assertions verifying the outcome. That is a useful signal, but the output is not just "here is a problem." Evolve turns that signal into a candidate contract edit with a concrete proposed change.
+Specify is built around three pillars:
 
-Running evolve against the self-spec (`specify.spec.yaml`) produces a summary showing the full command count and suggestions that an agent can use to change the contract intentionally.
+1. **Capture and spec generation**: Derive a behavioral contract from any target -- a live URL, existing test code, or captured traffic. The output is a structured spec that immediately works with lint and verify.
 
-**PR-based** (`--pr`): Analyzes a pull request diff to identify which parts of the spec are affected by the code changes. This mode gives the agent change context so it can decide what behavior to add, remove, or rewrite in the spec. It accepts a PR number or URL and optionally a `--repo` flag for disambiguation.
+2. **Spec-driven TDD with closed-world verification**: Write the behavioral contract first, then implement. Verification is closed-world: any public behavior not in the spec is a failure, not an oversight. Mechanical assertions check deterministic properties; behavioral requirements dispatch agents to verify properties that need judgment.
 
-```
-$ specify evolve --spec spec.yaml --pr 42
-$ specify evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42
-```
-
-**Report-based** (`--report`): Analyzes a gap report from a previous validation run and suggests spec refinements based on failures and coverage gaps. The report is input context for editing the contract, not the contract decision itself.
-
-```
-$ specify evolve --spec spec.yaml --report gap-report.json
-$ specify evolve --spec spec.yaml --report gap-report.json --output refined.yaml
-```
-
-The `--apply` flag enters an interactive mode where the agent walks through suggestions one by one, optionally applying them to produce a refined spec. Combined with `--url`, it can crawl a live system for additional context before making behavior changes.
-
-An important design boundary: `evolve` guides reasoning and edits. It does not compute facts about the spec's structural validity (that is `lint`'s job). Do not confuse them. Lint tells you "this ID is duplicated" or "this flow references a nonexistent page." Evolve tells you "given the user's intent, here is the behavior to add, remove, or refine, and here is a candidate spec mutation." Structural signals like missing assertions are inputs to that guidance, not the final product. Both are valuable, but they serve different purposes and should not be merged.
+3. **Impersonate**: Capture real traffic, augment it with synthetic variations, and stand up a mock server that faithfully reproduces the target's behavior. This enables testing against dependencies without access to the real system.
 
 
 ### Review
@@ -468,8 +443,6 @@ Human-readable help goes to stderr via `--help`. JSON goes to stdout with no arg
 <!-- spec:cli:create-non-interactive -->
 <!-- spec:cli:review-in-schema -->
 <!-- spec:cli:lint-top-level -->
-<!-- spec:cli:bootstrap-in-schema -->
-<!-- spec:cli:spec-refine-deprecated -->
 <!-- spec:cli:capture-explore-mode-in-schema -->
 <!-- spec:cli:capture-interactive-mode-in-schema -->
 <!-- spec:cli:schema-introspection-suite -->
@@ -487,11 +460,10 @@ Commands with multiple modes (like `verify` and `capture`) include a `modes` arr
 
 ### Subcommand Help
 <!-- spec:cli:subcommand-help-verify -->
-<!-- spec:cli:subcommand-help-evolve -->
 
 `specify <command> --help` shows command-specific help with parameters, modes, and examples. This is not a fallback to top-level help -- it is targeted information about the specific command.
 
-For example, `specify verify --help` shows verify-specific parameters (`--spec`, `--capture`, `--url`, `--headed`), the two modes (`data_validation` and `agent_verification`), and concrete examples. `specify evolve --help` shows evolve-specific parameters (`--pr`, `--report`, `--apply`).
+For example, `specify verify --help` shows verify-specific parameters (`--spec`, `--capture`, `--url`, `--headed`), the two modes (`data_validation` and `agent_verification`), and concrete examples.
 
 This matters for discoverability. An agent encountering `verify` for the first time can run `verify --help` and learn everything it needs to invoke the command correctly, including which parameter combinations activate which modes.
 
@@ -575,10 +547,8 @@ Global options control output format:
 <!-- spec:cli:unknown-command -->
 <!-- spec:cli:missing-spec-file -->
 <!-- spec:cli:missing-export-framework -->
-<!-- spec:cli:evolve-missing-spec -->
 <!-- spec:cli:generate-nonexistent-dir -->
 <!-- spec:cli:generate-no-traffic -->
-<!-- spec:cli:evolve-report-nonexistent -->
 <!-- spec:cli:schema-invalid-target -->
 <!-- spec:cli:capture-no-output -->
 <!-- spec:cli:agent-run-no-url -->
@@ -656,7 +626,7 @@ Lint also validates the narrative companion when `narrative_path` is set. It che
 
 The result is a structured `{ valid: boolean, errors: [...] }` object. Each error includes a JSON-pointer path, severity (`error` or `warning`), message, and rule identifier.
 
-Lint computes facts. It does not suggest improvements (that is evolve's job) or verify behavior (that is verify's job). This boundary is deliberate. A tool that mixes structural validation with improvement suggestions creates confusion about what needs fixing versus what might be nice to add.
+Lint computes facts. Agents reason. Lint tells you "this flow references page `foo` which does not exist." Agents decide what to do about it. Lint is deterministic validation; agents provide judgment. This boundary is deliberate -- a tool that mixes structural validation with improvement suggestions creates confusion about what must be fixed versus what could be improved.
 
 
 ## Interactive Mode
@@ -668,16 +638,13 @@ Lint computes facts. It does not suggest improvements (that is evolve's job) or 
 <!-- spec:cli:human-capture-live-path -->
 <!-- spec:cli:human-capture-code-path -->
 <!-- spec:cli:human-capture-generate-path -->
-<!-- spec:cli:human-evolve-interactive-path -->
-<!-- spec:cli:human-evolve-pr-path -->
-<!-- spec:cli:human-evolve-report-path -->
 <!-- spec:cli:human-review-path -->
 <!-- spec:cli:human-verify-data-path -->
 <!-- spec:cli:human-verify-agent-path -->
 <!-- spec:cli:human-verify-diff-path -->
 <!-- spec:cli:human-verify-stats-path -->
 
-`specify human` enters an interactive mode designed for humans who want guidance through the lifecycle. The wizard detects project state and presents the five lifecycle flows as an arrow-key menu.
+`specify human` enters an interactive mode designed for humans who want guidance through the lifecycle. The wizard detects project state and presents the lifecycle flows as an arrow-key menu.
 
 Every path through the wizard is directly addressable via command-line arguments:
 
@@ -685,9 +652,6 @@ Every path through the wizard is directly addressable via command-line arguments
 $ specify human create
 $ specify human capture live
 $ specify human capture code
-$ specify human evolve interactive
-$ specify human evolve pr
-$ specify human evolve report
 $ specify human review
 $ specify human verify data
 $ specify human verify agent
@@ -704,46 +668,6 @@ Two additional interactive modes complement the wizard:
 - `specify human watch`: A live TUI dashboard for monitoring agent runs and spec status. Requires a TTY and reports an error when run without one.
 
 All interactive modes exit gracefully when no TTY is available. This is important for CI/CD environments and automated testing where stdin is not connected to a terminal.
-
-
-## Development Workflow
-<!-- spec:cli:bootstrap-dry-run -->
-<!-- spec:cli:bootstrap-writes-files -->
-<!-- spec:cli:bootstrap-idempotent -->
-
-`specify bootstrap` sets up a specify-driven development workflow. It writes two files:
-
-1. **CLAUDE.md section**: Instructions for AI agents describing the red-green TDD workflow with Specify. The section is wrapped in marker comments (`<!-- specify-bootstrap -->`) for idempotent updates.
-
-2. **Git pre-commit hook**: A shell script that runs `specify lint` and `specify verify --spec ...` before allowing commits. It finds the specify binary (checking `./specify` first, then `PATH`), runs both checks, and blocks the commit if either fails.
-
-The workflow the bootstrap section teaches is:
-
-1. **Evolve** -- reason through what the contract should say. Run `specify evolve` for structural signals. Use judgment, not just tool output.
-
-2. **Write assertions first (RED)** -- update the spec with assertions that reflect intended behavior. They should fail against the current implementation.
-
-3. **Implement the change (GREEN)** -- write code to make the failing assertions pass.
-
-4. **Verify** -- run `specify lint` (structure valid?) then `specify verify --spec ...` (assertions pass?).
-
-5. **Commit spec + code together** -- the contract and implementation travel as one unit.
-
-Bootstrap is idempotent. Running it twice is safe -- it skips files that already have the specify section. It reports structured results showing what was created, updated, or skipped.
-
-```
-$ specify bootstrap
-$ specify bootstrap --dry-run
-$ specify bootstrap --target-dir ./my-project
-```
-
-### Rules for Agents
-
-The bootstrap instructions include explicit rules:
-
-- Never skip the evolve step, even for "obvious" changes.
-- If `verify --spec ...` fails, fix the code -- not the spec (unless the spec is genuinely wrong).
-- `lint` computes facts. `evolve` guides thinking. Do not confuse them.
 
 
 ## Report Analysis
@@ -791,7 +715,6 @@ This means most commands work without flags in a project that has a single spec 
 
 ```
 $ specify lint                     # finds spec.yaml or *.spec.yaml
-$ specify evolve                   # finds and analyzes the spec
 $ specify verify                   # finds the spec and infers verification mode
 ```
 
@@ -804,13 +727,11 @@ Explicit `--spec` always takes precedence over auto-discovery.
 
 The narrative companion and the spec are separate files that reference each other. The `narrative_path` field in the spec points to the narrative. The `<!~~ spec:page:xxx ~~>` annotations in the narrative point back to spec items.
 
-This bidirectional linking creates a sync problem: either side can change without the other. Specify handles this in three places:
+This bidirectional linking creates a sync problem: either side can change without the other. Specify handles this in two places:
 
 1. **Lint**: When `narrative_path` is set, lint checks that the narrative file exists and that its spec references match actual spec items. A reference to a deleted page produces a warning.
 
 2. **Review**: The HTML browser shows stale references with an orange indicator and "(stale)" label. A human reviewing the contract can see immediately where the narrative has drifted.
-
-3. **Evolve**: When analyzing a spec that has a narrative, evolve can suggest narrative updates as part of its suggestions (category `update_narrative`). This guides the agent to keep the prose aligned with the contract.
 
 Path resolution is relative to the spec file's directory, not the current working directory. A spec at `src/spec/examples/nested/app.spec.yaml` with `narrative_path: "../narrative.md"` resolves to `src/spec/examples/narrative.md`.
 
@@ -819,7 +740,7 @@ Path resolution is relative to the spec file's directory, not the current workin
 
 Several boundaries in Specify's design are deliberate and should be preserved.
 
-**Lint computes facts. Evolve guides reasoning.** Lint tells you "this flow references page `foo` which does not exist." Evolve tells you "this login page has no error-state scenario -- consider adding one." Both are valuable. Both should stay separate. Mixing them creates a tool that gives structural errors and improvement suggestions in the same output, making it unclear what must be fixed versus what could be improved.
+**Lint computes facts. Agents reason.** Lint tells you "this flow references page `foo` which does not exist." Agents decide what to do about it. Lint is deterministic validation; agents provide judgment. Mixing them creates a tool that gives structural errors and improvement suggestions in the same output, making it unclear what must be fixed versus what could be improved.
 
 **The tool stays deterministic.** No API keys. No LLM calls. No probabilistic outputs. Every time you run the same command with the same inputs, you get the same result. This makes Specify safe for CI/CD, reproducible for debugging, and trustworthy for verification. Intelligence comes from the agent layer -- the LLM that reads the structured output and makes decisions.
 
@@ -836,7 +757,6 @@ Several boundaries in Specify's design are deliberate and should be preserved.
 
 ## Self-Specification
 <!-- spec:cli:no-args-self-description -->
-<!-- spec:cli:evolve-no-pr-flag-ok -->
 
 Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines a large CLI command suite with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage and the closed-world no-extra-public-behavior rule).
 
@@ -847,12 +767,10 @@ The self-spec covers several categories:
 - **Self-description**: Running with no arguments produces valid JSON with name, version, commands, global options, and exit codes. Every registered command appears in the output.
 - **Schema introspection**: All three schema targets (spec, report, commands) produce valid JSON conforming to expected schemas.
 - **Error handling**: Invalid inputs produce structured error JSON with error type, context, and hints. Unknown commands, missing files, invalid URLs, and empty parameters all have dedicated test entries.
-- **Feature verification**: Each command is tested with representative inputs -- exports produce framework-specific code, evolve finds real gaps, lint validates structure, review generates HTML.
+- **Feature verification**: Each command is tested with representative inputs -- exports produce framework-specific code, lint validates structure, review generates HTML.
 - **Scenario sequences**: Multi-command scenarios test round-trips (schema for all targets) and cross-framework consistency (export to both Playwright and Cypress).
 - **Interactive paths**: Every sub-path through the `human` wizard is directly addressable and tested.
 - **Behavioral requirements**: Properties like "every reachable CLI path has a test entry" and "undocumented public CLI behavior makes verify fail" that need agent intelligence to verify.
-
-Running `specify evolve --spec specify.spec.yaml` against the self-spec produces a summary showing the full command count (78) and suggestions for improving coverage. This is the feedback loop: the tool uses its own analysis capabilities to identify gaps in its own specification.
 
 This self-referential quality is intentional. If Specify cannot specify its own behavior completely and verify it reliably, it has no business asking other projects to do the same.
 
