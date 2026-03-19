@@ -67,7 +67,7 @@ requirements:
             description: "Manifest is a JSON array of command definitions"
             schema:
               type: array
-              minItems: 21
+              minItems: 18
               items:
                 type: object
                 required: ["name", "description"]
@@ -77,9 +77,9 @@ requirements:
                   description:
                     type: string
           - type: json_path
-            description: "Manifest has exactly 21 public commands"
+            description: "Manifest has exactly 18 public commands"
             path: "length"
-            value: 21
+            value: 18
   - id: no-extra-public-behavior
     description: >
       Verify enforces a closed-world public contract: if the binary exposes any reachable
@@ -110,9 +110,9 @@ requirements:
         expected_exit_code: 0
         stdout_assertions:
           - type: json_path
-            description: "Exactly 24 public commands — no extras beyond what spec accounts for"
+            description: "Exactly 18 public commands — no extras beyond what spec accounts for"
             path: "length"
-            value: 24
+            value: 18
       - id: help-output-valid
         description: "Top-level help output lists known commands"
         args: ["--help"]
@@ -154,9 +154,9 @@ requirements:
         expected_exit_code: 0
         stdout_assertions:
           - type: json_path
-            description: "Exactly 21 public commands — no extras beyond what spec accounts for"
+            description: "Exactly 18 public commands — no extras beyond what spec accounts for"
             path: "length"
-            value: 21
+            value: 18
       - id: help-output-valid
         description: "Top-level help output lists known commands"
         args: ["--help"]
@@ -427,6 +427,32 @@ requirements:
          ratio, and pass/fail
       5. Fail if incomplete evidence can pass verification when the judge approves
     evidence_format: "{ total_properties, evidence_pieces, coverage_ratio, sanity_check_result, judge_overridden }"
+  # -------------------------------------------------------------------
+  # Spec Schema Discoverability
+  # -------------------------------------------------------------------
+  - id: spec-schema-discoverability
+    description: >
+      Agents must be able to discover the full spec schema and have enough context to make
+      informed decisions about how to represent new behavior in a spec file. The `spec guide`
+      command serves this purpose: it outputs the complete JSON schema for spec files (including
+      all type definitions — requirements, claims, pages, CLI commands, assertions), real
+      example specs, common patterns, assertion types, template variables, and authoring tips.
+      This replaces the need for a dedicated spec-editing command — an agent that reads `spec
+      guide` output has everything it needs to add, modify, or remove behavior from a spec by
+      directly editing the YAML file.
+    verification: agent
+    validation_plan: |
+      1. Run `specify spec guide` and verify the output contains the complete spec schema with
+         all type definitions (requirements, claims, pages, flows, CLI, assumptions, hooks)
+      2. Verify the schema includes field-level descriptions sufficient for an agent to understand
+         what each field means and when to use it
+      3. Verify real example specs are included (not just abstract schema)
+      4. Give an agent only the `spec guide` output and ask it to add a new behavioral requirement
+         to a spec — verify it produces valid, well-structured YAML without needing additional
+         documentation
+      5. Fail if the guide output is missing any top-level spec concept or if an agent cannot
+         author valid spec entries from the guide alone
+    evidence_format: "{ schema_completeness, type_definitions_count, examples_included, agent_authoring_success_rate }"
 
 claims:
   - id: closed-world-verify-contract
@@ -466,6 +492,12 @@ claims:
       The LLM drives orchestration while Specify provides the tooling.
     grounded_by:
       requirements: ["verify-as-prompt-generation", "evidence-judge-holistic-evaluation", "evidence-coverage-sanity-check"]
+  - id: agent-native-spec-editing
+    description: >
+      Agents can discover the full spec schema via `spec guide` and directly edit spec YAML
+      files to add, modify, or remove behavior — no dedicated spec-mutation command needed.
+    grounded_by:
+      requirements: ["spec-schema-discoverability"]
 
 cli:
   binary: "./specify"
@@ -501,13 +533,13 @@ cli:
             type: object
             required: ["name", "version", "commands", "global_options", "exit_codes"]
         - type: json_schema
-          description: "The commands array must list at least 21 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
+          description: "The commands array must list at least 18 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
           schema:
             type: object
             properties:
               commands:
                 type: array
-                minItems: 21
+                minItems: 18
                 items:
                   type: object
                   required: ["name", "description", "parameters"]
@@ -1464,11 +1496,10 @@ cli:
 
     - id: human-shows-lifecycle
       description: >
-        When the human wizard starts (even without a TTY), it outputs the five lifecycle
+        When the human wizard starts (even without a TTY), it outputs the four lifecycle
         flows to stderr: Create (author a new spec), Capture (record from live or code),
-        Evolve (improve an existing spec), Review (inspect in browser), and Verify (check
-        implementation). These are the core product concepts that organize all of Specify's
-        functionality.
+        Review (inspect in browser), and Verify (check implementation). These are the core
+        product concepts that organize all of Specify's functionality.
       args: ["human"]
       expected_exit_code: 0
       stderr_assertions:
@@ -1478,9 +1509,6 @@ cli:
         - type: text_contains
           description: "Shows the Capture flow for recording contracts from live systems or code"
           text: "Capture"
-        - type: text_contains
-          description: "Shows the Evolve flow for improving specs via gap analysis, PR changes, or reports"
-          text: "Evolve"
         - type: text_contains
           description: "Shows the Review flow for inspecting specs in an interactive browser view"
           text: "Review"
@@ -1535,39 +1563,6 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Capture"
-
-    - id: human-evolve-interactive-path
-      description: >
-        "human evolve interactive" jumps directly to the interactive evolution workflow,
-        which performs gap analysis on a spec and suggests improvements. The command outputs
-        "Evolve" to stderr confirming the correct flow was entered.
-      args: ["human", "evolve", "interactive"]
-      expected_exit_code: 0
-      stderr_assertions:
-        - type: text_contains
-          text: "Evolve"
-
-    - id: human-evolve-pr-path
-      description: >
-        "human evolve pr" jumps directly to the PR-driven evolution workflow, which analyzes
-        a pull request's changes and suggests spec updates to match. The command outputs
-        "Evolve" to stderr confirming the correct flow was entered.
-      args: ["human", "evolve", "pr"]
-      expected_exit_code: 0
-      stderr_assertions:
-        - type: text_contains
-          text: "Evolve"
-
-    - id: human-evolve-report-path
-      description: >
-        "human evolve report" jumps directly to the report-driven evolution workflow, which
-        analyzes a gap report to suggest targeted spec improvements based on validation
-        results. The command outputs "Evolve" to stderr confirming the correct flow.
-      args: ["human", "evolve", "report"]
-      expected_exit_code: 0
-      stderr_assertions:
-        - type: text_contains
-          text: "Evolve"
 
     - id: human-review-path
       description: >
