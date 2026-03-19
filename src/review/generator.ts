@@ -692,6 +692,12 @@ const JS = `
 
   function isStaleRef(ref) { return !validSpecRefs.has(ref); }
 
+  // Merge requirements from top-level and narrative sections for lookup
+  var allRequirements = [].concat(spec.requirements || []);
+  for (var ni = 0; ni < (spec.narrative || []).length; ni++) {
+    allRequirements = allRequirements.concat(spec.narrative[ni].requirements || []);
+  }
+
   // ---- Build TOC & narrative ----
 
   let sections = [];
@@ -1227,13 +1233,22 @@ const JS = `
           lines.push('  - <span class="spec-key">type:</span> <span class="spec-val">' + esc(a.type) + '</span>');
           if (a.description) lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(a.description) + '</span>');
         });
-      } else if (ref === 'requirements' && spec.requirements) {
+      } else if (ref === 'requirements' && allRequirements.length > 0) {
         lines.push('<span class="spec-key">requirements:</span>');
-        spec.requirements.forEach(function(r) {
+        allRequirements.forEach(function(r) {
           lines.push('  - <span class="spec-key">id:</span> <span class="spec-val">' + esc(r.id) + '</span>');
           lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(r.description || '') + '</span>');
           lines.push('    <span class="spec-key">verification:</span> <span class="spec-val">' + esc(r.verification || 'agent') + '</span>');
         });
+      } else if (refType === 'requirement' && refParts.length > 1) {
+        var reqId = refParts.slice(1).join(':');
+        var specReq = allRequirements.find(function(r) { return r.id === reqId; });
+        if (specReq) {
+          lines.push('<span class="spec-key">- id:</span> <span class="spec-val">' + esc(specReq.id) + '</span>');
+          lines.push('  <span class="spec-key">description:</span> <span class="spec-val">' + esc((specReq.description || '').substring(0, 200)) + (specReq.description && specReq.description.length > 200 ? '...' : '') + '</span>');
+          lines.push('  <span class="spec-key">verification:</span> <span class="spec-val">' + esc(specReq.verification || 'agent') + '</span>');
+          if (specReq.validation_plan) lines.push('  <span class="spec-key">validation_plan:</span> <span class="spec-comment"># ' + specReq.validation_plan.split('\\n').filter(Boolean).length + ' steps</span>');
+        }
       } else if (ref === 'claims' && spec.claims) {
         lines.push('<span class="spec-key">claims:</span>');
         spec.claims.forEach(function(c) {
