@@ -680,6 +680,7 @@ const JS = `
     for (const r of (page.expected_requests || [])) validSpecRefs.add('request:' + page.id + '/' + r.method + ':' + r.url_pattern);
   }
   for (const f of (spec.flows || [])) validSpecRefs.add('flow:' + f.id);
+  for (const req of (spec.requirements || [])) validSpecRefs.add('requirement:' + req.id);
   for (const claim of (spec.claims || [])) validSpecRefs.add('claim:' + claim.id);
   if (spec.cli) {
     for (const cmd of (spec.cli.commands || [])) validSpecRefs.add('cli:' + cmd.id);
