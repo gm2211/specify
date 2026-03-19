@@ -82,28 +82,34 @@ export async function cliRun(options: CliRunOptions, ctx: CliContext): Promise<n
     const passedClaims = (report.claims ?? []).filter(c => c.status === 'passed');
     if (verifiedReqs.length > 0) {
       for (const req of verifiedReqs) {
-        process.stderr.write(`${c.boldGreen('✓')} ${c.bold(req.id)}: verified by agent\n`);
-        // Show evidence summary
         const ev = req.evidence as Record<string, unknown> | undefined;
-        if (ev?.evidence) {
-          const inner = ev.evidence as Record<string, unknown>;
-          if (inner.total_paths !== undefined) {
-            process.stderr.write(`  ${c.dim(`${inner.covered_paths}/${inner.total_paths} paths covered`)}\n`);
-          }
-          if (inner.missing_paths !== undefined && (inner.missing_paths as number) > 0) {
-            process.stderr.write(`  ${c.yellow(`${inner.missing_paths} paths missing`)}\n`);
-          }
+        const method = ev?.method as string | undefined;
+        if (method === 'inline_checks') {
+          process.stderr.write(`${c.boldGreen('✓')} ${c.bold(req.id)}: ${ev?.checks_passed}/${ev?.checks_run} property check(s) passed\n`);
+        } else {
+          process.stderr.write(`${c.boldGreen('✓')} ${c.bold(req.id)}: verified by agent\n`);
+          process.stderr.write(`  ${c.dim(`Evidence: .specify/evidence/${req.id}.json`)}\n`);
         }
-        process.stderr.write(`  ${c.dim(`Evidence: .specify/evidence/${req.id}.json`)}\n`);
       }
     }
     if (failedReqs.length > 0) {
-      process.stderr.write(c.boldRed(`\n✗ ${failedReqs.length} behavioral requirement(s) need agent verification:\n`));
-      for (const req of failedReqs) {
-        process.stderr.write(`  ${c.red('✗')} ${c.bold(req.id)}: ${req.description.slice(0, 100)}${req.description.length > 100 ? '...' : ''}\n`);
+      const evidenceReqs = failedReqs.filter(r => !r.check_results?.length);
+      const checkReqs = failedReqs.filter(r => r.check_results?.length);
+      if (checkReqs.length > 0) {
+        process.stderr.write(c.boldRed(`\n✗ ${checkReqs.length} requirement(s) failed property checks:\n`));
+        for (const req of checkReqs) {
+          const failCount = req.check_results?.filter((cr: { status: string }) => cr.status === 'failed').length ?? 0;
+          process.stderr.write(`  ${c.red('✗')} ${c.bold(req.id)}: ${failCount} check(s) failed\n`);
+        }
       }
-      process.stderr.write(c.dim(`  Dispatch an agent to validate these requirements and provide evidence.\n`));
-      process.stderr.write(c.dim(`  Evidence goes in: .specify/evidence/<requirement-id>.json\n`));
+      if (evidenceReqs.length > 0) {
+        process.stderr.write(c.boldRed(`\n✗ ${evidenceReqs.length} behavioral requirement(s) need agent verification:\n`));
+        for (const req of evidenceReqs) {
+          process.stderr.write(`  ${c.red('✗')} ${c.bold(req.id)}: ${req.description.slice(0, 100)}${req.description.length > 100 ? '...' : ''}\n`);
+        }
+        process.stderr.write(c.dim(`  Dispatch an agent to validate these requirements and provide evidence.\n`));
+        process.stderr.write(c.dim(`  Evidence goes in: .specify/evidence/<requirement-id>.json\n`));
+      }
     }
     if (passedClaims.length > 0) {
       process.stderr.write(c.boldGreen(`\n✓ ${passedClaims.length} grounded claim(s):\n`));

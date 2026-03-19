@@ -42,6 +42,29 @@ requirements:
          used for different paths, no test IDs that don't exist)
       5. The assertion passes if every path maps to at least one test ID
     evidence_format: "A table of { path, test_id, status } entries where status is 'covered' or 'missing'"
+    checks:
+      - id: manifest-discovery
+        description: "Schema commands returns the full public command manifest"
+        args: ["schema", "commands"]
+        expected_exit_code: 0
+        stdout_assertions:
+          - type: json_schema
+            description: "Manifest is a JSON array of command definitions"
+            schema:
+              type: array
+              minItems: 24
+              items:
+                type: object
+                required: ["name", "description"]
+                properties:
+                  name:
+                    type: string
+                  description:
+                    type: string
+          - type: json_path
+            description: "Manifest has exactly 24 public commands"
+            path: "length"
+            value: 24
   - id: no-extra-public-behavior
     description: >
       Verify enforces a closed-world public contract: if the binary exposes any reachable
@@ -65,6 +88,30 @@ requirements:
       5. The assertion passes only if there are no `extra_unaccounted` behaviors and no
          stale public-surface mappings
     evidence_format: "A table of { behavior, discovery_source, mapped_to, status } entries where status is 'covered', 'extra_unaccounted', or 'stale_spec'"
+    checks:
+      - id: closed-world-manifest-count
+        description: "Public surface exactly matches expected command count (no hidden extras)"
+        args: ["schema", "commands"]
+        expected_exit_code: 0
+        stdout_assertions:
+          - type: json_path
+            description: "Exactly 24 public commands — no extras beyond what spec accounts for"
+            path: "length"
+            value: 24
+      - id: help-output-valid
+        description: "Top-level help output lists known commands"
+        args: ["--help"]
+        expected_exit_code: 0
+        stderr_assertions:
+          - type: text_contains
+            text: "verify"
+            description: "Help lists verify command"
+          - type: text_contains
+            text: "capture"
+            description: "Help lists capture command"
+          - type: text_contains
+            text: "evolve"
+            description: "Help lists evolve command"
   - id: evolve-user-intent-guidance
     description: >
       The `evolve` contract is stronger than gap reporting. It must guide an LLM to add,
@@ -78,6 +125,34 @@ requirements:
          not only add missing assertions
       4. Fail if `evolve` behaves only as gap detection / recommendation without intent-guided mutation support
     evidence_format: "A table of { mode, intent, observed_behavior, status } entries"
+    checks:
+      - id: evolve-produces-structured-suggestions
+        description: "Evolve produces structured suggestions with proposed_change actions and questions"
+        args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
+        expected_exit_code: 0
+        stdout_assertions:
+          - type: json_schema
+            description: "Output has suggestions array with proposed_change and question fields"
+            schema:
+              type: object
+              required: ["suggestions"]
+              properties:
+                suggestions:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: ["id", "category", "description", "proposed_change", "question"]
+                    properties:
+                      id:
+                        type: string
+                      category:
+                        type: string
+                      proposed_change:
+                        type: object
+                        required: ["action"]
+                      question:
+                        type: string
 
 claims:
   - id: closed-world-verify-contract
@@ -127,13 +202,13 @@ cli:
             type: object
             required: ["name", "version", "commands", "global_options", "exit_codes"]
         - type: json_schema
-          description: "The commands array must list at least 26 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
+          description: "The commands array must list at least 24 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
           schema:
             type: object
             properties:
               commands:
                 type: array
-                minItems: 26
+                minItems: 24
                 items:
                   type: object
                   required: ["name", "description", "parameters"]

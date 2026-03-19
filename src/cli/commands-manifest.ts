@@ -105,15 +105,6 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
-    name: 'cli run',
-    description: 'Run CLI verification against a spec',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
-      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history for statistical confidence' },
-    ],
-  },
-  {
     name: 'report diff',
     description: 'Diff two gap reports',
     parameters: [
@@ -329,21 +320,19 @@ export const COMMANDS: CommandDefinition[] = [
         optional_parameters: ['--headed', '--explore', '--max-exploration-rounds', '--timeout', '--no-setup', '--no-teardown', '--no-screenshots', '--output'],
         condition: '--url is provided without --capture',
       },
+      {
+        name: 'cli_verification',
+        description: 'Run CLI verification against spec command definitions (auto-detected when spec has a cli section)',
+        required_parameters: ['--spec'],
+        optional_parameters: ['--output', '--history-dir'],
+        condition: 'Spec has a cli section and neither --url nor --capture is provided',
+      },
     ],
     examples: [
       'specify verify --spec spec.yaml --capture ./captures/latest',
       'specify verify --spec spec.yaml --url http://localhost:3000',
+      'specify verify --spec spec.yaml   # auto-detects cli section',
     ],
-  },
-  {
-    name: 'verify cli',
-    description: 'Run CLI verification against a contract',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
-      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history for statistical confidence' },
-    ],
-    examples: ['specify verify cli --spec spec.yaml'],
   },
   {
     name: 'lint',

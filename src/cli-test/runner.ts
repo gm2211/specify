@@ -99,50 +99,21 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
   }
 
   // Include behavioral requirements from the spec
-  // Check .specify/evidence/<id>.json for agent-provided evidence
+  // Strategy: if a requirement has inline checks, run them directly.
+  // Otherwise, fall back to .specify/evidence/<id>.json files.
   const evidenceDir = path.join(process.cwd(), '.specify', 'evidence');
-  const requirements: RequirementResult[] = (spec.requirements ?? []).map(req => {
-    const evidencePath = path.join(evidenceDir, `${req.id}.json`);
-    try {
-      if (fs.existsSync(evidencePath)) {
-        const raw = fs.readFileSync(evidencePath, 'utf-8');
-        const evidence = JSON.parse(raw) as {
-          requirement_id: string;
-          status: 'passed' | 'failed';
-          timestamp?: string;
-          agent?: string;
-          evidence?: unknown;
-        };
-        if (evidence.status === 'passed') {
-          log?.(`  ${c.green('✓')} Requirement ${c.bold(req.id)}: evidence found (passed)`);
-          return {
-            id: req.id,
-            description: req.description,
-            verification: req.verification,
-            status: 'verified' as const,
-            evidence: evidence,
-          };
-        }
-        log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: evidence found (failed)`);
-        return {
-          id: req.id,
-          description: req.description,
-          verification: req.verification,
-          status: 'failed' as const,
-          evidence: evidence,
-        };
-      }
-    } catch {
-      // Evidence file is malformed or unreadable — treat as failed
+  const requirements: RequirementResult[] = [];
+  for (const req of spec.requirements ?? []) {
+    if (req.checks?.length && cliSpec) {
+      // Property-based evaluation: run inline checks
+      const result = await evaluateRequirementChecks(req, cliSpec, allRuns, log);
+      requirements.push(result);
+    } else {
+      // Fall back to evidence files
+      const result = evaluateRequirementEvidence(req, evidenceDir, log);
+      requirements.push(result);
     }
-    log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: no evidence`);
-    return {
-      id: req.id,
-      description: req.description,
-      verification: req.verification,
-      status: 'failed' as const,
-    };
-  });
+  }
 
   const claims = evaluateClaims(spec, commandResults, scenarioResults, requirements, log);
   const requirementPasses = requirements.filter(r => r.status === 'verified').length;
@@ -204,6 +175,95 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
   }
 
   return { report, runs: allRuns, outputDir };
+}
+
+/** Run inline checks for a requirement and produce a result. */
+async function evaluateRequirementChecks(
+  req: import('../spec/types.js').Requirement,
+  cliSpec: CliSpec,
+  allRuns: CliCommandRun[],
+  log?: (msg: string) => void,
+): Promise<RequirementResult> {
+  const checkResults: CliCommandResult[] = [];
+
+  for (const check of req.checks!) {
+    const run = await executeCommand(check, cliSpec, log);
+    allRuns.push(run);
+    const result = validateCommandRun(check, run);
+    checkResults.push(result);
+  }
+
+  const allPassed = checkResults.every(r => r.status === 'passed');
+  const status = allPassed ? 'verified' as const : 'failed' as const;
+
+  if (allPassed) {
+    log?.(`  ${c.green('✓')} Requirement ${c.bold(req.id)}: ${checkResults.length} check(s) passed`);
+  } else {
+    const failCount = checkResults.filter(r => r.status === 'failed').length;
+    log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: ${failCount}/${checkResults.length} check(s) failed`);
+  }
+
+  return {
+    id: req.id,
+    description: req.description,
+    verification: req.verification,
+    status,
+    check_results: checkResults,
+    evidence: {
+      method: 'inline_checks',
+      checks_run: checkResults.length,
+      checks_passed: checkResults.filter(r => r.status === 'passed').length,
+      timestamp: new Date().toISOString(),
+    },
+  };
+}
+
+/** Evaluate a requirement by reading its evidence file. */
+function evaluateRequirementEvidence(
+  req: import('../spec/types.js').Requirement,
+  evidenceDir: string,
+  log?: (msg: string) => void,
+): RequirementResult {
+  const evidencePath = path.join(evidenceDir, `${req.id}.json`);
+  try {
+    if (fs.existsSync(evidencePath)) {
+      const raw = fs.readFileSync(evidencePath, 'utf-8');
+      const evidence = JSON.parse(raw) as {
+        requirement_id: string;
+        status: 'passed' | 'failed';
+        timestamp?: string;
+        agent?: string;
+        evidence?: unknown;
+      };
+      if (evidence.status === 'passed') {
+        log?.(`  ${c.green('✓')} Requirement ${c.bold(req.id)}: evidence found (passed)`);
+        return {
+          id: req.id,
+          description: req.description,
+          verification: req.verification,
+          status: 'verified' as const,
+          evidence: evidence,
+        };
+      }
+      log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: evidence found (failed)`);
+      return {
+        id: req.id,
+        description: req.description,
+        verification: req.verification,
+        status: 'failed' as const,
+        evidence: evidence,
+      };
+    }
+  } catch {
+    // Evidence file is malformed or unreadable — treat as failed
+  }
+  log?.(`  ${c.red('✗')} Requirement ${c.bold(req.id)}: no evidence`);
+  return {
+    id: req.id,
+    description: req.description,
+    verification: req.verification,
+    status: 'failed' as const,
+  };
 }
 
 function evaluateClaims(

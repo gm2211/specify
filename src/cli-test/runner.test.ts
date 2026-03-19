@@ -78,3 +78,90 @@ test('runCliValidation evaluates grounded claims', async () => {
     process.chdir(cwd);
   }
 });
+
+test('runCliValidation evaluates inline requirement checks', async () => {
+  const cwd = process.cwd();
+  const tempDir = mkdtempSync(path.join(tmpdir(), 'specify-checks-'));
+
+  process.chdir(tempDir);
+  try {
+    const spec: Spec = {
+      version: '1.0',
+      name: 'Inline Checks Test',
+      claims: [
+        {
+          id: 'inline-claim',
+          description: 'Inline-checked requirement grounds this claim',
+          grounded_by: {
+            requirements: ['checked-requirement'],
+          },
+        },
+      ],
+      requirements: [
+        {
+          id: 'checked-requirement',
+          description: 'Requirement verified by inline checks',
+          verification: 'agent',
+          checks: [
+            {
+              id: 'check-echo',
+              args: ['property-test'],
+              expected_exit_code: 0,
+              stdout_assertions: [
+                { type: 'text_contains', text: 'property-test' },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'failing-check-requirement',
+          description: 'Requirement with a failing inline check',
+          verification: 'agent',
+          checks: [
+            {
+              id: 'check-wrong',
+              args: ['actual-output'],
+              expected_exit_code: 0,
+              stdout_assertions: [
+                { type: 'text_contains', text: 'will-not-match' },
+              ],
+            },
+          ],
+        },
+      ],
+      cli: {
+        binary: 'echo',
+        commands: [
+          {
+            id: 'basic-cmd',
+            args: ['ok'],
+            expected_exit_code: 0,
+          },
+        ],
+      },
+    };
+
+    const { report } = await runCliValidation({ spec });
+
+    // Inline checks: passing requirement is verified
+    const checkedReq = report.requirements?.find(r => r.id === 'checked-requirement');
+    assert.equal(checkedReq?.status, 'verified');
+    assert.ok(checkedReq?.check_results?.length === 1);
+    assert.equal(checkedReq?.check_results?.[0].status, 'passed');
+
+    // Inline checks: failing requirement is failed
+    const failingReq = report.requirements?.find(r => r.id === 'failing-check-requirement');
+    assert.equal(failingReq?.status, 'failed');
+
+    // Claim grounded by inline-checked requirement passes
+    assert.equal(report.claims?.find(c => c.id === 'inline-claim')?.status, 'passed');
+
+    // Summary: 1 cmd exitcode + 1 passing req + 1 failing req + 1 claim pass = 4 total
+    // passed: exitcode(1) + checked-requirement(1) + inline-claim(1) = 3
+    // failed: failing-check-requirement(1) = 1
+    assert.equal(report.summary.passed, 3);
+    assert.equal(report.summary.failed, 1);
+  } finally {
+    process.chdir(cwd);
+  }
+});
