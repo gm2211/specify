@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { loadSpec } from '../../spec/parser.js';
-import { markdownToNarrative } from '../../spec/narrative.js';
+import { markdownToNarrative, specNarrativeToDocument } from '../../spec/narrative.js';
 import { generateReviewHtml } from '../../review/generator.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
@@ -48,27 +48,31 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     return ExitCode.PARSE_ERROR;
   }
 
-  // Load narrative (auto-discover if not specified)
-  // Resolve relative paths against the spec file's directory, not cwd
+  // Load narrative — prefer embedded spec.narrative, fall back to external markdown file
   const specDir = path.dirname(path.resolve(options.spec));
   let narrative;
-  const rawNarrativePath = options.narrative
-    ?? spec.narrative_path
-    ?? path.basename(options.spec).replace(/\.(ya?ml|json)$/, '.narrative.md');
-  const resolvedNarrative = path.isAbsolute(rawNarrativePath)
-    ? rawNarrativePath
-    : path.resolve(specDir, rawNarrativePath);
-
-  if (fs.existsSync(resolvedNarrative)) {
-    try {
-      const md = fs.readFileSync(resolvedNarrative, 'utf-8');
-      narrative = markdownToNarrative(md);
-      log(`Loaded narrative: ${resolvedNarrative}`);
-    } catch (err) {
-      log(`Warning: failed to parse narrative ${resolvedNarrative}: ${(err as Error).message}`);
-    }
+  if (spec.narrative && spec.narrative.length > 0 && !options.narrative) {
+    narrative = specNarrativeToDocument(spec);
+    log(`Loaded narrative from spec`);
   } else {
-    log(`No narrative file found (tried: ${resolvedNarrative}), building from spec structure`);
+    const rawNarrativePath = options.narrative
+      ?? spec.narrative_path
+      ?? path.basename(options.spec).replace(/\.(ya?ml|json)$/, '.narrative.md');
+    const resolvedNarrative = path.isAbsolute(rawNarrativePath)
+      ? rawNarrativePath
+      : path.resolve(specDir, rawNarrativePath);
+
+    if (fs.existsSync(resolvedNarrative)) {
+      try {
+        const md = fs.readFileSync(resolvedNarrative, 'utf-8');
+        narrative = markdownToNarrative(md);
+        log(`Loaded narrative: ${resolvedNarrative}`);
+      } catch (err) {
+        log(`Warning: failed to parse narrative ${resolvedNarrative}: ${(err as Error).message}`);
+      }
+    } else {
+      log(`No narrative file found (tried: ${resolvedNarrative}), building from spec structure`);
+    }
   }
 
   // Load report(s) if specified

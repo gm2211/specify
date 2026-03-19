@@ -436,6 +436,16 @@ export function lintSpec(spec: Spec, specPath?: string): LintError[] {
     );
   }
 
+  // Rule: warn if both narrative_path and embedded narrative are present
+  if (spec.narrative_path && spec.narrative && spec.narrative.length > 0) {
+    errors.push({
+      path: '/narrative',
+      severity: 'warning',
+      message: 'Spec has both "narrative_path" (external file) and "narrative" (embedded sections). The embedded narrative will take precedence in review; consider removing one.',
+      rule: 'dual-narrative-sources',
+    });
+  }
+
   // Rule: narrative sync (when narrative_path is set)
   if (spec.narrative_path) {
     errors.push(...lintNarrativeSync(spec, spec.narrative_path, specPath));

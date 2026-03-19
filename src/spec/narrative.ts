@@ -61,6 +61,46 @@ export interface NarrativeSection {
 }
 
 // ---------------------------------------------------------------------------
+// Conversion: Spec embedded narrative → NarrativeDocument
+// ---------------------------------------------------------------------------
+
+import type { Spec, NarrativeSection as SpecNarrativeSection } from './types.js';
+
+/**
+ * Convert embedded narrative sections (spec.narrative) into a NarrativeDocument
+ * suitable for the review generator.
+ *
+ * Mapping:
+ *   SpecNarrativeSection.section     → NarrativeSection.title
+ *   SpecNarrativeSection.prose       → NarrativeSection.body
+ *   SpecNarrativeSection.covers      → NarrativeSection.specRefs
+ *   SpecNarrativeSection.requirements → appended as "requirement:{id}" in specRefs
+ *   Spec.name                        → NarrativeDocument.title
+ */
+export function specNarrativeToDocument(spec: Spec): NarrativeDocument {
+  const sections: NarrativeSection[] = (spec.narrative ?? []).map((ns: SpecNarrativeSection) => {
+    const specRefs: string[] = [...(ns.covers ?? [])];
+    for (const req of ns.requirements ?? []) {
+      specRefs.push(`requirement:${req.id}`);
+    }
+    return {
+      title: ns.section,
+      body: ns.prose,
+      specRefs,
+      children: [],
+    };
+  });
+
+  const overview = spec.description ?? '';
+
+  return {
+    title: spec.name,
+    overview,
+    sections,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Serialization: NarrativeDocument → Markdown
 // ---------------------------------------------------------------------------
 

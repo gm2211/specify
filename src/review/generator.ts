@@ -685,6 +685,10 @@ const JS = `
   if (spec.cli) {
     for (const cmd of (spec.cli.commands || [])) validSpecRefs.add('cli:' + cmd.id);
   }
+  for (const ns of (spec.narrative || [])) {
+    for (const coverId of (ns.covers || [])) validSpecRefs.add(coverId);
+    for (const req of (ns.requirements || [])) validSpecRefs.add('requirement:' + req.id);
+  }
 
   function isStaleRef(ref) { return !validSpecRefs.has(ref); }
 
