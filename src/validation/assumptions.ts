@@ -161,14 +161,24 @@ function resolveAssumptionUrl(
     variables.base_url = ctx.baseUrl;
   }
 
-  const withEnvVars = template.replace(/\$\{([^}]+)\}/g, (match, key: string) => {
-    return process.env[key] ?? match;
-  });
+  let resolved = template;
 
-  return withEnvVars.replace(/\{\{([^}]+)\}\}/g, (match, key: string) => {
-    const resolved = variables[key.trim()];
-    return resolved ?? match;
-  });
+  // Resolve nested combinations like {{base_url}} -> ${TARGET_BASE_URL} -> https://...
+  for (let i = 0; i < 3; i++) {
+    const next = resolved
+      .replace(/\{\{([^}]+)\}\}/g, (match, key: string) => {
+        const variableValue = variables[key.trim()];
+        return variableValue ?? match;
+      })
+      .replace(/\$\{([^}]+)\}/g, (match, key: string) => {
+        return process.env[key] ?? match;
+      });
+
+    if (next === resolved) break;
+    resolved = next;
+  }
+
+  return resolved;
 }
 
 /**
