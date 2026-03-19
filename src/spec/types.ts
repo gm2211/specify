@@ -198,6 +198,13 @@ export interface Requirement {
 
   /** What evidence the agent should produce. */
   evidence_format?: string;
+
+  /**
+   * Inline property checks — CLI commands with assertions that verify
+   * evaluates directly instead of looking for external evidence files.
+   * Each check is a CLI command spec run against the spec's cli.binary.
+   */
+  checks?: CliCommandSpec[];
 }
 
 // ---------------------------------------------------------------------------

@@ -40,7 +40,10 @@ export async function specSync(options: SpecSyncOptions, ctx: CliContext): Promi
   // Analyze tests
   const framework = (options.framework as TestFramework) ?? undefined;
   const testsDir = path.resolve(options.tests);
-  const analyses = analyzeTestDirectory(testsDir, framework);
+  const allAnalyses = analyzeTestDirectory(testsDir, framework);
+
+  // Filter to recognized test files (Playwright or Cypress, not unknown)
+  const analyses = allAnalyses.filter(a => a.framework !== 'unknown');
 
   if (analyses.length === 0) {
     process.stderr.write(`No test files found in: ${testsDir}\n`);
