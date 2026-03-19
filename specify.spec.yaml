@@ -1,21 +1,36 @@
 version: "1.0"
 name: "Specify CLI"
 description: >
-  Complete behavioral contract for Specify, a deterministic CLI tool for spec-driven
-  functional verification of web applications. Specify follows an agent-first design:
-  structured JSON goes to stdout for machine consumption, human-readable messages go
-  to stderr, and meaningful exit codes enable branching without parsing. The CLI uses
-  a command structure with noun-verb forms where useful (e.g., spec validate, report diff)
-  and unified top-level workflows like verify that infer mode from the spec and flags. It
-  provides
-  schema introspection so agents can discover capabilities at runtime. This spec serves
-  as both (1) a mechanically verifiable test suite executed by `specify verify --spec specify.spec.yaml`, and
-  (2) a set of behavioral requirements that guide agents to validate properties requiring
-  judgment. It is also a closed-world public contract: behavior exposed by the binary but
-  not accounted for here MUST cause `verify` to fail. The tool itself is fully deterministic — no API keys, no LLM calls —
-  intelligence comes from the agent layer that drives it.
+  Complete behavioral contract for Specify, an LLM orchestration harness for spec-driven
+  verification that captures, verifies, and impersonates any target system — web, API, or
+  CLI. Specify puts the LLM in the driver's seat for orchestration while providing
+  deterministic tools for mechanical checks. The verify flow walks the spec property by
+  property, generating structured prompts: for mechanical assertions (exit codes, text
+  matching, JSON schema) the prompt directs the agent to use Specify's assertion tools; for
+  behavioral properties the prompt describes what evidence to gather. After all evidence is
+  collected, a high-capability sub-agent judges holistically whether the spec is satisfied,
+  with a mechanical sanity check ensuring evidence coverage is mathematically sound. The CLI
+  follows an agent-first design: structured JSON goes to stdout, human-readable messages to
+  stderr, and meaningful exit codes enable branching without parsing. It uses noun-verb
+  command forms where useful (e.g., spec validate, report diff) and unified top-level
+  workflows like verify that infer mode from the spec and flags, with schema introspection
+  so agents can discover capabilities at runtime. Capture combines a Playwright recording
+  harness (automatic traffic and screenshot capture) with agent-driven exploration. Beyond
+  CLI verification, Specify supports three high-level product use cases: (1) autonomous
+  capture and spec generation from any target system, (2) spec-driven development through
+  iterative red/green/verify TDD loops with closed-world enforcement, and (3) impersonation
+  of captured systems via semantically coherent synthetic data augmentation and mock server
+  standup. This spec serves as both a mechanically verifiable test suite executed by
+  `specify verify --spec specify.spec.yaml` and a set of behavioral requirements that guide
+  agents to validate properties requiring judgment. It is also a closed-world public
+  contract: behavior exposed by the binary but not accounted for here MUST cause `verify`
+  to fail.
 description_claims:
   - closed-world-verify-contract
+  - capture-any-target
+  - spec-driven-tdd
+  - impersonate-from-capture
+  - verify-orchestration-architecture
 
 narrative_path: specify.spec.narrative.md
 
@@ -153,6 +168,265 @@ requirements:
                         required: ["action"]
                       question:
                         type: string
+  # -------------------------------------------------------------------
+  # Capture & Spec Generation
+  # -------------------------------------------------------------------
+  - id: capture-autonomous-exploration
+    description: >
+      Specify's capture capability for web targets combines a Playwright recording harness with
+      agent-driven exploration. Specify manages the browser session and automatically captures
+      all network traffic (requests/responses), takes screenshots on every page change (after
+      each response), and records console output — this recording runs silently in the
+      background. The agent's job is exploration: Specify prompts the agent to discover how the
+      target works, and the agent navigates pages, interacts with forms, clicks buttons, opens
+      modals, and discovers dynamic content. The exploration must be intelligent — prioritizing
+      interactive elements over static links and discovering UI states that only appear after
+      user interaction.
+    verification: agent
+    validation_plan: |
+      1. Point Specify's capture at a non-trivial web application with forms, modals, and
+         dynamic content (not just a static site)
+      2. Verify the Playwright harness automatically captures network traffic and screenshots
+         without the agent needing to explicitly trigger recording
+      3. Verify the agent interacts with forms (fills inputs, submits), clicks buttons that
+         trigger UI changes, and opens modals or dropdowns
+      4. Verify captured artifacts include: HTTP traffic log, screenshots of discovered states,
+         and console output
+      5. Verify the agent discovered UI states that require interaction (e.g., a modal that only
+         appears after clicking a button, form validation errors)
+      6. Fail if the agent only followed links without interacting with interactive elements
+    evidence_format: "A table of { interaction_type, target_element, discovered_state, artifacts_captured } entries"
+  - id: capture-cli-targets
+    description: >
+      Specify can capture behavior from CLI applications, not just web targets. The capture
+      agent probes the CLI by running help commands, trying different subcommands and flag
+      combinations, fuzzing arguments, and recording the input/output behavior (stdout, stderr,
+      exit codes) for each invocation. The discovered command surface must include subcommands,
+      flags, error handling paths, and mode variations.
+    verification: agent
+    validation_plan: |
+      1. Point Specify's capture at a CLI application with subcommands and flags
+      2. Verify the agent discovers subcommands (via --help, probing common names)
+      3. Verify the agent tests flag combinations and records stdout, stderr, and exit codes
+      4. Verify error paths are captured (invalid flags, missing required args)
+      5. Verify the captured data represents the CLI's command surface comprehensively enough
+         to distinguish it from a different CLI
+    evidence_format: "A table of { command_invocation, stdout_summary, stderr_summary, exit_code, discovery_method } entries"
+  - id: capture-spec-generation
+    description: >
+      After capturing behavior from a target system (web or CLI), Specify generates a spec
+      that represents the full observed behavior. The generated spec must be comprehensive
+      enough that it could be used to verify a re-implementation of the same system — covering
+      discovered pages/commands, interactions/flags, assertions derived from observed responses,
+      and error handling. The spec must conform to Specify's spec schema and pass lint.
+    verification: agent
+    validation_plan: |
+      1. Run capture against a target system, then run spec generation on the captured data
+      2. Verify the generated spec passes `specify spec lint`
+      3. Verify the generated spec covers all major behaviors observed during capture (pages or
+         commands, success paths, error paths)
+      4. Verify assertions in the generated spec are derived from actual observed responses (not
+         generic placeholders)
+      5. Run `specify verify` with the generated spec against the original target and verify
+         that coverage is high (>80%)
+      6. Fail if the generated spec is too sparse to distinguish the target from a trivially
+         different system
+    evidence_format: "{ generated_spec_path, lint_result, coverage_percentage, behaviors_covered, behaviors_missing }"
+  # -------------------------------------------------------------------
+  # Spec-Driven Development (TDD Loop)
+  # -------------------------------------------------------------------
+  - id: spec-driven-implementation-guidance
+    description: >
+      Given a spec (human-authored or generated from capture), Specify generates structured
+      prompts that guide an implementation agent through building the system. For each
+      unimplemented requirement, Specify emits a prompt containing: which requirement to
+      implement next, a suggested build order (e.g., foundational routes before complex flows),
+      relevant context from the spec (expected inputs, outputs, assertions), and rationale for
+      the ordering. Specify does not implement anything itself — it produces prompts that an
+      agent consumes to do the actual work. The prompts must be specific and ordered, not
+      generic instructions like "implement all requirements".
+    verification: agent
+    validation_plan: |
+      1. Start with a spec that defines multiple requirements and a stub/empty implementation
+      2. Invoke Specify's guidance capability and verify it emits structured prompts for the agent
+      3. Verify each prompt includes: which requirement to implement next, relevant context
+         from the spec (expected behavior, inputs, outputs), and why this order was chosen
+      4. After the agent implements one suggestion, verify Specify generates updated prompts
+         reflecting the newly satisfied requirement
+      5. Fail if prompts are generic (e.g., "implement all requirements") rather than specific
+         and ordered
+    evidence_format: "A sequence of { step, requirement_id, prompt_summary, implementation_status } entries"
+  - id: closed-world-verification
+    description: >
+      Specify's verify command enforces closed-world semantics: the system under test must
+      have EXACTLY the behavior described in the spec. Extra undeclared behavior (endpoints
+      not in the spec, CLI commands not accounted for, UI elements not specified) causes
+      verification failure, not just a warning. Missing behavior (unimplemented requirements)
+      also causes failure. Enforcement happens through the evidence-judge pattern: the
+      holistic judge evaluates the full evidence corpus against the full spec and must flag
+      both extra and missing behavior as failures. The evidence-coverage sanity check provides
+      an additional mechanical backstop. The verify report must distinguish between "extra
+      behavior found" and "required behavior missing" as separate failure categories.
+    verification: agent
+    validation_plan: |
+      1. Create a spec that deliberately omits some behavior of a target system
+      2. Run verify and confirm the judge reports the extra undeclared behavior as failures
+      3. Create a spec that includes requirements not yet implemented in the target
+      4. Run verify and confirm the judge reports the missing behavior as failures
+      5. Verify the report distinguishes between extra-behavior failures and missing-behavior
+         failures with different categories or labels
+      6. Verify that a system matching the spec exactly (no extra, no missing) passes verify
+      7. Fail if extra behavior is reported as a warning rather than a failure
+    evidence_format: "{ extra_behaviors_detected, missing_behaviors_detected, both_cause_failure, distinguishable_categories }"
+  - id: tdd-loop-orchestration
+    description: >
+      Specify can orchestrate a complete red/green/verify TDD cycle by emitting structured
+      prompts for each phase of each iteration. The loop proceeds: (1) Red — Specify emits
+      verify prompts, the agent gathers evidence, the judge reports failures. (2) Guide —
+      Specify emits implementation guidance prompts based on the spec and current failures.
+      (3) Green — the agent implements the next piece following the prompt. (4) Verify —
+      Specify emits verify prompts again, the judge confirms progress. Specify does not
+      execute implementation itself — it orchestrates the cycle through prompts. The loop
+      repeats until all requirements pass, with Specify tracking progress across iterations.
+    verification: agent
+    validation_plan: |
+      1. Start with a spec and an empty/stub implementation
+      2. Run the TDD loop for at least 3 iterations
+      3. Verify each iteration: Specify emits appropriate prompts for each phase and the
+         judge reports fewer failures than the previous iteration (monotonic progress)
+      4. Verify the final iteration results in all requirements passing
+      5. Verify Specify tracked progress across iterations (knows which requirements were
+         satisfied in which iteration)
+      6. Fail if the loop does not converge (same failures repeat without progress)
+    evidence_format: "A sequence of { iteration, failures_before, prompts_emitted, failures_after, requirements_newly_satisfied } entries"
+  # -------------------------------------------------------------------
+  # Impersonate (Capture + Augment + Mock)
+  # -------------------------------------------------------------------
+  - id: impersonate-synthetic-augmentation
+    description: >
+      Given captured traffic data from a target system, Specify can generate synthetic
+      request/response pairs that are logically consistent extrapolations of observed behavior
+      patterns. The synthetic data extends the captured dataset by interpolating — for example,
+      if captured data shows "add item X to cart, list cart shows X", synthetic data might
+      include "add item Y to cart, list cart shows X and Y". The augmentation uses an LLM to
+      understand the semantic patterns in the captured data and generate new pairs that are
+      consistent with those patterns.
+    verification: agent
+    validation_plan: |
+      1. Capture traffic from a target system with stateful behavior (e.g., a shopping cart,
+         a todo list, or a CRUD API)
+      2. Run Specify's synthetic augmentation on the captured data
+      3. Verify generated pairs are semantically coherent: state changes from one request
+         are reflected in subsequent responses
+      4. Verify generated pairs cover scenarios not present in the captured data but consistent
+         with observed patterns
+      5. Verify generated pairs are not exact duplicates of captured data (they must be novel)
+      6. Fail if generated pairs are random or semantically incoherent (e.g., adding an item
+         but the list response does not include it)
+    evidence_format: "{ captured_pair_count, synthetic_pair_count, coherence_score, novel_scenarios_covered, incoherent_pairs }"
+  - id: impersonate-mock-standup
+    description: >
+      Specify can stand up a mock server from captured and augmented traffic data that
+      impersonates the original system. The mock server accepts HTTP requests and returns
+      responses drawn from the captured + synthetic dataset. For requests that match captured
+      data exactly, it returns the captured response. For requests that do not match exactly,
+      it interpolates from the augmented dataset to produce a plausible response. The mock
+      must be functional enough that a client designed for the original system can interact
+      with the mock without errors.
+    verification: agent
+    validation_plan: |
+      1. Capture traffic from a target system and run synthetic augmentation
+      2. Stand up the mock server using Specify
+      3. Replay the original captured requests against the mock and verify responses match
+      4. Send novel requests (not in captured data but within the domain) and verify the mock
+         returns plausible responses interpolated from the augmented dataset
+      5. Point a client designed for the original system at the mock and verify it functions
+         without errors
+      6. Fail if the mock returns errors or empty responses for requests within the domain
+    evidence_format: "{ captured_replay_accuracy, novel_request_plausibility, client_compatibility, error_rate }"
+  - id: impersonate-interpolation-quality
+    description: >
+      Synthetic data generated for impersonation must be semantically coherent, not random
+      fuzzing. Coherence means: stateful operations maintain state consistency (adding item X
+      then listing shows X alongside previously added items), field formats match observed
+      patterns (dates look like dates, IDs follow the same format), and response structures
+      match the schema observed in captured data. The interpolation quality must be high enough
+      that a human reviewing the synthetic data cannot easily distinguish it from real traffic.
+    verification: agent
+    validation_plan: |
+      1. Generate synthetic data from captured traffic that includes stateful operations
+      2. Verify state consistency: sequential operations produce logically correct cumulative
+         state (e.g., add A, add B, list shows A and B)
+      3. Verify format consistency: field values in synthetic data match the format patterns
+         observed in captured data (e.g., UUID format, date format, numeric ranges)
+      4. Verify structural consistency: response bodies in synthetic data have the same schema
+         (keys, nesting, types) as corresponding captured responses
+      5. Present a mixed set of real and synthetic pairs to a reviewer and measure
+         distinguishability — fail if synthetic pairs are trivially identifiable
+    evidence_format: "{ state_consistency_score, format_consistency_score, structural_consistency_score, distinguishability_rate }"
+  # -------------------------------------------------------------------
+  # Verify Architecture (LLM Orchestration Harness)
+  # -------------------------------------------------------------------
+  - id: verify-as-prompt-generation
+    description: >
+      Verify's primary output is structured prompts for agents. When verify walks the spec,
+      it generates a structured prompt for each property telling the agent what to do. For
+      mechanical assertions (exit codes, text contains, JSON schema), the prompt directs the
+      agent to invoke Specify's deterministic assertion tools/harnesses that return pass/fail —
+      there is no point having an LLM eyeball whether stdout contains a string. For behavioral
+      properties, the prompt tells the agent what evidence to gather for later judgment. The
+      LLM's role is orchestration: deciding which checks to run, in what order, and
+      interpreting results holistically. Specify provides the mechanical tools; the LLM drives
+      the process.
+    verification: agent
+    validation_plan: |
+      1. Run verify against a spec with both mechanical (CLI) and behavioral (agent) properties
+      2. Verify that for each property, Specify emits a structured prompt for the agent
+      3. Verify prompts for mechanical properties direct the agent to use Specify's assertion
+         tools (not to eyeball output) and the tools return deterministic pass/fail
+      4. Verify prompts for behavioral properties describe the validation plan and expected
+         evidence format for later judgment
+      5. Verify the agent orchestrates the overall flow while Specify provides the tooling
+      6. Fail if mechanical assertions require LLM judgment or if behavioral properties lack
+         evidence-gathering instructions
+    evidence_format: "A table of { property_id, property_type, prompt_generated, uses_mechanical_harness, requires_llm_judgment } entries"
+  - id: evidence-judge-holistic-evaluation
+    description: >
+      After all evidence is gathered by the agent, Specify prompts a high-capability sub-agent
+      (the smartest model available) with the FULL spec and the FULL evidence corpus to
+      evaluate holistically whether the spec is satisfied. The judge sees everything at once —
+      not piecemeal property-by-property verdicts — so it can reason about cross-cutting
+      concerns, contradictions between evidence pieces, and overall system coherence. The
+      judge produces a structured verdict for each property and an overall pass/fail.
+    verification: agent
+    validation_plan: |
+      1. Run verify with gathered evidence and observe the judge invocation
+      2. Verify the judge receives the complete spec (all properties, requirements, claims)
+         and the complete evidence corpus (all evidence from all properties) in a single prompt
+      3. Verify the judge produces per-property verdicts (pass/fail with rationale) and an
+         overall verdict
+      4. Verify the judge can identify cross-cutting issues (e.g., evidence for property A
+         contradicts evidence for property B)
+      5. Fail if the judge evaluates properties in isolation without seeing the full corpus
+    evidence_format: "{ judge_model, full_spec_provided, full_evidence_provided, per_property_verdicts, overall_verdict, cross_cutting_issues_detected }"
+  - id: evidence-coverage-sanity-check
+    description: >
+      After the judge renders its verdict, a mechanical sanity check validates that evidence
+      coverage is mathematically sound. If the spec has N properties but the evidence corpus
+      contains evidence for significantly fewer than N, the sanity check fails the entire
+      verification regardless of the judge's verdict. This prevents the judge from declaring
+      success based on thin evidence. The threshold must be strict — for example, 35 properties
+      but only 2 pieces of evidence is an automatic fail.
+    verification: agent
+    validation_plan: |
+      1. Run verify with a spec that has many properties but provide evidence for only a few
+      2. Verify the sanity check detects the evidence gap and fails the verification even if
+         the judge approved the few pieces that were present
+      3. Run verify with complete evidence and verify the sanity check passes
+      4. Verify the sanity check reports: total properties, evidence pieces found, coverage
+         ratio, and pass/fail
+      5. Fail if incomplete evidence can pass verification when the judge approves
+    evidence_format: "{ total_properties, evidence_pieces, coverage_ratio, sanity_check_result, judge_overridden }"
 
 claims:
   - id: closed-world-verify-contract
@@ -167,6 +441,37 @@ claims:
       PR diffs, and reports as inputs to mutation rather than as a lint-style end product.
     grounded_by:
       requirements: ["evolve-user-intent-guidance"]
+  - id: capture-any-target
+    description: >
+      Specify can capture behavior from any target system — web, API, or CLI — through
+      autonomous agent-driven exploration that goes beyond passive recording to actively
+      interact with the target and discover its full behavioral surface.
+    grounded_by:
+      requirements: ["capture-autonomous-exploration", "capture-cli-targets"]
+  - id: spec-driven-tdd
+    description: >
+      Given a spec, Specify can orchestrate a provably-correct implementation through
+      iterative red/green/verify cycles where Specify emits structured prompts for each
+      phase, the agent gathers evidence and implements, and a holistic judge with
+      closed-world enforcement evaluates correctness.
+    grounded_by:
+      requirements: ["spec-driven-implementation-guidance", "closed-world-verification", "tdd-loop-orchestration"]
+  - id: impersonate-from-capture
+    description: >
+      Specify can impersonate a captured system by augmenting observed traffic with
+      semantically coherent synthetic data and standing up a mock server that interpolates
+      plausible responses for requests not seen in the original capture.
+    grounded_by:
+      requirements: ["impersonate-synthetic-augmentation", "impersonate-mock-standup", "impersonate-interpolation-quality"]
+  - id: verify-orchestration-architecture
+    description: >
+      Verify operates as an LLM orchestration harness with a hybrid approach: it generates
+      structured prompts for agents, provides mechanical assertion tools for deterministic
+      checks (exit codes, text matching, JSON schema), delegates behavioral judgment to a
+      holistic evidence judge, and validates evidence coverage with a mechanical sanity check.
+      The LLM drives orchestration while Specify provides the tooling.
+    grounded_by:
+      requirements: ["verify-as-prompt-generation", "evidence-judge-holistic-evaluation", "evidence-coverage-sanity-check"]
 
 cli:
   binary: "./specify"
