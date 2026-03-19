@@ -146,6 +146,9 @@ export interface Spec {
   /** Path to companion narrative document (relative to spec file). */
   narrative_path?: string;
 
+  /** Embedded narrative sections with prose and grouped requirements. */
+  narrative?: NarrativeSection[];
+
   /** Behavioral requirements that need agent intelligence to validate. */
   requirements?: Requirement[];
 }
@@ -205,6 +208,28 @@ export interface Requirement {
    * Each check is a CLI command spec run against the spec's cli.binary.
    */
   checks?: CliCommandSpec[];
+
+  /** Optional human-readable narrative context for this requirement. */
+  narrative?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Narrative sections (embedded prose)
+// ---------------------------------------------------------------------------
+
+/** A narrative section that groups related requirements and spec items with prose. */
+export interface NarrativeSection {
+  /** Section title. */
+  section: string;
+
+  /** Human-readable prose describing this capability area. */
+  prose: string;
+
+  /** Requirements defined within this narrative section. */
+  requirements?: Requirement[];
+
+  /** IDs of other spec items (CLI commands, claims, etc.) that this section covers. */
+  covers?: string[];
 }
 
 // ---------------------------------------------------------------------------

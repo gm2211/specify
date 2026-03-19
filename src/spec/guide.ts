@@ -229,6 +229,38 @@ export function getAuthoringGuide(): AuthoringGuide {
           text: "Unknown option"`,
       },
       {
+        name: 'Narrative sections with embedded requirements',
+        description: 'Embed prose and requirements directly in the spec YAML instead of a separate markdown file',
+        yaml_snippet: `narrative:
+  - section: "Capture & Spec Generation"
+    prose: >
+      The tool captures live application behavior and generates
+      machine-verifiable specs from observed interactions.
+    requirements:
+      - id: capture-autonomous-exploration
+        description: >
+          Autonomous capture mode discovers pages and interactions
+          without human guidance.
+        narrative: >
+          This is the core value prop — zero-effort spec generation.
+        verification: agent
+        validation_plan: |
+          1. Start capture in autonomous mode
+          2. Verify discovered pages match known app routes
+    covers:
+      - capture-no-url
+      - capture-invalid-url
+  - section: "Verification"
+    prose: >
+      Verification validates that application behavior matches
+      spec requirements using both mechanical and agent-based checks.
+    requirements:
+      - id: closed-world-verification
+        description: >
+          All claims must be grounded by passing checks.
+        verification: mechanical`,
+      },
+      {
         name: 'Defaults and assumptions',
         description: 'Global properties and preconditions for the spec',
         yaml_snippet: `defaults:
@@ -330,6 +362,8 @@ assumptions:
       'For behavioral requirements that need judgment to verify, include a validation plan in comments: what steps an agent should take, what evidence to produce, and what "passing" looks like.',
       'Write descriptions as if briefing an agent: clear enough that an agent can read the requirement, make a plan to validate it, and provide structured evidence without needing to ask for clarification.',
       'To verify a behavioral requirement, agents write evidence to .specify/evidence/<requirement-id>.json with format: { requirement_id, status: "passed"|"failed", timestamp, agent, evidence: { ... } }. The verify command reads this file and marks the requirement accordingly.',
+      'Use the top-level "narrative" field to embed prose sections directly in the spec YAML — this keeps human-readable context co-located with the requirements it describes, eliminating the need for a separate narrative markdown file.',
+      'Each narrative section can define requirements inline and reference other spec items via "covers" — this groups related concerns while keeping the spec as the single source of truth.',
       'Use "specify capture --interactive" to open a headed browser for human recording sessions, or "specify capture --explore" for autonomous page discovery.',
       'Use "specify verify --history-dir .specify/history" to save verification results, then "specify report stats --history-dir .specify/history" to see statistical confidence grow over time.',
     ],

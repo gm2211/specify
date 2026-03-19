@@ -99,11 +99,16 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
   }
 
   // Include behavioral requirements from the spec
+  // Merge requirements from top-level and narrative sections
   // Strategy: if a requirement has inline checks, run them directly.
   // Otherwise, fall back to .specify/evidence/<id>.json files.
   const evidenceDir = path.join(process.cwd(), '.specify', 'evidence');
   const requirements: RequirementResult[] = [];
-  for (const req of spec.requirements ?? []) {
+  const allRequirements = [
+    ...(spec.requirements ?? []),
+    ...(spec.narrative ?? []).flatMap(s => s.requirements ?? []),
+  ];
+  for (const req of allRequirements) {
     if (req.checks?.length && cliSpec) {
       // Property-based evaluation: run inline checks
       const result = await evaluateRequirementChecks(req, cliSpec, allRuns, log);

@@ -78,8 +78,14 @@ export const specSchema = {
             description: 'Inline property checks — CLI commands with assertions that verify evaluates directly.',
             items: { $ref: '#/$defs/CliCommandSpec' },
           },
+          narrative: { type: 'string', description: 'Optional human-readable narrative context for this requirement.' },
         },
       },
+    },
+    narrative: {
+      type: 'array',
+      description: 'Embedded narrative sections with prose and grouped requirements.',
+      items: { $ref: '#/$defs/NarrativeSection' },
     },
   },
 
@@ -102,6 +108,46 @@ export const specSchema = {
         commands: { type: 'array', items: { type: 'string' } },
         scenarios: { type: 'array', items: { type: 'string' } },
         requirements: { type: 'array', items: { type: 'string' } },
+      },
+    },
+
+    // -------------------------------------------------------------------
+    // NarrativeSection (embedded prose with grouped requirements)
+    // -------------------------------------------------------------------
+    NarrativeSection: {
+      type: 'object',
+      required: ['section', 'prose'],
+      additionalProperties: false,
+      properties: {
+        section: { type: 'string', description: 'Section title.' },
+        prose: { type: 'string', description: 'Human-readable prose describing this capability area.' },
+        requirements: {
+          type: 'array',
+          description: 'Requirements defined within this narrative section.',
+          items: {
+            type: 'object',
+            required: ['id', 'description', 'verification'],
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string', description: 'Unique identifier for this requirement.' },
+              description: { type: 'string', description: 'What should be true — clear enough for an agent to plan validation.' },
+              verification: { type: 'string', enum: ['mechanical', 'agent'], description: 'How this requirement is verified.' },
+              validation_plan: { type: 'string', description: 'Steps an agent should take to validate this requirement.' },
+              evidence_format: { type: 'string', description: 'What evidence the agent should produce.' },
+              checks: {
+                type: 'array',
+                description: 'Inline property checks — CLI commands with assertions that verify evaluates directly.',
+                items: { $ref: '#/$defs/CliCommandSpec' },
+              },
+              narrative: { type: 'string', description: 'Optional human-readable narrative context for this requirement.' },
+            },
+          },
+        },
+        covers: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'IDs of other spec items (CLI commands, claims, etc.) that this section covers.',
+        },
       },
     },
 

@@ -280,6 +280,81 @@ export function lintSpec(spec: Spec, specPath?: string): LintError[] {
     }
   }
 
+  // Rule: duplicate requirement IDs (across top-level and narrative sections)
+  const allRequirementIds = new Map<string, string>(); // id -> location
+  for (let i = 0; i < (spec.requirements?.length ?? 0); i++) {
+    const req = spec.requirements![i];
+    if (allRequirementIds.has(req.id)) {
+      errors.push({
+        path: `/requirements/${i}/id`,
+        severity: 'error',
+        message: `Duplicate requirement ID "${req.id}" (also at ${allRequirementIds.get(req.id)})`,
+        rule: 'duplicate-requirement-id',
+      });
+    } else {
+      allRequirementIds.set(req.id, `/requirements/${i}`);
+    }
+  }
+
+  // Rule: validate narrative sections
+  for (let i = 0; i < (spec.narrative?.length ?? 0); i++) {
+    const section = spec.narrative![i];
+
+    // Section title must be non-empty
+    if (!section.section || section.section.trim() === '') {
+      errors.push({
+        path: `/narrative/${i}/section`,
+        severity: 'error',
+        message: `Narrative section at index ${i} has an empty title`,
+        rule: 'narrative-empty-section-title',
+      });
+    }
+
+    // Check requirements inside narrative sections for duplicate IDs
+    for (let j = 0; j < (section.requirements?.length ?? 0); j++) {
+      const req = section.requirements![j];
+      const location = `/narrative/${i}/requirements/${j}`;
+      if (allRequirementIds.has(req.id)) {
+        errors.push({
+          path: `${location}/id`,
+          severity: 'error',
+          message: `Duplicate requirement ID "${req.id}" (also at ${allRequirementIds.get(req.id)})`,
+          rule: 'duplicate-requirement-id',
+        });
+      } else {
+        allRequirementIds.set(req.id, location);
+      }
+    }
+  }
+
+  // Rule: narrative covers references should point to existing spec items
+  // Build set of all known spec item IDs for covers validation
+  const allSpecItemIds = new Set<string>();
+  for (const cmd of spec.cli?.commands ?? []) allSpecItemIds.add(cmd.id);
+  for (const scenario of spec.cli?.scenarios ?? []) allSpecItemIds.add(scenario.id);
+  for (const claim of spec.claims ?? []) allSpecItemIds.add(claim.id);
+  for (const req of spec.requirements ?? []) allSpecItemIds.add(req.id);
+  for (const page of spec.pages ?? []) allSpecItemIds.add(page.id);
+  for (const flow of spec.flows ?? []) allSpecItemIds.add(flow.id);
+  for (const section of spec.narrative ?? []) {
+    for (const req of section.requirements ?? []) allSpecItemIds.add(req.id);
+  }
+
+  for (let i = 0; i < (spec.narrative?.length ?? 0); i++) {
+    const section = spec.narrative![i];
+    for (let j = 0; j < (section.covers?.length ?? 0); j++) {
+      const coverId = section.covers![j];
+      if (!allSpecItemIds.has(coverId)) {
+        errors.push({
+          path: `/narrative/${i}/covers/${j}`,
+          severity: 'warning',
+          message: `Narrative section "${section.section}" covers unknown spec item "${coverId}"`,
+          rule: 'narrative-covers-invalid-ref',
+        });
+      }
+    }
+  }
+
   // Rule: claim definitions and grounding
   const claimIds = new Map<string, number>();
   for (let i = 0; i < (spec.claims?.length ?? 0); i++) {
@@ -329,9 +404,8 @@ export function lintSpec(spec: Spec, specPath?: string): LintError[] {
         });
       }
     }
-    const requirementIds = new Set((spec.requirements ?? []).map(req => req.id));
     for (const requirementId of claim.grounded_by.requirements ?? []) {
-      if (!requirementIds.has(requirementId)) {
+      if (!allRequirementIds.has(requirementId)) {
         errors.push({
           path: `/claims/${i}/grounded_by/requirements`,
           severity: 'error',
@@ -446,9 +520,14 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   for (const scenario of spec.cli?.scenarios ?? []) {
     validRefs.add(`cli:${scenario.id}`);
   }
-  // Requirement refs
+  // Requirement refs (top-level and from narrative sections)
   for (const req of spec.requirements ?? []) {
     validRefs.add(`requirement:${req.id}`);
+  }
+  for (const section of spec.narrative ?? []) {
+    for (const req of section.requirements ?? []) {
+      validRefs.add(`requirement:${req.id}`);
+    }
   }
   for (const claim of spec.claims ?? []) {
     validRefs.add(`claim:${claim.id}`);
