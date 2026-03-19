@@ -1416,9 +1416,9 @@ cli:
 
     - id: human-shows-lifecycle
       description: >
-        When the human wizard starts (even without a TTY), it outputs the four lifecycle
+        When the human wizard starts (even without a TTY), it outputs the five primary lifecycle
         flows to stderr: Create (author a new spec), Capture (record from live or code),
-        Review (inspect in browser), and Verify (check implementation). These are the core
+        Review (inspect in browser), Verify (check implementation), and Evolve (improve via gap analysis). These are the core
         product concepts that organize all of Specify's functionality.
       args: ["human"]
       expected_exit_code: 0
@@ -1435,6 +1435,9 @@ cli:
         - type: text_contains
           description: "Shows the Verify flow for checking implementations against contracts"
           text: "Verify"
+        - type: text_contains
+          description: "Shows the Evolve flow for improving specs via gap analysis, PR changes, or reports"
+          text: "Evolve"
 
     # -------------------------------------------------------------------
     # Wizard direct paths — every sub-path is addressable and tested
@@ -1483,6 +1486,39 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Capture"
+
+    - id: human-evolve-interactive-path
+      description: >
+        "human evolve interactive" jumps directly to the interactive evolution workflow,
+        which performs gap analysis on a spec and suggests improvements. The command outputs
+        "Evolve" to stderr confirming the correct flow was entered.
+      args: ["human", "evolve", "interactive"]
+      expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          text: "Evolve"
+
+    - id: human-evolve-pr-path
+      description: >
+        "human evolve pr" jumps directly to the PR-driven evolution workflow, which analyzes
+        a pull request's changes and suggests spec updates to match. The command outputs
+        "Evolve" to stderr confirming the correct flow was entered.
+      args: ["human", "evolve", "pr"]
+      expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          text: "Evolve"
+
+    - id: human-evolve-report-path
+      description: >
+        "human evolve report" jumps directly to the report-driven evolution workflow, which
+        analyzes a gap report to suggest targeted spec improvements based on validation
+        results. The command outputs "Evolve" to stderr confirming the correct flow.
+      args: ["human", "evolve", "report"]
+      expected_exit_code: 0
+      stderr_assertions:
+        - type: text_contains
+          text: "Evolve"
 
     - id: human-review-path
       description: >
