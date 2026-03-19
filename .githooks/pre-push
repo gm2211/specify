@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# pre-push hook — auto-bump semver patch if version hasn't changed since last push.
+#
+# Git supplies the remote name and URL as arguments, and feeds lines of the form:
+#   <local ref> <local sha> <remote ref> <remote sha>
+# on stdin.
+
+set -euo pipefail
+
+REMOTE="$1"
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Read push info from stdin
+while read -r local_ref local_sha remote_ref remote_sha; do
+  # Skip delete pushes
+  if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # If remote_sha is all zeros, this is a new branch — no remote version to compare
+  if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+    echo "pre-push: New branch, skipping version bump."
+    continue
+  fi
+
+  # Get version on the local branch
+  local_version=$(git show "$local_sha:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+
+  # Get version on the remote branch
+  remote_version=$(git show "$remote_sha:package.json" 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+
+  if [ -z "$local_version" ] || [ -z "$remote_version" ]; then
+    echo "pre-push: Could not read version from package.json, skipping bump."
+    continue
+  fi
+
+  if [ "$local_version" = "$remote_version" ]; then
+    echo "pre-push: Version unchanged ($local_version). Auto-bumping patch..."
+
+    # Bump the version
+    new_version=$("$REPO_ROOT/scripts/bump-version.sh")
+
+    # Stage and amend the last commit
+    git add "$REPO_ROOT/package.json"
+    git commit --amend --no-edit
+
+    echo "pre-push: Version bumped to $new_version. Amended last commit."
+  else
+    echo "pre-push: Version already bumped ($remote_version -> $local_version). No action needed."
+  fi
+done
+
+exit 0
