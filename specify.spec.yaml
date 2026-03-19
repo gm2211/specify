@@ -5,9 +5,11 @@ description: >
   functional verification of web applications. Specify follows an agent-first design:
   structured JSON goes to stdout for machine consumption, human-readable messages go
   to stderr, and meaningful exit codes enable branching without parsing. The CLI uses
-  a noun-verb command pattern (e.g., spec validate, verify cli, report diff) and provides
+  a command structure with noun-verb forms where useful (e.g., spec validate, report diff)
+  and unified top-level workflows like verify that infer mode from the spec and flags. It
+  provides
   schema introspection so agents can discover capabilities at runtime. This spec serves
-  as both (1) a mechanically verifiable test suite executed by `specify verify cli`, and
+  as both (1) a mechanically verifiable test suite executed by `specify verify --spec specify.spec.yaml`, and
   (2) a set of behavioral requirements that guide agents to validate properties requiring
   judgment. The tool itself is fully deterministic — no API keys, no LLM calls —
   intelligence comes from the agent layer that drives it.
@@ -22,7 +24,7 @@ requirements:
       subcommands that a user can follow — for example:
       specify human → Verify → Against captured data,
       specify capture --from code --input ...,
-      specify verify cli --spec ....
+      specify verify --spec ....
     verification: agent
     validation_plan: |
       1. Discover all command paths:
@@ -142,9 +144,6 @@ cli:
         - type: text_contains
           description: "The top-level verify alias (unified verification dispatcher for data, agent, or CLI modes) must appear as a standalone command"
           text: "\"name\": \"verify\""
-        - type: text_contains
-          description: "The verify cli subcommand (explicit path to CLI test runner) must appear in the manifest"
-          text: "verify cli"
         - type: text_contains
           description: "The top-level lint alias (convenience shortcut that delegates to spec lint) must appear as a standalone command"
           text: "\"name\": \"lint\""
@@ -431,7 +430,7 @@ cli:
         - type: json_path
           description: "The evolve summary reports the exact number of CLI command test entries in this spec file"
           path: "spec_summary.cli_command_count"
-          value: 80
+          value: 78
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -887,19 +886,6 @@ cli:
           path: "spec_summary.page_count"
           value: 1
 
-    - id: verify-cli-top-level
-      description: >
-        The "verify cli" subcommand routes to the CLI verification engine, which executes
-        command entries defined in a spec's cli section. When the target spec has no cli
-        section (like login-page.yaml which only has pages), it fails with exit code 10 and
-        reports "no cli section". This verifies the routing from the top-level verify
-        dispatcher to CLI verification.
-      args: ["verify", "cli", "--spec", "src/spec/examples/login-page.yaml"]
-      expected_exit_code: 10
-      stderr_assertions:
-        - type: text_contains
-          text: "no cli section"
-
     - id: verify-capture-top-level
       description: >
         The "verify --capture" flag routes to spec validate (offline data validation mode).
@@ -1352,22 +1338,6 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Verify"
-
-    - id: human-verify-cli-path
-      description: >
-        "human verify cli" jumps directly to the CLI verification workflow. When pointed at
-        a spec with no cli section (login-page.yaml), it fails with exit code 10 and reports
-        both "Verify" (confirming the wizard path) and "no cli section" (the underlying CLI
-        verification error). This tests the full routing chain from wizard to CLI
-        verification.
-      args: ["human", "verify", "cli", "--spec", "src/spec/examples/login-page.yaml"]
-      expected_exit_code: 10
-      stderr_assertions:
-        - type: text_contains
-          text: "Verify"
-        - type: text_contains
-          description: "The wizard delegates to CLI verification, which reports the spec has no cli section to execute"
-          text: "no cli section"
 
     - id: human-verify-diff-path
       description: >

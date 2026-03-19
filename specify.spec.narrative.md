@@ -130,7 +130,6 @@ If a narrative references a spec item that no longer exists (e.g., `<!~~ spec:pa
 ### Verify
 <!-- spec:cli:verify-auto-detects-cli -->
 <!-- spec:cli:verify-requirements-fail-not-untested -->
-<!-- spec:cli:verify-cli-top-level -->
 <!-- spec:cli:verify-capture-top-level -->
 <!-- spec:cli:verify-url-no-browser -->
 
@@ -138,10 +137,9 @@ Checking that an implementation matches the contract. Verify is the assertion en
 
 Verify auto-detects its mode from the spec content and the flags provided:
 
-**CLI verification** (`verify cli` or auto-detected when spec has a `cli` section): Runs each command defined in the spec's `cli.commands` array, checks exit codes, and evaluates stdout/stderr assertions. This is fully deterministic -- the tool executes the binary, captures output, and compares against the spec.
+**CLI verification** (`verify --spec ...` when the spec has a `cli` section and no `--url`/`--capture`): Runs each command defined in the spec's `cli.commands` array, checks exit codes, and evaluates stdout/stderr assertions. This is fully deterministic -- the tool executes the binary, captures output, and compares against the spec.
 
 ```
-$ specify verify cli --spec spec.yaml
 $ specify verify --spec spec.yaml   # auto-detects cli section
 ```
 
@@ -399,7 +397,7 @@ These are deterministic checks that the tool evaluates directly:
 - **element_exists**: A CSS selector matches at least one DOM element.
 - **element_count**: The count of matching elements is within bounds.
 
-These are checked by `verify cli` for CLI specs, and by `verify --url` or `verify --capture` for page specs. No judgment is needed. The tool compares expected against actual and reports pass or fail.
+These are checked by `verify --spec` for CLI specs, and by `verify --url` or `verify --capture` for page specs. No judgment is needed. The tool compares expected against actual and reports pass or fail.
 
 ### Behavioral Requirements
 <!-- spec:requirement:full-path-coverage -->
@@ -661,7 +659,6 @@ Lint computes facts. It does not suggest improvements (that is evolve's job) or 
 <!-- spec:cli:human-review-path -->
 <!-- spec:cli:human-verify-data-path -->
 <!-- spec:cli:human-verify-agent-path -->
-<!-- spec:cli:human-verify-cli-path -->
 <!-- spec:cli:human-verify-diff-path -->
 <!-- spec:cli:human-verify-stats-path -->
 
@@ -679,7 +676,6 @@ $ specify human evolve report
 $ specify human review
 $ specify human verify data
 $ specify human verify agent
-$ specify human verify cli
 $ specify human verify diff
 $ specify human verify stats
 ```
@@ -704,7 +700,7 @@ All interactive modes exit gracefully when no TTY is available. This is importan
 
 1. **CLAUDE.md section**: Instructions for AI agents describing the red-green TDD workflow with Specify. The section is wrapped in marker comments (`<!-- specify-bootstrap -->`) for idempotent updates.
 
-2. **Git pre-commit hook**: A shell script that runs `specify lint` and `specify verify cli` before allowing commits. It finds the specify binary (checking `./specify` first, then `PATH`), runs both checks, and blocks the commit if either fails.
+2. **Git pre-commit hook**: A shell script that runs `specify lint` and `specify verify --spec ...` before allowing commits. It finds the specify binary (checking `./specify` first, then `PATH`), runs both checks, and blocks the commit if either fails.
 
 The workflow the bootstrap section teaches is:
 
@@ -714,7 +710,7 @@ The workflow the bootstrap section teaches is:
 
 3. **Implement the change (GREEN)** -- write code to make the failing assertions pass.
 
-4. **Verify** -- run `specify lint` (structure valid?) then `specify verify cli` (assertions pass?).
+4. **Verify** -- run `specify lint` (structure valid?) then `specify verify --spec ...` (assertions pass?).
 
 5. **Commit spec + code together** -- the contract and implementation travel as one unit.
 
@@ -731,7 +727,7 @@ $ specify bootstrap --target-dir ./my-project
 The bootstrap instructions include explicit rules:
 
 - Never skip the evolve step, even for "obvious" changes.
-- If `verify cli` fails, fix the code -- not the spec (unless the spec is genuinely wrong).
+- If `verify --spec ...` fails, fix the code -- not the spec (unless the spec is genuinely wrong).
 - `lint` computes facts. `evolve` guides thinking. Do not confuse them.
 
 
@@ -781,7 +777,7 @@ This means most commands work without flags in a project that has a single spec 
 ```
 $ specify lint                     # finds spec.yaml or *.spec.yaml
 $ specify evolve                   # finds and analyzes the spec
-$ specify verify cli               # finds the spec and runs CLI checks
+$ specify verify                   # finds the spec and infers verification mode
 ```
 
 Explicit `--spec` always takes precedence over auto-discovery.
@@ -829,7 +825,7 @@ Several boundaries in Specify's design are deliberate and should be preserved.
 
 Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines a large CLI command suite with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage).
 
-Running `specify verify cli --spec specify.spec.yaml` executes every command in the self-spec and reports pass/fail results. This is the primary test suite for the Specify CLI -- the tool verifies itself using its own verification engine.
+Running `specify verify --spec specify.spec.yaml` executes every command in the self-spec and reports pass/fail results. This is the primary test suite for the Specify CLI -- the tool verifies itself using its own verification engine.
 
 The self-spec covers several categories:
 
