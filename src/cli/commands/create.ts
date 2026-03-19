@@ -22,6 +22,14 @@ export interface CreateOptions {
   narrative?: string;
 }
 
+export function deriveNarrativePath(specPath: string): string {
+  if (/\.(ya?ml|json)$/i.test(specPath)) {
+    return specPath.replace(/\.(ya?ml|json)$/i, '.narrative.md');
+  }
+
+  return `${specPath}.narrative.md`;
+}
+
 export async function create(options: CreateOptions): Promise<number> {
   const rl = readline.createInterface({
     input: process.stdin,
@@ -79,7 +87,7 @@ export async function create(options: CreateOptions): Promise<number> {
 
     // Determine output paths
     const specPath = options.output ?? 'spec.yaml';
-    const narrativePath = options.narrative ?? specPath.replace(/\.(ya?ml|json)$/, '.narrative.md');
+    const narrativePath = options.narrative ?? deriveNarrativePath(specPath);
 
     // Link them
     narrative.specPath = specPath;

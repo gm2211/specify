@@ -37,7 +37,10 @@ export async function specValidate(options: SpecValidateOptions, ctx: CliContext
   // Check assumptions
   if (spec.assumptions?.length) {
     try {
-      const assumptionResults = await validateAssumptions(spec.assumptions);
+      const assumptionResults = await validateAssumptions(spec.assumptions, {
+        variables: spec.variables,
+        baseUrl: spec.variables?.base_url,
+      });
       if (!allAssumptionsMet(assumptionResults)) {
         const failedAssumptions = assumptionResults.filter(a => a.status === 'failed');
         if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {

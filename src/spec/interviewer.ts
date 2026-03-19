@@ -409,7 +409,7 @@ function buildSpec(ctx: InterviewContext): Spec {
   const assumptions: Assumption[] = [
     {
       type: 'url_reachable',
-      url: '{{base_url}}',
+      url: ctx.baseUrl,
       description: `${ctx.productName} is running`,
     },
   ];

@@ -564,6 +564,15 @@ function validateFlowStep(
   // ActionFlowStep (ScenarioStep discriminated union)
   if ('action' in step) {
     if (step.action === 'wait_for_request') {
+      if (!step.url_pattern) {
+        return {
+          type: 'action',
+          description: step.description,
+          status: 'untested',
+          reason: 'wait_for_request step is missing url_pattern',
+        };
+      }
+
       const method = step.method?.toUpperCase();
       const found = capture.traffic.some(
         (t) =>
@@ -580,6 +589,15 @@ function validateFlowStep(
     }
 
     if (step.action === 'wait_for_navigation') {
+      if (!step.url_pattern) {
+        return {
+          type: 'action',
+          description: step.description,
+          status: 'untested',
+          reason: 'wait_for_navigation step is missing url_pattern',
+        };
+      }
+
       const found = navigationTraffic.some((t) =>
         matchUrlPattern(t.url, step.url_pattern),
       );

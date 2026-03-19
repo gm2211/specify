@@ -13,6 +13,11 @@ import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
 
+type CapturePage = {
+  goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
+  waitForLoadState(state: 'load', options: { timeout: number }): Promise<void>;
+};
+
 export interface CaptureOptions {
   url: string;
   output: string;
@@ -25,6 +30,25 @@ export interface CaptureOptions {
   ignoreHttpsErrors?: boolean;
   interactive?: boolean;
   explore?: boolean;
+}
+
+export async function navigateWithLoadFallback(
+  page: CapturePage,
+  url: string,
+  timeout: number,
+  log: (msg: string) => void,
+): Promise<void> {
+  try {
+    await page.goto(url, { waitUntil: 'networkidle', timeout });
+  } catch (err) {
+    if (!(err instanceof Error) || err.name !== 'TimeoutError') {
+      throw err;
+    }
+
+    // Busy pages can keep connections open forever after the initial document load.
+    log('networkidle timed out, waiting for load on current page...');
+    await page.waitForLoadState('load', { timeout });
+  }
 }
 
 export async function capture(options: CaptureOptions, ctx: CliContext): Promise<number> {
@@ -112,18 +136,12 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     // Navigate
     log(`Navigating to ${navigateUrl}...`);
     try {
-      await page.goto(navigateUrl, { waitUntil: 'networkidle', timeout });
+      await navigateWithLoadFallback(page, navigateUrl, timeout, log);
     } catch (err) {
-      // networkidle can time out on busy pages — fall back to load
-      log(`networkidle timed out, waiting for load...`);
-      try {
-        await page.goto(navigateUrl, { waitUntil: 'load', timeout });
-      } catch (err2) {
-        const msg = err2 instanceof Error ? err2.message : String(err2);
-        log(`Navigation failed: ${msg}`);
-        process.stdout.write(JSON.stringify({ error: 'network_error', message: msg }) + '\n');
-        return ExitCode.NETWORK_ERROR;
-      }
+      const msg = err instanceof Error ? err.message : String(err);
+      log(`Navigation failed: ${msg}`);
+      process.stdout.write(JSON.stringify({ error: 'network_error', message: msg }) + '\n');
+      return ExitCode.NETWORK_ERROR;
     }
 
     // Take a screenshot of the loaded page

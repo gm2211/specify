@@ -18,23 +18,23 @@ import type { AssumptionResult, CheckStatus } from './types.js';
  */
 export async function validateAssumptions(
   assumptions: Assumption[],
-  ctx?: { baseUrl?: string },
+  ctx?: { baseUrl?: string; variables?: Record<string, string> },
 ): Promise<AssumptionResult[]> {
   const results: AssumptionResult[] = [];
 
   for (const assumption of assumptions) {
     switch (assumption.type) {
       case 'url_reachable':
-        results.push(await checkUrlReachable(assumption));
+        results.push(await checkUrlReachable(assumption, ctx));
         break;
       case 'env_var_set':
         results.push(checkEnvVarSet(assumption));
         break;
       case 'api_returns':
-        results.push(await checkApiReturns(assumption));
+        results.push(await checkApiReturns(assumption, ctx));
         break;
       case 'selector_exists':
-        results.push(await checkSelectorExists(assumption));
+        results.push(await checkSelectorExists(assumption, ctx));
         break;
     }
   }
@@ -47,9 +47,11 @@ export async function validateAssumptions(
  */
 async function checkUrlReachable(
   assumption: { type: 'url_reachable'; url: string; description?: string },
+  ctx?: { baseUrl?: string; variables?: Record<string, string> },
 ): Promise<AssumptionResult> {
+  const url = resolveAssumptionUrl(assumption.url, ctx);
   try {
-    const response = await fetch(assumption.url, {
+    const response = await fetch(url, {
       method: 'HEAD',
       signal: AbortSignal.timeout(10000),
     });
@@ -98,9 +100,11 @@ async function checkApiReturns(
     status?: number;
     description?: string;
   },
+  ctx?: { baseUrl?: string; variables?: Record<string, string> },
 ): Promise<AssumptionResult> {
+  const url = resolveAssumptionUrl(assumption.url, ctx);
   try {
-    const response = await fetch(assumption.url, {
+    const response = await fetch(url, {
       method: assumption.method ?? 'GET',
       signal: AbortSignal.timeout(10000),
     });
@@ -137,6 +141,7 @@ async function checkSelectorExists(
     selector: string;
     description?: string;
   },
+  _ctx?: { baseUrl?: string; variables?: Record<string, string> },
 ): Promise<AssumptionResult> {
   // selector_exists requires a browser; for passive validation, mark as untested
   return {
@@ -145,6 +150,25 @@ async function checkSelectorExists(
     status: 'untested' as CheckStatus,
     reason: 'selector_exists assumptions require active browser execution',
   };
+}
+
+function resolveAssumptionUrl(
+  template: string,
+  ctx?: { baseUrl?: string; variables?: Record<string, string> },
+): string {
+  const variables: Record<string, string> = { ...(ctx?.variables ?? {}) };
+  if (ctx?.baseUrl) {
+    variables.base_url = ctx.baseUrl;
+  }
+
+  const withEnvVars = template.replace(/\$\{([^}]+)\}/g, (match, key: string) => {
+    return process.env[key] ?? match;
+  });
+
+  return withEnvVars.replace(/\{\{([^}]+)\}\}/g, (match, key: string) => {
+    const resolved = variables[key.trim()];
+    return resolved ?? match;
+  });
 }
 
 /**
