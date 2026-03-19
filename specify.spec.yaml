@@ -5,7 +5,7 @@ description: >
   functional verification of web applications. Specify follows an agent-first design:
   structured JSON goes to stdout for machine consumption, human-readable messages go
   to stderr, and meaningful exit codes enable branching without parsing. The CLI uses
-  a noun-verb command pattern (e.g., spec validate, cli run, report diff) and provides
+  a noun-verb command pattern (e.g., spec validate, verify cli, report diff) and provides
   schema introspection so agents can discover capabilities at runtime. This spec serves
   as both (1) a mechanically verifiable test suite executed by `specify verify cli`, and
   (2) a set of behavioral requirements that guide agents to validate properties requiring
@@ -112,9 +112,6 @@ cli:
         - type: text_contains
           description: "The agent run command (autonomous browser-driven verification against a live system) must appear in the manifest"
           text: "agent run"
-        - type: text_contains
-          description: "The cli run command (execute CLI-section tests defined in a spec) must appear in the manifest"
-          text: "cli run"
         - type: text_contains
           description: "The report diff command (compare two gap reports to see what changed) must appear in the manifest"
           text: "report diff"
@@ -434,7 +431,7 @@ cli:
         - type: json_path
           description: "The evolve summary reports the exact number of CLI command test entries in this spec file"
           path: "spec_summary.cli_command_count"
-          value: 81
+          value: 80
 
     # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
@@ -449,21 +446,6 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "Path not found"
-
-    # -------------------------------------------------------------------
-    # CLI run
-    # -------------------------------------------------------------------
-    - id: cli-run-no-cli-section
-      description: >
-        The cli run command executes the test entries defined in a spec's cli section. When
-        pointed at a spec that has no cli section (like the login-page example, which only
-        has pages), it fails with exit code 10 and reports "no cli section" to stderr. This
-        validates that cli run requires the spec to contain CLI test definitions.
-      args: ["cli", "run", "--spec", "src/spec/examples/login-page.yaml"]
-      expected_exit_code: 10
-      stderr_assertions:
-        - type: text_contains
-          text: "no cli section"
 
     # -------------------------------------------------------------------
     # Spec validate (passive validation — no browser)
@@ -907,11 +889,11 @@ cli:
 
     - id: verify-cli-top-level
       description: >
-        The "verify cli" subcommand routes to the CLI test runner (cli run), which executes
+        The "verify cli" subcommand routes to the CLI verification engine, which executes
         command entries defined in a spec's cli section. When the target spec has no cli
         section (like login-page.yaml which only has pages), it fails with exit code 10 and
         reports "no cli section". This verifies the routing from the top-level verify
-        dispatcher to the CLI runner.
+        dispatcher to CLI verification.
       args: ["verify", "cli", "--spec", "src/spec/examples/login-page.yaml"]
       expected_exit_code: 10
       stderr_assertions:
@@ -1373,18 +1355,18 @@ cli:
 
     - id: human-verify-cli-path
       description: >
-        "human verify cli" jumps directly to the CLI verification workflow and then delegates
-        to cli run. When pointed at a spec with no cli section (login-page.yaml), it fails
-        with exit code 10 and reports both "Verify" (confirming the wizard path) and "no cli
-        section" (the underlying error from cli run). This tests the full routing chain from
-        wizard to CLI runner.
+        "human verify cli" jumps directly to the CLI verification workflow. When pointed at
+        a spec with no cli section (login-page.yaml), it fails with exit code 10 and reports
+        both "Verify" (confirming the wizard path) and "no cli section" (the underlying CLI
+        verification error). This tests the full routing chain from wizard to CLI
+        verification.
       args: ["human", "verify", "cli", "--spec", "src/spec/examples/login-page.yaml"]
       expected_exit_code: 10
       stderr_assertions:
         - type: text_contains
           text: "Verify"
         - type: text_contains
-          description: "The wizard delegates to cli run, which reports the spec has no cli section to execute"
+          description: "The wizard delegates to CLI verification, which reports the spec has no cli section to execute"
           text: "no cli section"
 
     - id: human-verify-diff-path

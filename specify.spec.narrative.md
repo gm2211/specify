@@ -266,7 +266,6 @@ When exported to test code via `specify spec export`, multi-page flows produce m
 
 ### CLI
 <!-- spec:cli -->
-<!-- spec:cli:cli-run-no-cli-section -->
 
 The `cli` section defines command-line verification. It specifies a binary to invoke and a set of commands with expected behavior:
 
@@ -828,7 +827,7 @@ Several boundaries in Specify's design are deliberate and should be preserved.
 <!-- spec:cli:no-args-self-description -->
 <!-- spec:cli:evolve-no-pr-flag-ok -->
 
-Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines 77 CLI commands with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage).
+Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines a large CLI command suite with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage).
 
 Running `specify verify cli --spec specify.spec.yaml` executes every command in the self-spec and reports pass/fail results. This is the primary test suite for the Specify CLI -- the tool verifies itself using its own verification engine.
 
