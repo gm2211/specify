@@ -67,7 +67,7 @@ requirements:
             description: "Manifest is a JSON array of command definitions"
             schema:
               type: array
-              minItems: 18
+              minItems: 17
               items:
                 type: object
                 required: ["name", "description"]
@@ -77,9 +77,9 @@ requirements:
                   description:
                     type: string
           - type: json_path
-            description: "Manifest has exactly 18 public commands"
+            description: "Manifest has exactly 17 public commands"
             path: "length"
-            value: 18
+            value: 17
   - id: no-extra-public-behavior
     description: >
       Verify enforces a closed-world public contract: if the binary exposes any reachable
@@ -110,9 +110,9 @@ requirements:
         expected_exit_code: 0
         stdout_assertions:
           - type: json_path
-            description: "Exactly 18 public commands — no extras beyond what spec accounts for"
+            description: "Exactly 17 public commands — no extras beyond what spec accounts for"
             path: "length"
-            value: 18
+            value: 17
       - id: help-output-valid
         description: "Top-level help output lists known commands"
         args: ["--help"]
@@ -154,9 +154,9 @@ requirements:
         expected_exit_code: 0
         stdout_assertions:
           - type: json_path
-            description: "Exactly 18 public commands — no extras beyond what spec accounts for"
+            description: "Exactly 17 public commands — no extras beyond what spec accounts for"
             path: "length"
-            value: 18
+            value: 17
       - id: help-output-valid
         description: "Top-level help output lists known commands"
         args: ["--help"]
@@ -533,13 +533,13 @@ cli:
             type: object
             required: ["name", "version", "commands", "global_options", "exit_codes"]
         - type: json_schema
-          description: "The commands array must list at least 18 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
+          description: "The commands array must list at least 17 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
           schema:
             type: object
             properties:
               commands:
                 type: array
-                minItems: 18
+                minItems: 17
                 items:
                   type: object
                   required: ["name", "description", "parameters"]
@@ -597,9 +597,6 @@ cli:
         - type: text_contains
           description: "The top-level lint alias (convenience shortcut that delegates to spec lint) must appear as a standalone command"
           text: "\"name\": \"lint\""
-        - type: text_contains
-          description: "The bootstrap command (scaffold specify-driven development workflow with CLAUDE.md and git hooks) must appear as a standalone command"
-          text: "\"name\": \"bootstrap\""
 
     - id: version-flag
       description: >
@@ -1232,45 +1229,6 @@ cli:
           value: true
 
     # -------------------------------------------------------------------
-    # Bootstrap command
-    # -------------------------------------------------------------------
-    - id: bootstrap-dry-run
-      description: >
-        The bootstrap command sets up a specify-driven development workflow in a target
-        directory by creating CLAUDE.md (agent instructions) and a git pre-commit hook.
-        With --dry-run, it previews the planned actions as structured JSON without writing
-        any files. The output includes dry_run=true and an actions array where each action
-        specifies what would be created (type, path, description).
-      args: ["bootstrap", "--dry-run", "--target-dir", "/tmp/specify-bootstrap-test"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_schema
-          description: "The dry run output describes planned file operations: each action has a type (create/update), file path, and human-readable description"
-          schema:
-            type: object
-            required: ["actions", "dry_run"]
-            properties:
-              dry_run:
-                type: boolean
-              actions:
-                type: array
-                minItems: 1
-                items:
-                  type: object
-                  required: ["type", "path", "description"]
-
-    - id: bootstrap-in-schema
-      description: >
-        The bootstrap command must be registered in the command manifest so agents can
-        discover it. This verifies "bootstrap" appears in the schema commands output.
-      args: ["schema", "commands"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: text_contains
-          description: "Bootstrap is present in the schema commands output"
-          text: "bootstrap"
-
-    # -------------------------------------------------------------------
     # Schema commands — real JSON Schema with modes
     # -------------------------------------------------------------------
     - id: schema-commands-has-modes
@@ -1296,44 +1254,6 @@ cli:
         - type: text_contains
           description: "The capture command has a from_code mode for importing contracts from existing test code"
           text: "from_code"
-
-    - id: bootstrap-writes-files
-      description: >
-        When bootstrap runs without --dry-run, it actually creates files in the target
-        directory. It writes a CLAUDE.md file (containing agent instructions for working
-        with the project) and a git pre-commit hook (that runs specify lint before each
-        commit). The JSON output reports dry_run=false and lists the actions taken, including
-        references to CLAUDE.md and pre-commit.
-      args: ["bootstrap", "--target-dir", "/tmp/specify-bootstrap-test-write"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_schema
-          description: "Output reports what files were written, with the same structure as dry run"
-          schema:
-            type: object
-            required: ["actions", "dry_run"]
-        - type: json_path
-          path: "dry_run"
-          value: false
-        - type: text_contains
-          description: "Reports that CLAUDE.md was created or updated with agent instructions"
-          text: "CLAUDE.md"
-        - type: text_contains
-          description: "Reports that a pre-commit git hook was created for automated linting"
-          text: "pre-commit"
-
-    - id: bootstrap-idempotent
-      description: >
-        Running bootstrap a second time on the same target directory must succeed (exit 0)
-        without errors. This verifies idempotency — bootstrap should update or skip existing
-        files rather than failing because they already exist. Agents and CI pipelines can
-        safely run bootstrap on every setup without worrying about state.
-      args: ["bootstrap", "--target-dir", "/tmp/specify-bootstrap-test-write"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          path: "dry_run"
-          value: false
 
     # -------------------------------------------------------------------
     # Behavioral requirements must appear in verify output
