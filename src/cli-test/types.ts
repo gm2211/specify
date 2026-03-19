@@ -54,6 +54,8 @@ export interface CliGapReport {
   scenarios: CliScenarioResult[];
   /** Behavioral requirements from the spec, with verification status. */
   requirements?: RequirementResult[];
+  /** Normative claims grounded by commands, scenarios, and/or requirements. */
+  claims?: ClaimResult[];
 }
 
 /** Result for a behavioral requirement. */
@@ -68,6 +70,31 @@ export interface RequirementResult {
   status: 'verified' | 'unverified' | 'failed';
   /** Evidence provided by an agent (empty until an agent validates it). */
   evidence?: unknown;
+}
+
+/** Result for a normative claim grounded by executable checks and/or requirements. */
+export interface ClaimResult {
+  /** Claim ID from the spec. */
+  id: string;
+  /** Claim description. */
+  description: string;
+  /** How the claim was grounded. */
+  groundedBy: {
+    commands: RefStatus[];
+    scenarios: RefStatus[];
+    requirements: RefStatus[];
+  };
+  /** Current status. */
+  status: 'passed' | 'failed';
+  /** Reason for failure, when available. */
+  reason?: string;
+}
+
+/** Status of an individual grounding reference. */
+export interface RefStatus {
+  id: string;
+  status: 'passed' | 'failed' | 'missing';
+  reason?: string;
 }
 
 /** Result of validating one CLI command. */

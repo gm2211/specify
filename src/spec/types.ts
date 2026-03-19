@@ -116,6 +116,12 @@ export interface Spec {
   /** Optional description of what this spec covers. */
   description?: string;
 
+  /** Claims that ground normative prose in executable checks or verified requirements. */
+  claims?: Claim[];
+
+  /** Claim IDs that this top-level description relies on. */
+  description_claims?: string[];
+
   /** Pages/views in the application. */
   pages?: PageSpec[];
 
@@ -142,6 +148,34 @@ export interface Spec {
 
   /** Behavioral requirements that need agent intelligence to validate. */
   requirements?: Requirement[];
+}
+
+// ---------------------------------------------------------------------------
+// Normative claims
+// ---------------------------------------------------------------------------
+
+/** A normative claim grounded by executable checks and/or verified requirements. */
+export interface Claim {
+  /** Unique identifier. */
+  id: string;
+
+  /** Normative statement that should be provably true. */
+  description: string;
+
+  /** How this claim is grounded by mechanical checks or behavioral requirements. */
+  grounded_by: ClaimGrounding;
+}
+
+/** References that prove a claim. All listed refs must pass for the claim to pass. */
+export interface ClaimGrounding {
+  /** Individual CLI command IDs whose successful results ground this claim. */
+  commands?: string[];
+
+  /** CLI scenario IDs whose successful results ground this claim. */
+  scenarios?: string[];
+
+  /** Behavioral requirement IDs whose verified evidence grounds this claim. */
+  requirements?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -195,6 +229,9 @@ export interface CliCommandSpec {
 
   /** Human-readable description. */
   description?: string;
+
+  /** Claim IDs that explicitly ground this command description. */
+  description_claims?: string[];
 
   /** Command-line arguments (each element is one arg). */
   args: string[];
@@ -292,6 +329,8 @@ export interface CliScenarioSpec {
   id: string;
   /** Human-readable description. */
   description?: string;
+  /** Claim IDs that explicitly ground this scenario description. */
+  description_claims?: string[];
   /** Commands to run in sequence. */
   steps: CliCommandSpec[];
 }

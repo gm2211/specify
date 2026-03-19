@@ -64,6 +64,8 @@ Capture validates its inputs early. An empty `--url` returns a structured `missi
 <!-- spec:cli:evolve-no-pr-flag-ok -->
 <!-- spec:cli:evolve-self-spec-finds-cli-gaps -->
 <!-- spec:cli:evolve-top-level -->
+<!-- spec:requirement:evolve-user-intent-guidance -->
+<!-- spec:claim:evolve-intent-guidance-contract -->
 
 Changing a contract as the product changes. Evolve is the agent-guidance step -- it helps an LLM turn user intent into concrete spec edits, without making deterministic assertions about correctness by itself.
 
@@ -299,7 +301,9 @@ cli:
 
 ### Requirements
 <!-- spec:requirements -->
+<!-- spec:claims -->
 <!-- spec:cli:verify-requirements-fail-not-untested -->
+<!-- spec:claim:closed-world-verify-contract -->
 
 Requirements describe behavioral properties that need agent intelligence to validate. They can express both positive coverage claims and closed-world claims about undocumented behavior. They cannot be checked by exit codes or string matching alone:
 
@@ -324,6 +328,8 @@ requirements:
 ```
 
 Each requirement has a `validation_plan` that tells an agent exactly how to verify it, and an `evidence_format` that specifies the structure of the evidence the agent should produce. This is not a suggestion -- it is a contract with the agent. In the self-spec, that contract is closed-world: extra undocumented public behavior is a verification failure, not a harmless implementation detail.
+
+Claims are the bridge between normative prose and verification. A claim is a first-class obligation that grounds a prose statement in either mechanical checks, behavioral requirements, or both. `verify` reports claims separately so a sentence in the spec cannot silently "pass" just because its surrounding command shape still matches.
 
 
 ### Variables

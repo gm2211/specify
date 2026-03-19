@@ -14,6 +14,8 @@ description: >
   judgment. It is also a closed-world public contract: behavior exposed by the binary but
   not accounted for here MUST cause `verify` to fail. The tool itself is fully deterministic — no API keys, no LLM calls —
   intelligence comes from the agent layer that drives it.
+description_claims:
+  - closed-world-verify-contract
 
 narrative_path: specify.spec.narrative.md
 
@@ -63,6 +65,33 @@ requirements:
       5. The assertion passes only if there are no `extra_unaccounted` behaviors and no
          stale public-surface mappings
     evidence_format: "A table of { behavior, discovery_source, mapped_to, status } entries where status is 'covered', 'extra_unaccounted', or 'stale_spec'"
+  - id: evolve-user-intent-guidance
+    description: >
+      The `evolve` contract is stronger than gap reporting. It must guide an LLM to add,
+      remove, or reshape behavior in a spec based on user intent, using gaps, PR diffs, and
+      validation reports as inputs rather than acting like lint.
+    verification: agent
+    validation_plan: |
+      1. Exercise `specify evolve` in interactive, PR, report, and apply modes
+      2. Confirm the outputs are candidate edits or edit workflows, not just issue listings
+      3. Confirm the workflow can respond to explicit user intent to remove or reshape behavior,
+         not only add missing assertions
+      4. Fail if `evolve` behaves only as gap detection / recommendation without intent-guided mutation support
+    evidence_format: "A table of { mode, intent, observed_behavior, status } entries"
+
+claims:
+  - id: closed-world-verify-contract
+    description: >
+      Behavior exposed by the binary but not accounted for in the spec MUST make `verify`
+      fail.
+    grounded_by:
+      requirements: ["no-extra-public-behavior"]
+  - id: evolve-intent-guidance-contract
+    description: >
+      `evolve` must guide add/remove/reshape spec behavior from user intent, treating gaps,
+      PR diffs, and reports as inputs to mutation rather than as a lint-style end product.
+    grounded_by:
+      requirements: ["evolve-user-intent-guidance"]
 
 cli:
   binary: "./specify"
@@ -403,6 +432,8 @@ cli:
         suggestion has an id, category, priority, description, rationale, proposed_change,
         and a question for the user to consider. This gives agents a machine-readable edit
         plan to combine with user intent, rather than a lint-style list of findings.
+      description_claims:
+        - evolve-intent-guidance-contract
       args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:
@@ -429,6 +460,8 @@ cli:
         report the "interactions but no assertions" pattern as a real gap so an agent can
         propose a concrete behavior change to the spec. This validates that evolve is guiding
         spec mutation, not merely reporting schema violations.
+      description_claims:
+        - evolve-intent-guidance-contract
       args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:
@@ -1056,29 +1089,36 @@ cli:
         When "verify" is called without the explicit "cli" subcommand and without --capture
         or --url, it auto-detects the spec's structure. If the spec has a cli section, it
         automatically runs CLI verification. If it also has behavioral requirements (agent-
-        verified properties), the report includes both commands and requirements arrays plus
-        a summary. This test uses a spec that has both a cli section and requirements: the
-        mechanical CLI test passes, but the unverified requirement causes exit code 1.
+        verified properties) and grounded claims, the report includes commands,
+        requirements, claims, and a summary. This test uses a spec that has a cli section,
+        a requirement, and a claim grounded by that requirement: the mechanical CLI test
+        passes, but the unverified requirement keeps both the requirement and the claim
+        failing.
       args: ["verify", "--spec", "src/spec/examples/with-requirements.spec.yaml", "--json"]
       expected_exit_code: 1
       stdout_assertions:
         - type: json_schema
-          description: "The report combines both CLI command results and behavioral requirement results in a unified structure"
+          description: "The report combines CLI command results, behavioral requirement results, and grounded claim results in a unified structure"
           schema:
             type: object
-            required: ["commands", "requirements", "summary"]
+            required: ["commands", "requirements", "claims", "summary"]
         - type: json_path
           description: "The mechanical CLI test (command entry) ran and passed successfully"
           path: "commands.0.status"
           value: "passed"
+        - type: json_path
+          description: "The grounded claim is included in the verify report"
+          path: "claims.0.status"
+          value: "failed"
 
     - id: verify-requirements-fail-not-untested
       description: >
         Behavioral requirements that have not been verified by an agent must count as
         failures (not "untested") in the verify report. This is a deliberate design choice:
         unverified requirements are a risk, so they are surfaced as failures to force
-        attention. The summary shows failed=1 and untested=0, meaning everything has a
-        definitive status — nothing is left in an ambiguous "untested" state.
+        attention. Claims grounded by those requirements must also fail. The summary shows
+        failed=2 and untested=0, meaning everything has a definitive status — nothing is
+        left in an ambiguous "untested" state.
       args: ["verify", "--spec", "src/spec/examples/with-requirements.spec.yaml", "--json"]
       expected_exit_code: 1
       stdout_assertions:
@@ -1087,9 +1127,13 @@ cli:
           path: "requirements.0.status"
           value: "failed"
         - type: json_path
-          description: "The summary counts unverified requirements as failures, reflecting the risk of unverified behavior"
+          description: "The claim grounded by the failed requirement also fails, so prose obligations cannot pass accidentally"
+          path: "claims.0.status"
+          value: "failed"
+        - type: json_path
+          description: "The summary counts both the failed requirement and the failed grounded claim"
           path: "summary.failed"
-          value: 1
+          value: 2
         - type: json_path
           description: "Nothing is left as 'untested' — every requirement and command has a definitive pass/fail status"
           path: "summary.untested"

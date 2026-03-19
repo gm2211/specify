@@ -8,7 +8,15 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Spec, CliSpec, CliCommandSpec, CliScenarioSpec } from '../spec/types.js';
-import type { CliGapReport, CliCommandResult, CliScenarioResult, CliCommandRun, RequirementResult } from './types.js';
+import type {
+  CliGapReport,
+  CliCommandResult,
+  CliScenarioResult,
+  CliCommandRun,
+  RequirementResult,
+  ClaimResult,
+  RefStatus,
+} from './types.js';
 import { executeCommand } from './executor.js';
 import { validateCommandRun } from './validator.js';
 import { c } from '../cli/colors.js';
@@ -136,8 +144,11 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
     };
   });
 
+  const claims = evaluateClaims(spec, commandResults, scenarioResults, requirements, log);
   const requirementPasses = requirements.filter(r => r.status === 'verified').length;
   const requirementFailures = requirements.filter(r => r.status === 'failed').length;
+  const claimPasses = claims.filter(c => c.status === 'passed').length;
+  const claimFailures = claims.filter(c => c.status === 'failed').length;
 
   const report: CliGapReport = {
     spec: {
@@ -150,17 +161,18 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
       timestamp: new Date().toISOString(),
     },
     summary: {
-      total: totalChecks + requirements.length,
-      passed: passed + requirementPasses,
-      failed: failed + requirementFailures,
+      total: totalChecks + requirements.length + claims.length,
+      passed: passed + requirementPasses + claimPasses,
+      failed: failed + requirementFailures + claimFailures,
       untested,
-      coverage: (totalChecks + requirements.length) > 0
-        ? Math.round(((passed + requirementPasses) / (totalChecks + requirements.length)) * 100)
+      coverage: (totalChecks + requirements.length + claims.length) > 0
+        ? Math.round(((passed + requirementPasses + claimPasses) / (totalChecks + requirements.length + claims.length)) * 100)
         : 0,
     },
     commands: commandResults,
     scenarios: scenarioResults,
     requirements,
+    claims,
   };
 
   // Save output
@@ -192,6 +204,73 @@ export async function runCliValidation(config: CliRunConfig): Promise<CliRunResu
   }
 
   return { report, runs: allRuns, outputDir };
+}
+
+function evaluateClaims(
+  spec: Spec,
+  commands: CliCommandResult[],
+  scenarios: CliScenarioResult[],
+  requirements: RequirementResult[],
+  log?: (msg: string) => void,
+): ClaimResult[] {
+  const commandMap = new Map(commands.map(cmd => [cmd.commandId, cmd]));
+  const scenarioMap = new Map(scenarios.map(scenario => [scenario.scenarioId, scenario]));
+  const requirementMap = new Map(requirements.map(req => [req.id, req]));
+
+  return (spec.claims ?? []).map(claim => {
+    const commandRefs = (claim.grounded_by.commands ?? []).map(id => {
+      const result = commandMap.get(id);
+      return refStatus(id, result ? result.status === 'passed' : undefined, result ? `Command "${id}" status is ${result.status}` : `Command "${id}" not found in report`);
+    });
+    const scenarioRefs = (claim.grounded_by.scenarios ?? []).map(id => {
+      const result = scenarioMap.get(id);
+      return refStatus(id, result ? result.status === 'passed' : undefined, result ? `Scenario "${id}" status is ${result.status}` : `Scenario "${id}" not found in report`);
+    });
+    const requirementRefs = (claim.grounded_by.requirements ?? []).map(id => {
+      const result = requirementMap.get(id);
+      return refStatus(id, result ? result.status === 'verified' : undefined, result ? `Requirement "${id}" status is ${result.status}` : `Requirement "${id}" not found in report`);
+    });
+
+    const allRefs = [...commandRefs, ...scenarioRefs, ...requirementRefs];
+    let reason: string | undefined;
+    if (allRefs.length === 0) {
+      reason = 'Claim has no grounding refs';
+    } else {
+      const failures = allRefs.filter(ref => ref.status !== 'passed');
+      if (failures.length > 0) {
+        reason = failures.map(ref => ref.reason ?? `${ref.id} failed`).join('; ');
+      }
+    }
+
+    const status = reason ? 'failed' as const : 'passed' as const;
+    if (status === 'passed') {
+      log?.(`  ${c.green('✓')} Claim ${c.bold(claim.id)}: grounded`);
+    } else {
+      log?.(`  ${c.red('✗')} Claim ${c.bold(claim.id)}: ${reason}`);
+    }
+
+    return {
+      id: claim.id,
+      description: claim.description,
+      groundedBy: {
+        commands: commandRefs,
+        scenarios: scenarioRefs,
+        requirements: requirementRefs,
+      },
+      status,
+      ...(reason ? { reason } : {}),
+    };
+  });
+}
+
+function refStatus(id: string, passed: boolean | undefined, failureReason: string): RefStatus {
+  if (passed === undefined) {
+    return { id, status: 'missing', reason: failureReason };
+  }
+  if (passed) {
+    return { id, status: 'passed' };
+  }
+  return { id, status: 'failed', reason: failureReason };
 }
 
 async function runScenario(
@@ -322,6 +401,32 @@ export function cliReportToMarkdown(report: CliGapReport): string {
         renderCommandMarkdown(step, lines, icon);
       }
     }
+  }
+
+  if ((report.requirements?.length ?? 0) > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## Requirements');
+    lines.push('');
+    lines.push('| Status | ID | Verification | Description |');
+    lines.push('|--------|----|--------------|-------------|');
+    for (const requirement of report.requirements ?? []) {
+      lines.push(`| ${icon(requirement.status === 'verified' ? 'passed' : requirement.status)} | \`${requirement.id}\` | \`${requirement.verification}\` | ${mdEscape(requirement.description)} |`);
+    }
+    lines.push('');
+  }
+
+  if ((report.claims?.length ?? 0) > 0) {
+    lines.push('---');
+    lines.push('');
+    lines.push('## Claims');
+    lines.push('');
+    lines.push('| Status | ID | Description | Reason |');
+    lines.push('|--------|----|-------------|--------|');
+    for (const claim of report.claims ?? []) {
+      lines.push(`| ${icon(claim.status)} | \`${claim.id}\` | ${mdEscape(claim.description)} | ${mdEscape(claim.reason ?? '—')} |`);
+    }
+    lines.push('');
   }
 
   lines.push('---');

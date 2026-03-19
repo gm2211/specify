@@ -264,6 +264,104 @@ export function lintSpec(spec: Spec, specPath?: string): LintError[] {
     }
   }
 
+  // Rule: duplicate CLI scenario IDs
+  const cliScenarioIds = new Map<string, number>();
+  for (let i = 0; i < (spec.cli?.scenarios?.length ?? 0); i++) {
+    const scenario = spec.cli!.scenarios![i];
+    if (cliScenarioIds.has(scenario.id)) {
+      errors.push({
+        path: `/cli/scenarios/${i}/id`,
+        severity: 'error',
+        message: `Duplicate CLI scenario ID "${scenario.id}" (first at /cli/scenarios/${cliScenarioIds.get(scenario.id)})`,
+        rule: 'duplicate-cli-scenario-id',
+      });
+    } else {
+      cliScenarioIds.set(scenario.id, i);
+    }
+  }
+
+  // Rule: claim definitions and grounding
+  const claimIds = new Map<string, number>();
+  for (let i = 0; i < (spec.claims?.length ?? 0); i++) {
+    const claim = spec.claims![i];
+    if (claimIds.has(claim.id)) {
+      errors.push({
+        path: `/claims/${i}/id`,
+        severity: 'error',
+        message: `Duplicate claim ID "${claim.id}" (first at /claims/${claimIds.get(claim.id)})`,
+        rule: 'duplicate-claim-id',
+      });
+    } else {
+      claimIds.set(claim.id, i);
+    }
+
+    const groundingRefs = [
+      ...(claim.grounded_by.commands ?? []),
+      ...(claim.grounded_by.scenarios ?? []),
+      ...(claim.grounded_by.requirements ?? []),
+    ];
+    if (groundingRefs.length === 0) {
+      errors.push({
+        path: `/claims/${i}/grounded_by`,
+        severity: 'error',
+        message: `Claim "${claim.id}" has no grounding refs`,
+        rule: 'claim-missing-grounding',
+      });
+    }
+
+    for (const commandId of claim.grounded_by.commands ?? []) {
+      if (!cliCmdIds.has(commandId)) {
+        errors.push({
+          path: `/claims/${i}/grounded_by/commands`,
+          severity: 'error',
+          message: `Claim "${claim.id}" references unknown CLI command "${commandId}"`,
+          rule: 'claim-invalid-command-ref',
+        });
+      }
+    }
+    for (const scenarioId of claim.grounded_by.scenarios ?? []) {
+      if (!cliScenarioIds.has(scenarioId)) {
+        errors.push({
+          path: `/claims/${i}/grounded_by/scenarios`,
+          severity: 'error',
+          message: `Claim "${claim.id}" references unknown CLI scenario "${scenarioId}"`,
+          rule: 'claim-invalid-scenario-ref',
+        });
+      }
+    }
+    const requirementIds = new Set((spec.requirements ?? []).map(req => req.id));
+    for (const requirementId of claim.grounded_by.requirements ?? []) {
+      if (!requirementIds.has(requirementId)) {
+        errors.push({
+          path: `/claims/${i}/grounded_by/requirements`,
+          severity: 'error',
+          message: `Claim "${claim.id}" references unknown requirement "${requirementId}"`,
+          rule: 'claim-invalid-requirement-ref',
+        });
+      }
+    }
+  }
+
+  validateDescriptionClaims(spec.description_claims, '/description_claims', claimIds, errors, 'spec description');
+  for (let i = 0; i < (spec.cli?.commands?.length ?? 0); i++) {
+    validateDescriptionClaims(
+      spec.cli!.commands![i].description_claims,
+      `/cli/commands/${i}/description_claims`,
+      claimIds,
+      errors,
+      `CLI command "${spec.cli!.commands![i].id}"`,
+    );
+  }
+  for (let i = 0; i < (spec.cli?.scenarios?.length ?? 0); i++) {
+    validateDescriptionClaims(
+      spec.cli!.scenarios![i].description_claims,
+      `/cli/scenarios/${i}/description_claims`,
+      claimIds,
+      errors,
+      `CLI scenario "${spec.cli!.scenarios![i].id}"`,
+    );
+  }
+
   // Rule: narrative sync (when narrative_path is set)
   if (spec.narrative_path) {
     errors.push(...lintNarrativeSync(spec, spec.narrative_path, specPath));
@@ -326,6 +424,7 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   validRefs.add('variables');
   validRefs.add('assumptions');
   validRefs.add('requirements');
+  validRefs.add('claims');
   validRefs.add('cli');
 
   for (const page of spec.pages ?? []) {
@@ -351,6 +450,9 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   for (const req of spec.requirements ?? []) {
     validRefs.add(`requirement:${req.id}`);
   }
+  for (const claim of spec.claims ?? []) {
+    validRefs.add(`claim:${claim.id}`);
+  }
 
   // Collect all refs from the narrative
   const narrativeRefs = new Set<string>();
@@ -366,7 +468,7 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
 
   // Check for invalid refs (narrative points to nonexistent spec item)
   for (const ref of narrativeRefs) {
-    if (ref === 'overview' || ref === 'defaults' || ref === 'meta') continue;
+    if (ref === 'overview' || ref === 'defaults' || ref === 'meta' || ref === 'claims') continue;
     if (!validRefs.has(ref)) {
       errors.push({
         path: '/narrative_path',
@@ -391,4 +493,24 @@ export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: 
   }
 
   return errors;
+}
+
+function validateDescriptionClaims(
+  claimRefs: string[] | undefined,
+  path: string,
+  knownClaims: Map<string, number>,
+  errors: LintError[],
+  ownerLabel: string,
+): void {
+  if (!claimRefs) return;
+  for (const claimId of claimRefs) {
+    if (!knownClaims.has(claimId)) {
+      errors.push({
+        path,
+        severity: 'error',
+        message: `${ownerLabel} references unknown claim "${claimId}"`,
+        rule: 'description-claim-invalid',
+      });
+    }
+  }
 }

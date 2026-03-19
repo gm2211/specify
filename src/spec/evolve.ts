@@ -616,6 +616,7 @@ export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): Evol
   validRefs.add('variables');
   validRefs.add('assumptions');
   validRefs.add('requirements');
+  validRefs.add('claims');
   validRefs.add('cli');
 
   for (const page of spec.pages ?? []) {
@@ -639,6 +640,9 @@ export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): Evol
   for (const req of spec.requirements ?? []) {
     validRefs.add(`requirement:${req.id}`);
   }
+  for (const claim of spec.claims ?? []) {
+    validRefs.add(`claim:${claim.id}`);
+  }
 
   // Collect all refs from narrative
   const narrativeRefs = new Set<string>();
@@ -652,7 +656,7 @@ export function analyzeNarrative(spec: Spec, narrative: NarrativeDocument): Evol
 
   // Stale refs: narrative points to nonexistent spec items
   for (const ref of narrativeRefs) {
-    if (ref === 'overview' || ref === 'defaults' || ref === 'meta') continue;
+    if (ref === 'overview' || ref === 'defaults' || ref === 'meta' || ref === 'claims') continue;
     if (!validRefs.has(ref)) {
       suggestions.push({
         id: sid(),

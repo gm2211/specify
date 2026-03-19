@@ -1,12 +1,20 @@
 version: "1.0"
 name: "Requirements Test Spec"
 description: "Minimal spec with a behavioral requirement to test verify cli reporting"
+description_claims:
+  - example-claim
 
 requirements:
   - id: example-requirement
     description: "This is an example behavioral requirement for testing"
     verification: agent
     validation_plan: "An agent should verify this somehow"
+
+claims:
+  - id: example-claim
+    description: "This example spec includes normative prose grounded by a requirement"
+    grounded_by:
+      requirements: ["example-requirement"]
 
 cli:
   binary: "echo"

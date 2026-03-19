@@ -78,6 +78,8 @@ export async function cliRun(options: CliRunOptions, ctx: CliContext): Promise<n
     // Report behavioral requirement status
     const failedReqs = (report.requirements ?? []).filter(r => r.status === 'failed');
     const verifiedReqs = (report.requirements ?? []).filter(r => r.status === 'verified');
+    const failedClaims = (report.claims ?? []).filter(c => c.status === 'failed');
+    const passedClaims = (report.claims ?? []).filter(c => c.status === 'passed');
     if (verifiedReqs.length > 0) {
       for (const req of verifiedReqs) {
         process.stderr.write(`${c.boldGreen('✓')} ${c.bold(req.id)}: verified by agent\n`);
@@ -102,6 +104,18 @@ export async function cliRun(options: CliRunOptions, ctx: CliContext): Promise<n
       }
       process.stderr.write(c.dim(`  Dispatch an agent to validate these requirements and provide evidence.\n`));
       process.stderr.write(c.dim(`  Evidence goes in: .specify/evidence/<requirement-id>.json\n`));
+    }
+    if (passedClaims.length > 0) {
+      process.stderr.write(c.boldGreen(`\n✓ ${passedClaims.length} grounded claim(s):\n`));
+      for (const claim of passedClaims) {
+        process.stderr.write(`  ${c.green('✓')} ${c.bold(claim.id)}\n`);
+      }
+    }
+    if (failedClaims.length > 0) {
+      process.stderr.write(c.boldRed(`\n✗ ${failedClaims.length} claim(s) are not fully grounded:\n`));
+      for (const claim of failedClaims) {
+        process.stderr.write(`  ${c.red('✗')} ${c.bold(claim.id)}: ${(claim.reason ?? claim.description).slice(0, 120)}${(claim.reason ?? claim.description).length > 120 ? '...' : ''}\n`);
+      }
     }
   }
 

@@ -26,6 +26,16 @@ export const specSchema = {
       type: 'string',
       description: 'Optional description of what this spec covers.',
     },
+    description_claims: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'Claim IDs that ground the top-level description.',
+    },
+    claims: {
+      type: 'array',
+      description: 'Normative claims grounded by executable checks and/or verified requirements.',
+      items: { $ref: '#/$defs/Claim' },
+    },
     pages: {
       type: 'array',
       items: { $ref: '#/$defs/PageSpec' },
@@ -69,6 +79,27 @@ export const specSchema = {
   },
 
   $defs: {
+    Claim: {
+      type: 'object',
+      required: ['id', 'description', 'grounded_by'],
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string', description: 'Unique identifier for this claim.' },
+        description: { type: 'string', description: 'Normative statement that should be provably true.' },
+        grounded_by: { $ref: '#/$defs/ClaimGrounding' },
+      },
+    },
+
+    ClaimGrounding: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        commands: { type: 'array', items: { type: 'string' } },
+        scenarios: { type: 'array', items: { type: 'string' } },
+        requirements: { type: 'array', items: { type: 'string' } },
+      },
+    },
+
     // -------------------------------------------------------------------
     // PageSpec
     // -------------------------------------------------------------------
@@ -375,6 +406,7 @@ export const specSchema = {
       properties: {
         id: { type: 'string' },
         description: { type: 'string' },
+        description_claims: { type: 'array', items: { type: 'string' } },
         args: { type: 'array', items: { type: 'string' } },
         stdin: { type: 'string' },
         env: { type: 'object', additionalProperties: { type: 'string' } },
@@ -418,6 +450,7 @@ export const specSchema = {
       properties: {
         id: { type: 'string' },
         description: { type: 'string' },
+        description_claims: { type: 'array', items: { type: 'string' } },
         steps: {
           type: 'array',
           items: { $ref: '#/$defs/CliCommandSpec' },

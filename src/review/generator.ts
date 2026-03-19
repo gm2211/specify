@@ -591,6 +591,18 @@ const JS = `
       }
     }
 
+    if (type === 'claims') {
+      if (spec.claims) {
+        spec.claims.forEach(function(c) {
+          results.push({ kind: 'claim', id: c.id, description: c.description, status: 'untested' });
+        });
+      }
+      if (cliReport && cliReport.claims) {
+        results.length = 0;
+        cliReport.claims.forEach(function(c) { results.push({ kind: 'claim', ...c }); });
+      }
+    }
+
     if (ref === 'cli') {
       if (spec.cli) {
         results.push({ kind: 'cli-summary', binary: spec.cli.binary, commandCount: (spec.cli.commands || []).length, status: 'passed' });
@@ -620,6 +632,22 @@ const JS = `
       }
     }
 
+    if (type === 'claim' && parts.length > 1) {
+      var claimId = parts.slice(1).join(':');
+      if (cliReport && cliReport.claims) {
+        var claim = (cliReport.claims || []).find(function(c) { return c.id === claimId; });
+        if (claim) {
+          results.push({ kind: 'claim', ...claim });
+        }
+      }
+      if (results.length === 0 && spec.claims) {
+        var specClaim = (spec.claims || []).find(function(c) { return c.id === claimId; });
+        if (specClaim) {
+          results.push({ kind: 'claim', id: specClaim.id, description: specClaim.description, status: 'untested' });
+        }
+      }
+    }
+
     // CLI report — match by command ID pattern (legacy non-prefixed refs)
     if (type !== 'cli' && !ref.startsWith('cli:') && cliReport) {
       for (const cmd of (cliReport.commands || [])) {
@@ -645,13 +673,14 @@ const JS = `
 
   // ---- Stale ref detection ----
 
-  const validSpecRefs = new Set(['overview', 'defaults', 'meta', 'variables', 'assumptions', 'requirements', 'cli']);
+  const validSpecRefs = new Set(['overview', 'defaults', 'meta', 'variables', 'assumptions', 'requirements', 'claims', 'cli']);
   for (const page of (spec.pages || [])) {
     validSpecRefs.add('page:' + page.id);
     for (const s of (page.scenarios || [])) validSpecRefs.add('scenario:' + page.id + '/' + s.id);
     for (const r of (page.expected_requests || [])) validSpecRefs.add('request:' + page.id + '/' + r.method + ':' + r.url_pattern);
   }
   for (const f of (spec.flows || [])) validSpecRefs.add('flow:' + f.id);
+  for (const claim of (spec.claims || [])) validSpecRefs.add('claim:' + claim.id);
   if (spec.cli) {
     for (const cmd of (spec.cli.commands || [])) validSpecRefs.add('cli:' + cmd.id);
   }
@@ -741,6 +770,16 @@ const JS = `
         title: 'Behavioral Requirements',
         body: spec.requirements.map(function(r) { return r.id + ': ' + r.description; }).join('\\n\\n'),
         refs: ['requirements'],
+        depth: 1,
+        children: []
+      });
+    }
+
+    if (spec.claims && spec.claims.length > 0) {
+      sections.push({
+        title: 'Grounded Claims',
+        body: spec.claims.map(function(c) { return c.id + ': ' + c.description; }).join('\\n\\n'),
+        refs: ['claims'],
         depth: 1,
         children: []
       });
@@ -1190,10 +1229,23 @@ const JS = `
           lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(r.description || '') + '</span>');
           lines.push('    <span class="spec-key">verification:</span> <span class="spec-val">' + esc(r.verification || 'agent') + '</span>');
         });
+      } else if (ref === 'claims' && spec.claims) {
+        lines.push('<span class="spec-key">claims:</span>');
+        spec.claims.forEach(function(c) {
+          lines.push('  - <span class="spec-key">id:</span> <span class="spec-val">' + esc(c.id) + '</span>');
+          lines.push('    <span class="spec-key">description:</span> <span class="spec-val">' + esc(c.description || '') + '</span>');
+        });
       } else if (ref === 'cli' && spec.cli) {
         lines.push('<span class="spec-key">cli:</span>');
         lines.push('  <span class="spec-key">binary:</span> <span class="spec-val">' + esc(spec.cli.binary) + '</span>');
         lines.push('  <span class="spec-comment"># ' + (spec.cli.commands || []).length + ' commands, ' + (spec.cli.scenarios || []).length + ' scenarios</span>');
+      } else if (refType === 'claim' && refParts.length > 1 && spec.claims) {
+        var claimId = refParts.slice(1).join(':');
+        var specClaim = (spec.claims || []).find(function(c) { return c.id === claimId; });
+        if (specClaim) {
+          lines.push('<span class="spec-key">- id:</span> <span class="spec-val">' + esc(specClaim.id) + '</span>');
+          lines.push('  <span class="spec-key">description:</span> <span class="spec-val">' + esc(specClaim.description) + '</span>');
+        }
       } else if (refType === 'cli' && refParts.length > 1 && spec.cli) {
         var cid = refParts.slice(1).join(':');
         var specCmd = (spec.cli.commands || []).find(function(c) { return c.id === cid; });
