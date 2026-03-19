@@ -19,6 +19,7 @@
     "typecheck": "npx tsc --noEmit",
     "validate": "npx tsx src/validation/validate.ts",
     "agent": "npx tsx src/agent/run.ts",
+    "test": "tsc && node --test dist/src/**/*.test.js",
     "build": "tsc",
     "specify": "npx tsx src/cli/index.ts"
   },

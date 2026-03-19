@@ -27,7 +27,6 @@
  *   specify review           --spec <path> [--report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
  *   specify agent run        --spec <path|-> --url <url> [--explore] [--headed]
- *   specify cli run          --spec <path|-> [--output <dir>]
  *   specify report diff      --a <path> --b <path>
  *   specify report stats     --history-dir <dir>
  *   specify schema spec|report|commands
@@ -551,20 +550,12 @@ async function main(): Promise<void> {
     } else if (noun === 'verify') {
       // Unified verification dispatcher
       // Routing: explicit flags > spec auto-detection
-      const verifyArgs = verb && verb !== 'cli' ? [verb, ...rest] : rest;
-      const specPath = verb === 'cli' ? resolveSpecArg(rest, ctx) : resolveSpecArg(verifyArgs, ctx);
+      const verifyArgs = verb ? [verb, ...rest] : rest;
+      const specPath = resolveSpecArg(verifyArgs, ctx);
       const url = getArg(verifyArgs, '--url');
       const capture = getArg(verifyArgs, '--capture');
 
-      if (verb === 'cli') {
-        // Explicit: verify cli → cli run (backward compat)
-        const { cliRun } = await import('./commands/cli-run.js');
-        exitCode = await cliRun({
-          spec: specPath,
-          output: getArg(rest, '--output'),
-          historyDir: getArg(rest, '--history-dir'),
-        }, ctx);
-      } else if (url && !capture) {
+      if (url && !capture) {
         // verify --url (no --capture) → agent run
         const { agentRun } = await import('./commands/agent-run.js');
         exitCode = await agentRun({

@@ -70,6 +70,8 @@ export interface RequirementResult {
   status: 'verified' | 'unverified' | 'failed';
   /** Evidence provided by an agent (empty until an agent validates it). */
   evidence?: unknown;
+  /** Results from inline property checks (when requirement has checks). */
+  check_results?: CliCommandResult[];
 }
 
 /** Result for a normative claim grounded by executable checks and/or requirements. */

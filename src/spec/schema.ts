@@ -73,6 +73,11 @@ export const specSchema = {
           verification: { type: 'string', enum: ['mechanical', 'agent'], description: 'How this requirement is verified.' },
           validation_plan: { type: 'string', description: 'Steps an agent should take to validate this requirement.' },
           evidence_format: { type: 'string', description: 'What evidence the agent should produce.' },
+          checks: {
+            type: 'array',
+            description: 'Inline property checks — CLI commands with assertions that verify evaluates directly.',
+            items: { $ref: '#/$defs/CliCommandSpec' },
+          },
         },
       },
     },
