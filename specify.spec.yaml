@@ -11,7 +11,8 @@ description: >
   schema introspection so agents can discover capabilities at runtime. This spec serves
   as both (1) a mechanically verifiable test suite executed by `specify verify --spec specify.spec.yaml`, and
   (2) a set of behavioral requirements that guide agents to validate properties requiring
-  judgment. The tool itself is fully deterministic — no API keys, no LLM calls —
+  judgment. It is also a closed-world public contract: behavior exposed by the binary but
+  not accounted for here MUST cause `verify` to fail. The tool itself is fully deterministic — no API keys, no LLM calls —
   intelligence comes from the agent layer that drives it.
 
 narrative_path: specify.spec.narrative.md
@@ -39,6 +40,29 @@ requirements:
          used for different paths, no test IDs that don't exist)
       5. The assertion passes if every path maps to at least one test ID
     evidence_format: "A table of { path, test_id, status } entries where status is 'covered' or 'missing'"
+  - id: no-extra-public-behavior
+    description: >
+      Verify enforces a closed-world public contract: if the binary exposes any reachable
+      public CLI behavior that is not accounted for in this spec, `verify` MUST fail.
+      This includes top-level commands, subcommands, aliases, inferred modes, interactive
+      menu destinations, and documented help surfaces.
+    verification: agent
+    validation_plan: |
+      1. Discover the public CLI surface:
+         - Run `specify schema commands` to enumerate registered commands and aliases
+         - Run `specify --help` plus subcommand `--help` output to enumerate advertised paths and modes
+         - Exercise interactive entry points to list directly reachable menu destinations
+         - Probe likely compatibility aliases and deprecated paths that may still be exposed
+      2. For each discovered behavior, map it to exactly one of:
+         - a CLI command entry in this spec
+         - a CLI scenario in this spec
+         - a behavioral requirement that intentionally covers a non-mechanical property
+      3. Mark any discovered behavior with no mapping as `extra_unaccounted`
+      4. Verify the converse: every mapped public-surface entry in the evidence corresponds
+         to behavior that is actually reachable in the implementation
+      5. The assertion passes only if there are no `extra_unaccounted` behaviors and no
+         stale public-surface mappings
+    evidence_format: "A table of { behavior, discovery_source, mapped_to, status } entries where status is 'covered', 'extra_unaccounted', or 'stale_spec'"
 
 cli:
   binary: "./specify"
@@ -368,16 +392,17 @@ cli:
           text: "page.locator"
 
     # -------------------------------------------------------------------
-    # Spec evolve (interactive gap analysis)
+    # Spec evolve (agent-guided spec editing)
     # -------------------------------------------------------------------
     - id: evolve-interactive
       description: >
         When spec evolve is called without --pr or --report, it runs in interactive mode,
-        performing a deterministic gap analysis of the spec. It outputs structured JSON
-        containing the mode ("interactive"), a spec_summary with metadata, and a suggestions
-        array. Each suggestion has an id, category, priority, description, rationale,
-        proposed_change, and a question for the user to consider. This gives agents a
-        machine-readable list of improvements to propose to the user.
+        producing structured editing guidance an LLM can use to add, remove, or reshape
+        behavior in the spec. It outputs structured JSON containing the mode
+        ("interactive"), a spec_summary with metadata, and a suggestions array. Each
+        suggestion has an id, category, priority, description, rationale, proposed_change,
+        and a question for the user to consider. This gives agents a machine-readable edit
+        plan to combine with user intent, rather than a lint-style list of findings.
       args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:
@@ -398,11 +423,12 @@ cli:
 
     - id: evolve-finds-gaps
       description: >
-        The evolve command's gap analysis is substantive, not just structural. When analyzing
-        the login-page example spec (which has 1 page with some scenarios that have interactions
-        but no assertions), evolve must detect and report the "interactions but no assertions"
-        pattern as a real gap. This validates that the analyzer finds meaningful quality issues,
-        not just schema violations.
+        The evolve command uses structural signals as inputs to spec editing guidance, not as
+        an end in themselves. When analyzing the login-page example spec (which has 1 page
+        with some scenarios that have interactions but no assertions), evolve must detect and
+        report the "interactions but no assertions" pattern as a real gap so an agent can
+        propose a concrete behavior change to the spec. This validates that evolve is guiding
+        spec mutation, not merely reporting schema violations.
       args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:
@@ -419,8 +445,8 @@ cli:
         When spec evolve is called on a spec that has a cli section (like specify.spec.yaml
         itself), it correctly counts the CLI command entries in its summary. Running evolve
         against the self-spec with --json confirms interactive mode and validates the
-        cli_command_count, which serves as a regression check that the spec's own command
-        inventory is tracked accurately.
+        cli_command_count, which serves as a regression check that the agent receives enough
+        inventory context to plan spec edits against the CLI surface accurately.
       args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:
@@ -490,14 +516,15 @@ cli:
           text: "No test files found"
 
     # -------------------------------------------------------------------
-    # Spec evolve (already partially covered above, add more)
+    # Spec evolve (complex CLI-focused editing guidance)
     # -------------------------------------------------------------------
     - id: evolve-self-spec-finds-cli-gaps
       description: >
         When evolve analyzes the self-spec (specify.spec.yaml), it runs in interactive mode
         and produces suggestions where each one has the required fields (id, category,
         priority, description, question). This tests that evolve works on complex CLI-focused
-        specs, not just simple page specs, and that its suggestions are always well-structured.
+        specs, not just simple page specs, and that its suggestions stay structured enough
+        for an LLM to turn them into concrete add/remove/update behavior edits.
       args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
       expected_exit_code: 0
       stdout_assertions:

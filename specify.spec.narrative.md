@@ -65,38 +65,38 @@ Capture validates its inputs early. An empty `--url` returns a structured `missi
 <!-- spec:cli:evolve-self-spec-finds-cli-gaps -->
 <!-- spec:cli:evolve-top-level -->
 
-Changing a contract as the product changes. Evolve is the thinking step -- it guides reasoning about what the contract should say, without making deterministic assertions about correctness.
+Changing a contract as the product changes. Evolve is the agent-guidance step -- it helps an LLM turn user intent into concrete spec edits, without making deterministic assertions about correctness by itself.
 
 Evolve operates in three modes:
 
-**Interactive** (default, no flags): Analyzes the current spec for structural gaps and produces prioritized suggestions. Each suggestion has a category (`new_coverage`, `add_scenario`, `add_assertion`, `spec_hygiene`, etc.), a priority level, a rationale explaining why the change matters, a proposed spec fragment, and a question for the agent to ask the user.
+**Interactive** (default, no flags): Analyzes the current spec and produces prioritized editing guidance. Each suggestion has a category (`new_coverage`, `add_scenario`, `add_assertion`, `spec_hygiene`, etc.), a priority level, a rationale explaining why the change matters, a proposed spec fragment, and a question for the agent to ask the user. The goal is not to "lint" the spec; the goal is to help the agent add, remove, or reshape behavior in the contract based on the user's prompt.
 
 ```
 $ specify evolve --spec spec.yaml
 $ specify spec evolve --spec spec.yaml --json
 ```
 
-For example, running evolve against the login page example spec finds that the `failed-login` scenario has interactions but no assertions verifying the outcome. That is a real gap -- the scenario clicks the submit button but never checks what happens. Evolve surfaces this as a suggestion with a concrete proposed change.
+For example, running evolve against the login page example spec finds that the `failed-login` scenario has interactions but no assertions verifying the outcome. That is a useful signal, but the output is not just "here is a problem." Evolve turns that signal into a candidate contract edit with a concrete proposed change.
 
-Running evolve against the self-spec (`specify.spec.yaml`) produces a summary showing the full command count and suggestions for improving coverage.
+Running evolve against the self-spec (`specify.spec.yaml`) produces a summary showing the full command count and suggestions that an agent can use to change the contract intentionally.
 
-**PR-based** (`--pr`): Analyzes a pull request diff to identify which parts of the spec are affected by the code changes. This mode accepts a PR number or URL and optionally a `--repo` flag for disambiguation.
+**PR-based** (`--pr`): Analyzes a pull request diff to identify which parts of the spec are affected by the code changes. This mode gives the agent change context so it can decide what behavior to add, remove, or rewrite in the spec. It accepts a PR number or URL and optionally a `--repo` flag for disambiguation.
 
 ```
 $ specify evolve --spec spec.yaml --pr 42
 $ specify evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42
 ```
 
-**Report-based** (`--report`): Analyzes a gap report from a previous validation run and suggests spec refinements based on failures and coverage gaps.
+**Report-based** (`--report`): Analyzes a gap report from a previous validation run and suggests spec refinements based on failures and coverage gaps. The report is input context for editing the contract, not the contract decision itself.
 
 ```
 $ specify evolve --spec spec.yaml --report gap-report.json
 $ specify evolve --spec spec.yaml --report gap-report.json --output refined.yaml
 ```
 
-The `--apply` flag enters an interactive mode where the agent walks through suggestions one by one, optionally applying them to produce a refined spec. Combined with `--url`, it can crawl a live system for additional context.
+The `--apply` flag enters an interactive mode where the agent walks through suggestions one by one, optionally applying them to produce a refined spec. Combined with `--url`, it can crawl a live system for additional context before making behavior changes.
 
-An important design boundary: `evolve` guides reasoning. It does not compute facts about the spec's structural validity (that is `lint`'s job). Do not confuse them. Lint tells you "this ID is duplicated" or "this flow references a nonexistent page." Evolve tells you "this scenario has no assertions -- consider adding one." Both are valuable, but they serve different purposes and should not be merged.
+An important design boundary: `evolve` guides reasoning and edits. It does not compute facts about the spec's structural validity (that is `lint`'s job). Do not confuse them. Lint tells you "this ID is duplicated" or "this flow references a nonexistent page." Evolve tells you "given the user's intent, here is the behavior to add, remove, or refine, and here is a candidate spec mutation." Structural signals like missing assertions are inputs to that guidance, not the final product. Both are valuable, but they serve different purposes and should not be merged.
 
 
 ### Review
@@ -301,7 +301,7 @@ cli:
 <!-- spec:requirements -->
 <!-- spec:cli:verify-requirements-fail-not-untested -->
 
-Requirements describe behavioral properties that need agent intelligence to validate. They cannot be checked by exit codes or string matching alone:
+Requirements describe behavioral properties that need agent intelligence to validate. They can express both positive coverage claims and closed-world claims about undocumented behavior. They cannot be checked by exit codes or string matching alone:
 
 ```yaml
 requirements:
@@ -313,9 +313,17 @@ requirements:
       2. For each path, search the spec for a test entry
       3. Produce a coverage table
     evidence_format: "A table of { path, test_id, status } entries"
+  - id: no-extra-public-behavior
+    description: "If the binary exposes public CLI behavior outside this spec, verify MUST fail"
+    verification: agent
+    validation_plan: |
+      1. Discover the public CLI surface
+      2. Map each reachable behavior to the spec
+      3. Fail if anything is extra or stale
+    evidence_format: "A table of { behavior, mapped_to, status } entries"
 ```
 
-Each requirement has a `validation_plan` that tells an agent exactly how to verify it, and an `evidence_format` that specifies the structure of the evidence the agent should produce. This is not a suggestion -- it is a contract with the agent.
+Each requirement has a `validation_plan` that tells an agent exactly how to verify it, and an `evidence_format` that specifies the structure of the evidence the agent should produce. This is not a suggestion -- it is a contract with the agent. In the self-spec, that contract is closed-world: extra undocumented public behavior is a verification failure, not a harmless implementation detail.
 
 
 ### Variables
@@ -401,15 +409,16 @@ These are checked by `verify --spec` for CLI specs, and by `verify --url` or `ve
 
 ### Behavioral Requirements
 <!-- spec:requirement:full-path-coverage -->
+<!-- spec:requirement:no-extra-public-behavior -->
 
-These are properties that need agent intelligence to validate. The classic example from the self-spec: "Every reachable path through the CLI has well-defined behavior captured in this spec."
+These are properties that need agent intelligence to validate. The self-spec uses them for two related guarantees: every reachable CLI path is covered, and any extra reachable public behavior outside the spec means `verify` MUST fail.
 
 No deterministic check can verify this. An agent needs to:
 1. Discover all command paths (via schema introspection, help parsing, fuzzing)
-2. Map each path to a test entry in the spec
-3. Produce evidence that the mapping is complete
+2. Map each path or public behavior to a test entry or requirement in the spec
+3. Produce evidence that the mapping is complete and that no extra undocumented behavior remains
 
-Agents validate behavioral requirements and write evidence files to `.specify/evidence/<requirement-id>.json`. When `verify` runs, it reads evidence files and marks requirements as passed (evidence exists and validates) or failed (no evidence).
+Agents validate behavioral requirements and write evidence files to `.specify/evidence/<requirement-id>.json`. When `verify` runs, it reads evidence files and marks requirements as passed (evidence exists and validates) or failed (no evidence or evidence showing extra undocumented behavior).
 
 ### No "Untested" State
 
@@ -823,7 +832,7 @@ Several boundaries in Specify's design are deliberate and should be preserved.
 <!-- spec:cli:no-args-self-description -->
 <!-- spec:cli:evolve-no-pr-flag-ok -->
 
-Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines a large CLI command suite with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage).
+Specify specifies itself. The `specify.spec.yaml` file in the project root is a behavioral contract for the Specify CLI. It defines a large CLI command suite with expected exit codes and output assertions, multi-command scenarios for integration testing, and behavioral requirements that need agent verification (like full path coverage and the closed-world no-extra-public-behavior rule).
 
 Running `specify verify --spec specify.spec.yaml` executes every command in the self-spec and reports pass/fail results. This is the primary test suite for the Specify CLI -- the tool verifies itself using its own verification engine.
 
@@ -835,9 +844,9 @@ The self-spec covers several categories:
 - **Feature verification**: Each command is tested with representative inputs -- exports produce framework-specific code, evolve finds real gaps, lint validates structure, review generates HTML.
 - **Scenario sequences**: Multi-command scenarios test round-trips (schema for all targets) and cross-framework consistency (export to both Playwright and Cypress).
 - **Interactive paths**: Every sub-path through the `human` wizard is directly addressable and tested.
-- **Behavioral requirements**: Properties like "every reachable CLI path has a test entry" that need agent intelligence to verify.
+- **Behavioral requirements**: Properties like "every reachable CLI path has a test entry" and "undocumented public CLI behavior makes verify fail" that need agent intelligence to verify.
 
-Running `specify evolve --spec specify.spec.yaml` against the self-spec produces a summary showing the full command count (77) and suggestions for improving coverage. This is the feedback loop: the tool uses its own analysis capabilities to identify gaps in its own specification.
+Running `specify evolve --spec specify.spec.yaml` against the self-spec produces a summary showing the full command count (78) and suggestions for improving coverage. This is the feedback loop: the tool uses its own analysis capabilities to identify gaps in its own specification.
 
 This self-referential quality is intentional. If Specify cannot specify its own behavior completely and verify it reliably, it has no business asking other projects to do the same.
 
