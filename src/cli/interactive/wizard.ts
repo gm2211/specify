@@ -309,7 +309,6 @@ export async function runWizard(options: { fromCapture?: string; action?: string
     const menuOptions: { label: string; action: string }[] = [
       { label: 'Create   — start a new spec from scratch', action: 'create' },
       { label: 'Capture  — derive a spec from a running app or existing tests', action: 'capture' },
-      { label: 'Evolve   — add a feature, fix a gap, or update an existing spec', action: 'evolve' },
       { label: 'Review   — read the spec in a browser', action: 'review' },
       { label: 'Verify   — check that the implementation matches the spec', action: 'verify' },
     ];
@@ -317,29 +316,21 @@ export async function runWizard(options: { fromCapture?: string; action?: string
     let action: string;
 
     if (options.action) {
-      // Direct path access: `specify human verify`, `specify human evolve`, etc.
+      // Direct path access: `specify human verify`, `specify human capture`, etc.
       const match = menuOptions.find(o => o.action === options.action);
       if (match) {
         action = match.action;
         console.error(`\n  → ${match.label}\n`);
       } else {
         console.error(`\n  Unknown action: ${options.action}`);
-        console.error('  Available: create, capture, evolve, review, verify\n');
+        console.error('  Available: create, capture, review, verify\n');
         rl.close();
         return ExitCode.PARSE_ERROR;
       }
     } else {
       // Interactive menu
-      console.error('');
-      console.error('  What would you like to do?');
-      console.error('');
-      for (const opt of menuOptions) {
-        console.error(`    ${opt.label}`);
-      }
-      console.error('');
-
       rl.pause();
-      const choice = await arrowSelect(menuOptions.map(o => o.label), 'Select:');
+      const choice = await arrowSelect(menuOptions.map(o => o.label), 'What would you like to do?');
       rl.resume();
       action = menuOptions[choice].action;
     }
@@ -354,9 +345,6 @@ export async function runWizard(options: { fromCapture?: string; action?: string
         break;
       case 'capture':
         exitCode = await flowCaptureMenu(state, prompts, options.subAction);
-        break;
-      case 'evolve':
-        exitCode = await flowEvolveMenu(state, prompts, options.subAction);
         break;
       case 'review':
         exitCode = await flowReview(state, prompts);
@@ -408,18 +396,6 @@ async function pickCapture(state: ProjectState, { askPath, choose }: PromptFns):
     return state.captures[idx];
   } else {
     return await askPath('Path to capture directory');
-  }
-}
-
-async function pickReport(state: ProjectState, { askPath, choose }: PromptFns, label = 'Which report?'): Promise<string> {
-  if (state.reports.length === 1) {
-    console.error(`  Using report: ${state.reports[0]}`);
-    return state.reports[0];
-  } else if (state.reports.length > 1) {
-    const idx = await choose(label, state.reports);
-    return state.reports[idx];
-  } else {
-    return await askPath('Path to report JSON file');
   }
 }
 
@@ -490,57 +466,6 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
   console.error(`  Output:   ${result.outputDir}`);
 
   return summary.failed > 0 ? ExitCode.ASSERTION_FAILURE : ExitCode.SUCCESS;
-}
-
-// ---------------------------------------------------------------------------
-// Flow: Refine
-// ---------------------------------------------------------------------------
-
-async function flowRefine(state: ProjectState, { ask, askPath, choose }: PromptFns): Promise<number> {
-  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
-  const reportPath = await pickReport(state, { askPath, choose } as PromptFns);
-
-  const { loadSpec } = await import('../../spec/parser.js');
-  const { analyzeGaps, applyRefinements, suggestionsToMarkdown } = await import('../../spec/refiner.js');
-  const spec = loadSpec(specPath);
-  const report = JSON.parse(fs.readFileSync(path.resolve(reportPath), 'utf-8'));
-  const suggestions = analyzeGaps(spec, report);
-
-  if (suggestions.length === 0) {
-    console.error('\n  No refinements needed — spec is well-aligned.');
-    return ExitCode.SUCCESS;
-  }
-
-  console.error(suggestionsToMarkdown(suggestions));
-
-  const shouldApply = await ask('Apply refinements and save?', 'y');
-  if (shouldApply.toLowerCase() === 'y' || shouldApply.toLowerCase() === 'yes') {
-    const outputPath = await askPath('Save refined spec to', specPath.replace(/(\.\w+)$/, '.refined$1'));
-    const refined = applyRefinements(spec, suggestions);
-    const yaml = specToYaml(refined);
-    fs.writeFileSync(path.resolve(outputPath), yaml, 'utf-8');
-    console.error(`\n  Refined spec written to: ${outputPath}`);
-  }
-
-  return ExitCode.SUCCESS;
-}
-
-// ---------------------------------------------------------------------------
-// Flow: Improve
-// ---------------------------------------------------------------------------
-
-async function flowImprove(state: ProjectState, { ask, askPath, choose }: PromptFns): Promise<number> {
-  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
-
-  const url = await ask('Target URL for page discovery (empty to skip)', '');
-
-  console.error('\n  Analyzing spec for gaps...\n');
-
-  const { specRefine } = await import('../commands/spec-refine.js');
-  return await specRefine(
-    { spec: specPath, url: url || undefined },
-    { outputFormat: 'text', quiet: false },
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -765,49 +690,6 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
     { url, output: outputDir, headed: false, noScreenshots: false, noGenerate: false },
     { outputFormat: 'text', quiet: false },
   );
-}
-
-// ---------------------------------------------------------------------------
-// Flow: Evolve (sub-menu)
-// ---------------------------------------------------------------------------
-
-async function flowEvolveMenu(state: ProjectState, prompts: PromptFns, subAction?: string): Promise<number> {
-  const { choose } = prompts;
-
-  const options = [
-    { label: 'Interactively — I want to add a feature or improve the spec', action: 'interactive' },
-    { label: 'From a PR — a pull request changed the code, update the spec to match', action: 'pr' },
-    { label: 'From a report — verification found gaps, fix them', action: 'report' },
-  ];
-
-  let action: string;
-  if (subAction) {
-    const match = options.find(o => o.action === subAction);
-    action = match ? match.action : subAction;
-  } else {
-    const idx = await choose('What changed?', options.map(o => o.label));
-    action = options[idx].action;
-  }
-
-  const specPath = await pickSpec(state, prompts);
-
-  switch (action) {
-    case 'interactive':
-      return await flowImprove(state, prompts);
-    case 'pr': {
-      const pr = await prompts.ask('Which PR? (number or URL)');
-      console.error('\n  Analyzing PR...\n');
-      const { specEvolve } = await import('../commands/spec-evolve.js');
-      return await specEvolve(
-        { spec: specPath, pr, apply: false },
-        { outputFormat: 'text', quiet: false },
-      );
-    }
-    case 'report':
-      return await flowRefine(state, prompts);
-    default:
-      return ExitCode.SUCCESS;
-  }
 }
 
 // ---------------------------------------------------------------------------

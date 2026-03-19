@@ -23,16 +23,6 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
-    name: 'spec refine',
-    description: 'DEPRECATED: Use "spec evolve" instead. Thin wrapper that delegates to spec evolve.',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON (maps to evolve --report)' },
-      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (maps to evolve --apply --url)' },
-      { name: '--output', type: 'string', required: false, description: 'Output file path' },
-    ],
-  },
-  {
     name: 'capture',
     description: 'Capture a contract from a live system or codebase',
     parameters: [
@@ -146,27 +136,6 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
-    name: 'spec evolve',
-    description: 'Evolve a spec from PR changes, gap report, or interactive analysis',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--pr', type: 'string', required: false, description: 'PR number or URL to analyze' },
-      { name: '--repo', type: 'string', required: false, description: 'GitHub repo (owner/repo) if not inferrable from PR URL' },
-      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON — analyze and suggest refinements' },
-      { name: '--apply', type: 'boolean', required: false, description: 'Enter interactive mode to walk through and apply gap fixes' },
-      { name: '--output', type: 'string', required: false, description: 'Write refined spec to this path (report & apply modes)' },
-      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (apply mode only)' },
-    ],
-    examples: [
-      'specify spec evolve --spec spec.yaml --pr 42',
-      'specify spec evolve --spec spec.yaml --pr https://github.com/org/repo/pull/42',
-      'specify spec evolve --spec spec.yaml',
-      'specify spec evolve --spec spec.yaml --report gap-report.json --output refined.yaml',
-      'specify spec evolve --spec spec.yaml --apply',
-      'specify spec evolve --spec spec.yaml --apply --url http://localhost:3000 --output refined.yaml',
-    ],
-  },
-  {
     name: 'spec sync',
     description: 'Compare spec against existing e2e tests bidirectionally',
     parameters: [
@@ -248,47 +217,6 @@ export const COMMANDS: CommandDefinition[] = [
     examples: ['specify create', 'specify create --output my-app.spec.yaml'],
   },
   {
-    name: 'evolve',
-    description: 'Evolve a contract from PR changes, gap report, or interactive analysis',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--pr', type: 'string', required: false, description: 'PR number or URL to analyze' },
-      { name: '--repo', type: 'string', required: false, description: 'GitHub repo (owner/repo) if not inferrable from PR URL' },
-      { name: '--report', type: 'string', required: false, description: 'Path to gap report JSON — analyze and suggest refinements' },
-      { name: '--apply', type: 'boolean', required: false, description: 'Enter interactive mode to walk through and apply gap fixes' },
-      { name: '--output', type: 'string', required: false, description: 'Write refined spec to this path (report & apply modes)' },
-      { name: '--url', type: 'string', required: false, description: 'URL to crawl for context (apply mode only)' },
-    ],
-    modes: [
-      {
-        name: 'interactive',
-        description: 'Analyze spec structure and suggest improvements (default when no --pr or --report)',
-        required_parameters: ['--spec'],
-        condition: 'Neither --pr nor --report is provided',
-      },
-      {
-        name: 'pr_driven',
-        description: 'Analyze a pull request and suggest spec updates to match code changes',
-        required_parameters: ['--spec', '--pr'],
-        optional_parameters: ['--repo', '--output'],
-        condition: '--pr is provided',
-      },
-      {
-        name: 'report_driven',
-        description: 'Analyze a gap report and suggest targeted spec refinements',
-        required_parameters: ['--spec', '--report'],
-        optional_parameters: ['--apply', '--output', '--url'],
-        condition: '--report is provided',
-      },
-    ],
-    examples: [
-      'specify evolve --spec spec.yaml',
-      'specify evolve --spec spec.yaml --pr 42',
-      'specify evolve --spec spec.yaml --report gap-report.json',
-      'specify evolve --spec spec.yaml --apply',
-    ],
-  },
-  {
     name: 'verify',
     description: 'Verify an implementation against a contract (data validation, live agent, or CLI)',
     parameters: [
@@ -341,19 +269,5 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
     ],
     examples: ['specify lint --spec spec.yaml'],
-  },
-  {
-    name: 'bootstrap',
-    description: 'Set up specify-driven development workflow (CLAUDE.md instructions, git pre-commit hook)',
-    parameters: [
-      { name: '--dry-run', type: 'boolean', required: false, description: 'Preview actions without writing files' },
-      { name: '--target-dir', type: 'string', required: false, description: 'Target directory (default: current working directory)' },
-      { name: '--spec', type: 'string', required: false, description: 'Path to spec file for hook configuration' },
-    ],
-    examples: [
-      'specify bootstrap',
-      'specify bootstrap --dry-run',
-      'specify bootstrap --target-dir ./my-project',
-    ],
   },
 ];

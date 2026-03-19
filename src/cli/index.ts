@@ -16,8 +16,6 @@
  * Command structure:
  *   specify spec validate   --spec <path|-> --capture <dir>
  *   specify spec generate   --input <dir> --output <path> [--smart]
- *   specify spec evolve     --spec <path> [--pr <number|url>] [--report <path>] [--apply]
- *   specify spec refine     --spec <path> [--report <path>]  (DEPRECATED → delegates to evolve)
  *   specify spec import     --from <path> [--framework playwright|cypress]
  *   specify spec export     --spec <path> --framework playwright|cypress
  *   specify spec sync       --spec <path> --tests <dir>
@@ -188,12 +186,12 @@ ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
-  ${c.cyan('evolve')}            Evolve a contract from PR, report, or interactively
   ${c.cyan('review')}            Inspect the contract in a browser
   ${c.cyan('verify')}            Verify an implementation against a contract
 
 ${c.bold('Advanced:')}
   ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec import')}      Import existing e2e tests as spec items
   ${c.cyan('spec export')}      Export spec items as e2e test code
   ${c.cyan('spec sync')}        Compare contract vs e2e tests
@@ -201,7 +199,6 @@ ${c.bold('Advanced:')}
   ${c.cyan('report stats')}     Show statistical confidence from history
 
 ${c.bold('Infrastructure:')}
-  ${c.cyan('bootstrap')}         Set up specify-driven development workflow
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
   ${c.cyan('mcp')}               MCP server for agent integration
 
@@ -210,8 +207,6 @@ ${c.dim(`Run "specify <command> --help" for command-specific help`)}
 
 ${c.bold('Common tasks:')}
   ${c.dim('New project:')}       specify create
-  ${c.dim('Add a feature:')}     specify evolve --spec spec.yaml
-  ${c.dim('After a PR:')}        specify evolve --spec spec.yaml --pr 42
   ${c.dim('Check it works:')}    specify verify --spec spec.yaml
   ${c.dim('See the contract:')}  specify review --spec spec.yaml
 
@@ -226,7 +221,6 @@ ${c.bold('Examples:')}
   ${c.dim('$')} specify create
   ${c.dim('$')} specify capture --url http://localhost:3000 --output ./captures
   ${c.dim('$')} specify verify --spec ./spec.yaml --capture ./captures/latest
-  ${c.dim('$')} specify evolve --spec ./spec.yaml --pr 42
   ${c.dim('$')} specify review --spec ./spec.yaml
 `.trimStart());
   }
@@ -375,27 +369,6 @@ async function main(): Promise<void> {
         smart: hasFlag(rest, '--smart'),
       }, ctx);
 
-    } else if (noun === 'spec' && verb === 'refine') {
-      const { specRefine } = await import('./commands/spec-refine.js');
-      exitCode = await specRefine({
-        spec: resolveSpecArg(rest, ctx),
-        report: getArg(rest, '--report'),
-        url: getArg(rest, '--url'),
-        output: getArg(rest, '--output'),
-      }, ctx);
-
-    } else if (noun === 'spec' && verb === 'evolve') {
-      const { specEvolve } = await import('./commands/spec-evolve.js');
-      exitCode = await specEvolve({
-        spec: resolveSpecArg(rest, ctx),
-        pr: getArg(rest, '--pr'),
-        repo: getArg(rest, '--repo'),
-        report: getArg(rest, '--report'),
-        apply: hasFlag(rest, '--apply'),
-        output: getArg(rest, '--output'),
-        url: getArg(rest, '--url'),
-      }, ctx);
-
     } else if (noun === 'spec' && verb === 'import') {
       const { specImport } = await import('./commands/spec-import.js');
       exitCode = await specImport({
@@ -533,20 +506,6 @@ async function main(): Promise<void> {
     // -----------------------------------------------------------------
     // Top-level lifecycle aliases
     // -----------------------------------------------------------------
-    } else if (noun === 'evolve') {
-      // Top-level alias for spec evolve
-      const evolveArgs = verb ? [verb, ...rest] : rest;
-      const { specEvolve } = await import('./commands/spec-evolve.js');
-      exitCode = await specEvolve({
-        spec: resolveSpecArg(evolveArgs, ctx),
-        pr: getArg(evolveArgs, '--pr'),
-        repo: getArg(evolveArgs, '--repo'),
-        report: getArg(evolveArgs, '--report'),
-        apply: hasFlag(evolveArgs, '--apply'),
-        output: getArg(evolveArgs, '--output'),
-        url: getArg(evolveArgs, '--url'),
-      }, ctx);
-
     } else if (noun === 'verify') {
       // Unified verification dispatcher
       // Routing: explicit flags > spec auto-detection
@@ -613,15 +572,6 @@ async function main(): Promise<void> {
       const { specLint } = await import('./commands/spec-lint.js');
       exitCode = await specLint({
         spec: resolveSpecArg(lintArgs, ctx),
-      }, ctx);
-
-    } else if (noun === 'bootstrap') {
-      const bootstrapArgs = verb ? [verb, ...rest] : rest;
-      const { bootstrap: bootstrapCmd } = await import('./commands/bootstrap.js');
-      exitCode = await bootstrapCmd({
-        dryRun: hasFlag(bootstrapArgs, '--dry-run'),
-        targetDir: getArg(bootstrapArgs, '--target-dir') ?? '.',
-        spec: getArg(bootstrapArgs, '--spec') || resolveSpecArg(bootstrapArgs, ctx) || undefined,
       }, ctx);
 
     } else {

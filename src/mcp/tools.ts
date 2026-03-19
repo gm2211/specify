@@ -12,7 +12,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { parseSpec, loadSpec, specToYaml } from '../spec/parser.js';
 import { lintRaw } from '../spec/lint.js';
 import { getAuthoringGuide } from '../spec/guide.js';
-import { analyzeInteractive, summarizeSpec } from '../spec/evolve.js';
 import { generateTestsFromSpec } from '../e2e/spec-to-test.js';
 import { COMMANDS } from '../cli/commands-manifest.js';
 
@@ -57,41 +56,6 @@ export function registerTools(server: McpServer): void {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // analyze_gaps — Find weaknesses in a spec
-  // -------------------------------------------------------------------------
-  server.registerTool(
-    'analyze_gaps',
-    {
-      title: 'Analyze Spec Gaps',
-      description:
-        'Analyze a spec for missing coverage: pages without assertions, scenarios without ' +
-        'error paths, missing flows, missing defaults/assumptions, CLI commands without output ' +
-        'assertions. Returns structured suggestions with proposed changes and questions to ask the user.',
-      inputSchema: {
-        content: z.string().describe('The spec content as a YAML or JSON string'),
-      },
-    },
-    async ({ content }) => {
-      try {
-        const spec = parseSpec(content);
-        const summary = summarizeSpec(spec);
-        const suggestions = analyzeInteractive(spec);
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({ spec_summary: summary, suggestions }, null, 2),
-          }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: (err as Error).message }) }],
-          isError: true,
-        };
-      }
     },
   );
 
@@ -167,36 +131,6 @@ export function registerTools(server: McpServer): void {
         const files = generateTestsFromSpec(spec, { framework });
         return {
           content: [{ type: 'text', text: JSON.stringify(files, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: (err as Error).message }) }],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // get_spec_summary — Quick summary of what a spec covers
-  // -------------------------------------------------------------------------
-  server.registerTool(
-    'get_spec_summary',
-    {
-      title: 'Get Spec Summary',
-      description:
-        'Parse a spec and return a concise summary: page count, flow count, scenario count, ' +
-        'CLI command count, whether defaults/assumptions/hooks are set.',
-      inputSchema: {
-        content: z.string().describe('The spec content as a YAML or JSON string'),
-      },
-    },
-    async ({ content }) => {
-      try {
-        const spec = parseSpec(content);
-        const summary = summarizeSpec(spec);
-        return {
-          content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }],
         };
       } catch (err) {
         return {
