@@ -67,7 +67,7 @@ requirements:
             description: "Manifest is a JSON array of command definitions"
             schema:
               type: array
-              minItems: 24
+              minItems: 21
               items:
                 type: object
                 required: ["name", "description"]
@@ -77,9 +77,9 @@ requirements:
                   description:
                     type: string
           - type: json_path
-            description: "Manifest has exactly 24 public commands"
+            description: "Manifest has exactly 21 public commands"
             path: "length"
-            value: 24
+            value: 21
   - id: no-extra-public-behavior
     description: >
       Verify enforces a closed-world public contract: if the binary exposes any reachable
@@ -124,50 +124,50 @@ requirements:
           - type: text_contains
             text: "capture"
             description: "Help lists capture command"
-          - type: text_contains
-            text: "evolve"
-            description: "Help lists evolve command"
-  - id: evolve-user-intent-guidance
+  - id: no-extra-public-behavior
     description: >
-      The `evolve` contract is stronger than gap reporting. It must guide an LLM to add,
-      remove, or reshape behavior in a spec based on user intent, using gaps, PR diffs, and
-      validation reports as inputs rather than acting like lint.
+      Verify enforces a closed-world public contract: if the binary exposes any reachable
+      public CLI behavior that is not accounted for in this spec, `verify` MUST fail.
+      This includes top-level commands, subcommands, aliases, inferred modes, interactive
+      menu destinations, and documented help surfaces.
     verification: agent
     validation_plan: |
-      1. Exercise `specify evolve` in interactive, PR, report, and apply modes
-      2. Confirm the outputs are candidate edits or edit workflows, not just issue listings
-      3. Confirm the workflow can respond to explicit user intent to remove or reshape behavior,
-         not only add missing assertions
-      4. Fail if `evolve` behaves only as gap detection / recommendation without intent-guided mutation support
-    evidence_format: "A table of { mode, intent, observed_behavior, status } entries"
+      1. Discover the public CLI surface:
+         - Run `specify schema commands` to enumerate registered commands and aliases
+         - Run `specify --help` plus subcommand `--help` output to enumerate advertised paths and modes
+         - Exercise interactive entry points to list directly reachable menu destinations
+         - Probe likely compatibility aliases and deprecated paths that may still be exposed
+      2. For each discovered behavior, map it to exactly one of:
+         - a CLI command entry in this spec
+         - a CLI scenario in this spec
+         - a behavioral requirement that intentionally covers a non-mechanical property
+      3. Mark any discovered behavior with no mapping as `extra_unaccounted`
+      4. Verify the converse: every mapped public-surface entry in the evidence corresponds
+         to behavior that is actually reachable in the implementation
+      5. The assertion passes only if there are no `extra_unaccounted` behaviors and no
+         stale public-surface mappings
+    evidence_format: "A table of { behavior, discovery_source, mapped_to, status } entries where status is 'covered', 'extra_unaccounted', or 'stale_spec'"
     checks:
-      - id: evolve-produces-structured-suggestions
-        description: "Evolve produces structured suggestions with proposed_change actions and questions"
-        args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
+      - id: closed-world-manifest-count
+        description: "Public surface exactly matches expected command count (no hidden extras)"
+        args: ["schema", "commands"]
         expected_exit_code: 0
         stdout_assertions:
-          - type: json_schema
-            description: "Output has suggestions array with proposed_change and question fields"
-            schema:
-              type: object
-              required: ["suggestions"]
-              properties:
-                suggestions:
-                  type: array
-                  minItems: 1
-                  items:
-                    type: object
-                    required: ["id", "category", "description", "proposed_change", "question"]
-                    properties:
-                      id:
-                        type: string
-                      category:
-                        type: string
-                      proposed_change:
-                        type: object
-                        required: ["action"]
-                      question:
-                        type: string
+          - type: json_path
+            description: "Exactly 21 public commands — no extras beyond what spec accounts for"
+            path: "length"
+            value: 21
+      - id: help-output-valid
+        description: "Top-level help output lists known commands"
+        args: ["--help"]
+        expected_exit_code: 0
+        stderr_assertions:
+          - type: text_contains
+            text: "verify"
+            description: "Help lists verify command"
+          - type: text_contains
+            text: "capture"
+            description: "Help lists capture command"
   # -------------------------------------------------------------------
   # Capture & Spec Generation
   # -------------------------------------------------------------------
@@ -435,12 +435,6 @@ claims:
       fail.
     grounded_by:
       requirements: ["no-extra-public-behavior"]
-  - id: evolve-intent-guidance-contract
-    description: >
-      `evolve` must guide add/remove/reshape spec behavior from user intent, treating gaps,
-      PR diffs, and reports as inputs to mutation rather than as a lint-style end product.
-    grounded_by:
-      requirements: ["evolve-user-intent-guidance"]
   - id: capture-any-target
     description: >
       Specify can capture behavior from any target system — web, API, or CLI — through
@@ -507,13 +501,13 @@ cli:
             type: object
             required: ["name", "version", "commands", "global_options", "exit_codes"]
         - type: json_schema
-          description: "The commands array must list at least 24 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
+          description: "The commands array must list at least 21 entries (all registered commands), each with name, description, and parameters so agents know every available operation"
           schema:
             type: object
             properties:
               commands:
                 type: array
-                minItems: 24
+                minItems: 21
                 items:
                   type: object
                   required: ["name", "description", "parameters"]
@@ -523,12 +517,6 @@ cli:
         - type: text_contains
           description: "The spec generate command (create a spec from captured traffic data) must appear in the manifest"
           text: "spec generate"
-        - type: text_contains
-          description: "The spec refine command (deprecated alias for spec evolve) must still appear in the manifest for backward compatibility"
-          text: "spec refine"
-        - type: text_contains
-          description: "The spec evolve command (gap analysis and spec improvement suggestions) must appear in the manifest"
-          text: "spec evolve"
         - type: text_contains
           description: "The spec import command (convert existing e2e tests into spec items) must appear in the manifest"
           text: "spec import"
@@ -572,9 +560,6 @@ cli:
           description: "The capture command (record a contract from a live system or codebase) must appear as a standalone command"
           text: "\"name\": \"capture\""
         - type: text_contains
-          description: "The top-level evolve alias (convenience shortcut that delegates to spec evolve) must appear as a standalone command"
-          text: "\"name\": \"evolve\""
-        - type: text_contains
           description: "The top-level verify alias (unified verification dispatcher for data, agent, or CLI modes) must appear as a standalone command"
           text: "\"name\": \"verify\""
         - type: text_contains
@@ -617,8 +602,8 @@ cli:
     - id: help-flag
       description: >
         When invoked with --help, Specify prints human-readable usage information to stderr
-        (not stdout, which is reserved for structured data). The help text must show the five
-        primary lifecycle flows (Create, Capture, Evolve, Review, Verify) and the interactive
+        (not stdout, which is reserved for structured data). The help text must show the
+        primary lifecycle flows (Create, Capture, Review, Verify) and the interactive
         human mode, giving users a clear mental model of the tool's workflow.
       args: ["--help"]
       expected_exit_code: 0
@@ -632,8 +617,6 @@ cli:
           text: "create"
         - type: text_contains
           text: "capture"
-        - type: text_contains
-          text: "evolve"
         - type: text_contains
           text: "review"
         - type: text_contains
@@ -801,77 +784,6 @@ cli:
           text: "page.locator"
 
     # -------------------------------------------------------------------
-    # Spec evolve (agent-guided spec editing)
-    # -------------------------------------------------------------------
-    - id: evolve-interactive
-      description: >
-        When spec evolve is called without --pr or --report, it runs in interactive mode,
-        producing structured editing guidance an LLM can use to add, remove, or reshape
-        behavior in the spec. It outputs structured JSON containing the mode
-        ("interactive"), a spec_summary with metadata, and a suggestions array. Each
-        suggestion has an id, category, priority, description, rationale, proposed_change,
-        and a question for the user to consider. This gives agents a machine-readable edit
-        plan to combine with user intent, rather than a lint-style list of findings.
-      description_claims:
-        - evolve-intent-guidance-contract
-      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          path: "mode"
-          value: "interactive"
-        - type: json_schema
-          description: "The evolve output must contain mode, spec_summary, and suggestions, where each suggestion includes actionable fields: id, category, priority, description, rationale, proposed_change, and a question prompting the user for a decision"
-          schema:
-            type: object
-            required: ["mode", "spec_summary", "suggestions"]
-            properties:
-              suggestions:
-                type: array
-                items:
-                  type: object
-                  required: ["id", "category", "priority", "description", "rationale", "proposed_change", "question"]
-
-    - id: evolve-finds-gaps
-      description: >
-        The evolve command uses structural signals as inputs to spec editing guidance, not as
-        an end in themselves. When analyzing the login-page example spec (which has 1 page
-        with some scenarios that have interactions but no assertions), evolve must detect and
-        report the "interactions but no assertions" pattern as a real gap so an agent can
-        propose a concrete behavior change to the spec. This validates that evolve is guiding
-        spec mutation, not merely reporting schema violations.
-      description_claims:
-        - evolve-intent-guidance-contract
-      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          description: "Correctly identifies the login-page spec as having exactly 1 page"
-          path: "spec_summary.page_count"
-          value: 1
-        - type: text_contains
-          description: "Detects scenarios that have user interactions defined but are missing assertions to verify the outcome"
-          text: "interactions but no assertions"
-
-    - id: evolve-no-pr-flag-ok
-      description: >
-        When spec evolve is called on a spec that has a cli section (like specify.spec.yaml
-        itself), it correctly counts the CLI command entries in its summary. Running evolve
-        against the self-spec with --json confirms interactive mode and validates the
-        cli_command_count, which serves as a regression check that the agent receives enough
-        inventory context to plan spec edits against the CLI surface accurately.
-      args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          path: "mode"
-          value: "interactive"
-        - type: json_path
-          description: "The evolve summary reports the exact number of CLI command test entries in this spec file"
-          path: "spec_summary.cli_command_count"
-          value: 78
-
-    # -------------------------------------------------------------------
     # Spec import (heuristic analysis)
     # -------------------------------------------------------------------
     - id: import-nonexistent-dir
@@ -927,34 +839,6 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "No test files found"
-
-    # -------------------------------------------------------------------
-    # Spec evolve (complex CLI-focused editing guidance)
-    # -------------------------------------------------------------------
-    - id: evolve-self-spec-finds-cli-gaps
-      description: >
-        When evolve analyzes the self-spec (specify.spec.yaml), it runs in interactive mode
-        and produces suggestions where each one has the required fields (id, category,
-        priority, description, question). This tests that evolve works on complex CLI-focused
-        specs, not just simple page specs, and that its suggestions stay structured enough
-        for an LLM to turn them into concrete add/remove/update behavior edits.
-      args: ["spec", "evolve", "--spec", "specify.spec.yaml", "--json"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          path: "mode"
-          value: "interactive"
-        - type: json_schema
-          description: "Every suggestion in the array must have all required fields so agents can programmatically present them to users"
-          schema:
-            type: object
-            required: ["suggestions"]
-            properties:
-              suggestions:
-                type: array
-                items:
-                  type: object
-                  required: ["id", "category", "priority", "description", "question"]
 
     # -------------------------------------------------------------------
     # Spec lint (structural validation)
@@ -1024,17 +908,6 @@ cli:
           description: "The guide documents available assertion types (like element_exists) so agents know what checks they can define"
           text: "element_exists"
 
-    - id: evolve-missing-spec
-      description: >
-        When spec evolve is given a --spec path that does not exist, it fails with exit
-        code 10 and prints "Failed to load spec" to stderr. This is the same error pattern
-        used by all commands that load specs, ensuring consistent behavior across the CLI.
-      args: ["spec", "evolve", "--spec", "nonexistent.yaml"]
-      expected_exit_code: 10
-      stderr_assertions:
-        - type: text_contains
-          text: "Failed to load spec"
-
     # -------------------------------------------------------------------
     # Spec generate errors
     # -------------------------------------------------------------------
@@ -1061,21 +934,6 @@ cli:
       stderr_assertions:
         - type: text_contains
           text: "traffic.json not found"
-
-    # -------------------------------------------------------------------
-    # Spec evolve errors (report flag)
-    # -------------------------------------------------------------------
-    - id: evolve-report-nonexistent
-      description: >
-        When spec evolve is called with --report pointing to a nonexistent JSON file, it
-        fails with exit code 10 and prints "Failed to load report" to stderr. The --report
-        flag puts evolve in report-driven mode where it analyzes a gap report to suggest
-        targeted improvements — the report file must exist for this mode to work.
-      args: ["spec", "evolve", "--spec", "src/spec/examples/login-page.yaml", "--report", "nonexistent.json"]
-      expected_exit_code: 10
-      stderr_assertions:
-        - type: text_contains
-          text: "Failed to load report"
 
     # -------------------------------------------------------------------
     # Report diff errors
@@ -1310,22 +1168,6 @@ cli:
     # -------------------------------------------------------------------
     # Top-level lifecycle aliases
     # -------------------------------------------------------------------
-    - id: evolve-top-level
-      description: >
-        The top-level "evolve" command is a convenience alias that delegates directly to
-        "spec evolve". Running "specify evolve --spec ..." must produce identical output
-        to "specify spec evolve --spec ...". This verifies the alias works by checking that
-        it returns interactive mode and correctly summarizes the login-page spec (1 page).
-      args: ["evolve", "--spec", "src/spec/examples/login-page.yaml", "--json"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: json_path
-          path: "mode"
-          value: "interactive"
-        - type: json_path
-          path: "spec_summary.page_count"
-          value: 1
-
     - id: verify-capture-top-level
       description: >
         The "verify --capture" flag routes to spec validate (offline data validation mode).
@@ -1540,36 +1382,6 @@ cli:
         - type: text_contains
           description: "Shows example invocations starting with 'specify verify'"
           text: "specify verify"
-
-    - id: subcommand-help-evolve
-      description: >
-        Running "evolve --help" shows the evolve-specific parameters, including --pr (for
-        PR-driven evolution) and --report (for report-driven gap analysis). This helps users
-        understand the three evolution modes: interactive (default), PR-driven, and
-        report-driven.
-      args: ["evolve", "--help"]
-      expected_exit_code: 0
-      stderr_assertions:
-        - type: text_contains
-          text: "--pr"
-        - type: text_contains
-          text: "--report"
-
-    # -------------------------------------------------------------------
-    # Previously untested commands (covering missing paths)
-    # -------------------------------------------------------------------
-    - id: spec-refine-deprecated
-      description: >
-        The spec refine command is deprecated in favor of spec evolve. When invoked, it
-        still works (exit 0) but prints a deprecation warning to stderr so users know to
-        migrate. The command delegates to spec evolve internally, ensuring backward
-        compatibility while guiding users toward the current API.
-      args: ["spec", "refine", "--spec", "src/spec/examples/login-page.yaml"]
-      expected_exit_code: 0
-      stderr_assertions:
-        - type: text_contains
-          description: "Warns the user that spec refine is deprecated and they should use spec evolve instead"
-          text: "deprecated"
 
     - id: mcp-help
       description: >
