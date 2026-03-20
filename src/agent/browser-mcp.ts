@@ -4,12 +4,26 @@
  * Exposes browser interaction tools to the Agent SDK via createSdkMcpServer.
  * All tools are prefixed `browser_` and delegate to executeCommand from
  * capture-agent.ts, which handles Playwright actions + auto-screenshots.
+ *
+ * Also exposes `ask_user` — the agent's channel to request credentials,
+ * choices, or any input from the human operator.
  */
 
+import * as readline from 'readline';
 import type { Page } from 'playwright';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { executeCommand } from '../cli/commands/capture-agent.js';
+
+function promptUser(question: string): Promise<string> {
+  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+  return new Promise((resolve) => {
+    rl.question(`\n🔑 ${question}\n> `, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
 
 export function createBrowserMcpServer(
   page: Page,
@@ -133,6 +147,15 @@ export function createBrowserMcpServer(
         async (args) => {
           const result = await executeCommand(page, { action: 'waitForSelector', selector: args.selector, options: { state: args.state, timeout: args.timeout } }, screenshotFn);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+        },
+      ),
+      tool(
+        'ask_user',
+        'Ask the human operator a question. Use this when you need credentials (username, password, API key), must choose between ambiguous options, or need any information you cannot discover autonomously. The user sees the question on stderr and types a response.',
+        { question: z.string().describe('The question to ask the human operator') },
+        async (args) => {
+          const answer = await promptUser(args.question);
+          return { content: [{ type: 'text' as const, text: answer }] };
         },
       ),
     ],

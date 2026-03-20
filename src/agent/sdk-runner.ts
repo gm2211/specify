@@ -83,7 +83,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<{ result:
     'mcp__browser__browser_press', 'mcp__browser__browser_screenshot',
     'mcp__browser__browser_content', 'mcp__browser__browser_evaluate',
     'mcp__browser__browser_url', 'mcp__browser__browser_title',
-    'mcp__browser__browser_wait_for',
+    'mcp__browser__browser_wait_for', 'mcp__browser__ask_user',
   ];
 
   try {

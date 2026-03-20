@@ -42,10 +42,19 @@ Visit remaining sections. Screenshot initial state, try primary interaction.
 2. Read and refine the generated spec.
 3. Write the final spec to the output directory.
 
+## Asking the User
+You have an ask_user tool. Use it when you need:
+- Login credentials (username, password) to get past an auth wall
+- API keys or tokens that the app requires
+- A choice between ambiguous options you can't resolve on your own
+- Any information that isn't discoverable from the application itself
+Do NOT ask for things you can figure out yourself. Be autonomous 99% of the time.
+
 ## What NOT to Do
 - Don't get stuck on one page.
 - Don't explore external links.
 - Don't try to break security.
+- Don't guess credentials — ask the user.
 
 ## Target
 Explore ${url} and generate a comprehensive behavioral spec.`;
@@ -61,6 +70,10 @@ target implementation. Your job is to verify every requirement in the spec.
 3. For behavioral requirements, navigate and gather evidence.
 4. Write evidence files to .specify/evidence/<requirement-id>.json.
 5. A requirement PASSES if demonstrably present, FAILS otherwise.
+
+## Asking the User
+If you need credentials or other information to access the system under test,
+use the ask_user tool. Don't guess — ask.
 
 ## Target
 Verify ${url} against the spec at ${specPath}.`;
