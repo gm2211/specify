@@ -421,8 +421,8 @@ async function main(): Promise<void> {
         const url = getArg(captureArgs, '--url') ?? '';
         const output = getArg(captureArgs, '--output') ?? '';
 
-        // Agent mode: if CLAUDE_CODE_OAUTH_TOKEN is set and not --human, use SDK agent
-        if (!human && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+        // Specify IS the agent — use SDK runner for live capture (human mode is the only exception)
+        if (!human) {
           const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
           const { getCapturePrompt } = await import('../agent/prompts.js');
           const outputDir = path.resolve(output || '.specify/capture');
