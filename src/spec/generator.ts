@@ -501,4 +501,8 @@ function generate(): void {
   console.log('\nReview and refine the generated spec before using it for validation.');
 }
 
-generate();
+// Only run as a standalone CLI script, not when imported as a module
+import { fileURLToPath } from 'url';
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  generate();
+}

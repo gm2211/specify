@@ -24,7 +24,7 @@
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
  *   specify review           --spec <path> [--report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
- *   specify agent run        --spec <path|-> --url <url> [--explore] [--headed]
+ *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
  *   specify report diff      --a <path> --b <path>
  *   specify report stats     --history-dir <dir>
  *   specify schema spec|report|commands
@@ -417,37 +417,83 @@ async function main(): Promise<void> {
           output: getArg(captureArgs, '--output'),
         }, ctx);
       } else {
-        const { capture: captureCmd } = await import('./commands/capture.js');
-        const interactive = hasFlag(captureArgs, '--interactive');
-        const explore = hasFlag(captureArgs, '--explore');
-        exitCode = await captureCmd({
-          url: getArg(captureArgs, '--url') ?? '',
-          output: getArg(captureArgs, '--output') ?? '',
-          headed: hasFlag(captureArgs, '--headed') || interactive,  // interactive implies headed
-          timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
-          noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
-          noGenerate: hasFlag(captureArgs, '--no-generate'),
-          specOutput: getArg(captureArgs, '--spec-output'),
-          specName: getArg(captureArgs, '--spec-name'),
-          interactive,
-          explore,
-        }, ctx);
+        const human = hasFlag(captureArgs, '--human');
+        const url = getArg(captureArgs, '--url') ?? '';
+        const output = getArg(captureArgs, '--output') ?? '';
+
+        // Agent mode: if CLAUDE_CODE_OAUTH_TOKEN is set and not --human, use SDK agent
+        if (!human && process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+          const { getCapturePrompt } = await import('../agent/prompts.js');
+          const outputDir = path.resolve(output || '.specify/capture');
+          const prompt = getCapturePrompt(url);
+          try {
+            const { result, costUsd } = await runSpecifyAgent({
+              task: 'capture',
+              systemPrompt: prompt,
+              userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
+              url,
+              outputDir,
+              headed: hasFlag(captureArgs, '--headed'),
+            });
+            process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
+            process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
+            exitCode = ExitCode.SUCCESS;
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`Agent capture failed: ${msg}\n`);
+            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+            exitCode = ExitCode.BROWSER_ERROR;
+          }
+        } else {
+          const { capture: captureCmd } = await import('./commands/capture.js');
+          exitCode = await captureCmd({
+            url,
+            output,
+            headed: hasFlag(captureArgs, '--headed') || human,
+            timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
+            noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
+            noGenerate: hasFlag(captureArgs, '--no-generate'),
+            specOutput: getArg(captureArgs, '--spec-output'),
+            specName: getArg(captureArgs, '--spec-name'),
+            human,
+          }, ctx);
+        }
       }
 
-    } else if (noun === 'agent' && verb === 'run') {
-      const { agentRun } = await import('./commands/agent-run.js');
-      exitCode = await agentRun({
-        spec: resolveSpecArg(rest, ctx),
-        url: getArg(rest, '--url') ?? '',
-        headed: hasFlag(rest, '--headed'),
-        output: getArg(rest, '--output'),
-        explore: hasFlag(rest, '--explore'),
-        maxExplorationRounds: getArg(rest, '--max-exploration-rounds') ? parseInt(getArg(rest, '--max-exploration-rounds')!) : undefined,
-        noSetup: hasFlag(rest, '--no-setup'),
-        noTeardown: hasFlag(rest, '--no-teardown'),
-        timeout: getArg(rest, '--timeout') ? parseInt(getArg(rest, '--timeout')!) : undefined,
-        noScreenshots: hasFlag(rest, '--no-screenshots'),
-      }, ctx);
+    } else if (noun === 'replay') {
+      // replay command — recombine args
+      const replayArgs = verb ? [verb, ...rest] : rest;
+      const captureDir = getArg(replayArgs, '--capture') ?? '';
+      const url = getArg(replayArgs, '--url') ?? '';
+      if (!captureDir || !url) {
+        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide --capture and --url' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
+      } else {
+        const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+        const { getReplayPrompt } = await import('../agent/prompts.js');
+        const outputDir = path.resolve(getArg(replayArgs, '--output') ?? '.specify/replay');
+        const prompt = getReplayPrompt(captureDir, url);
+        try {
+          const { result, costUsd } = await runSpecifyAgent({
+            task: 'replay',
+            systemPrompt: prompt,
+            userPrompt: `Replay traffic from ${captureDir} against ${url}.`,
+            url,
+            captureDir,
+            outputDir,
+            headed: hasFlag(replayArgs, '--headed'),
+          });
+          process.stderr.write(`Replay complete (cost: $${costUsd.toFixed(4)})\n`);
+          process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
+          exitCode = ExitCode.SUCCESS;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`Replay failed: ${msg}\n`);
+          process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+          exitCode = ExitCode.BROWSER_ERROR;
+        }
+      }
 
     } else if (noun === 'cli' && verb === 'run') {
       const { cliRun } = await import('./commands/cli-run.js');
@@ -515,20 +561,30 @@ async function main(): Promise<void> {
       const capture = getArg(verifyArgs, '--capture');
 
       if (url && !capture) {
-        // verify --url (no --capture) → agent run
-        const { agentRun } = await import('./commands/agent-run.js');
-        exitCode = await agentRun({
-          spec: specPath,
-          url: url,
-          headed: hasFlag(verifyArgs, '--headed'),
-          output: getArg(verifyArgs, '--output'),
-          explore: hasFlag(verifyArgs, '--explore'),
-          maxExplorationRounds: getArg(verifyArgs, '--max-exploration-rounds') ? parseInt(getArg(verifyArgs, '--max-exploration-rounds')!) : undefined,
-          noSetup: hasFlag(verifyArgs, '--no-setup'),
-          noTeardown: hasFlag(verifyArgs, '--no-teardown'),
-          timeout: getArg(verifyArgs, '--timeout') ? parseInt(getArg(verifyArgs, '--timeout')!) : undefined,
-          noScreenshots: hasFlag(verifyArgs, '--no-screenshots'),
-        }, ctx);
+        // verify --url (no --capture) → Agent SDK verification
+        const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+        const { getVerifyPrompt } = await import('../agent/prompts.js');
+        const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
+        const prompt = getVerifyPrompt(specPath, url);
+        try {
+          const { result, costUsd } = await runSpecifyAgent({
+            task: 'verify',
+            systemPrompt: prompt,
+            userPrompt: `Verify ${url} against the spec at ${specPath}.`,
+            url,
+            spec: specPath,
+            outputDir,
+            headed: hasFlag(verifyArgs, '--headed'),
+          });
+          process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
+          process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
+          exitCode = ExitCode.SUCCESS;
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`Verification failed: ${msg}\n`);
+          process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+          exitCode = ExitCode.BROWSER_ERROR;
+        }
       } else if (capture) {
         // verify --capture → spec validate
         const { specValidate } = await import('./commands/spec-validate.js');

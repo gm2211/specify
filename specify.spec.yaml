@@ -261,7 +261,8 @@ narrative:
       - capture-no-output
       - capture-from-code-missing
       - capture-explore-mode-in-schema
-      - capture-interactive-mode-in-schema
+      - capture-human-mode-in-schema
+      - capture-agent-mode-in-schema
 
   # -------------------------------------------------------------------
   # Spec-Driven Development (TDD Loop)
@@ -1757,16 +1758,29 @@ cli:
           description: "The explore mode is listed in the capture command's modes"
           text: "from_live_explore"
 
-    - id: capture-interactive-mode-in-schema
+    - id: capture-human-mode-in-schema
       description: >
-        The capture command's interactive mode (--interactive flag) must be discoverable
-        via schema commands. The manifest should include "from_live_interactive" as a mode.
+        The capture command's human mode (--human flag) must be discoverable
+        via schema commands. The manifest should include "from_live_human" as a mode,
+        enabling humans to drive a headed browser while Specify records all traffic.
       args: ["schema", "commands"]
       expected_exit_code: 0
       stdout_assertions:
         - type: text_contains
-          description: "The interactive mode is listed in the capture command's modes"
-          text: "from_live_interactive"
+          description: "The human mode is listed in the capture command's modes"
+          text: "from_live_human"
+
+    - id: capture-agent-mode-in-schema
+      description: >
+        The capture command's agent mode (--agent flag) must be discoverable via schema
+        commands. The manifest should include "from_live_agent" as a mode, enabling agents
+        to drive browser interaction via a stdin/stdout NDJSON protocol during capture.
+      args: ["schema", "commands"]
+      expected_exit_code: 0
+      stdout_assertions:
+        - type: text_contains
+          description: "The agent mode is listed in the capture command's modes"
+          text: "from_live_agent"
 
     - id: capture-from-code-missing
       description: >

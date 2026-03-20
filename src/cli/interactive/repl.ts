@@ -226,17 +226,20 @@ async function handleRun(args: string[], state: ReplState): Promise<void> {
   }
 
   console.log('Running agent...');
-  const { runAgent } = await import('../../agent/runner.js');
-  const result = await runAgent({
-    specPath: state.specPath,
-    targetUrl: state.targetUrl,
-    headless: !args.includes('--headed'),
-    log: (msg) => console.log(`  ${msg}`),
+  const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
+  const { getVerifyPrompt } = await import('../../agent/prompts.js');
+  const prompt = getVerifyPrompt(state.specPath, state.targetUrl);
+  const { result, costUsd } = await runSpecifyAgent({
+    task: 'verify',
+    systemPrompt: prompt,
+    userPrompt: `Verify ${state.targetUrl} against the spec at ${state.specPath}.`,
+    url: state.targetUrl,
+    spec: state.specPath,
+    outputDir: '.specify/verify',
+    headed: args.includes('--headed'),
   });
-
-  state.report = result.report;
-  const { summary } = result.report;
-  console.log(`\nResult: ${summary.passed} passed, ${summary.failed} failed, ${summary.untested} untested (${summary.coverage}% coverage)`);
+  console.log(`\nAgent complete (cost: $${costUsd.toFixed(4)})`);
+  console.log(result);
 }
 
 function handleShow(args: string[], state: ReplState): void {

@@ -449,23 +449,24 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
 
   console.error('\n  Launching agent...\n');
 
-  const { runAgent } = await import('../../agent/runner.js');
-  const result = await runAgent({
-    specPath,
-    targetUrl: url,
-    headless: headed !== 'headed',
-    log: (msg) => console.error(`  ${msg}`),
+  const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
+  const { getVerifyPrompt } = await import('../../agent/prompts.js');
+  const prompt = getVerifyPrompt(specPath, url);
+  const { result, costUsd } = await runSpecifyAgent({
+    task: 'verify',
+    systemPrompt: prompt,
+    userPrompt: `Verify ${url} against the spec at ${specPath}.`,
+    url,
+    spec: specPath,
+    outputDir: '.specify/verify',
+    headed: headed === 'headed',
   });
 
-  const { summary } = result.report;
   console.error('');
-  console.error(`  Passed:   ${summary.passed}`);
-  console.error(`  Failed:   ${summary.failed}`);
-  console.error(`  Untested: ${summary.untested}`);
-  console.error(`  Coverage: ${summary.coverage}%`);
-  console.error(`  Output:   ${result.outputDir}`);
+  console.error(`  Agent complete (cost: $${costUsd.toFixed(4)})`);
+  console.error(`  ${result}`);
 
-  return summary.failed > 0 ? ExitCode.ASSERTION_FAILURE : ExitCode.SUCCESS;
+  return ExitCode.SUCCESS;
 }
 
 // ---------------------------------------------------------------------------

@@ -94,14 +94,17 @@ export async function runTui(options: {
         state.running = true;
         render(state);
         try {
-          const { runAgent } = await import('../../agent/runner.js');
-          const result = await runAgent({
-            specPath: options.spec,
-            targetUrl: options.url,
-            headless: true,
-            log: () => {},
+          const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
+          const { getVerifyPrompt } = await import('../../agent/prompts.js');
+          const prompt = getVerifyPrompt(options.spec, options.url);
+          await runSpecifyAgent({
+            task: 'verify',
+            systemPrompt: prompt,
+            userPrompt: `Verify ${options.url} against the spec at ${options.spec}.`,
+            url: options.url,
+            spec: options.spec,
+            outputDir: '.specify/verify',
           });
-          state.report = result.report;
         } catch {
           // Display error briefly
         }

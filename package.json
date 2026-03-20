@@ -18,13 +18,14 @@
     "generate-spec": "npx tsx src/spec/generator.ts",
     "typecheck": "npx tsc --noEmit",
     "validate": "npx tsx src/validation/validate.ts",
-    "agent": "npx tsx src/agent/run.ts",
+    "agent": "npx tsx src/cli/index.ts capture",
     "test": "tsc && node --test dist/src/**/*.test.js",
     "build": "tsc",
     "specify": "npx tsx src/cli/index.ts",
     "prepare": "git config core.hooksPath .githooks"
   },
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.81",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "ajv": "^8.18.0",
     "chrome-remote-interface": "^0.33.2",
