@@ -9,11 +9,12 @@
       "Write",
       "Bash(bd:*)",
       "Bash(git:*)",
-      "mcp__codex__codex"
+      "mcp__codex__codex",
+      "Bash(grep -n \"type:\\\\|quantifier\\\\|confidence\" /Users/gmecocci/projects/specify/src/spec/examples/*.yaml)"
     ]
   },
   "sandbox": {
-    "enabled": true,
-    "autoAllowBashIfSandboxed": true
+    "enabled": false,
+    "autoAllowBashIfSandboxed": false
   }
 }
