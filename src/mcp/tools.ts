@@ -76,30 +76,21 @@ export function registerTools(server: McpServer): void {
     },
     async ({ spec_path, capture_path }) => {
       try {
-        // Dynamic import to avoid loading validation code unless needed
-        const { specValidate } = await import('../cli/commands/spec-validate.js');
+        const { loadSpec } = await import('../spec/parser.js');
+        const { validate, loadCaptureData } = await import('../validation/validator.js');
+        const { toJson } = await import('../validation/reporter.js');
 
-        // Capture stdout by running the command
-        const output: string[] = [];
-        const origWrite = process.stdout.write;
-        process.stdout.write = ((chunk: string | Uint8Array) => {
-          output.push(typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString());
-          return true;
-        }) as typeof process.stdout.write;
-
-        const exitCode = await specValidate(
-          { spec: spec_path, capture: capture_path },
-          { outputFormat: 'json', quiet: true },
-        );
-
-        process.stdout.write = origWrite;
+        const spec = loadSpec(spec_path);
+        const capture = loadCaptureData(capture_path);
+        const report = validate(spec, capture);
+        const hasFailures = report.summary.failed > 0;
 
         return {
           content: [{
             type: 'text',
-            text: output.join('') || JSON.stringify({ exit_code: exitCode }),
+            text: toJson(report),
           }],
-          isError: exitCode !== 0,
+          isError: hasFailures,
         };
       } catch (err) {
         return {

@@ -10,11 +10,18 @@ import type { NarrativeDocument } from '../spec/narrative.js';
 import type { GapReport } from '../validation/types.js';
 import type { CliGapReport } from '../cli-test/types.js';
 
+export interface AgentVerifyResult {
+  pass: boolean;
+  summary: string;
+  results: { id: string; pass: boolean; evidence: string; type?: string }[];
+}
+
 export interface ReviewData {
   spec: Spec;
   narrative?: NarrativeDocument;
   webReport?: GapReport;
   cliReport?: CliGapReport;
+  agentResult?: AgentVerifyResult;
 }
 
 export function generateReviewHtml(data: ReviewData): string {
@@ -47,13 +54,6 @@ ${CSS}
     <main id="content">
       <div id="narrative-view"></div>
     </main>
-    <aside id="detail-panel" class="hidden">
-      <div id="detail-header">
-        <h3 id="detail-title"></h3>
-        <button onclick="closeDetail()" class="close-btn">&times;</button>
-      </div>
-      <div id="detail-body"></div>
-    </aside>
   </div>
 </div>
 <script>
@@ -90,7 +90,6 @@ const CSS = `
   --yellow: #d29922;
   --orange: #db6d28;
   --sidebar-w: 260px;
-  --detail-w: 380px;
   --header-h: 56px;
 }
 
@@ -159,9 +158,9 @@ body {
 
 /* Layout */
 #layout {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--sidebar-w) 1fr;
   flex: 1;
-  height: calc(100vh - var(--header-h));
 }
 
 /* Sidebar */
@@ -169,6 +168,9 @@ body {
   width: var(--sidebar-w);
   min-width: var(--sidebar-w);
   border-right: 1px solid var(--border);
+  position: sticky;
+  top: var(--header-h);
+  height: calc(100vh - var(--header-h));
   overflow-y: auto;
   padding: 12px 0;
   background: var(--bg-surface);
@@ -204,38 +206,74 @@ body {
 
 /* Main content */
 #content {
-  flex: 1;
   overflow-y: auto;
   padding: 32px 48px;
-  max-width: 900px;
+  max-width: 960px;
 }
 
 .section {
   margin-bottom: 32px;
-  padding: 20px 24px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-surface);
-  cursor: pointer;
   transition: border-color 0.15s;
+  overflow: hidden;
 }
 .section:hover { border-color: var(--accent); }
-.section.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.section.expanded { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
 
 .section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  padding: 20px 24px;
+  cursor: pointer;
+  transition: background 0.15s;
 }
+.section-header:hover { background: var(--bg-hover); }
 .section-header h2 { font-size: 18px; font-weight: 600; }
 .section-header h3 { font-size: 15px; font-weight: 600; }
-.section-badges { display: flex; gap: 6px; }
+.section-chevron {
+  font-size: 14px;
+  color: var(--text-muted);
+  margin-right: 8px;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+.section.expanded .section-chevron { transform: rotate(90deg); }
+.section-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.section-header-left h2, .section-header-left h3 {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.section-badges { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.section-mini-badges { display: flex; gap: 4px; flex-wrap: wrap; margin-left: 4px; }
+.mini-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.mini-badge.pass { background: rgba(63,185,80,0.12); color: var(--green); }
+.mini-badge.fail { background: rgba(248,81,73,0.12); color: var(--red); }
+.mini-badge.untested { background: rgba(110,118,129,0.12); color: var(--text-dim); }
+.mini-badge.info { background: rgba(88,166,255,0.1); color: var(--accent); }
 
-.section-body { color: var(--text-muted); font-size: 14px; }
+.section-body { color: var(--text-muted); font-size: 14px; padding: 0 24px; }
+.section-body:last-child { padding-bottom: 20px; }
 .section-body p { margin-bottom: 8px; }
 .section-refs {
   margin-top: 8px;
+  padding: 0 24px;
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
@@ -256,33 +294,37 @@ body {
 
 /* Spec view (inline per card, see .inline-spec) */
 
-/* Detail panel */
-#detail-panel {
-  width: var(--detail-w);
-  min-width: var(--detail-w);
-  border-left: 1px solid var(--border);
-  overflow-y: auto;
-  background: var(--bg-surface);
-  padding: 16px;
+/* Accordion details */
+.section-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+  background: rgba(0,0,0,0.12);
+  border-top: 1px solid transparent;
 }
-#detail-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
+.section.expanded .section-details {
+  max-height: 5000px;
+  transition: max-height 0.5s ease-in;
+  border-top-color: var(--border);
 }
-#detail-header h3 { font-size: 15px; }
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  font-size: 20px;
-  cursor: pointer;
-  padding: 4px 8px;
+.section-details-inner {
+  padding: 16px 24px 20px;
 }
-.close-btn:hover { color: var(--text); }
+.section-details .agent-result-item {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.section-details .agent-result-item.pass { border-left: 3px solid var(--green); }
+.section-details .agent-result-item.fail { border-left: 3px solid var(--red); }
+.section-details .not-verified {
+  color: var(--text-dim);
+  font-size: 13px;
+  font-style: italic;
+  padding: 8px 0;
+}
 
 .assertion-item {
   padding: 8px 12px;
@@ -338,7 +380,7 @@ body {
 .spec-toggle-btn.active { background: rgba(88,166,255,0.15); color: var(--accent); border-color: var(--accent); }
 
 .inline-spec {
-  margin-top: 12px;
+  margin: 12px 24px 0;
   padding: 12px 16px;
   background: rgba(0,0,0,0.3);
   border: 1px solid var(--border);
@@ -427,6 +469,115 @@ body {
 .exit-code.passed { color: var(--green); }
 .exit-code.failed { color: var(--red); }
 
+/* Requirement cards */
+.req-card {
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(0,0,0,0.15);
+  transition: border-color 0.15s;
+}
+.req-card:hover { border-color: var(--accent); }
+.req-card.pass { border-left: 3px solid var(--green); }
+.req-card.fail { border-left: 3px solid var(--red); }
+.req-card.untested { border-left: 3px solid var(--text-dim); }
+
+.req-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.req-card-id {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+}
+.req-card-badges { display: flex; gap: 6px; align-items: center; }
+.req-card-desc {
+  font-size: 14px;
+  color: var(--text);
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+.req-card-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+}
+.req-plan {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.req-plan-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.req-plan ol {
+  margin: 0;
+  padding-left: 18px;
+}
+.req-plan ol li {
+  margin-bottom: 2px;
+  line-height: 1.5;
+}
+.req-evidence {
+  margin-top: 6px;
+  padding: 8px 12px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.req-evidence-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.req-status-icon {
+  font-size: 14px;
+  margin-right: 4px;
+}
+.req-status-icon.pass { color: var(--green); }
+.req-status-icon.fail { color: var(--red); }
+.req-status-icon.untested { color: var(--text-dim); }
+
+/* Detail empty state with spec data */
+.spec-preview-item {
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  font-size: 13px;
+}
+.spec-preview-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  margin-bottom: 2px;
+}
+.spec-preview-text { color: var(--text-muted); }
+.spec-preview-list {
+  margin: 4px 0 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.spec-preview-list li { margin-bottom: 2px; }
+
 /* Sync warnings */
 .sync-warn {
   padding: 8px 12px;
@@ -440,9 +591,9 @@ body {
 
 /* Responsive */
 @media (max-width: 900px) {
+  #layout { grid-template-columns: 1fr; }
   #sidebar { display: none; }
   #content { padding: 16px; }
-  #detail-panel { position: fixed; right: 0; top: var(--header-h); bottom: 0; z-index: 20; box-shadow: -4px 0 12px rgba(0,0,0,0.4); }
 }
 `;
 
@@ -458,6 +609,7 @@ const JS = `
   const narrative = DATA.narrative;
   const webReport = DATA.webReport;
   const cliReport = DATA.cliReport;
+  const agentResult = DATA.agentResult;
 
   // ---- Helpers ----
 
@@ -582,7 +734,15 @@ const JS = `
     if (type === 'requirements') {
       if (spec.requirements) {
         spec.requirements.forEach(function(r) {
-          results.push({ kind: 'requirement', id: r.id, description: r.description, verification: r.verification, status: 'untested' });
+          var status = 'untested';
+          var evidence = null;
+          // Check agent result for this requirement
+          if (agentResult && agentResult.results) {
+            var ar = agentResult.results.find(function(a) { return a.id === r.id; });
+            if (ar) { status = ar.pass ? 'passed' : 'failed'; evidence = ar.evidence; }
+          }
+          results.push({ kind: 'requirement', id: r.id, description: r.description, verification: r.verification,
+            validation_plan: r.validation_plan, evidence_format: r.evidence_format, evidence: evidence, status: status });
         });
       }
       if (cliReport && cliReport.requirements) {
@@ -632,6 +792,26 @@ const JS = `
       }
     }
 
+    if (type === 'requirement' && parts.length > 1) {
+      var reqId = parts.slice(1).join(':');
+      var specReq = allRequirements.find(function(r) { return r.id === reqId; });
+      if (specReq) {
+        var rStatus = 'untested';
+        var rEvidence = null;
+        if (agentResult && agentResult.results) {
+          var agentReq = agentResult.results.find(function(a) { return a.id === reqId; });
+          if (agentReq) { rStatus = agentReq.pass ? 'passed' : 'failed'; rEvidence = agentReq.evidence; }
+        }
+        if (cliReport && cliReport.requirements) {
+          var cliReq = cliReport.requirements.find(function(r) { return r.id === reqId; });
+          if (cliReq) { rStatus = cliReq.status || rStatus; }
+        }
+        results.push({ kind: 'requirement', id: specReq.id, description: specReq.description,
+          verification: specReq.verification, validation_plan: specReq.validation_plan,
+          evidence_format: specReq.evidence_format, evidence: rEvidence, status: rStatus });
+      }
+    }
+
     if (type === 'claim' && parts.length > 1) {
       var claimId = parts.slice(1).join(':');
       if (cliReport && cliReport.claims) {
@@ -645,6 +825,16 @@ const JS = `
         if (specClaim) {
           results.push({ kind: 'claim', id: specClaim.id, description: specClaim.description, status: 'untested' });
         }
+      }
+    }
+
+    // Agent result — match by ID against any ref that had no results
+    if (results.length === 0 && agentResult && agentResult.results) {
+      var refId = parts.length > 1 ? parts.slice(1).join(':') : ref;
+      var agentMatch = agentResult.results.find(function(r) { return r.id === refId || r.id === ref; });
+      if (agentMatch) {
+        results.push({ kind: 'agent-result', id: agentMatch.id, status: agentMatch.pass ? 'passed' : 'failed',
+          evidence: agentMatch.evidence, type: agentMatch.type || type });
       }
     }
 
@@ -668,6 +858,22 @@ const JS = `
     const hasFail = results.some(r => r.status === 'failed');
     if (hasFail) return hasPass ? 'mixed' : 'failed';
     if (hasPass) return 'passed';
+    return 'untested';
+  }
+
+  // ---- Get requirement status from reports ----
+
+  function getRequirementStatus(reqId) {
+    // Check agent result first
+    if (agentResult && agentResult.results) {
+      var ar = agentResult.results.find(function(r) { return r.id === reqId; });
+      if (ar) return ar.pass ? 'passed' : 'failed';
+    }
+    // Check CLI report
+    if (cliReport && cliReport.requirements) {
+      var cr = cliReport.requirements.find(function(r) { return r.id === reqId; });
+      if (cr) return cr.status || 'untested';
+    }
     return 'untested';
   }
 
@@ -779,10 +985,11 @@ const JS = `
     if (spec.requirements && spec.requirements.length > 0) {
       sections.push({
         title: 'Behavioral Requirements',
-        body: spec.requirements.map(function(r) { return r.id + ': ' + r.description; }).join('\\n\\n'),
+        body: '',
         refs: ['requirements'],
         depth: 1,
-        children: []
+        children: [],
+        requirementCards: spec.requirements
       });
     }
 
@@ -869,7 +1076,7 @@ const JS = `
     toc.querySelectorAll('.toc-item').forEach(el => {
       el.addEventListener('click', () => {
         const idx = parseInt(el.dataset.idx);
-        selectSection(idx);
+        toggleSectionDetails(idx);
       });
     });
   }
@@ -885,9 +1092,19 @@ const JS = `
       allResults.forEach(r => { if (counts[r.status] !== undefined) counts[r.status]++; });
 
       const tag = s.depth === 1 ? 'h2' : 'h3';
-      html += '<div class="section' + (i === activeSectionIdx ? ' active' : '') + '" data-idx="' + i + '">';
-      html += '<div class="section-header">';
+      const isExpanded = i === activeSectionIdx;
+      html += '<div class="section' + (isExpanded ? ' expanded' : '') + '" data-idx="' + i + '">';
+
+      // --- Section header (clickable for accordion) ---
+      html += '<div class="section-header" data-idx="' + i + '">';
+      html += '<div class="section-header-left">';
+      html += '<span class="section-chevron">' + (isExpanded ? '\\u25be' : '\\u25b8') + '</span>';
       html += '<' + tag + '>' + esc(s.title) + '</' + tag + '>';
+
+      // Inline mini-badges for richer at-a-glance info
+      html += buildMiniSummary(s, allResults);
+
+      html += '</div>';
       html += '<div class="section-badges">';
       if (allResults.length > 0) {
         if (counts.passed) html += badgeFor('passed', counts.passed + ' passed');
@@ -908,6 +1125,76 @@ const JS = `
         html += '</div>';
       }
 
+      // Requirement cards (structured rendering)
+      if (s.requirementCards && s.requirementCards.length > 0) {
+        html += '<div class="section-body" style="margin-top:8px">';
+        for (const req of s.requirementCards) {
+          var reqStatus = getRequirementStatus(req.id);
+          var reqCls = reqStatus === 'passed' ? 'pass' : reqStatus === 'failed' ? 'fail' : 'untested';
+          var reqIcon = reqStatus === 'passed' ? '\\u2713' : reqStatus === 'failed' ? '\\u2717' : '\\u25cb';
+
+          html += '<div class="req-card ' + reqCls + '">';
+          html += '<div class="req-card-header">';
+          html += '<span class="req-card-id">' + esc(req.id) + '</span>';
+          html += '<div class="req-card-badges">';
+          html += '<span class="req-status-icon ' + reqCls + '">' + reqIcon + '</span>';
+          html += '<span class="badge badge-' + (req.verification === 'mechanical' ? 'neutral' : 'warn') + '">' + esc(req.verification || 'agent') + '</span>';
+          html += '</div></div>';
+          html += '<div class="req-card-desc">' + esc(req.description) + '</div>';
+          if (req.validation_plan) {
+            var planSteps = req.validation_plan.split('\\n').filter(Boolean);
+            if (planSteps.length > 2) {
+              html += '<div class="req-plan"><div class="req-plan-title">Validation Plan</div>';
+              html += '<ol>';
+              for (var psi = 0; psi < Math.min(planSteps.length, 3); psi++) {
+                html += '<li>' + esc(planSteps[psi].replace(/^\\d+\\.\\s*/, '').replace(/^-\\s*/, '')) + '</li>';
+              }
+              if (planSteps.length > 3) html += '<li style="color:var(--text-dim)">... ' + (planSteps.length - 3) + ' more steps</li>';
+              html += '</ol></div>';
+            }
+          }
+          if (req.evidence_format) {
+            html += '<div class="req-card-meta"><span class="badge badge-neutral">evidence: ' + esc(req.evidence_format) + '</span></div>';
+          }
+          html += '</div>';
+        }
+        html += '</div>';
+      }
+
+      // Also render inline requirement cards for narrative sections that cover requirements
+      if (!s.requirementCards) {
+        var sectionReqs = [];
+        for (var ri2 = 0; ri2 < s.refs.length; ri2++) {
+          var refStr = s.refs[ri2];
+          if (refStr === 'requirements') {
+            sectionReqs = sectionReqs.concat(allRequirements);
+          } else if (refStr.indexOf('requirement:') === 0) {
+            var rqId = refStr.substring('requirement:'.length);
+            var found = allRequirements.find(function(r) { return r.id === rqId; });
+            if (found) sectionReqs.push(found);
+          }
+        }
+        if (sectionReqs.length > 0) {
+          html += '<div class="section-body" style="margin-top:8px">';
+          for (var sri = 0; sri < sectionReqs.length; sri++) {
+            var sreq = sectionReqs[sri];
+            var srStatus = getRequirementStatus(sreq.id);
+            var srCls = srStatus === 'passed' ? 'pass' : srStatus === 'failed' ? 'fail' : 'untested';
+            var srIcon = srStatus === 'passed' ? '\\u2713' : srStatus === 'failed' ? '\\u2717' : '\\u25cb';
+            html += '<div class="req-card ' + srCls + '">';
+            html += '<div class="req-card-header">';
+            html += '<span class="req-card-id">' + esc(sreq.id) + '</span>';
+            html += '<div class="req-card-badges">';
+            html += '<span class="req-status-icon ' + srCls + '">' + srIcon + '</span>';
+            html += '<span class="badge badge-' + (sreq.verification === 'mechanical' ? 'neutral' : 'warn') + '">' + esc(sreq.verification || 'agent') + '</span>';
+            html += '</div></div>';
+            html += '<div class="req-card-desc">' + esc(sreq.description) + '</div>';
+            html += '</div>';
+          }
+          html += '</div>';
+        }
+      }
+
       // Spec refs + toggle
       if (s.refs.length > 0) {
         html += '<div class="section-refs">';
@@ -920,86 +1207,202 @@ const JS = `
         html += '<div class="inline-spec hidden" id="inline-spec-' + i + '"></div>';
       }
 
+      // Expandable details area (accordion)
+      html += '<div class="section-details">';
+      html += '<div class="section-details-inner">';
+      if (isExpanded) {
+        html += buildSectionDetails(i);
+      }
+      html += '</div></div>';
+
       html += '</div>';
     }
     container.innerHTML = html;
 
-    // Bind clicks
-    container.querySelectorAll('.section').forEach(el => {
-      el.addEventListener('click', () => {
+    // Bind header clicks for accordion
+    container.querySelectorAll('.section-header').forEach(el => {
+      el.addEventListener('click', (e) => {
+        // Don't toggle if clicking a button inside header
+        if (e.target.closest('button')) return;
         const idx = parseInt(el.dataset.idx);
-        selectSection(idx);
+        toggleSectionDetails(idx);
       });
     });
   }
 
-  // renderSpec removed — spec is now shown inline per-card via toggleInlineSpec
+  function buildMiniSummary(section, allResults) {
+    var html = '<div class="section-mini-badges">';
+    for (var ri = 0; ri < section.refs.length; ri++) {
+      var ref = section.refs[ri];
+      var refParts = ref.split(':');
+      var refType = refParts[0];
 
-  // ---- Detail panel ----
+      if (refType === 'page' && refParts[1]) {
+        var page = (spec.pages || []).find(function(p) { return p.id === refParts[1]; });
+        if (page) {
+          var vaCount = (page.visual_assertions || []).length;
+          var scCount = (page.scenarios || []).length;
+          if (vaCount > 0) html += '<span class="mini-badge info">' + vaCount + ' assertions</span>';
+          if (scCount > 0) html += '<span class="mini-badge info">' + scCount + ' scenarios</span>';
+        }
+      } else if (refType === 'scenario') {
+        var slash = (refParts[1] || '').indexOf('/');
+        if (slash > 0) {
+          var sPageId = refParts[1].substring(0, slash);
+          var scenarioId = refParts[1].substring(slash + 1);
+          var sPage = (spec.pages || []).find(function(p) { return p.id === sPageId; });
+          if (sPage) {
+            var scenario = (sPage.scenarios || []).find(function(s) { return s.id === scenarioId; });
+            if (scenario && scenario.steps) {
+              html += '<span class="mini-badge info">' + scenario.steps.length + ' steps</span>';
+              // Show overall status from results
+              var scenarioResults = allResults.filter(function(r) { return r.kind === 'scenario' || r.kind === 'scenario-step'; });
+              var sStatus = aggregateStatus(scenarioResults);
+              if (sStatus !== 'untested') {
+                var sCls = sStatus === 'passed' ? 'pass' : sStatus === 'failed' ? 'fail' : 'untested';
+                html += '<span class="mini-badge ' + sCls + '">' + sStatus + '</span>';
+              }
+            }
+          }
+        }
+      } else if (refType === 'flow' && refParts[1]) {
+        var flow = (spec.flows || []).find(function(f) { return f.id === refParts[1]; });
+        if (flow && flow.steps) {
+          html += '<span class="mini-badge info">' + flow.steps.length + ' steps</span>';
+          var flowResults = allResults.filter(function(r) { return r.kind === 'flow' || r.kind === 'flow-step'; });
+          var fStatus = aggregateStatus(flowResults);
+          if (fStatus !== 'untested') {
+            var fCls = fStatus === 'passed' ? 'pass' : fStatus === 'failed' ? 'fail' : 'untested';
+            html += '<span class="mini-badge ' + fCls + '">' + fStatus + '</span>';
+          }
+        }
+      }
+    }
+    html += '</div>';
+    return html;
+  }
 
-  function selectSection(idx) {
-    activeSectionIdx = idx;
-    renderToc();
-    renderNarrative();
+  function buildSectionDetails(idx) {
+    var s = sections[idx];
+    var allResults = s.refs.flatMap(function(r) { return resolveRef(r); });
+    var html = '';
 
-    const s = sections[idx];
-    const allResults = s.refs.flatMap(r => resolveRef(r));
+    // Stale refs warning
+    var staleRefs = s.refs.filter(function(r) { return isStaleRef(r); });
+    if (staleRefs.length > 0) {
+      html += '<div class="sync-warn">\\u26a0 Stale references: the narrative mentions spec items that no longer exist: ' + staleRefs.map(function(r) { return '<code>' + esc(r) + '</code>'; }).join(', ') + '. Update the narrative to fix these.</div>';
+    }
 
-    $('detail-title').textContent = s.title;
-    const body = $('detail-body');
+    // Agent verification results
+    var agentItems = [];
+    if (agentResult && agentResult.results) {
+      for (var ari = 0; ari < s.refs.length; ari++) {
+        var ref = s.refs[ari];
+        var refParts = ref.split(':');
+        var refId = refParts.length > 1 ? refParts.slice(1).join(':') : ref;
+        for (var aj = 0; aj < agentResult.results.length; aj++) {
+          var ar = agentResult.results[aj];
+          if (ar.id === refId || ar.id === ref) {
+            // Avoid duplicates
+            if (!agentItems.find(function(x) { return x.id === ar.id; })) {
+              agentItems.push(ar);
+            }
+          }
+        }
+      }
+      // Also check for requirements covered by this section
+      if (s.requirementCards) {
+        for (var rci = 0; rci < s.requirementCards.length; rci++) {
+          var reqId = s.requirementCards[rci].id;
+          for (var aj2 = 0; aj2 < agentResult.results.length; aj2++) {
+            var ar2 = agentResult.results[aj2];
+            if (ar2.id === reqId && !agentItems.find(function(x) { return x.id === ar2.id; })) {
+              agentItems.push(ar2);
+            }
+          }
+        }
+      }
+    }
 
+    if (agentItems.length > 0) {
+      html += '<div class="detail-section"><div class="detail-section-title">Agent Verification</div>';
+      for (var ai = 0; ai < agentItems.length; ai++) {
+        var item = agentItems[ai];
+        var cls = item.pass ? 'pass' : 'fail';
+        var icon = item.pass ? '\\u2713' : '\\u2717';
+        html += '<div class="agent-result-item ' + cls + '">';
+        html += '<span class="req-status-icon ' + cls + '">' + icon + '</span> ';
+        html += '<span style="font-family:monospace;font-size:12px;color:var(--accent)">' + esc(item.id) + '</span>';
+        if (item.evidence) {
+          html += '<div style="margin-top:4px;font-size:12px;color:var(--text-muted)">' + esc(typeof item.evidence === 'string' ? item.evidence : JSON.stringify(item.evidence)) + '</div>';
+        }
+        html += '</div>';
+      }
+      html += '</div>';
+    } else if (agentResult && agentResult.results && agentResult.results.length > 0) {
+      html += '<div class="not-verified">Not yet verified by agent for this section</div>';
+    }
+
+    // Validation results from reports
     if (allResults.length === 0) {
-      var staleRefs = s.refs.filter(function(r) { return isStaleRef(r); });
-      if (staleRefs.length > 0) {
-        body.innerHTML = '<div class="sync-warn">\\u26a0 Stale references: the narrative mentions spec items that no longer exist: ' + staleRefs.map(function(r) { return '<code>' + esc(r) + '</code>'; }).join(', ') + '. Update the narrative to fix these.</div>';
-      } else {
-        body.innerHTML = '<div class="sync-warn">No validation results linked to this section. Run <code>specify verify</code> to generate results.</div>';
+      var specPreview = buildSpecPreview(s);
+      if (specPreview) {
+        if (staleRefs.length === 0) {
+          html += '<div class="sync-warn" style="margin-bottom:12px">No validation results yet. Run <code>specify verify --url &lt;url&gt;</code> to generate results.</div>';
+        }
+        html += specPreview;
+      } else if (staleRefs.length === 0 && agentItems.length === 0) {
+        html += '<div class="sync-warn">No validation results linked to this section.</div>';
       }
     } else {
-      let html = '';
-
       // Group by kind
-      const groups = {};
-      for (const r of allResults) {
-        const k = r.kind || 'other';
+      var groups = {};
+      for (var gi = 0; gi < allResults.length; gi++) {
+        var r = allResults[gi];
+        var k = r.kind || 'other';
         if (!groups[k]) groups[k] = [];
         groups[k].push(r);
       }
 
-      for (const [kind, items] of Object.entries(groups)) {
+      for (var kind in groups) {
+        if (!groups.hasOwnProperty(kind)) continue;
+        var items = groups[kind];
         html += '<div class="detail-section">';
         html += '<div class="detail-section-title">' + esc(formatKind(kind)) + '</div>';
 
-        for (const item of items) {
-          const cls = item.status === 'passed' ? 'pass' : item.status === 'failed' ? 'fail' : 'untested';
-          html += '<div class="assertion-item ' + cls + '">';
+        for (var ii = 0; ii < items.length; ii++) {
+          var itm = items[ii];
+          var iCls = itm.status === 'passed' ? 'pass' : itm.status === 'failed' ? 'fail' : 'untested';
+          html += '<div class="assertion-item ' + iCls + '">';
 
-          if (item.kind === 'cli-command') {
-            html += renderCliCommand(item);
-          } else if (item.kind === 'request') {
-            html += renderRequest(item);
-          } else if (item.kind === 'visual') {
-            html += renderVisual(item);
-          } else if (item.kind === 'scenario' || item.kind === 'flow') {
-            html += renderFlowOrScenario(item);
-          } else if (item.kind === 'scenario-step' || item.kind === 'flow-step') {
-            html += renderStep(item);
-          } else if (item.kind === 'default') {
-            html += renderDefault(item);
-          } else if (item.kind === 'console') {
-            html += renderConsole(item);
-          } else if (item.kind === 'variable') {
-            html += renderVariable(item);
-          } else if (item.kind === 'assumption') {
-            html += renderAssumption(item);
-          } else if (item.kind === 'requirement') {
-            html += renderRequirement(item);
-          } else if (item.kind === 'cli-spec') {
-            html += renderCliSpec(item);
-          } else if (item.kind === 'cli-summary') {
-            html += '<div class="assertion-type">CLI Section</div><div class="assertion-desc">Binary: ' + esc(item.binary) + '</div><div class="assertion-detail">' + item.commandCount + ' command tests</div>';
+          if (itm.kind === 'cli-command') {
+            html += renderCliCommand(itm);
+          } else if (itm.kind === 'request') {
+            html += renderRequest(itm);
+          } else if (itm.kind === 'visual') {
+            html += renderVisual(itm);
+          } else if (itm.kind === 'scenario' || itm.kind === 'flow') {
+            html += renderFlowOrScenario(itm);
+          } else if (itm.kind === 'scenario-step' || itm.kind === 'flow-step') {
+            html += renderStep(itm);
+          } else if (itm.kind === 'default') {
+            html += renderDefault(itm);
+          } else if (itm.kind === 'console') {
+            html += renderConsole(itm);
+          } else if (itm.kind === 'variable') {
+            html += renderVariable(itm);
+          } else if (itm.kind === 'assumption') {
+            html += renderAssumption(itm);
+          } else if (itm.kind === 'requirement') {
+            html += renderRequirement(itm);
+          } else if (itm.kind === 'cli-spec') {
+            html += renderCliSpec(itm);
+          } else if (itm.kind === 'agent-result') {
+            html += renderAgentResult(itm);
+          } else if (itm.kind === 'cli-summary') {
+            html += '<div class="assertion-type">CLI Section</div><div class="assertion-desc">Binary: ' + esc(itm.binary) + '</div><div class="assertion-detail">' + itm.commandCount + ' command tests</div>';
           } else {
-            html += '<div class="assertion-desc">' + esc(item.description || item.status || 'Unknown') + '</div>';
+            html += '<div class="assertion-desc">' + esc(itm.description || itm.status || 'Unknown') + '</div>';
           }
 
           html += '</div>';
@@ -1007,24 +1410,32 @@ const JS = `
 
         html += '</div>';
       }
-
-      body.innerHTML = html;
     }
 
-    $('detail-panel').classList.remove('hidden');
-
-    // Scroll to section in narrative
-    const el = document.querySelector('.section[data-idx="' + idx + '"]');
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    return html;
   }
 
-  function closeDetail() {
-    activeSectionIdx = -1;
-    $('detail-panel').classList.add('hidden');
+  // renderSpec removed — spec is now shown inline per-card via toggleInlineSpec
+
+  // ---- Accordion toggle ----
+
+  function toggleSectionDetails(idx) {
+    if (activeSectionIdx === idx) {
+      // Collapse current
+      activeSectionIdx = -1;
+    } else {
+      // Expand new (collapses previous)
+      activeSectionIdx = idx;
+    }
     renderToc();
     renderNarrative();
+
+    // Scroll to expanded section
+    if (activeSectionIdx >= 0) {
+      var el = document.querySelector('.section[data-idx="' + activeSectionIdx + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
   }
-  window.closeDetail = closeDetail;
 
   function formatKind(k) {
     return k.replace(/-/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase());
@@ -1147,10 +1558,65 @@ const JS = `
   }
 
   function renderRequirement(item) {
-    var h = '<div class="assertion-type">Behavioral Requirement \\u2014 ' + esc(item.verification || 'agent') + '</div>';
-    h += '<div class="assertion-desc">' + esc(item.id || '') + '</div>';
-    h += '<div class="assertion-detail">' + esc(item.description || '') + '</div>';
-    if (item.evidence) h += '<div class="assertion-detail">Evidence: ' + esc(JSON.stringify(item.evidence).substring(0, 200)) + '</div>';
+    var statusIcon = item.status === 'passed' ? '\\u2713' : item.status === 'failed' ? '\\u2717' : '\\u25cb';
+    var statusCls = item.status === 'passed' ? 'pass' : item.status === 'failed' ? 'fail' : 'untested';
+    var verBadgeCls = item.verification === 'mechanical' ? 'neutral' : 'warn';
+
+    var h = '<div class="req-card-header" style="margin-bottom:4px">';
+    h += '<span class="req-card-id"><span class="req-status-icon ' + statusCls + '">' + statusIcon + '</span> ' + esc(item.id || '') + '</span>';
+    h += '<span class="badge badge-' + verBadgeCls + '">' + esc(item.verification || 'agent') + '</span>';
+    h += '</div>';
+    h += '<div class="req-card-desc" style="font-size:13px">' + esc(item.description || '') + '</div>';
+
+    // Validation plan
+    if (item.validation_plan) {
+      var steps = item.validation_plan.split('\\n').filter(Boolean);
+      h += '<div class="req-plan"><div class="req-plan-title">Validation Plan</div>';
+      h += '<ol>';
+      for (var si = 0; si < steps.length; si++) {
+        h += '<li>' + esc(steps[si].replace(/^\\d+\\.\\s*/, '').replace(/^-\\s*/, '')) + '</li>';
+      }
+      h += '</ol></div>';
+    }
+
+    // Evidence format
+    if (item.evidence_format) {
+      h += '<div style="margin-top:4px"><span class="badge badge-neutral">evidence format: ' + esc(item.evidence_format) + '</span></div>';
+    }
+
+    // Evidence (rendered nicely, not raw JSON)
+    if (item.evidence) {
+      h += '<div class="req-evidence"><div class="req-evidence-title">Evidence</div>';
+      if (typeof item.evidence === 'string') {
+        h += '<div class="spec-preview-text">' + esc(item.evidence) + '</div>';
+      } else if (typeof item.evidence === 'object') {
+        // Render evidence object as key-value pairs
+        var evidenceEntries = Object.entries(item.evidence);
+        for (var ei = 0; ei < evidenceEntries.length; ei++) {
+          var ek = evidenceEntries[ei][0];
+          var ev = evidenceEntries[ei][1];
+          h += '<div style="margin-bottom:4px"><span style="color:var(--accent);font-size:12px">' + esc(ek) + ':</span> ';
+          h += '<span style="color:var(--text-muted);font-size:12px">' + esc(typeof ev === 'string' ? ev : JSON.stringify(ev)) + '</span></div>';
+        }
+      }
+      h += '</div>';
+    }
+
+    return h;
+  }
+
+  function renderAgentResult(item) {
+    var statusIcon = item.status === 'passed' ? '\\u2713' : '\\u2717';
+    var statusCls = item.status === 'passed' ? 'pass' : 'fail';
+    var h = '<div class="req-card-header" style="margin-bottom:4px">';
+    h += '<span class="req-card-id"><span class="req-status-icon ' + statusCls + '">' + statusIcon + '</span> ' + esc(item.id || '') + '</span>';
+    if (item.type) h += '<span class="badge badge-neutral">' + esc(item.type) + '</span>';
+    h += '</div>';
+    if (item.evidence) {
+      h += '<div class="req-evidence"><div class="req-evidence-title">Evidence</div>';
+      h += '<div class="spec-preview-text">' + esc(typeof item.evidence === 'string' ? item.evidence : JSON.stringify(item.evidence, null, 2)) + '</div>';
+      h += '</div>';
+    }
     return h;
   }
 
@@ -1185,6 +1651,115 @@ const JS = `
     }
     h += '<div class="cli-rerun">Run: <code>' + esc((spec.cli ? spec.cli.binary : './specify') + ' ' + (item.args || []).join(' ')) + '</code></div>';
     return h;
+  }
+
+  // ---- Spec preview for detail panel empty state ----
+
+  function buildSpecPreview(section) {
+    var html = '';
+    for (var ri = 0; ri < section.refs.length; ri++) {
+      var ref = section.refs[ri];
+      var refParts = ref.split(':');
+      var refType = refParts[0];
+
+      if (refType === 'page' && refParts[1]) {
+        var page = (spec.pages || []).find(function(p) { return p.id === refParts[1]; });
+        if (page) {
+          html += '<div class="detail-section"><div class="detail-section-title">Page: ' + esc(page.id) + '</div>';
+          html += '<div class="spec-preview-item"><div class="spec-preview-label">Path</div><div class="spec-preview-text">' + esc(page.path) + '</div></div>';
+          if (page.description) html += '<div class="spec-preview-item"><div class="spec-preview-label">Description</div><div class="spec-preview-text">' + esc(page.description) + '</div></div>';
+          if (page.visual_assertions && page.visual_assertions.length > 0) {
+            html += '<div class="spec-preview-item"><div class="spec-preview-label">Visual Assertions (' + page.visual_assertions.length + ')</div><ul class="spec-preview-list">';
+            for (var vai = 0; vai < page.visual_assertions.length; vai++) {
+              var va = page.visual_assertions[vai];
+              html += '<li>' + esc((va.type || '') + ': ' + (va.description || va.selector || '')) + '</li>';
+            }
+            html += '</ul></div>';
+          }
+          if (page.scenarios && page.scenarios.length > 0) {
+            html += '<div class="spec-preview-item"><div class="spec-preview-label">Scenarios (' + page.scenarios.length + ')</div><ul class="spec-preview-list">';
+            for (var si = 0; si < page.scenarios.length; si++) {
+              html += '<li>' + esc(page.scenarios[si].id + (page.scenarios[si].description ? ' - ' + page.scenarios[si].description : '')) + '</li>';
+            }
+            html += '</ul></div>';
+          }
+          html += '</div>';
+        }
+      }
+
+      if (refType === 'scenario') {
+        var slash = (refParts[1] || '').indexOf('/');
+        if (slash > 0) {
+          var sPageId = refParts[1].substring(0, slash);
+          var scenarioId = refParts[1].substring(slash + 1);
+          var sPage = (spec.pages || []).find(function(p) { return p.id === sPageId; });
+          if (sPage) {
+            var scenario = (sPage.scenarios || []).find(function(s) { return s.id === scenarioId; });
+            if (scenario) {
+              html += '<div class="detail-section"><div class="detail-section-title">Scenario: ' + esc(scenarioId) + '</div>';
+              if (scenario.description) html += '<div class="spec-preview-item"><div class="spec-preview-label">Description</div><div class="spec-preview-text">' + esc(scenario.description) + '</div></div>';
+              if (scenario.steps && scenario.steps.length > 0) {
+                html += '<div class="spec-preview-item"><div class="spec-preview-label">Steps (' + scenario.steps.length + ')</div><ol class="spec-preview-list">';
+                for (var sti = 0; sti < scenario.steps.length; sti++) {
+                  var step = scenario.steps[sti];
+                  html += '<li>' + esc((step.action || step.type || '') + (step.description ? ': ' + step.description : '')) + '</li>';
+                }
+                html += '</ol></div>';
+              }
+              html += '</div>';
+            }
+          }
+        }
+      }
+
+      if (refType === 'flow' && refParts[1]) {
+        var flow = (spec.flows || []).find(function(f) { return f.id === refParts[1]; });
+        if (flow) {
+          html += '<div class="detail-section"><div class="detail-section-title">Flow: ' + esc(flow.id) + '</div>';
+          if (flow.description) html += '<div class="spec-preview-item"><div class="spec-preview-label">Description</div><div class="spec-preview-text">' + esc(flow.description) + '</div></div>';
+          if (flow.steps && flow.steps.length > 0) {
+            html += '<div class="spec-preview-item"><div class="spec-preview-label">Steps (' + flow.steps.length + ')</div><ol class="spec-preview-list">';
+            for (var fsi = 0; fsi < flow.steps.length; fsi++) {
+              var fStep = flow.steps[fsi];
+              html += '<li>' + esc((fStep.action || fStep.type || fStep.page || '') + (fStep.description ? ': ' + fStep.description : '')) + '</li>';
+            }
+            html += '</ol></div>';
+          }
+          html += '</div>';
+        }
+      }
+
+      if (ref === 'requirements' || refType === 'requirement') {
+        var reqs = [];
+        if (ref === 'requirements') {
+          reqs = allRequirements;
+        } else if (refParts.length > 1) {
+          var rId = refParts.slice(1).join(':');
+          var found = allRequirements.find(function(r) { return r.id === rId; });
+          if (found) reqs = [found];
+        }
+        if (reqs.length > 0) {
+          html += '<div class="detail-section"><div class="detail-section-title">Requirements (' + reqs.length + ')</div>';
+          for (var rqi = 0; rqi < reqs.length; rqi++) {
+            var rq = reqs[rqi];
+            html += '<div class="spec-preview-item">';
+            html += '<div class="spec-preview-label">' + esc(rq.id) + ' <span class="badge badge-' + (rq.verification === 'mechanical' ? 'neutral' : 'warn') + '">' + esc(rq.verification || 'agent') + '</span></div>';
+            html += '<div class="spec-preview-text">' + esc(rq.description) + '</div>';
+            if (rq.validation_plan) {
+              var planLines = rq.validation_plan.split('\\n').filter(Boolean);
+              html += '<div style="margin-top:4px"><div class="spec-preview-label">Validation Plan</div><ol class="spec-preview-list">';
+              for (var pli = 0; pli < planLines.length; pli++) {
+                html += '<li>' + esc(planLines[pli].replace(/^\\d+\\.\\s*/, '').replace(/^-\\s*/, '')) + '</li>';
+              }
+              html += '</ol></div>';
+            }
+            html += '</div>';
+          }
+          html += '</div>';
+        }
+      }
+    }
+    return html || null;
   }
 
   // ---- Per-card spec toggle ----
@@ -1314,7 +1889,8 @@ const JS = `
   function renderSummary() {
     const badges = $('summary-badges');
     const reports = [webReport, cliReport].filter(Boolean);
-    if (reports.length === 0) {
+    var hasAgent = agentResult && agentResult.results && agentResult.results.length > 0;
+    if (reports.length === 0 && !hasAgent) {
       badges.innerHTML = '<span class="badge badge-neutral">No reports</span>';
       return;
     }
@@ -1324,6 +1900,13 @@ const JS = `
         total += r.summary.total || 0;
         passed += r.summary.passed || 0;
         failed += r.summary.failed || 0;
+      }
+    }
+    if (hasAgent) {
+      for (var ari = 0; ari < agentResult.results.length; ari++) {
+        total++;
+        if (agentResult.results[ari].pass) passed++;
+        else failed++;
       }
     }
     const untested = total - passed - failed;

@@ -1,12 +1,19 @@
 {
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
   "permissions": {
-    "allow": ["Read", "Edit", "Write", "Bash(bd:*)", "Bash(git:*)"]
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash(bd:*)",
+      "Bash(git:*)",
+      "mcp__codex__codex"
+    ]
   },
   "sandbox": {
     "enabled": true,
     "autoAllowBashIfSandboxed": true
-  },
-  "env": {
-    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   }
 }

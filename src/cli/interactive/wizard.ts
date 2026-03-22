@@ -48,8 +48,8 @@ function detectProjectState(): ProjectState {
 
   // Find capture directories (contain traffic.json)
   const captures: string[] = [];
-  // Check .specify/captures/ (preferred) and legacy captures/
-  for (const capturesBase of [path.join(specifyDir, 'captures'), path.join(cwd, 'captures')]) {
+  // Check .specify/capture/ (agent default), .specify/captures/ (legacy), and captures/ (legacy)
+  for (const capturesBase of [path.join(specifyDir, 'capture'), path.join(specifyDir, 'captures'), path.join(cwd, 'captures')]) {
     if (fs.existsSync(capturesBase)) {
       try {
         const subdirs = fs.readdirSync(capturesBase).filter(d => {
@@ -451,22 +451,29 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
   const { getVerifyPrompt } = await import('../../agent/prompts.js');
-  const prompt = getVerifyPrompt(specPath, url);
-  const { result, costUsd } = await runSpecifyAgent({
+  const resolvedSpec = path.resolve(specPath);
+  const prompt = getVerifyPrompt(resolvedSpec, url);
+  const { result, costUsd, structuredOutput } = await runSpecifyAgent({
     task: 'verify',
     systemPrompt: prompt,
-    userPrompt: `Verify ${url} against the spec at ${specPath}.`,
+    userPrompt: `Verify ${url} against the spec at ${resolvedSpec}.`,
     url,
-    spec: specPath,
+    spec: resolvedSpec,
     outputDir: '.specify/verify',
     headed: headed === 'headed',
   });
 
+  const { extractBool } = await import('../../agent/sdk-runner.js');
+  const pass = extractBool(structuredOutput, 'pass');
+
   console.error('');
   console.error(`  Agent complete (cost: $${costUsd.toFixed(4)})`);
+  if (pass !== null) {
+    console.error(`  Result: ${pass ? 'PASS' : 'FAIL'}`);
+  }
   console.error(`  ${result}`);
 
-  return ExitCode.SUCCESS;
+  return pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
 }
 
 // ---------------------------------------------------------------------------
@@ -684,13 +691,51 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
   const url = await ask('URL to capture', 'http://localhost:3000');
   const outputDir = await askPath('Output directory', './captures/latest');
 
-  console.error('\n  Launching capture...\n');
+  try {
+    new URL(url);
+  } catch {
+    console.error(`  Invalid URL: ${url}`);
+    return ExitCode.PARSE_ERROR;
+  }
 
-  const { capture: captureCmd } = await import('../commands/capture.js');
-  return await captureCmd(
-    { url, output: outputDir, headed: false, noScreenshots: false, noGenerate: false },
-    { outputFormat: 'text', quiet: false },
-  );
+  console.error('\n  Launching agent capture...\n');
+
+  const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
+  const { getCapturePrompt } = await import('../../agent/prompts.js');
+  const resolvedOutputDir = path.resolve(outputDir);
+  const specOutputPath = path.resolve(path.join(path.dirname(resolvedOutputDir), 'spec.yaml'));
+  const prompt = getCapturePrompt(url, specOutputPath);
+
+  try {
+    const { costUsd } = await runSpecifyAgent({
+      task: 'capture',
+      systemPrompt: prompt,
+      userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
+      url,
+      outputDir: resolvedOutputDir,
+      specOutput: specOutputPath,
+      specName: new URL(url).hostname,
+    });
+    console.error(`\n  Capture complete (cost: $${costUsd.toFixed(4)})`);
+
+    if (!fs.existsSync(specOutputPath)) {
+      console.error(`  Warning: agent did not write spec file at ${specOutputPath}`);
+      return ExitCode.PARSE_ERROR;
+    }
+    try {
+      const { loadSpec } = await import('../../spec/parser.js');
+      const spec = loadSpec(specOutputPath);
+      console.error(`  Spec validated: ${specOutputPath} (${spec.pages?.length ?? 0} pages)`);
+      return ExitCode.SUCCESS;
+    } catch (parseErr) {
+      console.error(`  Warning: agent wrote invalid spec: ${(parseErr as Error).message}`);
+      return ExitCode.PARSE_ERROR;
+    }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`  Agent capture failed: ${msg}`);
+    return ExitCode.BROWSER_ERROR;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -740,7 +785,16 @@ async function flowVerifyMenu(state: ProjectState, prompts: PromptFns, subAction
       return await flowAgent(state, prompts);
     case 'cli': {
       const specPath = await pickSpec(state, prompts);
-      console.error('\n  Running CLI verification...\n');
+      const { loadSpec: loadSpecForCli } = await import('../../spec/parser.js');
+      let cliSpec;
+      try { cliSpec = loadSpecForCli(specPath); } catch { /* handled by cliRun */ }
+      if (cliSpec?.cli) {
+        console.error(`\n  CLI target: ${cliSpec.cli.binary}`);
+        console.error(`  Commands: ${(cliSpec.cli.commands || []).length}`);
+      } else {
+        console.error('\n  Warning: spec has no cli section — nothing to verify');
+      }
+      console.error('  Running CLI verification...\n');
       const { cliRun } = await import('../commands/cli-run.js');
       return await cliRun(
         { spec: specPath },

@@ -61,11 +61,13 @@ function parseArgs(): { inputDir: string; outputFile: string; specName: string }
 }
 
 function findLatestCapture(): string {
-  const capturesDir = path.resolve(process.env.CAPTURE_OUTPUT_DIR ?? 'captures');
+  const envDir = process.env.CAPTURE_OUTPUT_DIR;
+  const candidates = envDir ? [envDir] : ['.specify/capture', 'captures'];
+  const capturesDir = path.resolve(candidates.find(d => fs.existsSync(path.resolve(d))) ?? candidates[0]);
 
   if (!fs.existsSync(capturesDir)) {
-    console.error(`Captures directory not found: ${capturesDir}`);
-    console.error('Run "npm run browse" or "npm run capture" first, or use --input <dir>');
+    console.error(`Captures directory not found. Checked: ${candidates.join(', ')}`);
+    console.error('Run "specify capture --url <url>" first, or use --input <dir>');
     process.exit(1);
   }
 

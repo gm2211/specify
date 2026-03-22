@@ -1,7 +1,7 @@
 /**
  * src/cli/commands/review.ts — Open an interactive spec browser in the browser
  *
- * `specify review --spec <path> [--narrative <path>] [--report <path>] [--output <path>] [--no-open]`
+ * `specify review --spec <path> [--narrative <path>] [--report <path>] [--agent-report <path>] [--output <path>] [--no-open]`
  *
  * Generates a self-contained HTML file and opens it in the default browser.
  * The browser shows the human-readable narrative with toggle to computable spec,
@@ -18,11 +18,13 @@ import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import type { GapReport } from '../../validation/types.js';
 import type { CliGapReport } from '../../cli-test/types.js';
+import type { AgentVerifyResult } from '../../review/generator.js';
 
 export interface ReviewOptions {
   spec: string;
   narrative?: string;
   report?: string;
+  agentReport?: string;
   output?: string;
   noOpen?: boolean;
 }
@@ -99,6 +101,23 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     }
   }
 
+  // Load agent report if specified
+  let agentResult: AgentVerifyResult | undefined;
+  if (options.agentReport) {
+    try {
+      const agentPath = path.resolve(options.agentReport);
+      const agentData = JSON.parse(fs.readFileSync(agentPath, 'utf-8'));
+      if (agentData.structuredOutput) {
+        agentResult = agentData.structuredOutput as AgentVerifyResult;
+      } else if (agentData.pass !== undefined && agentData.results) {
+        agentResult = agentData as AgentVerifyResult;
+      }
+      if (agentResult) log(`Loaded agent report: ${options.agentReport}`);
+    } catch (err) {
+      log(`Warning: failed to load agent report ${options.agentReport}: ${(err as Error).message}`);
+    }
+  }
+
   // Auto-discover reports in common locations
   if (!options.report) {
     const specDir = path.dirname(path.resolve(options.spec));
@@ -119,8 +138,37 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     }
   }
 
+  // Auto-discover agent results in .specify/verify/
+  if (!agentResult && !options.agentReport) {
+    const specDir = path.dirname(path.resolve(options.spec));
+    const verifyDir = path.join(specDir, '.specify', 'verify');
+    if (fs.existsSync(verifyDir)) {
+      // Look for the most recent agent result JSON
+      try {
+        const files = fs.readdirSync(verifyDir)
+          .filter(f => f.endsWith('.json'))
+          .map(f => ({ name: f, path: path.join(verifyDir, f), mtime: fs.statSync(path.join(verifyDir, f)).mtimeMs }))
+          .sort((a, b) => b.mtime - a.mtime);
+        for (const file of files) {
+          try {
+            const data = JSON.parse(fs.readFileSync(file.path, 'utf-8'));
+            if (data.structuredOutput && data.structuredOutput.results) {
+              agentResult = data.structuredOutput as AgentVerifyResult;
+              log(`Auto-discovered agent report: ${file.name}`);
+              break;
+            } else if (data.pass !== undefined && Array.isArray(data.results)) {
+              agentResult = data as AgentVerifyResult;
+              log(`Auto-discovered agent report: ${file.name}`);
+              break;
+            }
+          } catch { /* skip individual files */ }
+        }
+      } catch { /* skip if directory can't be read */ }
+    }
+  }
+
   // Generate HTML
-  const html = generateReviewHtml({ spec, narrative, webReport, cliReport });
+  const html = generateReviewHtml({ spec, narrative, webReport, cliReport, agentResult });
 
   // Determine output path
   const outputPath = options.output
@@ -156,6 +204,7 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     hasNarrative: !!narrative,
     hasWebReport: !!webReport,
     hasCliReport: !!cliReport,
+    hasAgentReport: !!agentResult,
   };
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 

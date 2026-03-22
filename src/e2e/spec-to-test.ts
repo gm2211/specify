@@ -87,13 +87,25 @@ function generateSplitFiles(spec: Spec, framework: 'playwright' | 'cypress', bas
   const files: GeneratedTestFile[] = [];
   const ext = framework === 'playwright' ? 'spec.ts' : 'cy.ts';
 
+  // Pre-generate hooks so they can be included in each split file
+  const hookLines: string[] = [];
+  if (spec.hooks) {
+    if (framework === 'playwright') {
+      hookLines.push(...generatePlaywrightHooks(spec.hooks));
+    } else {
+      hookLines.push(...generateCypressHooks(spec.hooks));
+    }
+  }
+
   for (const page of spec.pages ?? []) {
     const lines: string[] = [];
     if (framework === 'playwright') {
       lines.push(`import { test, expect } from '@playwright/test';`);
       lines.push('');
+      if (hookLines.length) lines.push(...hookLines, '');
       lines.push(...generatePlaywrightPage(page, baseUrl));
     } else {
+      if (hookLines.length) lines.push(...hookLines, '');
       lines.push(...generateCypressPage(page, baseUrl));
     }
     files.push({
@@ -109,8 +121,10 @@ function generateSplitFiles(spec: Spec, framework: 'playwright' | 'cypress', bas
     if (framework === 'playwright') {
       lines.push(`import { test, expect } from '@playwright/test';`);
       lines.push('');
+      if (hookLines.length) lines.push(...hookLines, '');
       lines.push(...generatePlaywrightFlow(flow, spec, baseUrl));
     } else {
+      if (hookLines.length) lines.push(...hookLines, '');
       lines.push(...generateCypressFlow(flow, spec, baseUrl));
     }
     files.push({
@@ -225,12 +239,19 @@ function generatePlaywrightAssertion(assertion: VisualAssertion): string[] {
       return [`await expect(page.locator(${quote(assertion.selector)})).toContainText(${quote(assertion.text)});`];
     case 'text_matches':
       return [`await expect(page.locator(${quote(assertion.selector)})).toHaveText(${regexLiteral(assertion.pattern)});`];
-    case 'element_count':
+    case 'element_count': {
       if (assertion.min !== undefined && assertion.min === assertion.max) {
         return [`await expect(page.locator(${quote(assertion.selector)})).toHaveCount(${assertion.min});`];
       }
-      // For range checks, use count()
-      return [`expect(await page.locator(${quote(assertion.selector)}).count()).toBeGreaterThanOrEqual(${assertion.min ?? 0});`];
+      const lines: string[] = [];
+      if (assertion.min !== undefined) {
+        lines.push(`expect(await page.locator(${quote(assertion.selector)}).count()).toBeGreaterThanOrEqual(${assertion.min});`);
+      }
+      if (assertion.max !== undefined) {
+        lines.push(`expect(await page.locator(${quote(assertion.selector)}).count()).toBeLessThanOrEqual(${assertion.max});`);
+      }
+      return lines.length > 0 ? lines : [`expect(await page.locator(${quote(assertion.selector)}).count()).toBeGreaterThanOrEqual(0);`];
+    }
     case 'screenshot_region':
       return [`await expect(page.locator(${quote(assertion.selector)})).toHaveScreenshot();`];
     default:
@@ -406,11 +427,19 @@ function generateCypressAssertion(assertion: VisualAssertion): string[] {
       return [`cy.get(${quote(assertion.selector)}).should('contain', ${quote(assertion.text)});`];
     case 'text_matches':
       return [`cy.get(${quote(assertion.selector)}).invoke('text').should('match', ${regexLiteral(assertion.pattern)});`];
-    case 'element_count':
+    case 'element_count': {
       if (assertion.min !== undefined && assertion.min === assertion.max) {
         return [`cy.get(${quote(assertion.selector)}).should('have.length', ${assertion.min});`];
       }
-      return [`cy.get(${quote(assertion.selector)}).should('have.length.at.least', ${assertion.min ?? 0});`];
+      const lines: string[] = [];
+      if (assertion.min !== undefined) {
+        lines.push(`cy.get(${quote(assertion.selector)}).should('have.length.at.least', ${assertion.min});`);
+      }
+      if (assertion.max !== undefined) {
+        lines.push(`cy.get(${quote(assertion.selector)}).should('have.length.at.most', ${assertion.max});`);
+      }
+      return lines.length > 0 ? lines : [`cy.get(${quote(assertion.selector)}).should('have.length.at.least', 0);`];
+    }
     case 'screenshot_region':
       return [`// Visual regression not directly supported in Cypress without plugins`];
     default:
@@ -449,7 +478,8 @@ function generateCypressStep(step: ScenarioStep): string[] {
       lines.push(`cy.wait(${step.duration});${desc}`);
       break;
     case 'wait_for_request':
-      lines.push(`// Wait for request: ${step.url_pattern}${desc}`);
+      lines.push(`cy.intercept(${step.method ? `'${step.method}', ` : ''}${quote(step.url_pattern)}).as('req');${desc}`);
+      lines.push(`cy.wait('@req');`);
       break;
     case 'wait_for_navigation':
       lines.push(`cy.url().should('include', ${quote(step.url_pattern)});${desc}`);
@@ -514,7 +544,7 @@ function quote(s: string): string {
 }
 
 function regexLiteral(pattern: string): string {
-  return `/${pattern}/`;
+  return `/${pattern.replace(/\//g, '\\/')}/`;
 }
 
 function sanitizeFileName(name: string): string {

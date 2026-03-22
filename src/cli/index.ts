@@ -22,7 +22,7 @@
  *   specify spec lint       --spec <path|->
  *   specify spec guide
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
- *   specify review           --spec <path> [--report <path>] [--no-open]
+ *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
  *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
  *   specify report diff      --a <path> --b <path>
@@ -78,11 +78,11 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if ((arg === '--output-format' || arg === '--format') && args[i + 1]) {
+    if ((arg === '--output-format' || arg === '--format') && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
       outputFormat = args[++i] as OutputFormat;
     } else if (arg === '--json') {
       outputFormat = 'json';
-    } else if (arg === '--fields' && args[i + 1]) {
+    } else if (arg === '--fields' && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
       fields = args[++i].split(',');
     } else if (arg === '--quiet' || arg === '-q') {
       quiet = true;
@@ -104,7 +104,9 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
 function getArg(args: string[], flag: string): string | undefined {
   const idx = args.indexOf(flag);
   if (idx === -1 || idx + 1 >= args.length) return undefined;
-  return args[idx + 1];
+  const value = args[idx + 1];
+  if (value.length > 1 && value.startsWith('-')) return '';
+  return value;
 }
 
 /**
@@ -144,6 +146,20 @@ function resolveSpecArg(args: string[], ctx: CliContext): string {
 
 function hasFlag(args: string[], flag: string): boolean {
   return args.includes(flag);
+}
+
+/** Map an agent error to the appropriate exit code. */
+function agentExitCode(err: unknown): number {
+  if (err instanceof Error && err.name === 'AgentError') {
+    const msg = err.message;
+    if (msg.includes('max_turns') || msg.includes('max_budget')) {
+      return ExitCode.TIMEOUT;
+    }
+    if (msg.includes('error_during_execution')) {
+      return ExitCode.ASSERTION_FAILURE;
+    }
+  }
+  return ExitCode.BROWSER_ERROR;
 }
 
 // ---------------------------------------------------------------------------
@@ -315,7 +331,7 @@ async function main(): Promise<void> {
 
   const [noun, verb, ...rest] = remaining;
 
-  let exitCode: number;
+  let exitCode: number = ExitCode.PARSE_ERROR;
 
   try {
     // -----------------------------------------------------------------
@@ -329,11 +345,17 @@ async function main(): Promise<void> {
           url: getArg(rest, '--url'),
         });
       } else if (verb === 'watch' || verb === 'tui') {
-        const { runTui } = await import('./interactive/tui.js');
-        exitCode = await runTui({
-          spec: resolveSpecArg(rest, ctx),
-          url: getArg(rest, '--url') ?? '',
-        });
+        const tuiUrl = getArg(rest, '--url') ?? '';
+        if (!tuiUrl) {
+          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide a target URL for the TUI dashboard' }) + '\n');
+          exitCode = ExitCode.PARSE_ERROR;
+        } else {
+          const { runTui } = await import('./interactive/tui.js');
+          exitCode = await runTui({
+            spec: resolveSpecArg(rest, ctx),
+            url: tuiUrl,
+          });
+        }
       } else {
         // Default: wizard — pass verb as action for direct path access
         // e.g. `specify human verify` → action='verify'
@@ -423,27 +445,69 @@ async function main(): Promise<void> {
 
         // Specify IS the agent — use SDK runner for live capture (human mode is the only exception)
         if (!human) {
-          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-          const { getCapturePrompt } = await import('../agent/prompts.js');
-          const outputDir = path.resolve(output || '.specify/capture');
-          const prompt = getCapturePrompt(url);
-          try {
-            const { result, costUsd } = await runSpecifyAgent({
-              task: 'capture',
-              systemPrompt: prompt,
-              userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
-              url,
-              outputDir,
-              headed: hasFlag(captureArgs, '--headed'),
-            });
-            process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
-            process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
-            exitCode = ExitCode.SUCCESS;
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            process.stderr.write(`Agent capture failed: ${msg}\n`);
-            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-            exitCode = ExitCode.BROWSER_ERROR;
+          if (!url) {
+            process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' }) + '\n');
+            exitCode = ExitCode.PARSE_ERROR;
+          } else {
+            let validUrl = true;
+            try {
+              new URL(url);
+            } catch {
+              process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+              exitCode = ExitCode.PARSE_ERROR;
+              validUrl = false;
+            }
+            if (validUrl) {
+              const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+              const { getCapturePrompt } = await import('../agent/prompts.js');
+              const outputDir = path.resolve(output || '.specify/capture');
+              const specOutput = getArg(captureArgs, '--spec-output');
+              const specName = getArg(captureArgs, '--spec-name');
+              const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
+              const prompt = getCapturePrompt(url, specOutputPath);
+              try {
+                const { result, costUsd } = await runSpecifyAgent({
+                  task: 'capture',
+                  systemPrompt: prompt,
+                  userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
+                  url,
+                  outputDir,
+                  specOutput: specOutputPath,
+                  specName: specName ?? new URL(url).hostname,
+                  headed: hasFlag(captureArgs, '--headed'),
+                });
+                process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
+
+                // Post-run validation: verify the spec file exists and parses
+                if (!fs.existsSync(specOutputPath)) {
+                  process.stderr.write(`Warning: agent did not write spec file at ${specOutputPath}\n`);
+                  process.stdout.write(JSON.stringify({ error: 'spec_not_written', costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                  exitCode = ExitCode.PARSE_ERROR;
+                } else {
+                  try {
+                    const { loadSpec } = await import('../spec/parser.js');
+                    const spec = loadSpec(specOutputPath);
+                    const pageCount = spec.pages?.length ?? 0;
+                    process.stderr.write(`Spec validated: ${specOutputPath} (${pageCount} pages)\n`);
+                    process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, pages: pageCount }) + '\n');
+                    exitCode = ExitCode.SUCCESS;
+
+                    process.stderr.write(`\n  To review the spec:\n`);
+                    process.stderr.write(`  $ specify review --spec ${specOutputPath}\n\n`);
+                  } catch (parseErr) {
+                    const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+                    process.stderr.write(`Warning: agent wrote invalid spec: ${parseMsg}\n`);
+                    process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: parseMsg, costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                    exitCode = ExitCode.PARSE_ERROR;
+                  }
+                }
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                process.stderr.write(`Agent capture failed: ${msg}\n`);
+                process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+                exitCode = agentExitCode(err);
+              }
+            }
           }
         } else {
           const { capture: captureCmd } = await import('./commands/capture.js');
@@ -491,7 +555,88 @@ async function main(): Promise<void> {
           const msg = err instanceof Error ? err.message : String(err);
           process.stderr.write(`Replay failed: ${msg}\n`);
           process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-          exitCode = ExitCode.BROWSER_ERROR;
+          exitCode = agentExitCode(err);
+        }
+      }
+
+    } else if (noun === 'compare') {
+      const compareArgs = verb ? [verb, ...rest] : rest;
+      let remoteUrl = getArg(compareArgs, '--remote') ?? '';
+      let localUrl = getArg(compareArgs, '--local') ?? '';
+      const remoteAuth = getArg(compareArgs, '--remote-auth');
+      const localAuth = getArg(compareArgs, '--local-auth');
+      // Embed credentials into URLs (user:pass@host format)
+      if (remoteAuth && remoteUrl) {
+        try {
+          const u = new URL(remoteUrl);
+          const [user, ...passParts] = remoteAuth.split(':');
+          u.username = encodeURIComponent(user);
+          u.password = encodeURIComponent(passParts.join(':'));
+          remoteUrl = u.toString();
+        } catch { /* URL validation below will catch */ }
+      }
+      if (localAuth && localUrl) {
+        try {
+          const u = new URL(localUrl);
+          const [user, ...passParts] = localAuth.split(':');
+          u.username = encodeURIComponent(user);
+          u.password = encodeURIComponent(passParts.join(':'));
+          localUrl = u.toString();
+        } catch { /* URL validation below will catch */ }
+      }
+
+      if (!remoteUrl || !localUrl) {
+        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide both --remote and --local URLs' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
+      } else {
+        let validUrls = true;
+        for (const u of [remoteUrl, localUrl]) {
+          try { new URL(u); } catch {
+            process.stdout.write(JSON.stringify({ error: 'invalid_url', url: u, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+            exitCode = ExitCode.PARSE_ERROR;
+            validUrls = false;
+            break;
+          }
+        }
+        if (validUrls) {
+          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+          const { getComparePrompt } = await import('../agent/prompts.js');
+          const outputDir = path.resolve(getArg(compareArgs, '--output') ?? '.specify/compare');
+          const prompt = getComparePrompt(remoteUrl, localUrl, outputDir);
+          try {
+            const { result, costUsd, structuredOutput } = await runSpecifyAgent({
+              task: 'compare',
+              systemPrompt: prompt,
+              userPrompt: `Compare remote ${remoteUrl} against local ${localUrl}.`,
+              remoteUrl,
+              localUrl,
+              outputDir,
+              headed: hasFlag(compareArgs, '--headed'),
+            });
+            const { extractBool } = await import('../agent/sdk-runner.js');
+            const match = extractBool(structuredOutput, 'match');
+            process.stderr.write(`Compare complete (cost: $${costUsd.toFixed(4)})\n`);
+            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, match, structuredOutput }) + '\n');
+            exitCode = match === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+
+            // Save structured output for review
+            const compareResultPath = path.join(outputDir, 'compare-result.json');
+            fs.mkdirSync(outputDir, { recursive: true });
+            fs.writeFileSync(compareResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+
+            // Human-friendly hint
+            const reportPath = path.join(outputDir, 'compare-report.md');
+            if (fs.existsSync(reportPath)) {
+              process.stderr.write(`\n  Report: ${reportPath}\n`);
+            }
+            process.stderr.write(`\n  To review interactively:\n`);
+            process.stderr.write(`  $ specify review --spec <your-spec.yaml> --agent-report ${compareResultPath}\n\n`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`Compare failed: ${msg}\n`);
+            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+            exitCode = agentExitCode(err);
+          }
         }
       }
 
@@ -538,6 +683,7 @@ async function main(): Promise<void> {
         spec: resolveSpecArg(reviewArgs, ctx),
         narrative: getArg(reviewArgs, '--narrative'),
         report: getArg(reviewArgs, '--report'),
+        agentReport: getArg(reviewArgs, '--agent-report'),
         output: getArg(reviewArgs, '--output'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
       }, ctx);
@@ -562,28 +708,112 @@ async function main(): Promise<void> {
 
       if (url && !capture) {
         // verify --url (no --capture) → Agent SDK verification
-        const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-        const { getVerifyPrompt } = await import('../agent/prompts.js');
-        const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
-        const prompt = getVerifyPrompt(specPath, url);
-        try {
-          const { result, costUsd } = await runSpecifyAgent({
-            task: 'verify',
-            systemPrompt: prompt,
-            userPrompt: `Verify ${url} against the spec at ${specPath}.`,
-            url,
-            spec: specPath,
-            outputDir,
-            headed: hasFlag(verifyArgs, '--headed'),
-          });
-          process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
-          process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
-          exitCode = ExitCode.SUCCESS;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`Verification failed: ${msg}\n`);
-          process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-          exitCode = ExitCode.BROWSER_ERROR;
+        if (!specPath) {
+          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
+          exitCode = ExitCode.PARSE_ERROR;
+        } else {
+          const { loadSpec } = await import('../spec/parser.js');
+          const resolvedSpecPath = path.resolve(specPath);
+          let spec;
+          try {
+            spec = loadSpec(resolvedSpecPath);
+          } catch (loadErr) {
+            const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
+            process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: msg }) + '\n');
+            exitCode = ExitCode.PARSE_ERROR;
+          }
+          if (spec) {
+            // Pre-flight: check assumptions before spending agent turns
+            if (spec.assumptions?.length) {
+              const { validateAssumptions, allAssumptionsMet } = await import('../validation/assumptions.js');
+              const assumptionResults = await validateAssumptions(spec.assumptions, {
+                variables: spec.variables,
+                baseUrl: url,
+              });
+              if (!allAssumptionsMet(assumptionResults)) {
+                const failed = assumptionResults.filter(a => a.status === 'failed');
+                process.stderr.write(`Assumptions not met:\n`);
+                for (const a of failed) {
+                  process.stderr.write(`  - ${a.type}: ${a.reason}\n`);
+                }
+                process.stdout.write(JSON.stringify({ error: 'assumptions_failed', assumptions: failed }) + '\n');
+                exitCode = ExitCode.ASSUMPTION_FAILURE;
+                spec = null;
+              }
+            }
+          }
+          if (spec) {
+            // Pre-flight: run setup hooks
+            let hookRunResult: { ctx: { specVars: Record<string, string>; runtimeVars: Record<string, unknown> } } | undefined;
+            if (spec.hooks?.setup?.length) {
+              try {
+                const { executeHooks } = await import('../agent/hooks.js');
+                hookRunResult = await executeHooks(
+                  spec.hooks.setup,
+                  { specVars: spec.variables ?? {}, runtimeVars: {} },
+                  (msg: string) => process.stderr.write(msg + '\n'),
+                );
+                process.stderr.write(`Setup hooks complete\n`);
+              } catch (hookErr) {
+                const msg = hookErr instanceof Error ? hookErr.message : String(hookErr);
+                process.stderr.write(`Setup hook failed: ${msg}\n`);
+                process.stdout.write(JSON.stringify({ error: 'hook_failure', message: msg }) + '\n');
+                exitCode = ExitCode.ASSUMPTION_FAILURE;
+                spec = null;
+              }
+            }
+
+            if (spec) {
+              const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+              const { getVerifyPrompt } = await import('../agent/prompts.js');
+              const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
+              const prompt = getVerifyPrompt(resolvedSpecPath, url);
+              try {
+                const { result, costUsd, structuredOutput } = await runSpecifyAgent({
+                  task: 'verify',
+                  systemPrompt: prompt,
+                  userPrompt: `Verify ${url} against the spec at ${resolvedSpecPath}.`,
+                  url,
+                  spec: resolvedSpecPath,
+                  outputDir,
+                  headed: hasFlag(verifyArgs, '--headed'),
+                });
+                const { extractBool } = await import('../agent/sdk-runner.js');
+                const pass = extractBool(structuredOutput, 'pass');
+                process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
+                process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+                exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+
+                // Save structured output for review
+                const verifyResultPath = path.join(outputDir, 'verify-result.json');
+                fs.mkdirSync(outputDir, { recursive: true });
+                fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+
+                // Human-friendly hint
+                process.stderr.write(`\n  To review interactively:\n`);
+                process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                process.stderr.write(`Verification failed: ${msg}\n`);
+                process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+                exitCode = agentExitCode(err);
+              }
+
+              // Teardown hooks (best-effort)
+              if (spec.hooks?.teardown?.length) {
+                try {
+                  const { executeHooks } = await import('../agent/hooks.js');
+                  await executeHooks(
+                    spec.hooks.teardown,
+                    hookRunResult?.ctx ?? { specVars: spec.variables ?? {}, runtimeVars: {} },
+                    (msg: string) => process.stderr.write(msg + '\n'),
+                  );
+                } catch {
+                  process.stderr.write(`Warning: teardown hook failed\n`);
+                }
+              }
+            }
+          }
         }
       } else if (capture) {
         // verify --capture → spec validate
@@ -621,6 +851,54 @@ async function main(): Promise<void> {
           exitCode = ExitCode.PARSE_ERROR;
         }
       }
+
+    } else if (noun === 'clean') {
+      // Clean up generated reports and agent output
+      const cleanArgs = verb ? [verb, ...rest] : rest;
+      const dryRun = hasFlag(cleanArgs, '--dry-run');
+      const patterns = [
+        '.specify/capture', '.specify/verify', '.specify/compare', '.specify/replay',
+        '.specify/evidence',
+      ];
+      const htmlGlob = '*.review.html';
+
+      let removed = 0;
+      // Remove .specify subdirectories
+      for (const dir of patterns) {
+        const resolved = path.resolve(dir);
+        if (fs.existsSync(resolved)) {
+          if (dryRun) {
+            process.stderr.write(`  Would remove: ${resolved}\n`);
+          } else {
+            fs.rmSync(resolved, { recursive: true, force: true });
+            process.stderr.write(`  Removed: ${resolved}\n`);
+          }
+          removed++;
+        }
+      }
+      // Remove *.review.html files in cwd
+      const cwd = process.cwd();
+      for (const f of fs.readdirSync(cwd)) {
+        if (f.endsWith('.review.html')) {
+          const fullPath = path.join(cwd, f);
+          if (dryRun) {
+            process.stderr.write(`  Would remove: ${fullPath}\n`);
+          } else {
+            fs.unlinkSync(fullPath);
+            process.stderr.write(`  Removed: ${fullPath}\n`);
+          }
+          removed++;
+        }
+      }
+      if (removed === 0) {
+        process.stderr.write('  Nothing to clean.\n');
+      } else if (dryRun) {
+        process.stderr.write(`\n  ${removed} items would be removed. Run without --dry-run to delete.\n`);
+      } else {
+        process.stderr.write(`\n  Cleaned ${removed} items.\n`);
+      }
+      process.stdout.write(JSON.stringify({ cleaned: removed, dryRun }) + '\n');
+      exitCode = ExitCode.SUCCESS;
 
     } else if (noun === 'lint') {
       // Top-level alias for spec lint

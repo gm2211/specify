@@ -83,6 +83,34 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'compare',
+    description: 'Live side-by-side comparison of remote and local targets using parallel browser sessions',
+    parameters: [
+      { name: '--remote', type: 'string', required: true, description: 'Remote target URL' },
+      { name: '--local', type: 'string', required: true, description: 'Local target URL' },
+      { name: '--remote-auth', type: 'string', required: false, description: 'HTTP Basic Auth for remote (user:pass)' },
+      { name: '--local-auth', type: 'string', required: false, description: 'HTTP Basic Auth for local (user:pass)' },
+      { name: '--output', type: 'string', required: false, description: 'Output directory for comparison report' },
+      { name: '--headed', type: 'boolean', required: false, description: 'Run browsers visibly' },
+    ],
+    examples: [
+      'specify compare --remote https://prod.example.com --local http://localhost:3000',
+      'specify compare --remote https://staging.example.com --local http://localhost:3000 --headed',
+    ],
+  },
+  {
+    name: 'cli run',
+    description: 'Run CLI commands defined in spec and validate their output',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
+      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
+      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history' },
+    ],
+    examples: [
+      'specify cli run --spec spec.yaml',
+    ],
+  },
+  {
     name: 'report diff',
     description: 'Diff two gap reports',
     parameters: [
@@ -190,10 +218,11 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
       { name: '--narrative', type: 'string', required: false, description: 'Path to narrative companion file (auto-discovered if omitted)' },
       { name: '--report', type: 'string', required: false, description: 'Path to validation report JSON (gap-report.json or cli-report.json)' },
+      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON (from specify verify --url)' },
       { name: '--output', type: 'string', required: false, description: 'Output HTML file path (default: <spec>.review.html)' },
       { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
     ],
-    examples: ['specify review --spec spec.yaml', 'specify review --spec spec.yaml --report gap-report.json'],
+    examples: ['specify review --spec spec.yaml', 'specify review --spec spec.yaml --report gap-report.json', 'specify review --spec spec.yaml --agent-report verify-result.json'],
   },
   {
     name: 'create',
@@ -242,6 +271,17 @@ export const COMMANDS: CommandDefinition[] = [
       'specify verify --spec spec.yaml --capture ./captures/latest',
       'specify verify --spec spec.yaml --url http://localhost:3000',
       'specify verify --spec spec.yaml   # auto-detects cli section',
+    ],
+  },
+  {
+    name: 'clean',
+    description: 'Remove generated reports, agent output, and *.review.html files',
+    parameters: [
+      { name: '--dry-run', type: 'boolean', required: false, description: 'Show what would be removed without deleting' },
+    ],
+    examples: [
+      'specify clean',
+      'specify clean --dry-run',
     ],
   },
   {
