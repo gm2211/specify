@@ -5,7 +5,8 @@
  * Can also automatically apply those suggestions to produce a refined spec.
  */
 
-import type { Spec, PageSpec, ExpectedRequest } from './types.js';
+import type { Spec, SpecV1, PageSpec, ExpectedRequest } from './types.js';
+import { isV1 } from './types.js';
 import type { GapReport, PageResult, RequestResult } from '../validation/types.js';
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,7 @@ export interface RemoveAssertionSuggestion extends BaseSuggestion {
 
 /** Analyze gaps and generate refinement suggestions. */
 export function analyzeGaps(spec: Spec, report: GapReport): RefinementSuggestion[] {
+  if (!isV1(spec)) return [];
   const suggestions: RefinementSuggestion[] = [];
 
   for (const pageResult of report.pages) {
@@ -151,8 +153,9 @@ export function applyRefinements(
   spec: Spec,
   suggestions: RefinementSuggestion[],
 ): Spec {
+  if (!isV1(spec)) return spec;
   // Deep clone the spec
-  const refined: Spec = JSON.parse(JSON.stringify(spec));
+  const refined: SpecV1 = JSON.parse(JSON.stringify(spec));
 
   for (const suggestion of suggestions) {
     const page = refined.pages?.find((p) => p.id === suggestion.pageId);

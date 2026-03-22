@@ -24,9 +24,9 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Get Spec Authoring Guide',
       description:
-        'Returns the complete Specify spec authoring guide: JSON Schema, annotated examples, ' +
-        'patterns for every spec construct, all assertion/step types, and best practices. ' +
-        'Call this first when writing a new spec.',
+        'Returns the complete Specify spec authoring guide: JSON Schema for both v1 and v2 formats, ' +
+        'annotated examples, patterns for every spec construct (including v2 behavioral patterns), ' +
+        'all assertion/step types, and best practices. Call this first when writing a new spec.',
     },
     async () => {
       const guide = getAuthoringGuide();
@@ -44,9 +44,9 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Lint Spec',
       description:
-        'Validate a spec for structural correctness. Checks YAML/JSON syntax, ' +
+        'Validate a spec (v1 or v2) for structural correctness. Checks YAML/JSON syntax, ' +
         'JSON Schema compliance, and semantic rules (duplicate IDs, invalid cross-references, ' +
-        'empty steps, undefined variables). No live application or captures needed.',
+        'empty steps, undefined variables). Automatically detects spec version. No live application or captures needed.',
       inputSchema: {
         content: z.string().describe('The spec content as a YAML or JSON string'),
       },

@@ -8,6 +8,7 @@ import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
 import type { Spec } from '../../spec/types.js';
+import { isV1 } from '../../spec/types.js';
 import { readStdin } from '../stdin.js';
 
 export interface SpecValidateOptions {
@@ -34,8 +35,8 @@ export async function specValidate(options: SpecValidateOptions, ctx: CliContext
     return ExitCode.PARSE_ERROR;
   }
 
-  // Check assumptions
-  if (spec.assumptions?.length) {
+  // Check assumptions (v1 only)
+  if (isV1(spec) && spec.assumptions?.length) {
     try {
       const assumptionResults = await validateAssumptions(spec.assumptions, {
         variables: spec.variables,

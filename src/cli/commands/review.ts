@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { loadSpec } from '../../spec/parser.js';
+import { isV1 } from '../../spec/types.js';
 import { markdownToNarrative, specNarrativeToDocument } from '../../spec/narrative.js';
 import { generateReviewHtml } from '../../review/generator.js';
 import { ExitCode } from '../exit-codes.js';
@@ -53,12 +54,13 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
   // Load narrative — prefer embedded spec.narrative, fall back to external markdown file
   const specDir = path.dirname(path.resolve(options.spec));
   let narrative;
-  if (spec.narrative && spec.narrative.length > 0 && !options.narrative) {
+  const v1Spec = isV1(spec) ? spec : null;
+  if (v1Spec?.narrative && v1Spec.narrative.length > 0 && !options.narrative) {
     narrative = specNarrativeToDocument(spec);
     log(`Loaded narrative from spec`);
   } else {
     const rawNarrativePath = options.narrative
-      ?? spec.narrative_path
+      ?? v1Spec?.narrative_path
       ?? path.basename(options.spec).replace(/\.(ya?ml|json)$/, '.narrative.md');
     const resolvedNarrative = path.isAbsolute(rawNarrativePath)
       ? rawNarrativePath

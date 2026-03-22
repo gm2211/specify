@@ -9,7 +9,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import Ajv from 'ajv';
-import type { Spec, PageSpec, ExpectedRequest, FlowSpec, FlowStep, DefaultProperties } from '../spec/types.js';
+import type { Spec, SpecV1, PageSpec, ExpectedRequest, FlowSpec, FlowStep, DefaultProperties } from '../spec/types.js';
+import { isV1 } from '../spec/types.js';
 import type {
   CapturedTraffic,
   CapturedConsoleEntry,
@@ -908,6 +909,9 @@ function computeSummary(pages: PageResult[], flows: FlowResult[], defaults?: Def
 
 /** Validate a spec against a capture session and return a gap report. */
 export function validate(spec: Spec, capture: CaptureData): GapReport {
+  if (!isV1(spec)) {
+    throw new Error('Passive validation requires a v1 spec');
+  }
   const pages: PageResult[] = (spec.pages ?? []).map((page) =>
     validatePage(page, capture),
   );

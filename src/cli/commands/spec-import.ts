@@ -10,7 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { analyzeTestFile, analyzeTestDirectory, detectFramework } from '../../e2e/test-analyzer.js';
 import type { TestFileAnalysis, TestFramework } from '../../e2e/types.js';
-import type { Spec, PageSpec, ScenarioSpec, ScenarioStep } from '../../spec/types.js';
+import type { SpecV1, PageSpec, ScenarioSpec, ScenarioStep } from '../../spec/types.js';
 import { specToYaml } from '../../spec/parser.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
@@ -95,7 +95,7 @@ export async function specImport(options: SpecImportOptions, ctx: CliContext): P
 // Partial spec builder
 // ---------------------------------------------------------------------------
 
-function buildPartialSpec(analyses: TestFileAnalysis[]): Spec {
+function buildPartialSpec(analyses: TestFileAnalysis[]): SpecV1 {
   const pages: PageSpec[] = [];
   const seenPaths = new Set<string>();
 

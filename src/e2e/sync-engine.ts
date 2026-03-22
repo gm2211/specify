@@ -6,6 +6,7 @@
  */
 
 import type { Spec, PageSpec, ScenarioSpec, ScenarioStep, FlowSpec } from '../spec/types.js';
+import { isV1 } from '../spec/types.js';
 import type {
   TestFileAnalysis,
   TestCase,
@@ -23,6 +24,29 @@ import type {
 
 /** Compute a sync report comparing a spec against analyzed test files. */
 export function computeSync(spec: Spec, testAnalyses: TestFileAnalysis[]): SyncReport {
+  if (!isV1(spec)) {
+    // v2 specs don't have pages/flows — return empty sync report
+    const allTests = flattenTests(testAnalyses);
+    return {
+      uncoveredSpecItems: [],
+      unmappedTests: allTests.map(({ test, filePath }) => ({
+        testName: test.name,
+        filePath,
+        analysis: test,
+      })),
+      mismatches: [],
+      matched: [],
+      summary: {
+        totalSpecItems: 0,
+        totalTests: allTests.length,
+        matched: 0,
+        uncoveredSpecItems: 0,
+        unmappedTests: allTests.length,
+        mismatches: 0,
+        syncPercentage: 100,
+      },
+    };
+  }
   // Flatten all test cases across files
   const allTests = flattenTests(testAnalyses);
 

@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import type { Spec } from '../../spec/types.js';
+import { isV1 } from '../../spec/types.js';
 import type { GapReport } from '../../validation/types.js';
 import { ExitCode } from '../exit-codes.js';
 import { buildReplCompleter } from './completer.js';
@@ -175,7 +176,7 @@ async function handleLoad(args: string[], state: ReplState): Promise<void> {
     const { loadSpec } = await import('../../spec/parser.js');
     state.spec = loadSpec(filePath);
     state.specPath = filePath;
-    console.log(`Loaded spec: ${state.spec.name} (${state.spec.pages?.length ?? 0} pages)`);
+    console.log(`Loaded spec: ${state.spec.name} (${isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0} pages)`);
   } else if (type === 'capture') {
     state.capturePath = filePath;
     console.log(`Capture path set: ${filePath}`);

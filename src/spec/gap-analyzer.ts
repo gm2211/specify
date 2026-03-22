@@ -5,7 +5,8 @@
  * an interactive apply() to fix it via user prompts.
  */
 
-import type { Spec } from './types.js';
+import type { Spec, SpecV1 } from './types.js';
+import { isV1 } from './types.js';
 import type { DiscoveredPage } from '../cli/interactive/crawler.js';
 
 // ---------------------------------------------------------------------------
@@ -22,7 +23,7 @@ export interface SpecGap {
   category: string;
   description: string;
   question: string;
-  apply: (spec: Spec, helpers: PromptHelpers) => Promise<void>;
+  apply: (spec: SpecV1, helpers: PromptHelpers) => Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
@@ -30,6 +31,7 @@ export interface SpecGap {
 // ---------------------------------------------------------------------------
 
 export function analyzeSpecGaps(spec: Spec, discoveredPages?: DiscoveredPage[]): SpecGap[] {
+  if (!isV1(spec)) return [];
   const gaps: SpecGap[] = [];
 
   // 1. Missing description

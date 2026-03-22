@@ -14,12 +14,21 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'spec generate',
-    description: 'Generate a spec from capture data',
+    description: 'Generate a spec from capture data (v2 by default)',
     parameters: [
       { name: '--input', type: 'string', required: true, description: 'Path to capture directory' },
       { name: '--output', type: 'string', required: false, description: 'Output file path' },
       { name: '--name', type: 'string', required: false, description: 'Spec name' },
-      { name: '--smart', type: 'boolean', required: false, description: 'Use smart generation' },
+      { name: '--smart', type: 'boolean', required: false, description: 'Use smart generation (v1 only)' },
+      { name: '--v1', type: 'boolean', required: false, description: 'Generate v1 format instead of v2' },
+    ],
+  },
+  {
+    name: 'spec migrate',
+    description: 'Migrate a v1 spec to v2 behavioral format',
+    parameters: [
+      { name: '--input', type: 'string', required: true, description: 'Path to v1 spec file' },
+      { name: '--output', type: 'string', required: false, description: 'Output path for v2 spec (default: input path with .v2.yaml suffix)' },
     ],
   },
   {

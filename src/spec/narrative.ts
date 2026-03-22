@@ -64,7 +64,8 @@ export interface NarrativeSection {
 // Conversion: Spec embedded narrative → NarrativeDocument
 // ---------------------------------------------------------------------------
 
-import type { Spec, NarrativeSection as SpecNarrativeSection } from './types.js';
+import type { Spec, SpecV1, NarrativeSection as SpecNarrativeSection } from './types.js';
+import { isV1 } from './types.js';
 
 /**
  * Convert embedded narrative sections (spec.narrative) into a NarrativeDocument
@@ -78,6 +79,9 @@ import type { Spec, NarrativeSection as SpecNarrativeSection } from './types.js'
  *   Spec.name                        → NarrativeDocument.title
  */
 export function specNarrativeToDocument(spec: Spec): NarrativeDocument {
+  if (!isV1(spec)) {
+    return { title: spec.name, overview: spec.description ?? '', sections: [] };
+  }
   const sections: NarrativeSection[] = (spec.narrative ?? []).map((ns: SpecNarrativeSection) => {
     const specRefs: string[] = [...(ns.covers ?? [])];
     for (const req of ns.requirements ?? []) {

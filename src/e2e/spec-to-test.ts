@@ -5,7 +5,8 @@
  * Playwright or Cypress test code from spec definitions.
  */
 
-import type { Spec, PageSpec, ScenarioSpec, ScenarioStep, FlowSpec, FlowStep, VisualAssertion, HooksSpec } from '../spec/types.js';
+import type { Spec, SpecV1, PageSpec, ScenarioSpec, ScenarioStep, FlowSpec, FlowStep, VisualAssertion, HooksSpec } from '../spec/types.js';
+import { isV1 } from '../spec/types.js';
 import type { GeneratedTestFile, GenerateOptions } from './types.js';
 
 // ---------------------------------------------------------------------------
@@ -14,6 +15,9 @@ import type { GeneratedTestFile, GenerateOptions } from './types.js';
 
 /** Generate test files from a spec. */
 export function generateTestsFromSpec(spec: Spec, options: GenerateOptions): GeneratedTestFile[] {
+  if (!isV1(spec)) {
+    throw new Error('Test generation is only supported for v1 specs.');
+  }
   const { framework, baseUrl, splitFiles = false } = options;
 
   if (splitFiles) {
@@ -26,7 +30,7 @@ export function generateTestsFromSpec(spec: Spec, options: GenerateOptions): Gen
 // Single file generation
 // ---------------------------------------------------------------------------
 
-function generateSingleFile(spec: Spec, framework: 'playwright' | 'cypress', baseUrl?: string): GeneratedTestFile {
+function generateSingleFile(spec: SpecV1, framework: 'playwright' | 'cypress', baseUrl?: string): GeneratedTestFile {
   const ids: string[] = [];
   const lines: string[] = [];
 
@@ -83,7 +87,7 @@ function generateSingleFile(spec: Spec, framework: 'playwright' | 'cypress', bas
 // Split file generation
 // ---------------------------------------------------------------------------
 
-function generateSplitFiles(spec: Spec, framework: 'playwright' | 'cypress', baseUrl?: string): GeneratedTestFile[] {
+function generateSplitFiles(spec: SpecV1, framework: 'playwright' | 'cypress', baseUrl?: string): GeneratedTestFile[] {
   const files: GeneratedTestFile[] = [];
   const ext = framework === 'playwright' ? 'spec.ts' : 'cy.ts';
 
@@ -217,7 +221,7 @@ function generatePlaywrightPage(page: PageSpec, baseUrl?: string): string[] {
   return lines;
 }
 
-function generatePlaywrightFlow(flow: FlowSpec, spec: Spec, baseUrl?: string): string[] {
+function generatePlaywrightFlow(flow: FlowSpec, spec: SpecV1, baseUrl?: string): string[] {
   const lines: string[] = [];
   const label = flow.id + (flow.description ? ` — ${flow.description}` : '');
 
@@ -310,7 +314,7 @@ function generatePlaywrightStep(step: ScenarioStep): string[] {
   return lines;
 }
 
-function generatePlaywrightFlowStep(step: FlowStep, spec: Spec, baseUrl?: string): string[] {
+function generatePlaywrightFlowStep(step: FlowStep, spec: SpecV1, baseUrl?: string): string[] {
   if ('navigate' in step) {
     const url = resolveUrl(step.navigate, baseUrl);
     const desc = step.description ? `  // ${step.description}` : '';
@@ -405,7 +409,7 @@ function generateCypressPage(page: PageSpec, baseUrl?: string): string[] {
   return lines;
 }
 
-function generateCypressFlow(flow: FlowSpec, spec: Spec, baseUrl?: string): string[] {
+function generateCypressFlow(flow: FlowSpec, spec: SpecV1, baseUrl?: string): string[] {
   const lines: string[] = [];
   const label = flow.id + (flow.description ? ` — ${flow.description}` : '');
 
@@ -498,7 +502,7 @@ function generateCypressStep(step: ScenarioStep): string[] {
   return lines;
 }
 
-function generateCypressFlowStep(step: FlowStep, spec: Spec, baseUrl?: string): string[] {
+function generateCypressFlowStep(step: FlowStep, spec: SpecV1, baseUrl?: string): string[] {
   if ('navigate' in step) {
     const url = resolveUrl(step.navigate, baseUrl);
     const desc = step.description ? `  // ${step.description}` : '';
