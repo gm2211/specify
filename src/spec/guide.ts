@@ -9,14 +9,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { specSchema } from './schema.js';
+import { specSchemaV2 } from './schema-v2.js';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 export interface AuthoringGuide {
-  /** Full JSON Schema for the spec format. */
+  /** Full JSON Schema for the v1 spec format. */
   schema: typeof specSchema;
+
+  /** Full JSON Schema for the v2 spec format. */
+  schema_v2: typeof specSchemaV2;
 
   /** Complete example specs with explanations. */
   examples: Array<{
@@ -27,6 +31,13 @@ export interface AuthoringGuide {
 
   /** Annotated mini-patterns showing common constructs. */
   patterns: Array<{
+    name: string;
+    description: string;
+    yaml_snippet: string;
+  }>;
+
+  /** v2-specific patterns showing behavioral spec constructs. */
+  patterns_v2: Array<{
     name: string;
     description: string;
     yaml_snippet: string;
@@ -95,7 +106,41 @@ export function getAuthoringGuide(): AuthoringGuide {
   return {
     schema: specSchema,
 
+    schema_v2: specSchemaV2,
+
     examples: loadExamples(),
+
+    patterns_v2: [
+      {
+        name: 'Minimal v2 spec',
+        description: 'The smallest valid v2 spec — version, name, and one area with a behavior',
+        yaml_snippet: `version: "2.0"\nname: "My App"\nareas:\n  - id: auth\n    name: Authentication\n    behaviors:\n      - id: login-valid-credentials\n        description: A user with valid credentials can log in and sees the dashboard`,
+      },
+      {
+        name: 'Area with multiple behaviors',
+        description: 'Areas group behaviors by feature, not by page. Behaviors are plain-language claims about what should be true.',
+        yaml_snippet: `areas:
+  - id: shopping-cart
+    name: Shopping Cart
+    behaviors:
+      - id: add-item-to-cart
+        description: Adding a product increments the cart badge count
+      - id: remove-item-from-cart
+        description: Removing the last item shows an empty-cart message
+      - id: cart-persists-across-sessions
+        description: Items in the cart survive a page reload`,
+      },
+      {
+        name: 'Behavior with tags',
+        description: 'Use kebab-case IDs. Behaviors describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
+        yaml_snippet: `behaviors:
+  - id: search-returns-relevant-results
+    description: Searching for a product name returns items whose title contains the query
+    tags: [search, relevance]
+  - id: empty-search-shows-prompt
+    description: Submitting an empty search query shows a helpful prompt instead of an error`,
+      },
+    ],
 
     patterns: [
       {
@@ -366,6 +411,11 @@ assumptions:
       'Each narrative section can define requirements inline and reference other spec items via "covers" — this groups related concerns while keeping the spec as the single source of truth.',
       'Use "specify capture --url <url>" for autonomous agent-driven capture, or "specify capture --url <url> --human" to open a headed browser for manual recording.',
       'Use "specify verify --history-dir .specify/history" to save verification results, then "specify report stats --history-dir .specify/history" to see statistical confidence grow over time.',
+      '[v2] In v2 specs, areas group behaviors by feature, not by page — think "authentication" or "shopping cart" rather than "/login" or "/cart".',
+      '[v2] Behaviors are plain-language claims: describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
+      '[v2] Use kebab-case IDs for areas and behaviors (e.g., "add-item-to-cart", not "addItemToCart").',
+      '[v2] Use "specify spec migrate --input old.yaml" to convert a v1 spec to v2 behavioral format.',
+      '[v2] Use "specify spec generate --input <capture-dir>" to generate a v2 spec (default). Add --v1 for legacy format.',
     ],
   };
 }

@@ -6,6 +6,8 @@
  */
 
 import type { Spec } from '../spec/types.js';
+import type { SpecV2 } from '../spec/types.js';
+import { isV2 } from '../spec/types.js';
 import type { NarrativeDocument } from '../spec/narrative.js';
 import type { GapReport } from '../validation/types.js';
 import type { CliGapReport } from '../cli-test/types.js';
@@ -25,6 +27,9 @@ export interface ReviewData {
 }
 
 export function generateReviewHtml(data: ReviewData): string {
+  if (isV2(data.spec)) {
+    return generateReviewHtmlV2(data, data.spec);
+  }
   const jsonPayload = JSON.stringify(data, null, 2);
   return `<!DOCTYPE html>
 <html lang="en">
@@ -70,6 +75,326 @@ ${JS}
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
+
+// ---------------------------------------------------------------------------
+// V2 HTML generator
+// ---------------------------------------------------------------------------
+
+function generateReviewHtmlV2(data: ReviewData, spec: SpecV2): string {
+  const jsonPayload = JSON.stringify(data, null, 2);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>${escapeHtml(spec.name)} — Specify</title>
+<style>
+${CSS}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="header">
+    <div class="header-left">
+      <h1 id="spec-title"></h1>
+      <span id="spec-version" class="badge badge-neutral"></span>
+    </div>
+    <div class="header-right">
+      <div id="summary-badges"></div>
+    </div>
+  </header>
+  <div id="layout">
+    <nav id="sidebar">
+      <div id="toc"></div>
+    </nav>
+    <main id="content">
+      <div id="narrative-view"></div>
+    </main>
+  </div>
+</div>
+<script>
+// Embedded data
+const DATA = ${jsonPayload};
+</script>
+<script>
+${JS_V2}
+</script>
+</body>
+</html>`;
+}
+
+const JS_V2 = `
+(function() {
+  'use strict';
+
+  var spec = DATA.spec;
+  var agentResult = DATA.agentResult;
+  var areas = spec.areas || [];
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+  function $(id) { return document.getElementById(id); }
+
+  // ---- Behavior status from agent results ----
+
+  function getBehaviorStatus(areaId, behaviorId) {
+    var fqid = areaId + '/' + behaviorId;
+    if (agentResult && agentResult.results) {
+      for (var i = 0; i < agentResult.results.length; i++) {
+        var r = agentResult.results[i];
+        if (r.id === fqid || r.id === behaviorId) {
+          return r.pass ? 'passed' : 'failed';
+        }
+      }
+    }
+    return 'untested';
+  }
+
+  function getAreaStatus(area) {
+    var hasPass = false, hasFail = false;
+    for (var i = 0; i < area.behaviors.length; i++) {
+      var s = getBehaviorStatus(area.id, area.behaviors[i].id);
+      if (s === 'passed') hasPass = true;
+      if (s === 'failed') hasFail = true;
+    }
+    if (hasFail) return hasPass ? 'mixed' : 'failed';
+    if (hasPass) return 'passed';
+    return 'untested';
+  }
+
+  function statusDot(status) {
+    var cls = status === 'passed' ? 'pass' : status === 'failed' ? 'fail' : status === 'mixed' ? 'mixed' : 'untested';
+    return '<span class="toc-status ' + cls + '"></span>';
+  }
+
+  function badgeFor(status, label) {
+    var cls = status === 'passed' ? 'pass' : status === 'failed' ? 'fail' : 'untested';
+    return '<span class="badge badge-' + cls + '">' + esc(label) + '</span>';
+  }
+
+  function getBehaviorEvidence(areaId, behaviorId) {
+    var fqid = areaId + '/' + behaviorId;
+    if (agentResult && agentResult.results) {
+      for (var i = 0; i < agentResult.results.length; i++) {
+        var r = agentResult.results[i];
+        if (r.id === fqid || r.id === behaviorId) {
+          return r.evidence || null;
+        }
+      }
+    }
+    return null;
+  }
+
+  // ---- Active area for accordion ----
+
+  var activeAreaIdx = -1;
+
+  function toggleArea(idx) {
+    activeAreaIdx = (activeAreaIdx === idx) ? -1 : idx;
+    renderToc();
+    renderContent();
+    if (activeAreaIdx >= 0) {
+      var el = document.querySelector('.section[data-idx="' + activeAreaIdx + '"]');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ---- TOC (sidebar) ----
+
+  function renderToc() {
+    var html = '';
+    for (var i = 0; i < areas.length; i++) {
+      var area = areas[i];
+      var status = getAreaStatus(area);
+      var isActive = i === activeAreaIdx;
+      html += '<div class="toc-item depth-1' + (isActive ? ' active' : '') + '" data-idx="' + i + '">';
+      html += statusDot(status);
+      html += '<span>' + esc(area.name) + '</span>';
+      html += '</div>';
+    }
+    $('toc').innerHTML = html;
+    $('toc').querySelectorAll('.toc-item').forEach(function(el) {
+      el.addEventListener('click', function() {
+        toggleArea(parseInt(el.dataset.idx));
+      });
+    });
+  }
+
+  // ---- Main content ----
+
+  function renderContent() {
+    var html = '';
+
+    // Description at top
+    if (spec.description) {
+      html += '<div class="section" style="border-color:var(--border)">';
+      html += '<div class="section-body" style="padding:20px 24px">';
+      html += '<p>' + esc(spec.description) + '</p>';
+      html += '</div></div>';
+    }
+
+    for (var i = 0; i < areas.length; i++) {
+      var area = areas[i];
+      var isExpanded = i === activeAreaIdx;
+      var areaStatus = getAreaStatus(area);
+      var counts = { passed: 0, failed: 0, untested: 0 };
+      for (var bi = 0; bi < area.behaviors.length; bi++) {
+        var bs = getBehaviorStatus(area.id, area.behaviors[bi].id);
+        if (bs === 'passed') counts.passed++;
+        else if (bs === 'failed') counts.failed++;
+        else counts.untested++;
+      }
+
+      html += '<div class="section' + (isExpanded ? ' expanded' : '') + '" data-idx="' + i + '">';
+
+      // Header
+      html += '<div class="section-header" data-idx="' + i + '">';
+      html += '<div class="section-header-left">';
+      html += '<span class="section-chevron">' + (isExpanded ? '\\u25be' : '\\u25b8') + '</span>';
+      html += '<h2>' + esc(area.name) + '</h2>';
+      html += '<div class="section-mini-badges">';
+      html += '<span class="mini-badge info">' + area.behaviors.length + ' behaviors</span>';
+      html += '</div>';
+      html += '</div>';
+      html += '<div class="section-badges">';
+      if (counts.passed) html += badgeFor('passed', counts.passed + ' passed');
+      if (counts.failed) html += badgeFor('failed', counts.failed + ' failed');
+      if (counts.untested) html += badgeFor('untested', counts.untested + ' untested');
+      html += '</div></div>';
+
+      // Prose
+      if (area.prose) {
+        html += '<div class="section-body">';
+        var paragraphs = area.prose.split('\\n\\n').filter(Boolean);
+        for (var pi = 0; pi < paragraphs.length; pi++) {
+          html += '<p>' + esc(paragraphs[pi]) + '</p>';
+        }
+        html += '</div>';
+      }
+
+      // Expandable details: behavior cards
+      html += '<div class="section-details">';
+      html += '<div class="section-details-inner">';
+      if (isExpanded) {
+        html += renderAreaBehaviors(area);
+      }
+      html += '</div></div>';
+
+      html += '</div>';
+    }
+    $('narrative-view').innerHTML = html;
+
+    // Bind header clicks
+    $('narrative-view').querySelectorAll('.section-header').forEach(function(el) {
+      el.addEventListener('click', function(e) {
+        if (e.target.closest('button')) return;
+        toggleArea(parseInt(el.dataset.idx));
+      });
+    });
+  }
+
+  function renderAreaBehaviors(area) {
+    var html = '<div class="detail-section"><div class="detail-section-title">Behaviors</div>';
+    for (var i = 0; i < area.behaviors.length; i++) {
+      var b = area.behaviors[i];
+      var status = getBehaviorStatus(area.id, b.id);
+      var cls = status === 'passed' ? 'pass' : status === 'failed' ? 'fail' : 'untested';
+      var icon = status === 'passed' ? '\\u2713' : status === 'failed' ? '\\u2717' : '\\u25cb';
+
+      html += '<div class="req-card ' + cls + '">';
+      html += '<div class="req-card-header">';
+      html += '<span class="req-card-id">' + esc(area.id + '/' + b.id) + '</span>';
+      html += '<div class="req-card-badges">';
+      html += '<span class="req-status-icon ' + cls + '">' + icon + '</span>';
+      if (status !== 'untested') {
+        html += '<span class="badge badge-' + cls + '">' + esc(status) + '</span>';
+      }
+      html += '</div></div>';
+      html += '<div class="req-card-desc">' + esc(b.description) + '</div>';
+
+      if (b.details) {
+        html += '<div class="req-plan"><div class="req-plan-title">Details</div>';
+        html += '<div style="color:var(--text-muted);font-size:13px;line-height:1.5">' + esc(b.details) + '</div>';
+        html += '</div>';
+      }
+
+      if (b.tags && b.tags.length > 0) {
+        html += '<div class="req-card-meta">';
+        for (var ti = 0; ti < b.tags.length; ti++) {
+          html += '<span class="badge badge-neutral">' + esc(b.tags[ti]) + '</span>';
+        }
+        html += '</div>';
+      }
+
+      // Evidence from agent verification
+      var evidence = getBehaviorEvidence(area.id, b.id);
+      if (evidence) {
+        html += '<div class="req-evidence"><div class="req-evidence-title">Evidence</div>';
+        if (typeof evidence === 'string') {
+          html += '<div class="spec-preview-text">' + esc(evidence) + '</div>';
+        } else if (Array.isArray(evidence)) {
+          for (var ei = 0; ei < evidence.length; ei++) {
+            var ev = evidence[ei];
+            html += '<div style="margin-bottom:4px"><span style="color:var(--accent);font-size:12px">' + esc(ev.label || ev.type || '') + ':</span> ';
+            html += '<span style="color:var(--text-muted);font-size:12px">' + esc(ev.content || '') + '</span></div>';
+          }
+        } else if (typeof evidence === 'object') {
+          var entries = Object.entries(evidence);
+          for (var oi = 0; oi < entries.length; oi++) {
+            html += '<div style="margin-bottom:4px"><span style="color:var(--accent);font-size:12px">' + esc(entries[oi][0]) + ':</span> ';
+            html += '<span style="color:var(--text-muted);font-size:12px">' + esc(typeof entries[oi][1] === 'string' ? entries[oi][1] : JSON.stringify(entries[oi][1])) + '</span></div>';
+          }
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // ---- Summary badges ----
+
+  function renderSummary() {
+    var total = 0, passed = 0, failed = 0;
+    for (var i = 0; i < areas.length; i++) {
+      for (var j = 0; j < areas[i].behaviors.length; j++) {
+        total++;
+        var s = getBehaviorStatus(areas[i].id, areas[i].behaviors[j].id);
+        if (s === 'passed') passed++;
+        else if (s === 'failed') failed++;
+      }
+    }
+    var untested = total - passed - failed;
+    var html = '';
+    if (passed) html += badgeFor('passed', passed + ' passed');
+    if (failed) html += badgeFor('failed', failed + ' failed');
+    if (untested > 0) html += badgeFor('untested', untested + ' untested');
+    if (total > 0) {
+      var pct = Math.round((passed / total) * 100);
+      html += '<span class="badge badge-neutral">' + pct + '% coverage</span>';
+    }
+    if (!html) html = '<span class="badge badge-neutral">No behaviors</span>';
+    $('summary-badges').innerHTML = html;
+  }
+
+  // ---- Init ----
+
+  function init() {
+    $('spec-title').textContent = spec.name;
+    $('spec-version').textContent = 'v' + spec.version;
+    renderToc();
+    renderContent();
+    renderSummary();
+  }
+
+  init();
+})();
+`;
 
 // ---------------------------------------------------------------------------
 // CSS

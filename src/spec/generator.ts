@@ -19,6 +19,9 @@ import type {
   ExpectedResponse,
   ConsoleExpectation,
   JsonSchema,
+  SpecV2,
+  Area,
+  Behavior,
 } from './types.js';
 import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
 import { specToYaml } from './parser.js';
@@ -451,6 +454,86 @@ export function generateSpec(options: { inputDir: string; specName: string; smar
       base_url: origin || '${TARGET_BASE_URL}',
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// V2 spec generation — behavioral claims instead of matchers
+// ---------------------------------------------------------------------------
+
+/** Generate a v2 behavioral spec from capture data. */
+export function generateSpecV2(options: { inputDir: string; specName: string }): SpecV2 {
+  const traffic = loadTraffic(options.inputDir);
+  const consoleLogs = loadConsole(options.inputDir);
+  const origin = traffic.length > 0 ? extractOrigin(traffic[0].url) : '';
+  const pageGroups = groupByPage(traffic);
+
+  const areas: Area[] = [];
+
+  for (const group of pageGroups) {
+    const areaId = pathToId(group.pagePath);
+    const unique = deduplicateRequests(group.requests);
+    const behaviors: Behavior[] = [];
+
+    for (const req of unique) {
+      const urlPath = extractPath(req.url);
+      behaviors.push({
+        id: pathToId(`${req.method.toLowerCase()}-${urlPath}`),
+        description: `${req.method} ${urlPath} returns ${req.status}`,
+        ...(req.contentType?.includes('json') ? { tags: ['api'] } : {}),
+      });
+    }
+
+    if (behaviors.length > 0) {
+      areas.push({
+        id: areaId,
+        name: group.pagePath === '/' ? 'Root' : group.pagePath.replace(/^\//, ''),
+        behaviors: deduplicateBehaviors(behaviors),
+      });
+    }
+  }
+
+  // Add a general behaviors area for console/error expectations
+  const errorCount = consoleLogs.filter((e) => e.type === 'error').length;
+  if (errorCount === 0) {
+    const generalBehaviors: Behavior[] = [
+      { id: 'no-console-errors', description: 'No console errors appear during normal usage' },
+    ];
+    areas.push({ id: 'reliability', name: 'Reliability', behaviors: generalBehaviors });
+  }
+
+  if (areas.length === 0) {
+    areas.push({
+      id: 'general',
+      name: 'General',
+      behaviors: [{ id: 'app-loads', description: 'Application loads without errors' }],
+    });
+  }
+
+  return {
+    version: '2',
+    name: options.specName,
+    description: `Generated from capture: ${path.basename(options.inputDir)}`,
+    target: { type: 'web', url: origin || '${TARGET_URL}' },
+    areas,
+    variables: {
+      base_url: origin || '${TARGET_BASE_URL}',
+    },
+  };
+}
+
+function deduplicateBehaviors(behaviors: Behavior[]): Behavior[] {
+  const seen = new Set<string>();
+  const result: Behavior[] = [];
+  for (const b of behaviors) {
+    let id = b.id;
+    let suffix = 2;
+    while (seen.has(id)) {
+      id = `${b.id}-${suffix++}`;
+    }
+    seen.add(id);
+    result.push({ ...b, id });
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

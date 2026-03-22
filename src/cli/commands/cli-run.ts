@@ -7,6 +7,7 @@ import * as path from 'path';
 import { loadSpec, parseSpec } from '../../spec/parser.js';
 import { runCliValidation, cliReportToMarkdown } from '../../cli-test/runner.js';
 import type { Spec } from '../../spec/types.js';
+import { isV1 } from '../../spec/types.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { formatOutput } from '../output.js';
@@ -31,6 +32,11 @@ export async function cliRun(options: CliRunOptions, ctx: CliContext): Promise<n
     }
   } catch (err) {
     process.stderr.write(`Failed to load spec: ${(err as Error).message}\n`);
+    return ExitCode.PARSE_ERROR;
+  }
+
+  if (!isV1(spec)) {
+    process.stderr.write('v2 specs are not supported by this command yet.\n');
     return ExitCode.PARSE_ERROR;
   }
 

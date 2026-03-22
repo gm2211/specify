@@ -44,6 +44,7 @@ import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 import { resolveSpecPath } from './spec-finder.js';
+import { isV1 } from '../spec/types.js';
 
 // Read version from package.json at startup
 const __filename = fileURLToPath(import.meta.url);
@@ -208,6 +209,7 @@ ${c.bold('Primary Flows:')}
 ${c.bold('Advanced:')}
   ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
+  ${c.cyan('spec migrate')}     Migrate a v1 spec to v2 behavioral format
   ${c.cyan('spec import')}      Import existing e2e tests as spec items
   ${c.cyan('spec export')}      Export spec items as e2e test code
   ${c.cyan('spec sync')}        Compare contract vs e2e tests
@@ -389,7 +391,40 @@ async function main(): Promise<void> {
         output: getArg(rest, '--output'),
         name: getArg(rest, '--name'),
         smart: hasFlag(rest, '--smart'),
+        v1: hasFlag(rest, '--v1'),
       }, ctx);
+
+    } else if (noun === 'spec' && verb === 'migrate') {
+      const { loadSpec } = await import('../spec/parser.js');
+      const { isV1: checkV1 } = await import('../spec/types.js');
+      const { migrateV1toV2 } = await import('../spec/migrate.js');
+      const { writeSpec } = await import('../spec/parser.js');
+
+      const inputPath = getArg(rest, '--input') ?? '';
+      if (!inputPath) {
+        process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--input', hint: 'Provide the path to a v1 spec file' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
+      } else {
+        try {
+          const spec = loadSpec(path.resolve(inputPath));
+          if (!checkV1(spec)) {
+            process.stderr.write('Spec is not v1 format — nothing to migrate.\n');
+            exitCode = ExitCode.PARSE_ERROR;
+          } else {
+            const v2 = migrateV1toV2(spec);
+            const outputPath = getArg(rest, '--output') ?? inputPath.replace(/\.(ya?ml|json)$/, '.v2.yaml');
+            writeSpec(v2, path.resolve(outputPath));
+            process.stderr.write(`Migrated v1 spec to v2: ${outputPath}\n`);
+            if (ctx.outputFormat === 'json') {
+              process.stdout.write(JSON.stringify({ input: inputPath, output: outputPath }) + '\n');
+            }
+            exitCode = ExitCode.SUCCESS;
+          }
+        } catch (err) {
+          process.stderr.write(`Migration failed: ${(err as Error).message}\n`);
+          exitCode = ExitCode.PARSE_ERROR;
+        }
+      }
 
     } else if (noun === 'spec' && verb === 'import') {
       const { specImport } = await import('./commands/spec-import.js');
@@ -487,7 +522,7 @@ async function main(): Promise<void> {
                   try {
                     const { loadSpec } = await import('../spec/parser.js');
                     const spec = loadSpec(specOutputPath);
-                    const pageCount = spec.pages?.length ?? 0;
+                    const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
                     process.stderr.write(`Spec validated: ${specOutputPath} (${pageCount} pages)\n`);
                     process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, pages: pageCount }) + '\n');
                     exitCode = ExitCode.SUCCESS;
@@ -724,7 +759,7 @@ async function main(): Promise<void> {
           }
           if (spec) {
             // Pre-flight: check assumptions before spending agent turns
-            if (spec.assumptions?.length) {
+            if (isV1(spec) && spec.assumptions?.length) {
               const { validateAssumptions, allAssumptionsMet } = await import('../validation/assumptions.js');
               const assumptionResults = await validateAssumptions(spec.assumptions, {
                 variables: spec.variables,
@@ -743,9 +778,9 @@ async function main(): Promise<void> {
             }
           }
           if (spec) {
-            // Pre-flight: run setup hooks
+            // Pre-flight: run setup hooks (v1 only)
             let hookRunResult: { ctx: { specVars: Record<string, string>; runtimeVars: Record<string, unknown> } } | undefined;
-            if (spec.hooks?.setup?.length) {
+            if (isV1(spec) && spec.hooks?.setup?.length) {
               try {
                 const { executeHooks } = await import('../agent/hooks.js');
                 hookRunResult = await executeHooks(
@@ -799,8 +834,8 @@ async function main(): Promise<void> {
                 exitCode = agentExitCode(err);
               }
 
-              // Teardown hooks (best-effort)
-              if (spec.hooks?.teardown?.length) {
+              // Teardown hooks (best-effort, v1 only)
+              if (isV1(spec) && spec.hooks?.teardown?.length) {
                 try {
                   const { executeHooks } = await import('../agent/hooks.js');
                   await executeHooks(
@@ -830,7 +865,7 @@ async function main(): Promise<void> {
         const { loadSpec } = await import('../spec/parser.js');
         try {
           const spec = loadSpec(specPath);
-          if (spec.cli) {
+          if (isV1(spec) && spec.cli) {
             // Spec has a cli section → run CLI verification
             const { cliRun } = await import('./commands/cli-run.js');
             exitCode = await cliRun({
@@ -838,7 +873,7 @@ async function main(): Promise<void> {
               output: getArg(verifyArgs, '--output'),
               historyDir: getArg(verifyArgs, '--history-dir'),
             }, ctx);
-          } else if (spec.pages?.length) {
+          } else if (isV1(spec) && spec.pages?.length) {
             // Spec has pages but no URL — can't verify without a target
             process.stderr.write('Spec has pages but no --url or --capture provided. Provide a target to verify against.\n');
             exitCode = ExitCode.PARSE_ERROR;

@@ -8,6 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Spec } from '../../spec/types.js';
+import { isV1 } from '../../spec/types.js';
 import type { GapReport, PageResult, CheckStatus } from '../../validation/types.js';
 import { ExitCode } from '../exit-codes.js';
 
@@ -95,7 +96,7 @@ export async function runTui(options: {
       state.selectedPage = Math.max(0, state.selectedPage - 1);
     } else if (key === '\u001b[B') {
       // Down
-      const maxPages = state.report?.pages.length ?? state.spec?.pages?.length ?? 0;
+      const maxPages = state.report?.pages.length ?? (state.spec && isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0);
       if (maxPages > 0) {
         state.selectedPage = Math.min(maxPages - 1, state.selectedPage + 1);
       }
@@ -229,8 +230,8 @@ function render(state: TuiState): void {
   } else {
     // Idle — no results yet
     output += `\n${WHITE} Spec loaded: ${state.spec?.name ?? 'none'}${RESET}\n`;
-    output += ` Pages: ${state.spec?.pages?.length ?? 0}\n`;
-    output += ` Flows: ${state.spec?.flows?.length ?? 0}\n`;
+    output += ` Pages: ${state.spec && isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0}\n`;
+    output += ` Flows: ${state.spec && isV1(state.spec) ? state.spec.flows?.length ?? 0 : 0}\n`;
     if (state.lastError) {
       output += `\n ${RED}Error: ${state.lastError}${RESET}\n`;
     }

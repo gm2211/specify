@@ -1,6 +1,9 @@
 /**
  * src/spec/parser.ts — Load and validate a spec from YAML or JSON
  *
+ * Supports both v1 (computable) and v2 (behavioral) spec formats.
+ * Version is detected from the `version` field and the correct schema is applied.
+ *
  * Usage:
  *   import { loadSpec } from './parser.js';
  *   const spec = loadSpec('path/to/spec.yaml');
@@ -12,10 +15,12 @@ import * as path from 'path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import { specSchema } from './schema.js';
+import { specSchemaV2 } from './schema-v2.js';
 import type { Spec } from './types.js';
 
 const ajv = new Ajv({ allErrors: true });
-const validate = ajv.compile(specSchema);
+const validateV1 = ajv.compile(specSchema);
+const validateV2 = ajv.compile(specSchemaV2);
 
 /** Error thrown when a spec file fails validation. */
 export class SpecValidationError extends Error {
@@ -84,22 +89,28 @@ export function parseSpec(content: string, sourceName = '<string>'): Spec {
 }
 
 /**
- * Validate a parsed object against the spec schema.
- *
- * @param data - Parsed data to validate
- * @param source - Source name for error messages
- * @returns Validated Spec object
- * @throws SpecValidationError if validation fails
+ * Validate a parsed object against the appropriate spec schema.
+ * Detects v1 vs v2 from the `version` field.
  */
 function validateSpec(data: unknown, source: string): Spec {
   if (data === null || data === undefined || typeof data !== 'object') {
     throw new SpecValidationError(source, ['Spec must be a non-null object']);
   }
 
-  const valid = validate(data);
+  const obj = data as Record<string, unknown>;
+  const isV2 = obj.version === '2';
+  const validator = isV2 ? validateV2 : validateV1;
 
-  if (!valid && validate.errors) {
-    const errors = validate.errors.map((err) => {
+  if (isV2) {
+    process.stderr.write('');  // v2 is the new format, no warning needed
+  } else if (obj.version === '1.0') {
+    // v1 still supported — deprecation warning will be added later
+  }
+
+  const valid = validator(data);
+
+  if (!valid && validator.errors) {
+    const errors = validator.errors.map((err) => {
       const path = err.instancePath || '/';
       const msg = err.message ?? 'unknown error';
       return `${path}: ${msg}`;
@@ -112,9 +123,6 @@ function validateSpec(data: unknown, source: string): Spec {
 
 /**
  * Serialize a spec to a YAML string.
- *
- * @param spec - Spec object to serialize
- * @returns YAML string
  */
 export function specToYaml(spec: Spec): string {
   return yaml.dump(spec, {
@@ -129,9 +137,6 @@ export function specToYaml(spec: Spec): string {
 
 /**
  * Write a spec to a file (YAML or JSON based on extension).
- *
- * @param spec - Spec object to write
- * @param filePath - Destination file path
  */
 export function writeSpec(spec: Spec, filePath: string): void {
   const resolved = path.resolve(filePath);

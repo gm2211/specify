@@ -11,7 +11,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'replay' | 'compare';
+  task: 'capture' | 'verify' | 'verify_v2' | 'replay' | 'compare';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -118,6 +118,55 @@ function browserToolNames(serverName: string): string[] {
 }
 
 function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
+  if (task === 'verify_v2') {
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          pass: { type: 'boolean', description: 'True only if ALL behaviors pass' },
+          summary: {
+            type: 'object',
+            properties: {
+              total: { type: 'number' },
+              passed: { type: 'number' },
+              failed: { type: 'number' },
+              skipped: { type: 'number' },
+            },
+            required: ['total', 'passed', 'failed', 'skipped'],
+          },
+          results: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', description: 'Fully-qualified: area-id/behavior-id' },
+                description: { type: 'string' },
+                status: { type: 'string', enum: ['passed', 'failed', 'skipped'] },
+                method: { type: 'string', description: 'How the behavior was verified' },
+                evidence: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string', enum: ['screenshot', 'text', 'network_log', 'command_output', 'file'] },
+                      label: { type: 'string' },
+                      content: { type: 'string' },
+                    },
+                    required: ['type', 'label', 'content'],
+                  },
+                },
+                rationale: { type: 'string' },
+                duration_ms: { type: 'number' },
+              },
+              required: ['id', 'description', 'status'],
+            },
+          },
+        },
+        required: ['pass', 'summary', 'results'],
+      },
+    };
+  }
   if (task === 'verify') {
     return {
       type: 'json_schema',

@@ -1,17 +1,47 @@
 /**
- * src/spec/types.ts — Computational spec format types
+ * src/spec/types.ts — Spec format types (v1 + v2 union)
  *
- * A spec describes the **functional behavior** of a web application:
- * what a user should see, what network calls should happen, and how
- * interactions should work. Every assertion is programmatically verifiable.
+ * V1 (computable): describes HOW to verify with matchers, selectors, step sequences.
+ * V2 (behavioral): describes WHAT should be true; agent figures out verification.
  *
- * Key principles:
- *   - Functional, not structural: describes user experience, not implementation
- *   - Verifiable: every assertion can be checked automatically
- *   - Composable: pages are referenced in flows, flows reference pages
- *   - Flexible: visual, network, console, and interaction checks
- *   - Templatable: {{var}} for dynamic values, ${ENV_VAR} for env vars
+ * Both versions coexist via discriminated union on the `version` field.
  */
+
+// Re-export v2 types
+export type {
+  SpecV2,
+  Target,
+  WebTarget,
+  CliTarget,
+  ApiTarget,
+  AssumptionV2,
+  HookStepV2,
+  HooksV2,
+  Area,
+  Behavior,
+  VerificationReport,
+  BehaviorResult,
+  Evidence,
+  GapAnalysisReport,
+  BehaviorCoverage,
+  MatchedTest,
+  UnmappedTest,
+} from './types-v2.js';
+
+import type { SpecV2 } from './types-v2.js';
+
+/** Discriminated union of v1 and v2 spec formats. */
+export type Spec = SpecV1 | SpecV2;
+
+/** Type guard: is this a v2 spec? */
+export function isV2(spec: Spec): spec is SpecV2 {
+  return spec.version === '2';
+}
+
+/** Type guard: is this a v1 spec? */
+export function isV1(spec: Spec): spec is SpecV1 {
+  return !isV2(spec);
+}
 
 // ---------------------------------------------------------------------------
 // Assertion quantifiers and confidence (Antithesis-inspired)
@@ -105,8 +135,8 @@ export interface SelectorExistsAssumption extends BaseAssumption {
 // Top-level spec
 // ---------------------------------------------------------------------------
 
-/** Root spec document. */
-export interface Spec {
+/** Root spec document (v1 computable format). */
+export interface SpecV1 {
   /** Spec format version. */
   version: string;
 

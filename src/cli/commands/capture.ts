@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
+import { isV1 } from '../../spec/types.js';
 
 type CapturePage = {
   goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
@@ -208,10 +209,11 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
         const resolvedSpecFile = path.resolve(specFile);
         fs.mkdirSync(path.dirname(resolvedSpecFile), { recursive: true });
         fs.writeFileSync(resolvedSpecFile, specToYaml(spec), 'utf-8');
-        log(`Spec generated: ${resolvedSpecFile} (${spec.pages?.length ?? 0} pages)`);
+        const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
+        log(`Spec generated: ${resolvedSpecFile} (${pageCount} pages)`);
 
         (summary as Record<string, unknown>).spec = resolvedSpecFile;
-        (summary as Record<string, unknown>).specPages = spec.pages?.length ?? 0;
+        (summary as Record<string, unknown>).specPages = pageCount;
       } catch (err) {
         log(`Warning: spec generation failed: ${(err as Error).message}`);
         log('Run "specify spec generate" manually to generate a spec from the capture data.');

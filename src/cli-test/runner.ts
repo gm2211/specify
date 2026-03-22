@@ -7,7 +7,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { Spec, CliSpec, CliCommandSpec, CliScenarioSpec } from '../spec/types.js';
+import type { Spec, SpecV1, CliSpec, CliCommandSpec, CliScenarioSpec } from '../spec/types.js';
+import { isV1 } from '../spec/types.js';
 import type {
   CliGapReport,
   CliCommandResult,
@@ -36,6 +37,9 @@ export interface CliRunResult {
 /** Run all CLI commands from a spec and validate results. */
 export async function runCliValidation(config: CliRunConfig): Promise<CliRunResult> {
   const { spec, log } = config;
+  if (!isV1(spec)) {
+    throw new Error('CLI validation requires a v1 spec');
+  }
   const cliSpec = spec.cli;
 
   if (!cliSpec) {
@@ -272,7 +276,7 @@ function evaluateRequirementEvidence(
 }
 
 function evaluateClaims(
-  spec: Spec,
+  spec: SpecV1,
   commands: CliCommandResult[],
   scenarios: CliScenarioResult[],
   requirements: RequirementResult[],

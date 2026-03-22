@@ -14,11 +14,14 @@ import * as path from 'path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import { specSchema } from './schema.js';
-import type { Spec, FlowStep } from './types.js';
+import { specSchemaV2 } from './schema-v2.js';
+import type { Spec, SpecV1, SpecV2, FlowStep } from './types.js';
+import { isV1, isV2 } from './types.js';
 import { markdownToNarrative, type NarrativeSection } from './narrative.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
+const validateV2 = ajv.compile(specSchemaV2);
 
 // ---------------------------------------------------------------------------
 // Types
@@ -81,10 +84,12 @@ export function lintRaw(content: string, sourceName = '<string>', specPath?: str
     return { valid: false, errors };
   }
 
-  // 2. Schema validation
-  const schemaValid = validate(data);
-  if (!schemaValid && validate.errors) {
-    for (const err of validate.errors) {
+  // 2. Schema validation (dispatch on version)
+  const obj = data as Record<string, unknown>;
+  const schemaValidator = obj.version === '2' ? validateV2 : validate;
+  const schemaValid = schemaValidator(data);
+  if (!schemaValid && schemaValidator.errors) {
+    for (const err of schemaValidator.errors) {
       errors.push({
         path: err.instancePath || '/',
         severity: 'error',
@@ -116,6 +121,8 @@ export function lintRaw(content: string, sourceName = '<string>', specPath?: str
  * Returns warnings and errors beyond what JSON Schema can catch.
  */
 export function lintSpec(spec: Spec, specPath?: string): LintError[] {
+  if (isV2(spec)) return lintSpecV2(spec);
+  if (!isV1(spec)) return [];
   const errors: LintError[] = [];
 
   // Rule: duplicate page IDs
@@ -464,6 +471,7 @@ export function lintSpec(spec: Spec, specPath?: string): LintError[] {
  * and warns about spec items that have no narrative coverage.
  */
 export function lintNarrativeSync(spec: Spec, narrativePath: string, specPath?: string): LintError[] {
+  if (!isV1(spec)) return [];
   const errors: LintError[] = [];
 
   // Resolve narrative path relative to the spec file's directory, not cwd
@@ -602,4 +610,77 @@ function validateDescriptionClaims(
       });
     }
   }
+}
+
+// ---------------------------------------------------------------------------
+// V2 semantic lint rules
+// ---------------------------------------------------------------------------
+
+function lintSpecV2(spec: SpecV2): LintError[] {
+  const errors: LintError[] = [];
+
+  // Rule: duplicate area IDs
+  const areaIds = new Map<string, number>();
+  for (let i = 0; i < spec.areas.length; i++) {
+    const area = spec.areas[i];
+    if (areaIds.has(area.id)) {
+      errors.push({
+        path: `/areas/${i}/id`,
+        severity: 'error',
+        message: `Duplicate area ID "${area.id}" (first at /areas/${areaIds.get(area.id)})`,
+        rule: 'duplicate-area-id',
+      });
+    } else {
+      areaIds.set(area.id, i);
+    }
+
+    // Rule: duplicate behavior IDs within an area
+    const behaviorIds = new Map<string, number>();
+    for (let j = 0; j < area.behaviors.length; j++) {
+      const behavior = area.behaviors[j];
+      if (behaviorIds.has(behavior.id)) {
+        errors.push({
+          path: `/areas/${i}/behaviors/${j}/id`,
+          severity: 'error',
+          message: `Duplicate behavior ID "${behavior.id}" in area "${area.id}" (first at /areas/${i}/behaviors/${behaviorIds.get(behavior.id)})`,
+          rule: 'duplicate-behavior-id',
+        });
+      } else {
+        behaviorIds.set(behavior.id, j);
+      }
+
+      // Rule: empty behavior description
+      if (!behavior.description.trim()) {
+        errors.push({
+          path: `/areas/${i}/behaviors/${j}/description`,
+          severity: 'error',
+          message: `Behavior "${behavior.id}" in area "${area.id}" has an empty description`,
+          rule: 'empty-behavior-description',
+        });
+      }
+    }
+  }
+
+  // Rule: duplicate behavior IDs across all areas
+  const globalBehaviorIds = new Map<string, string>();
+  for (const area of spec.areas) {
+    for (const behavior of area.behaviors) {
+      const fqId = `${area.id}/${behavior.id}`;
+      if (globalBehaviorIds.has(behavior.id)) {
+        const prevArea = globalBehaviorIds.get(behavior.id)!;
+        if (prevArea !== area.id) {
+          errors.push({
+            path: `/areas`,
+            severity: 'warning',
+            message: `Behavior ID "${behavior.id}" appears in both area "${prevArea}" and "${area.id}". Fully-qualified IDs (${prevArea}/${behavior.id}, ${fqId}) are distinct, but bare IDs collide.`,
+            rule: 'ambiguous-behavior-id',
+          });
+        }
+      } else {
+        globalBehaviorIds.set(behavior.id, area.id);
+      }
+    }
+  }
+
+  return errors;
 }

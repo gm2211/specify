@@ -8,7 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import type { Spec, PageSpec } from '../../spec/types.js';
+import type { Spec, SpecV1, PageSpec } from '../../spec/types.js';
+import { isV1 } from '../../spec/types.js';
 import { specToYaml } from '../../spec/parser.js';
 import { discoverPages, type DiscoveredPage } from './crawler.js';
 import { completePath } from './completer.js';
@@ -554,8 +555,10 @@ async function flowGenerate(state: ProjectState, { ask, askPath, choose, confirm
 
   const yaml = specToYaml(spec);
 
-  console.error(`  Pages: ${spec.pages?.length ?? 0}`);
-  console.error(`  Flows: ${spec.flows?.length ?? 0}`);
+  const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
+  const flowCount = isV1(spec) ? spec.flows?.length ?? 0 : 0;
+  console.error(`  Pages: ${pageCount}`);
+  console.error(`  Flows: ${flowCount}`);
 
   fs.writeFileSync(path.resolve(outputPath), yaml, 'utf-8');
   console.error(`\n  Spec written to: ${outputPath}`);
@@ -630,7 +633,7 @@ async function flowCreate(
 
   const useDefaults = await confirm('Enable default checks (no 5xx, no console errors)?');
 
-  const spec: Spec = {
+  const spec: SpecV1 = {
     version: '1.0',
     name,
     description,
@@ -725,7 +728,7 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
     try {
       const { loadSpec } = await import('../../spec/parser.js');
       const spec = loadSpec(specOutputPath);
-      console.error(`  Spec validated: ${specOutputPath} (${spec.pages?.length ?? 0} pages)`);
+      console.error(`  Spec validated: ${specOutputPath} (${isV1(spec) ? spec.pages?.length ?? 0 : 0} pages)`);
       return ExitCode.SUCCESS;
     } catch (parseErr) {
       console.error(`  Warning: agent wrote invalid spec: ${(parseErr as Error).message}`);
@@ -788,7 +791,7 @@ async function flowVerifyMenu(state: ProjectState, prompts: PromptFns, subAction
       const { loadSpec: loadSpecForCli } = await import('../../spec/parser.js');
       let cliSpec;
       try { cliSpec = loadSpecForCli(specPath); } catch { /* handled by cliRun */ }
-      if (cliSpec?.cli) {
+      if (cliSpec && isV1(cliSpec) && cliSpec.cli) {
         console.error(`\n  CLI target: ${cliSpec.cli.binary}`);
         console.error(`  Commands: ${(cliSpec.cli.commands || []).length}`);
       } else {
