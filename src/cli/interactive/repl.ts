@@ -17,6 +17,7 @@ interface ReplState {
   spec: Spec | null;
   specPath: string | null;
   report: GapReport | null;
+  agentResult: unknown;
   capturePath: string | null;
   targetUrl: string | null;
 }
@@ -34,6 +35,7 @@ export async function runRepl(options: { spec?: string; url?: string } = {}): Pr
     spec: null,
     specPath: null,
     report: null,
+    agentResult: null,
     capturePath: null,
     targetUrl: options.url ?? null,
   };
@@ -226,28 +228,53 @@ async function handleRun(args: string[], state: ReplState): Promise<void> {
   }
 
   console.log('Running agent...');
+  state.report = null;
+  state.agentResult = null;
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
   const { getVerifyPrompt } = await import('../../agent/prompts.js');
-  const prompt = getVerifyPrompt(state.specPath, state.targetUrl);
-  const { result, costUsd } = await runSpecifyAgent({
+  const resolvedSpec = path.resolve(state.specPath);
+  const prompt = getVerifyPrompt(resolvedSpec, state.targetUrl);
+  const { result, costUsd, structuredOutput } = await runSpecifyAgent({
     task: 'verify',
     systemPrompt: prompt,
-    userPrompt: `Verify ${state.targetUrl} against the spec at ${state.specPath}.`,
+    userPrompt: `Verify ${state.targetUrl} against the spec at ${resolvedSpec}.`,
     url: state.targetUrl,
-    spec: state.specPath,
+    spec: resolvedSpec,
     outputDir: '.specify/verify',
     headed: args.includes('--headed'),
   });
+  const { extractBool } = await import('../../agent/sdk-runner.js');
+  const pass = extractBool(structuredOutput, 'pass');
+  state.agentResult = structuredOutput;
   console.log(`\nAgent complete (cost: $${costUsd.toFixed(4)})`);
+  if (pass !== null) {
+    const summary = structuredOutput && typeof structuredOutput === 'object' && 'summary' in structuredOutput
+      ? (structuredOutput as { summary: string }).summary : '';
+    console.log(`Result: ${pass ? 'PASS' : 'FAIL'}${summary ? ` — ${summary}` : ''}`);
+  }
   console.log(result);
 }
 
 function handleShow(args: string[], state: ReplState): void {
-  if (!state.report) {
+  if (!state.report && !state.agentResult) {
     console.log('No report available. Run "validate" or "run" first.');
     return;
   }
 
+  if (!state.report && state.agentResult) {
+    // Display agent verification results
+    const ar = state.agentResult as { pass?: boolean; summary?: string; results?: { id: string; pass: boolean; evidence: string }[] };
+    console.log(`Result: ${ar.pass ? 'PASS' : 'FAIL'}`);
+    if (ar.summary) console.log(`Summary: ${ar.summary}`);
+    if (ar.results?.length) {
+      for (const r of ar.results) {
+        console.log(`  ${r.pass ? '✓' : '✗'} ${r.id}: ${r.evidence}`);
+      }
+    }
+    return;
+  }
+
+  if (!state.report) return;
   const target = args[0] ?? 'summary';
 
   switch (target) {

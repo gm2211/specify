@@ -258,9 +258,7 @@ narrative:
     covers:
       - capture-no-url
       - capture-invalid-url
-      - capture-no-output
       - capture-from-code-missing
-      - capture-explore-mode-in-schema
       - capture-human-mode-in-schema
       - capture-agent-mode-in-schema
 
@@ -772,8 +770,8 @@ cli:
           description: "The spec guide command (authoring guidance for LLM spec writers) must appear in the manifest"
           text: "spec guide"
         - type: text_contains
-          description: "The agent run command (autonomous browser-driven verification against a live system) must appear in the manifest"
-          text: "agent run"
+          description: "The compare command (live side-by-side comparison of remote and local targets) must appear in the manifest"
+          text: "compare"
         - type: text_contains
           description: "The report diff command (compare two gap reports to see what changed) must appear in the manifest"
           text: "report diff"
@@ -1249,20 +1247,6 @@ cli:
           path: "error"
           value: "invalid_url"
 
-    - id: capture-no-output
-      description: >
-        The capture command in live mode requires both --url and --output (the directory to
-        save captured data). When --output is empty, it outputs a structured JSON error with
-        error="missing_parameter" and parameter="--output", and exits with code 10.
-      args: ["capture", "--url", "https://example.com", "--output", ""]
-      expected_exit_code: 10
-      stdout_assertions:
-        - type: json_path
-          path: "error"
-          value: "missing_parameter"
-        - type: json_path
-          path: "parameter"
-          value: "--output"
 
     # -------------------------------------------------------------------
     # Create command
@@ -1746,41 +1730,29 @@ cli:
         - type: text_contains
           text: "Verify"
 
-    - id: capture-explore-mode-in-schema
+    - id: capture-agent-mode-in-schema
       description: >
-        The capture command's explore mode (--explore flag) must be discoverable via
-        schema commands. The manifest should include "from_live_explore" as a mode,
-        confirming agents can discover autonomous page exploration as a capture option.
+        The capture command's agent mode (default, no --human flag) must be discoverable
+        via schema commands. The manifest should include "agent" as a mode,
+        confirming agents can discover autonomous capture as a capture option.
       args: ["schema", "commands"]
       expected_exit_code: 0
       stdout_assertions:
         - type: text_contains
-          description: "The explore mode is listed in the capture command's modes"
-          text: "from_live_explore"
+          description: "The agent mode is listed in the capture command's modes"
+          text: "agent"
 
     - id: capture-human-mode-in-schema
       description: >
         The capture command's human mode (--human flag) must be discoverable
-        via schema commands. The manifest should include "from_live_human" as a mode,
+        via schema commands. The manifest should include "human" as a mode,
         enabling humans to drive a headed browser while Specify records all traffic.
       args: ["schema", "commands"]
       expected_exit_code: 0
       stdout_assertions:
         - type: text_contains
           description: "The human mode is listed in the capture command's modes"
-          text: "from_live_human"
-
-    - id: capture-agent-mode-in-schema
-      description: >
-        The capture command's agent mode (--agent flag) must be discoverable via schema
-        commands. The manifest should include "from_live_agent" as a mode, enabling agents
-        to drive browser interaction via a stdin/stdout NDJSON protocol during capture.
-      args: ["schema", "commands"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: text_contains
-          description: "The agent mode is listed in the capture command's modes"
-          text: "from_live_agent"
+          text: "human"
 
     - id: capture-from-code-missing
       description: >

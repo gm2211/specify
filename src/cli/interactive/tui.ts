@@ -6,6 +6,7 @@
  */
 
 import * as fs from 'fs';
+import * as path from 'path';
 import type { Spec } from '../../spec/types.js';
 import type { GapReport, PageResult, CheckStatus } from '../../validation/types.js';
 import { ExitCode } from '../exit-codes.js';
@@ -28,11 +29,20 @@ const STATUS_ICON: Record<CheckStatus, string> = {
   untested: `${DIM}[skip]${RESET}`,
 };
 
+interface AgentResult {
+  pass: boolean;
+  summary: string;
+  results: { id: string; pass: boolean; evidence: string }[];
+}
+
 interface TuiState {
   spec: Spec | null;
   report: GapReport | null;
+  agentResult: AgentResult | null;
   selectedPage: number;
   running: boolean;
+  lastVerifyPass?: boolean;
+  lastError?: string;
 }
 
 export async function runTui(options: {
@@ -52,6 +62,7 @@ export async function runTui(options: {
   const state: TuiState = {
     spec,
     report: null,
+    agentResult: null,
     selectedPage: 0,
     running: false,
   };
@@ -85,36 +96,48 @@ export async function runTui(options: {
     } else if (key === '\u001b[B') {
       // Down
       const maxPages = state.report?.pages.length ?? state.spec?.pages?.length ?? 0;
-      state.selectedPage = Math.min(maxPages - 1, state.selectedPage + 1);
+      if (maxPages > 0) {
+        state.selectedPage = Math.min(maxPages - 1, state.selectedPage + 1);
+      }
     }
 
     // Action keys
     if (key === 'r' || key === 'R') {
       if (!state.running) {
         state.running = true;
+        state.agentResult = null;
+        state.lastError = undefined;
         render(state);
         try {
           const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
           const { getVerifyPrompt } = await import('../../agent/prompts.js');
-          const prompt = getVerifyPrompt(options.spec, options.url);
-          await runSpecifyAgent({
+          const resolvedSpec = path.resolve(options.spec);
+          const prompt = getVerifyPrompt(resolvedSpec, options.url);
+          const { structuredOutput } = await runSpecifyAgent({
             task: 'verify',
             systemPrompt: prompt,
-            userPrompt: `Verify ${options.url} against the spec at ${options.spec}.`,
+            userPrompt: `Verify ${options.url} against the spec at ${resolvedSpec}.`,
             url: options.url,
-            spec: options.spec,
+            spec: resolvedSpec,
             outputDir: '.specify/verify',
           });
-        } catch {
-          // Display error briefly
+          const { extractBool } = await import('../../agent/sdk-runner.js');
+          const pass = extractBool(structuredOutput, 'pass');
+          if (pass !== null) {
+            state.lastVerifyPass = pass;
+          }
+          if (structuredOutput && typeof structuredOutput === 'object') {
+            const so = structuredOutput as Record<string, unknown>;
+            state.agentResult = {
+              pass: pass === true,
+              summary: typeof so.summary === 'string' ? so.summary : '',
+              results: Array.isArray(so.results) ? so.results as AgentResult['results'] : [],
+            };
+          }
+        } catch (err) {
+          state.lastError = err instanceof Error ? err.message : String(err);
         }
         state.running = false;
-      }
-    } else if (key === 'v' || key === 'V') {
-      if (state.report) {
-        // Re-validate is essentially re-render with current data
-        render(state);
-        return;
       }
     }
 
@@ -147,14 +170,22 @@ function render(state: TuiState): void {
   output += `${BOLD}${CYAN} Specify Dashboard -- ${title}${RESET}\n`;
   output += `${DIM}${'-'.repeat(Math.min(columns, 80))}${RESET}\n`;
 
-  if (!state.report && !state.running) {
-    // Show spec overview
-    output += `\n${WHITE} Spec loaded: ${state.spec?.name ?? 'none'}${RESET}\n`;
-    output += ` Pages: ${state.spec?.pages?.length ?? 0}\n`;
-    output += ` Flows: ${state.spec?.flows?.length ?? 0}\n`;
-    output += `\n${DIM} Press [R] to run, [Q] to quit${RESET}\n`;
-  } else if (state.running) {
+  if (state.running) {
     output += `\n${YELLOW} Running agent...${RESET}\n`;
+  } else if (state.agentResult) {
+    // Agent verification results
+    const ar = state.agentResult;
+    output += ` ${ar.pass ? `${GREEN}PASS${RESET}` : `${RED}FAIL${RESET}`} — ${ar.summary}\n`;
+    output += `${DIM}${'-'.repeat(Math.min(columns, 80))}${RESET}\n`;
+    for (let i = 0; i < ar.results.length && i < rows - 8; i++) {
+      const r = ar.results[i];
+      const icon = r.pass ? `${GREEN}[pass]${RESET}` : `${RED}[FAIL]${RESET}`;
+      output += `  ${icon} ${r.id}: ${r.evidence.substring(0, 60)}\n`;
+    }
+    if (state.lastError) {
+      output += `\n ${RED}Error: ${state.lastError}${RESET}\n`;
+    }
+    output += `\n${DIM} [R]un again  [Q]uit${RESET}\n`;
   } else if (state.report) {
     // Split view: pages list + detail
     const pages = state.report.pages;
@@ -195,11 +226,20 @@ function render(state: TuiState): void {
         output += `  ${STATUS_ICON[sc.status]} scenario: ${sc.scenarioId}\n`;
       }
     }
+  } else {
+    // Idle — no results yet
+    output += `\n${WHITE} Spec loaded: ${state.spec?.name ?? 'none'}${RESET}\n`;
+    output += ` Pages: ${state.spec?.pages?.length ?? 0}\n`;
+    output += ` Flows: ${state.spec?.flows?.length ?? 0}\n`;
+    if (state.lastError) {
+      output += `\n ${RED}Error: ${state.lastError}${RESET}\n`;
+    }
+    output += `\n${DIM} Press [R] to run, [Q] to quit${RESET}\n`;
   }
 
   // Footer
   output += `\n${DIM}${'-'.repeat(Math.min(columns, 80))}${RESET}\n`;
-  output += `${DIM} [R]un  [V]alidate  [Up/Down]Navigate  [Q]uit${RESET}\n`;
+  output += `${DIM} [R]un  [Up/Down]Navigate  [Q]uit${RESET}\n`;
 
   process.stdout.write(output);
 }

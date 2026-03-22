@@ -28,9 +28,10 @@ function promptUser(question: string): Promise<string> {
 export function createBrowserMcpServer(
   page: Page,
   screenshotFn: (name: string) => Promise<string>,
+  serverName: string = 'browser',
 ) {
   const server = createSdkMcpServer({
-    name: 'browser',
+    name: serverName,
     tools: [
       tool(
         'browser_goto',

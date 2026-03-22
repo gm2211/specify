@@ -364,7 +364,7 @@ assumptions:
       'To verify a behavioral requirement, agents write evidence to .specify/evidence/<requirement-id>.json with format: { requirement_id, status: "passed"|"failed", timestamp, agent, evidence: { ... } }. The verify command reads this file and marks the requirement accordingly.',
       'Use the top-level "narrative" field to embed prose sections directly in the spec YAML — this keeps human-readable context co-located with the requirements it describes, eliminating the need for a separate narrative markdown file.',
       'Each narrative section can define requirements inline and reference other spec items via "covers" — this groups related concerns while keeping the spec as the single source of truth.',
-      'Use "specify capture --human" to open a headed browser for human recording, "specify capture --explore" for autonomous page discovery, or "specify capture --allow-agent-interaction" for agent-driven exploration via stdin/stdout Playwright proxy.',
+      'Use "specify capture --url <url>" for autonomous agent-driven capture, or "specify capture --url <url> --human" to open a headed browser for manual recording.',
       'Use "specify verify --history-dir .specify/history" to save verification results, then "specify report stats --history-dir .specify/history" to see statistical confidence grow over time.',
     ],
   };
