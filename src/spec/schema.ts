@@ -1,21 +1,21 @@
 /**
- * src/spec/schema.ts — JSON Schema for validating spec documents
+ * src/spec/schema.ts — JSON Schema for the behavioral spec format
  *
- * This schema mirrors the TypeScript types in types.ts and is used
- * by the parser (parser.ts) to validate YAML/JSON spec files at runtime.
+ * Areas group behaviors; behaviors are plain-language claims.
+ * No matchers, no selectors, no step sequences.
  */
 
-/** JSON Schema (Draft 7) for the Specify spec format. */
 export const specSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'Specify Spec',
-  description: 'Computational spec format for functional verification of web applications.',
+  description: 'Behavioral spec format — describes WHAT should be true, not HOW to verify it.',
   type: 'object',
-  required: ['version', 'name'],
+  required: ['version', 'name', 'target', 'areas'],
   additionalProperties: false,
   properties: {
     version: {
       type: 'string',
+      const: '2',
       description: 'Spec format version.',
     },
     name: {
@@ -24,540 +24,138 @@ export const specSchema = {
     },
     description: {
       type: 'string',
-      description: 'Optional description of what this spec covers.',
+      description: 'What this spec covers.',
     },
-    description_claims: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Claim IDs that ground the top-level description.',
-    },
-    claims: {
-      type: 'array',
-      description: 'Normative claims grounded by executable checks and/or verified requirements.',
-      items: { $ref: '#/$defs/Claim' },
-    },
-    pages: {
-      type: 'array',
-      items: { $ref: '#/$defs/PageSpec' },
-    },
-    flows: {
-      type: 'array',
-      items: { $ref: '#/$defs/FlowSpec' },
-    },
-    cli: { $ref: '#/$defs/CliSpec' },
-    hooks: { $ref: '#/$defs/HooksSpec' },
-    variables: {
-      type: 'object',
-      additionalProperties: { type: 'string' },
-    },
-    assumptions: {
-      type: 'array',
-      items: { $ref: '#/$defs/Assumption' },
-      description: 'Preconditions that must hold for this spec to be validly tested.',
-    },
-    defaults: { $ref: '#/$defs/DefaultProperties' },
-    narrative_path: {
-      type: 'string',
-      description: 'Path to companion narrative document (relative to spec file).',
-    },
-    requirements: {
-      type: 'array',
-      description: 'Behavioral requirements that need agent intelligence to validate.',
-      items: {
-        type: 'object',
-        required: ['id', 'description', 'verification'],
-        additionalProperties: false,
-        properties: {
-          id: { type: 'string', description: 'Unique identifier for this requirement.' },
-          description: { type: 'string', description: 'What should be true — clear enough for an agent to plan validation.' },
-          verification: { type: 'string', enum: ['mechanical', 'agent'], description: 'How this requirement is verified.' },
-          validation_plan: { type: 'string', description: 'Steps an agent should take to validate this requirement.' },
-          evidence_format: { type: 'string', description: 'What evidence the agent should produce.' },
-          checks: {
-            type: 'array',
-            description: 'Inline property checks — CLI commands with assertions that verify evaluates directly.',
-            items: { $ref: '#/$defs/CliCommandSpec' },
+    target: {
+      description: 'What kind of system this spec describes.',
+      oneOf: [
+        {
+          type: 'object',
+          required: ['type', 'url'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'web' },
+            url: { type: 'string', description: 'URL of the web application.' },
           },
-          narrative: { type: 'string', description: 'Optional human-readable narrative context for this requirement.' },
         },
-      },
-    },
-    narrative: {
-      type: 'array',
-      description: 'Embedded narrative sections with prose and grouped requirements.',
-      items: { $ref: '#/$defs/NarrativeSection' },
-    },
-  },
-
-  $defs: {
-    Claim: {
-      type: 'object',
-      required: ['id', 'description', 'grounded_by'],
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string', description: 'Unique identifier for this claim.' },
-        description: { type: 'string', description: 'Normative statement that should be provably true.' },
-        grounded_by: { $ref: '#/$defs/ClaimGrounding' },
-      },
-    },
-
-    ClaimGrounding: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        commands: { type: 'array', items: { type: 'string' } },
-        scenarios: { type: 'array', items: { type: 'string' } },
-        requirements: { type: 'array', items: { type: 'string' } },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // NarrativeSection (embedded prose with grouped requirements)
-    // -------------------------------------------------------------------
-    NarrativeSection: {
-      type: 'object',
-      required: ['section', 'prose'],
-      additionalProperties: false,
-      properties: {
-        section: { type: 'string', description: 'Section title.' },
-        prose: { type: 'string', description: 'Human-readable prose describing this capability area.' },
-        requirements: {
-          type: 'array',
-          description: 'Requirements defined within this narrative section.',
-          items: {
-            type: 'object',
-            required: ['id', 'description', 'verification'],
-            additionalProperties: false,
-            properties: {
-              id: { type: 'string', description: 'Unique identifier for this requirement.' },
-              description: { type: 'string', description: 'What should be true — clear enough for an agent to plan validation.' },
-              verification: { type: 'string', enum: ['mechanical', 'agent'], description: 'How this requirement is verified.' },
-              validation_plan: { type: 'string', description: 'Steps an agent should take to validate this requirement.' },
-              evidence_format: { type: 'string', description: 'What evidence the agent should produce.' },
-              checks: {
-                type: 'array',
-                description: 'Inline property checks — CLI commands with assertions that verify evaluates directly.',
-                items: { $ref: '#/$defs/CliCommandSpec' },
-              },
-              narrative: { type: 'string', description: 'Optional human-readable narrative context for this requirement.' },
+        {
+          type: 'object',
+          required: ['type', 'binary'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'cli' },
+            binary: { type: 'string', description: 'Binary or command to invoke.' },
+            env: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
+              description: 'Environment variables.',
+            },
+            timeout_ms: { type: 'number', description: 'Default timeout in milliseconds.' },
+          },
+        },
+        {
+          type: 'object',
+          required: ['type', 'url'],
+          additionalProperties: false,
+          properties: {
+            type: { type: 'string', const: 'api' },
+            url: { type: 'string', description: 'Base URL of the API.' },
+            headers: {
+              type: 'object',
+              additionalProperties: { type: 'string' },
+              description: 'Default headers for API requests.',
             },
           },
         },
-        covers: {
-          type: 'array',
-          items: { type: 'string' },
-          description: 'IDs of other spec items (CLI commands, claims, etc.) that this section covers.',
-        },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // PageSpec
-    // -------------------------------------------------------------------
-    PageSpec: {
-      type: 'object',
-      required: ['id', 'path'],
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string' },
-        path: { type: 'string' },
-        title: { type: 'string' },
-        visual_assertions: {
-          type: 'array',
-          items: { $ref: '#/$defs/VisualAssertion' },
-        },
-        expected_requests: {
-          type: 'array',
-          items: { $ref: '#/$defs/ExpectedRequest' },
-        },
-        console_expectations: {
-          type: 'array',
-          items: { $ref: '#/$defs/ConsoleExpectation' },
-        },
-        scenarios: {
-          type: 'array',
-          items: { $ref: '#/$defs/ScenarioSpec' },
-        },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // VisualAssertion (discriminated union on "type")
-    // -------------------------------------------------------------------
-    VisualAssertion: {
-      type: 'object',
-      required: ['type'],
-      properties: {
-        type: {
-          type: 'string',
-          enum: [
-            'element_exists',
-            'text_contains',
-            'text_matches',
-            'screenshot_region',
-            'element_count',
-          ],
-        },
-        description: { type: 'string' },
-        selector: { type: 'string' },
-        text: { type: 'string' },
-        pattern: { type: 'string' },
-        min: { type: 'number' },
-        max: { type: 'number' },
-        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
-        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
-      },
-      allOf: [
-        {
-          if: { properties: { type: { const: 'element_exists' } } },
-          then: { required: ['selector'] },
-        },
-        {
-          if: { properties: { type: { const: 'text_contains' } } },
-          then: { required: ['selector', 'text'] },
-        },
-        {
-          if: { properties: { type: { const: 'text_matches' } } },
-          then: { required: ['selector', 'pattern'] },
-        },
-        {
-          if: { properties: { type: { const: 'screenshot_region' } } },
-          then: { required: ['selector'] },
-        },
-        {
-          if: { properties: { type: { const: 'element_count' } } },
-          then: { required: ['selector'] },
-        },
       ],
     },
-
-    // -------------------------------------------------------------------
-    // ExpectedRequest
-    // -------------------------------------------------------------------
-    ExpectedRequest: {
+    variables: {
       type: 'object',
-      required: ['method', 'url_pattern'],
-      additionalProperties: false,
-      properties: {
-        method: { type: 'string' },
-        url_pattern: { type: 'string' },
-        description: { type: 'string' },
-        request_body: { $ref: '#/$defs/RequestBodySpec' },
-        response: { $ref: '#/$defs/ExpectedResponse' },
-        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
-        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
-      },
+      additionalProperties: { type: 'string' },
+      description: 'Template variables for parameterization.',
     },
-
-    RequestBodySpec: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        content_type: { type: 'string' },
-        body_schema: { $ref: '#/$defs/JsonSchemaInline' },
-      },
-    },
-
-    ExpectedResponse: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        status: { type: 'number' },
-        status_in: { type: 'array', items: { type: 'number' } },
-        content_type: { type: 'string' },
-        body_schema: { $ref: '#/$defs/JsonSchemaInline' },
-      },
-    },
-
-    // Permissive inline JSON Schema (we don't fully validate nested schemas)
-    JsonSchemaInline: {
-      type: 'object',
-      additionalProperties: true,
-    },
-
-    // -------------------------------------------------------------------
-    // ConsoleExpectation
-    // -------------------------------------------------------------------
-    ConsoleExpectation: {
-      type: 'object',
-      required: ['level'],
-      additionalProperties: false,
-      properties: {
-        level: { type: 'string' },
-        count: { type: 'number' },
-        exclude_pattern: { type: 'string' },
-        quantifier: { type: 'string', enum: ['always', 'sometimes'] },
-        confidence: { type: 'string', enum: ['observed', 'inferred', 'reviewed'] },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // ScenarioSpec
-    // -------------------------------------------------------------------
-    ScenarioSpec: {
-      type: 'object',
-      required: ['id', 'steps'],
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string' },
-        description: { type: 'string' },
-        steps: {
-          type: 'array',
-          items: { $ref: '#/$defs/ScenarioStep' },
+    assumptions: {
+      type: 'array',
+      description: 'Preconditions that must hold for valid testing.',
+      items: {
+        type: 'object',
+        required: ['description'],
+        additionalProperties: false,
+        properties: {
+          description: { type: 'string', description: 'Plain-language precondition.' },
+          check: { type: 'string', description: 'Optional shell command to verify.' },
         },
       },
     },
-
-    ScenarioStep: {
-      type: 'object',
-      required: ['action'],
-      properties: {
-        action: {
-          type: 'string',
-          enum: [
-            'click',
-            'fill',
-            'select',
-            'hover',
-            'wait_for_request',
-            'wait_for_navigation',
-            'assert_visible',
-            'assert_text',
-            'assert_not_visible',
-            'keypress',
-            'scroll',
-            'wait',
-          ],
-        },
-        description: { type: 'string' },
-        selector: { type: 'string' },
-        value: { type: 'string' },
-        key: { type: 'string' },
-        url_pattern: { type: 'string' },
-        method: { type: 'string' },
-        text: { type: 'string' },
-        duration: { type: 'number' },
-        direction: { type: 'string', enum: ['top', 'bottom'] },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // FlowSpec
-    // -------------------------------------------------------------------
-    FlowSpec: {
-      type: 'object',
-      required: ['id', 'steps'],
-      additionalProperties: false,
-      properties: {
-        id: { type: 'string' },
-        description: { type: 'string' },
-        steps: {
-          type: 'array',
-          items: { $ref: '#/$defs/FlowStep' },
-        },
-      },
-    },
-
-    FlowStep: {
-      type: 'object',
-      properties: {
-        navigate: { type: 'string' },
-        assert_page: { type: 'string' },
-        action: { type: 'string' },
-        description: { type: 'string' },
-        selector: { type: 'string' },
-        value: { type: 'string' },
-        key: { type: 'string' },
-        url_pattern: { type: 'string' },
-        method: { type: 'string' },
-        text: { type: 'string' },
-        duration: { type: 'number' },
-        direction: { type: 'string', enum: ['top', 'bottom'] },
-      },
-      // At least one of navigate, assert_page, or action must be present
-      anyOf: [
-        { required: ['navigate'] },
-        { required: ['assert_page'] },
-        { required: ['action'] },
-      ],
-    },
-
-    // -------------------------------------------------------------------
-    // HooksSpec
-    // -------------------------------------------------------------------
-    HooksSpec: {
+    hooks: {
       type: 'object',
       additionalProperties: false,
       properties: {
         setup: {
           type: 'array',
-          items: { $ref: '#/$defs/HookStep' },
+          items: { $ref: '#/definitions/hookStep' },
         },
         teardown: {
           type: 'array',
-          items: { $ref: '#/$defs/HookStep' },
+          items: { $ref: '#/definitions/hookStep' },
         },
       },
     },
-
-    HookStep: {
-      type: 'object',
-      required: ['name', 'type'],
-      properties: {
-        name: { type: 'string' },
-        type: { type: 'string', enum: ['api_call', 'shell'] },
-        method: { type: 'string' },
-        url: { type: 'string' },
-        headers: {
-          type: 'object',
-          additionalProperties: { type: 'string' },
-        },
-        body: {},
-        command: { type: 'string' },
-        save_as: { type: 'string' },
-      },
-      allOf: [
-        {
-          if: { properties: { type: { const: 'api_call' } } },
-          then: { required: ['method', 'url'] },
-        },
-        {
-          if: { properties: { type: { const: 'shell' } } },
-          then: { required: ['command'] },
-        },
-      ],
+    areas: {
+      type: 'array',
+      description: 'Behavioral claims grouped by feature area.',
+      minItems: 1,
+      items: { $ref: '#/definitions/area' },
     },
-
-    // -------------------------------------------------------------------
-    // CliSpec (CLI verification)
-    // -------------------------------------------------------------------
-    CliSpec: {
+    narrative_path: {
+      type: 'string',
+      description: 'Path to companion narrative document (relative to spec file).',
+    },
+    test_dir: {
+      type: 'string',
+      description: 'Hint: where to look for existing tests (e.g. "tests/").',
+    },
+  },
+  definitions: {
+    hookStep: {
       type: 'object',
-      required: ['binary'],
+      required: ['name', 'run'],
       additionalProperties: false,
       properties: {
-        binary: { type: 'string' },
-        env: { type: 'object', additionalProperties: { type: 'string' } },
-        timeout_ms: { type: 'number' },
-        commands: {
-          type: 'array',
-          items: { $ref: '#/$defs/CliCommandSpec' },
-        },
-        scenarios: {
-          type: 'array',
-          items: { $ref: '#/$defs/CliScenarioSpec' },
-        },
+        name: { type: 'string', description: 'Human-readable name.' },
+        run: { type: 'string', description: 'Shell command to run.' },
+        save_as: { type: 'string', description: 'Save stdout under this variable name.' },
       },
     },
-
-    CliCommandSpec: {
+    area: {
       type: 'object',
-      required: ['id', 'args'],
+      required: ['id', 'name', 'behaviors'],
       additionalProperties: false,
       properties: {
-        id: { type: 'string' },
-        description: { type: 'string' },
-        description_claims: { type: 'array', items: { type: 'string' } },
-        args: { type: 'array', items: { type: 'string' } },
-        stdin: { type: 'string' },
-        env: { type: 'object', additionalProperties: { type: 'string' } },
-        timeout_ms: { type: 'number' },
-        expected_exit_code: { type: 'number' },
-        expected_exit_codes: { type: 'array', items: { type: 'number' } },
-        stdout_assertions: {
+        id: { type: 'string', description: 'Kebab-case identifier.', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+        name: { type: 'string', description: 'Human-readable name.' },
+        prose: { type: 'string', description: 'Essay-style narrative for this area.' },
+        behaviors: {
           type: 'array',
-          items: { $ref: '#/$defs/CliOutputAssertion' },
-        },
-        stderr_assertions: {
-          type: 'array',
-          items: { $ref: '#/$defs/CliOutputAssertion' },
+          description: 'Behavioral claims within this area.',
+          minItems: 1,
+          items: { $ref: '#/definitions/behavior' },
         },
       },
     },
-
-    CliOutputAssertion: {
+    behavior: {
       type: 'object',
-      required: ['type'],
-      properties: {
-        type: {
-          type: 'string',
-          enum: ['text_contains', 'text_matches', 'json_schema', 'json_path', 'empty', 'line_count'],
-        },
-        description: { type: 'string' },
-        text: { type: 'string' },
-        pattern: { type: 'string' },
-        schema: { $ref: '#/$defs/JsonSchemaInline' },
-        path: { type: 'string' },
-        value: {},
-        min: { type: 'number' },
-        max: { type: 'number' },
-      },
-    },
-
-    CliScenarioSpec: {
-      type: 'object',
-      required: ['id', 'steps'],
+      required: ['id', 'description'],
       additionalProperties: false,
       properties: {
-        id: { type: 'string' },
-        description: { type: 'string' },
-        description_claims: { type: 'array', items: { type: 'string' } },
-        steps: {
+        id: { type: 'string', description: 'Kebab-case identifier, unique within area.', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+        description: { type: 'string', description: 'The behavioral claim — what should be true.' },
+        details: { type: 'string', description: 'Additional context, edge cases.' },
+        tags: {
           type: 'array',
-          items: { $ref: '#/$defs/CliCommandSpec' },
+          items: { type: 'string' },
+          description: 'Tags for filtering.',
         },
-      },
-    },
-
-    // -------------------------------------------------------------------
-    // Assumption (preconditions for valid testing)
-    // -------------------------------------------------------------------
-    Assumption: {
-      type: 'object',
-      required: ['type'],
-      properties: {
-        type: {
-          type: 'string',
-          enum: ['url_reachable', 'env_var_set', 'api_returns', 'selector_exists'],
-        },
-        description: { type: 'string' },
-        url: { type: 'string' },
-        name: { type: 'string' },
-        method: { type: 'string' },
-        status: { type: 'number' },
-        selector: { type: 'string' },
-      },
-      allOf: [
-        {
-          if: { properties: { type: { const: 'url_reachable' } } },
-          then: { required: ['url'] },
-        },
-        {
-          if: { properties: { type: { const: 'env_var_set' } } },
-          then: { required: ['name'] },
-        },
-        {
-          if: { properties: { type: { const: 'api_returns' } } },
-          then: { required: ['url'] },
-        },
-        {
-          if: { properties: { type: { const: 'selector_exists' } } },
-          then: { required: ['url', 'selector'] },
-        },
-      ],
-    },
-
-    // -------------------------------------------------------------------
-    // DefaultProperties (universal properties across all pages)
-    // -------------------------------------------------------------------
-    DefaultProperties: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        no_5xx: { type: 'boolean' },
-        no_console_errors: { type: 'boolean' },
-        no_uncaught_exceptions: { type: 'boolean' },
-        page_load_timeout_ms: { type: 'number' },
       },
     },
   },

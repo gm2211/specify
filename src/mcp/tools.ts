@@ -12,7 +12,6 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { parseSpec, loadSpec, specToYaml } from '../spec/parser.js';
 import { lintRaw } from '../spec/lint.js';
 import { getAuthoringGuide } from '../spec/guide.js';
-import { generateTestsFromSpec } from '../e2e/spec-to-test.js';
 import { COMMANDS } from '../cli/commands-manifest.js';
 
 export function registerTools(server: McpServer): void {
@@ -24,9 +23,8 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Get Spec Authoring Guide',
       description:
-        'Returns the complete Specify spec authoring guide: JSON Schema for both v1 and v2 formats, ' +
-        'annotated examples, patterns for every spec construct (including v2 behavioral patterns), ' +
-        'all assertion/step types, and best practices. Call this first when writing a new spec.',
+        'Returns the complete Specify spec authoring guide: JSON Schema, ' +
+        'annotated examples, behavioral patterns, and best practices. Call this first when writing a new spec.',
     },
     async () => {
       const guide = getAuthoringGuide();
@@ -44,9 +42,9 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Lint Spec',
       description:
-        'Validate a spec (v1 or v2) for structural correctness. Checks YAML/JSON syntax, ' +
+        'Validate a spec for structural correctness. Checks YAML/JSON syntax, ' +
         'JSON Schema compliance, and semantic rules (duplicate IDs, invalid cross-references, ' +
-        'empty steps, undefined variables). Automatically detects spec version. No live application or captures needed.',
+        'undefined variables). No live application or captures needed.',
       inputSchema: {
         content: z.string().describe('The spec content as a YAML or JSON string'),
       },
@@ -56,79 +54,6 @@ export function registerTools(server: McpServer): void {
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // validate_spec — Full validation against captures (file-based)
-  // -------------------------------------------------------------------------
-  server.registerTool(
-    'validate_spec',
-    {
-      title: 'Validate Spec Against Captures',
-      description:
-        'Run full validation of a spec file against captured data. Requires file paths ' +
-        'on disk. For structural-only validation, use lint_spec instead.',
-      inputSchema: {
-        spec_path: z.string().describe('Path to the spec file on disk'),
-        capture_path: z.string().describe('Path to the capture directory on disk'),
-      },
-    },
-    async ({ spec_path, capture_path }) => {
-      try {
-        const { loadSpec } = await import('../spec/parser.js');
-        const { validate, loadCaptureData } = await import('../validation/validator.js');
-        const { toJson } = await import('../validation/reporter.js');
-
-        const spec = loadSpec(spec_path);
-        const capture = loadCaptureData(capture_path);
-        const report = validate(spec, capture);
-        const hasFailures = report.summary.failed > 0;
-
-        return {
-          content: [{
-            type: 'text',
-            text: toJson(report),
-          }],
-          isError: hasFailures,
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: (err as Error).message }) }],
-          isError: true,
-        };
-      }
-    },
-  );
-
-  // -------------------------------------------------------------------------
-  // export_tests — Generate test code from a spec
-  // -------------------------------------------------------------------------
-  server.registerTool(
-    'export_tests',
-    {
-      title: 'Export Tests',
-      description:
-        'Generate Playwright or Cypress test code from a spec. Returns generated test files ' +
-        'with file paths and content. Useful for turning specs into runnable e2e tests.',
-      inputSchema: {
-        content: z.string().describe('The spec content as a YAML or JSON string'),
-        framework: z.enum(['playwright', 'cypress']).describe('Target test framework'),
-      },
-    },
-    async ({ content, framework }) => {
-      try {
-        const spec = parseSpec(content);
-        const files = generateTestsFromSpec(spec, { framework });
-        return {
-          content: [{ type: 'text', text: JSON.stringify(files, null, 2) }],
-        };
-      } catch (err) {
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ error: (err as Error).message }) }],
-          isError: true,
-        };
-      }
     },
   );
 

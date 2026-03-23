@@ -8,10 +8,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
-import type { Spec, SpecV1, PageSpec } from '../../spec/types.js';
-import { isV1 } from '../../spec/types.js';
+import type { Spec } from '../../spec/types.js';
 import { specToYaml } from '../../spec/parser.js';
-import { discoverPages, type DiscoveredPage } from './crawler.js';
 import { completePath } from './completer.js';
 import { ExitCode } from '../exit-codes.js';
 
@@ -400,42 +398,9 @@ async function pickCapture(state: ProjectState, { askPath, choose }: PromptFns):
   }
 }
 
-async function flowValidate(state: ProjectState, { askPath, choose }: PromptFns): Promise<number> {
-  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
-  const capturePath = await pickCapture(state, { askPath, choose } as PromptFns);
-
-  const outputDir = await askPath('Output directory (empty to skip)', '');
-
-  console.error('\n  Running validation...\n');
-
-  const { loadSpec } = await import('../../spec/parser.js');
-  const { loadCaptureData, validate } = await import('../../validation/validator.js');
-  const { toMarkdown, toJson } = await import('../../validation/reporter.js');
-
-  const spec = loadSpec(specPath);
-  const capture = loadCaptureData(capturePath);
-  const report = validate(spec, capture);
-
-  // Print summary
-  const { summary } = report;
-  console.error(`  Passed:   ${summary.passed}`);
-  console.error(`  Failed:   ${summary.failed}`);
-  console.error(`  Untested: ${summary.untested}`);
-  console.error(`  Coverage: ${summary.coverage}%`);
-
-  // Write files
-  if (outputDir) {
-    const dir = path.resolve(outputDir);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(path.join(dir, 'gap-report.json'), toJson(report), 'utf-8');
-    fs.writeFileSync(path.join(dir, 'gap-report.md'), toMarkdown(report), 'utf-8');
-    console.error(`\n  Reports written to: ${dir}`);
-  }
-
-  // Output JSON to stdout
-  process.stdout.write(toJson(report) + '\n');
-
-  return summary.failed > 0 ? ExitCode.ASSERTION_FAILURE : ExitCode.SUCCESS;
+async function flowValidate(_state: ProjectState, _prompts: PromptFns): Promise<number> {
+  console.error('\n  Passive data validation has been removed. Use "verify --url" for agent-driven verification.\n');
+  return ExitCode.PARSE_ERROR;
 }
 
 // ---------------------------------------------------------------------------
@@ -451,19 +416,15 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
   console.error('\n  Launching agent...\n');
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
+  const { getVerifyPrompt } = await import('../../agent/prompts.js');
   const { loadSpec, specToYaml } = await import('../../spec/parser.js');
-  const { isV2: checkV2 } = await import('../../spec/types.js');
   const resolvedSpec = path.resolve(specPath);
   const spec = loadSpec(resolvedSpec);
-  const useV2 = checkV2(spec);
-  const prompt = useV2
-    ? getVerifyPromptV2(specToYaml(spec))
-    : getVerifyPrompt(resolvedSpec, url);
+  const prompt = getVerifyPrompt(specToYaml(spec));
   const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-    task: useV2 ? 'verify_v2' : 'verify',
+    task: 'verify',
     systemPrompt: prompt,
-    userPrompt: useV2 ? `Verify ${url} against the v2 behavioral spec.` : `Verify ${url} against the spec at ${resolvedSpec}.`,
+    userPrompt: `Verify ${url} against the behavioral spec.`,
     url,
     spec: resolvedSpec,
     outputDir: '.specify/verify',
@@ -483,70 +444,14 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
   return pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
 }
 
-// ---------------------------------------------------------------------------
-// Flow: Diff
-// ---------------------------------------------------------------------------
-
-async function flowDiff(state: ProjectState, { askPath, choose }: PromptFns): Promise<number> {
-  let reportA: string;
-  let reportB: string;
-
-  if (state.reports.length >= 2) {
-    console.error('\n  Select baseline report (older):');
-    const idxA = await choose('Baseline report?', state.reports);
-    reportA = state.reports[idxA];
-    console.error('  Select new report (newer):');
-    const remaining = state.reports.filter((_, i) => i !== idxA);
-    const idxB = await choose('New report?', remaining);
-    reportB = remaining[idxB];
-  } else if (state.reports.length === 1) {
-    reportA = state.reports[0];
-    console.error(`\n  Using report: ${reportA}`);
-    reportB = await askPath('Path to second report');
-  } else {
-    reportA = await askPath('Path to baseline report (older)');
-    reportB = await askPath('Path to new report (newer)');
-  }
-
-  const { diffReports, diffToMarkdown } = await import('../../history/diff.js');
-  const a = JSON.parse(fs.readFileSync(path.resolve(reportA), 'utf-8'));
-  const b = JSON.parse(fs.readFileSync(path.resolve(reportB), 'utf-8'));
-  const diff = diffReports(a, b);
-
-  console.error(diffToMarkdown(diff));
-  process.stdout.write(JSON.stringify(diff, null, 2) + '\n');
-
-  return diff.summary.new_failures > 0 ? ExitCode.ASSERTION_FAILURE : ExitCode.SUCCESS;
-}
-
-// ---------------------------------------------------------------------------
-// Flow: Stats
-// ---------------------------------------------------------------------------
-
-async function flowStats(state: ProjectState, { askPath }: PromptFns): Promise<number> {
-  const histDir = state.historyDir ?? await askPath('Path to history directory', '.specify/history');
-
-  const { createHistoryStore } = await import('../../history/store.js');
-  const { computeStats, statsToMarkdown } = await import('../../history/statistics.js');
-
-  const store = createHistoryStore(histDir);
-  const reports = store.list().map(id => store.load(id));
-  const stats = computeStats(reports);
-
-  console.error(statsToMarkdown(stats));
-  process.stdout.write(JSON.stringify(stats, null, 2) + '\n');
-
-  return ExitCode.SUCCESS;
-}
 
 // ---------------------------------------------------------------------------
 // Flow: Generate
 // ---------------------------------------------------------------------------
 
-async function flowGenerate(state: ProjectState, { ask, askPath, choose, confirm }: PromptFns): Promise<number> {
+async function flowGenerate(state: ProjectState, { ask, askPath, choose }: PromptFns): Promise<number> {
   const capturePath = await pickCapture(state, { askPath, choose } as PromptFns);
 
-  const smart = await confirm('Use smart generation (semantic grouping, flow inference)?');
   const specName = await ask('Spec name', 'Generated Spec');
   const outputPath = await askPath('Output file', 'spec.yaml');
 
@@ -556,15 +461,12 @@ async function flowGenerate(state: ProjectState, { ask, askPath, choose, confirm
   const spec = generateSpec({
     inputDir: path.resolve(capturePath),
     specName,
-    smart,
   });
 
   const yaml = specToYaml(spec);
 
-  const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
-  const flowCount = isV1(spec) ? spec.flows?.length ?? 0 : 0;
-  console.error(`  Pages: ${pageCount}`);
-  console.error(`  Flows: ${flowCount}`);
+  const areaCount = spec.areas?.length ?? 0;
+  console.error(`  Areas: ${areaCount}`);
 
   fs.writeFileSync(path.resolve(outputPath), yaml, 'utf-8');
   console.error(`\n  Spec written to: ${outputPath}`);
@@ -578,7 +480,7 @@ async function flowGenerate(state: ProjectState, { ask, askPath, choose, confirm
 
 async function flowCreate(
   { ask, askPath, confirm }: PromptFns,
-  fromCapture?: string,
+  _fromCapture?: string,
 ): Promise<number> {
   console.error('');
   const name = await ask('App name', 'my-app');
@@ -586,66 +488,12 @@ async function flowCreate(
   const description = await ask('Description', `Spec for ${name}`);
   const outputPath = await askPath('Output file', 'spec.yaml');
 
-  const pages: PageSpec[] = [];
-
-  // Discover pages from capture if provided
-  if (fromCapture) {
-    console.error(`\n  Loading pages from capture: ${fromCapture}`);
-    const trafficPath = path.join(fromCapture, 'traffic.json');
-    if (fs.existsSync(trafficPath)) {
-      const traffic = JSON.parse(fs.readFileSync(trafficPath, 'utf-8')) as Array<{ url: string; method: string }>;
-      const pagePaths = new Set<string>();
-      for (const entry of traffic) {
-        if (entry.method.toUpperCase() === 'GET') {
-          try { pagePaths.add(new URL(entry.url).pathname); } catch { /* skip */ }
-        }
-      }
-      for (const p of pagePaths) {
-        const id = p.replace(/^\//, '').replace(/[\/\?&#=.]/g, '-').replace(/-+/g, '-') || 'root';
-        pages.push({ id, path: p, console_expectations: [{ level: 'error', count: 0 }] });
-      }
-      console.error(`  Loaded ${pages.length} page(s)`);
-    }
-  } else {
-    // Offer to crawl
-    const shouldCrawl = await confirm('Auto-discover pages by crawling the URL?', false);
-    if (shouldCrawl) {
-      console.error(`\n  Crawling ${baseUrl}...`);
-      try {
-        const discovered = await discoverPages(baseUrl, { maxPages: 10 });
-        console.error(`  Found ${discovered.length} page(s)\n`);
-        for (const page of discovered) {
-          const include = await confirm(`Include ${page.path}${page.title ? ` (${page.title})` : ''}?`);
-          if (include) {
-            pages.push(discoveredToPageSpec(page));
-          }
-        }
-      } catch (err) {
-        console.error(`  Crawl failed: ${err instanceof Error ? err.message : String(err)}\n`);
-      }
-    }
-  }
-
-  // Manual pages
-  let addMore = pages.length === 0 || await confirm('Add pages manually?', false);
-  while (addMore) {
-    const pagePath = await ask('Page path (e.g., /dashboard)');
-    if (!pagePath) break;
-    const pageId = pagePath.replace(/^\//, '').replace(/[\/\?&#=.]/g, '-').replace(/-+/g, '-') || 'root';
-    pages.push({ id: pageId, path: pagePath, console_expectations: [{ level: 'error', count: 0 }] });
-    console.error(`  Added: ${pageId}`);
-    addMore = await confirm('Add another page?', false);
-  }
-
-  const useDefaults = await confirm('Enable default checks (no 5xx, no console errors)?');
-
-  const spec: SpecV1 = {
-    version: '1.0',
+  const spec: Spec = {
+    version: '2',
     name,
     description,
-    pages: pages.length > 0 ? pages : undefined,
-    variables: { base_url: baseUrl },
-    ...(useDefaults ? { defaults: { no_5xx: true, no_console_errors: true } } : {}),
+    target: { type: 'web', url: baseUrl },
+    areas: [],
   };
 
   const yaml = specToYaml(spec);
@@ -671,7 +519,6 @@ async function flowCaptureMenu(state: ProjectState, prompts: PromptFns, subActio
 
   const options = [
     { label: 'From a live URL', action: 'live' },
-    { label: 'From existing test code', action: 'code' },
     { label: 'Generate spec from capture data', action: 'generate' },
   ];
 
@@ -687,8 +534,6 @@ async function flowCaptureMenu(state: ProjectState, prompts: PromptFns, subActio
   switch (action) {
     case 'live':
       return await flowCaptureLive(prompts);
-    case 'code':
-      return await flowImportTests(state, prompts);
     case 'generate':
       return await flowGenerate(state, prompts);
     default:
@@ -710,10 +555,10 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
   console.error('\n  Launching agent capture...\n');
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getCapturePromptV2 } = await import('../../agent/prompts.js');
+  const { getCapturePrompt } = await import('../../agent/prompts.js');
   const resolvedOutputDir = path.resolve(outputDir);
   const specOutputPath = path.resolve(path.join(path.dirname(resolvedOutputDir), 'spec.yaml'));
-  const prompt = getCapturePromptV2(url, specOutputPath);
+  const prompt = getCapturePrompt(url, specOutputPath);
 
   try {
     const { costUsd } = await runSpecifyAgent({
@@ -734,7 +579,7 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
     try {
       const { loadSpec } = await import('../../spec/parser.js');
       const spec = loadSpec(specOutputPath);
-      console.error(`  Spec validated: ${specOutputPath} (${isV1(spec) ? spec.pages?.length ?? 0 : 0} pages)`);
+      console.error(`  Spec validated: ${specOutputPath} (${spec.areas?.length ?? 0} areas)`);
       return ExitCode.SUCCESS;
     } catch (parseErr) {
       console.error(`  Warning: agent wrote invalid spec: ${(parseErr as Error).message}`);
@@ -768,127 +613,11 @@ async function flowReview(state: ProjectState, prompts: PromptFns): Promise<numb
 // ---------------------------------------------------------------------------
 
 async function flowVerifyMenu(state: ProjectState, prompts: PromptFns, subAction?: string): Promise<number> {
-  const { choose } = prompts;
-
-  const options = [
-    { label: 'Against captured data — offline validation', action: 'data' },
-    { label: 'Against a live URL — autonomous agent verification', action: 'agent' },
-    { label: 'CLI commands — run and validate command output', action: 'cli' },
-    { label: 'Diff two reports — detect regressions', action: 'diff' },
-    { label: 'Statistical confidence — analyze run history', action: 'stats' },
-  ];
-
-  let action: string;
-  if (subAction) {
-    const match = options.find(o => o.action === subAction);
-    action = match ? match.action : subAction;
-  } else {
-    const idx = await choose('How would you like to verify?', options.map(o => o.label));
-    action = options[idx].action;
+  // Agent verification is the only mode now
+  if (subAction && subAction !== 'agent') {
+    console.error(`\n  Unknown verify sub-action: ${subAction}. Only agent verification is available.\n`);
+    return ExitCode.PARSE_ERROR;
   }
-
-  switch (action) {
-    case 'data':
-      return await flowValidate(state, prompts);
-    case 'agent':
-      return await flowAgent(state, prompts);
-    case 'cli': {
-      const specPath = await pickSpec(state, prompts);
-      const { loadSpec: loadSpecForCli } = await import('../../spec/parser.js');
-      let cliSpec;
-      try { cliSpec = loadSpecForCli(specPath); } catch { /* handled by cliRun */ }
-      if (cliSpec && isV1(cliSpec) && cliSpec.cli) {
-        console.error(`\n  CLI target: ${cliSpec.cli.binary}`);
-        console.error(`  Commands: ${(cliSpec.cli.commands || []).length}`);
-      } else {
-        console.error('\n  Warning: spec has no cli section — nothing to verify');
-      }
-      console.error('  Running CLI verification...\n');
-      const { cliRun } = await import('../commands/cli-run.js');
-      return await cliRun(
-        { spec: specPath },
-        { outputFormat: 'text', quiet: false },
-      );
-    }
-    case 'diff':
-      return await flowDiff(state, prompts);
-    case 'stats':
-      return await flowStats(state, prompts);
-    default:
-      return ExitCode.SUCCESS;
-  }
+  return await flowAgent(state, prompts);
 }
 
-// ---------------------------------------------------------------------------
-// Flow: Import e2e tests
-// ---------------------------------------------------------------------------
-
-async function flowImportTests(state: ProjectState, { ask, askPath }: PromptFns): Promise<number> {
-  let testDir: string;
-  if (state.e2eTestDirs.length === 1) {
-    testDir = state.e2eTestDirs[0];
-    console.error(`\n  Using test directory: ${testDir}`);
-  } else if (state.e2eTestDirs.length > 1) {
-    testDir = await askPath('Path to test file or directory', state.e2eTestDirs[0]);
-  } else {
-    testDir = await askPath('Path to test file or directory');
-  }
-
-  const framework = state.e2eFramework && state.e2eFramework !== 'unknown'
-    ? state.e2eFramework
-    : undefined;
-
-  const outputPath = await ask('Output spec file (empty to only show analysis)', '');
-
-  console.error('\n  Analyzing test files...\n');
-
-  const { specImport } = await import('../commands/spec-import.js');
-  return await specImport(
-    { from: testDir, framework, output: outputPath || undefined },
-    { outputFormat: 'text', quiet: false },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Flow: Sync spec against e2e tests
-// ---------------------------------------------------------------------------
-
-async function flowSyncTests(state: ProjectState, { askPath, choose }: PromptFns): Promise<number> {
-  const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
-
-  let testDir: string;
-  if (state.e2eTestDirs.length === 1) {
-    testDir = state.e2eTestDirs[0];
-    console.error(`  Using test directory: ${testDir}`);
-  } else if (state.e2eTestDirs.length > 1) {
-    testDir = await askPath('Path to test directory', state.e2eTestDirs[0]);
-  } else {
-    testDir = await askPath('Path to test directory');
-  }
-
-  const framework = state.e2eFramework && state.e2eFramework !== 'unknown'
-    ? state.e2eFramework
-    : undefined;
-
-  console.error('\n  Computing sync...\n');
-
-  const { specSync } = await import('../commands/spec-sync.js');
-  return await specSync(
-    { spec: specPath, tests: testDir, framework },
-    { outputFormat: 'text', quiet: false },
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function discoveredToPageSpec(page: DiscoveredPage): PageSpec {
-  const id = page.path.replace(/^\//, '').replace(/[\/\?&#=.]/g, '-').replace(/-+/g, '-') || 'root';
-  return {
-    id,
-    path: page.path,
-    ...(page.title ? { title: page.title } : {}),
-    console_expectations: [{ level: 'error', count: 0 }],
-  };
-}

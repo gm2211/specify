@@ -3,32 +3,12 @@ import type { CommandDefinition } from './types.js';
 /** Command manifest for schema introspection. */
 export const COMMANDS: CommandDefinition[] = [
   {
-    name: 'spec validate',
-    description: 'Validate a spec against captured data',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--capture', type: 'string', required: true, description: 'Path to capture directory' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
-      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history' },
-    ],
-  },
-  {
     name: 'spec generate',
-    description: 'Generate a spec from capture data (v2 by default)',
+    description: 'Generate a spec from capture data',
     parameters: [
       { name: '--input', type: 'string', required: true, description: 'Path to capture directory' },
       { name: '--output', type: 'string', required: false, description: 'Output file path' },
       { name: '--name', type: 'string', required: false, description: 'Spec name' },
-      { name: '--smart', type: 'boolean', required: false, description: 'Use smart generation (v1 only)' },
-      { name: '--v1', type: 'boolean', required: false, description: 'Generate v1 format instead of v2' },
-    ],
-  },
-  {
-    name: 'spec migrate',
-    description: 'Migrate a v1 spec to v2 behavioral format',
-    parameters: [
-      { name: '--input', type: 'string', required: true, description: 'Path to v1 spec file' },
-      { name: '--output', type: 'string', required: false, description: 'Output path for v2 spec (default: input path with .v2.yaml suffix)' },
     ],
   },
   {
@@ -108,65 +88,10 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
-    name: 'cli run',
-    description: 'Run CLI commands defined in spec and validate their output',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
-      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history' },
-    ],
-    examples: [
-      'specify cli run --spec spec.yaml',
-    ],
-  },
-  {
-    name: 'report diff',
-    description: 'Diff two gap reports',
-    parameters: [
-      { name: '--a', type: 'string', required: true, description: 'Path to first report' },
-      { name: '--b', type: 'string', required: true, description: 'Path to second report' },
-    ],
-  },
-  {
-    name: 'report stats',
-    description: 'Show statistical confidence from history',
-    parameters: [
-      { name: '--history-dir', type: 'string', required: true, description: 'Path to history directory' },
-    ],
-  },
-  {
     name: 'schema',
     description: 'Output JSON Schema for spec, report, or commands',
     parameters: [
       { name: 'target', type: 'string', required: true, description: 'Schema target: spec, report, or commands' },
-    ],
-  },
-  {
-    name: 'spec import',
-    description: 'Import existing e2e tests as spec items',
-    parameters: [
-      { name: '--from', type: 'string', required: true, description: 'Path to test file or directory' },
-      { name: '--framework', type: 'string', required: false, description: 'Test framework: playwright or cypress (auto-detected if omitted)' },
-      { name: '--output', type: 'string', required: false, description: 'Output path for generated spec file' },
-    ],
-  },
-  {
-    name: 'spec export',
-    description: 'Export spec items as e2e test code',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--framework', type: 'string', required: true, description: 'Target framework: playwright or cypress' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for generated test files' },
-      { name: '--split-files', type: 'boolean', required: false, description: 'Generate one file per page/flow' },
-    ],
-  },
-  {
-    name: 'spec sync',
-    description: 'Compare spec against existing e2e tests bidirectionally',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--tests', type: 'string', required: true, description: 'Path to test directory' },
-      { name: '--framework', type: 'string', required: false, description: 'Test framework: playwright or cypress (auto-detected if omitted)' },
     ],
   },
   {
@@ -247,39 +172,13 @@ export const COMMANDS: CommandDefinition[] = [
     description: 'Verify an implementation against a contract (data validation, live agent, or CLI)',
     parameters: [
       { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-      { name: '--capture', type: 'string', required: false, description: 'Path to capture directory (data validation mode)' },
-      { name: '--url', type: 'string', required: false, description: 'Target URL (live agent verification mode)' },
+      { name: '--url', type: 'string', required: false, description: 'Target URL (for web/api specs)' },
       { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
-      { name: '--history-dir', type: 'string', required: false, description: 'Directory to save report history (data validation mode)' },
-      { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly (agent mode)' },
-    ],
-    modes: [
-      {
-        name: 'data_validation',
-        description: 'Validate spec against captured data (offline)',
-        required_parameters: ['--spec', '--capture'],
-        optional_parameters: ['--output', '--history-dir'],
-        condition: '--capture is provided (or neither --capture nor --url)',
-      },
-      {
-        name: 'agent_verification',
-        description: 'Run autonomous agent-driven verification against a live system via Agent SDK',
-        required_parameters: ['--spec', '--url'],
-        optional_parameters: ['--headed', '--output'],
-        condition: '--url is provided without --capture',
-      },
-      {
-        name: 'cli_verification',
-        description: 'Run CLI verification against spec command definitions (auto-detected when spec has a cli section)',
-        required_parameters: ['--spec'],
-        optional_parameters: ['--output', '--history-dir'],
-        condition: 'Spec has a cli section and neither --url nor --capture is provided',
-      },
+      { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly' },
     ],
     examples: [
-      'specify verify --spec spec.yaml --capture ./captures/latest',
       'specify verify --spec spec.yaml --url http://localhost:3000',
-      'specify verify --spec spec.yaml   # auto-detects cli section',
+      'specify verify --spec spec.yaml',
     ],
   },
   {

@@ -2,7 +2,7 @@
  * src/spec/narrative.ts — Narrative companion format
  *
  * A narrative document is a human-readable description of a product
- * that links prose sections to computable spec items. It lives alongside
+ * that links prose sections to spec items. It lives alongside
  * the YAML spec as a companion .narrative.md file.
  *
  * Format:
@@ -13,17 +13,9 @@
  *   <!-- spec:overview -->
  *   Prose description...
  *
- *   ## Login Page
- *   <!-- spec:page:login -->
- *   Prose about the login page...
- *
- *   ### Successful Login
- *   <!-- spec:scenario:login/successful-login -->
- *   Prose about the happy path...
- *
- *   ## Checkout Flow
- *   <!-- spec:flow:checkout -->
- *   Prose about the checkout flow...
+ *   ## Authentication
+ *   <!-- spec:area:auth -->
+ *   Prose about authentication...
  */
 
 // ---------------------------------------------------------------------------
@@ -53,7 +45,7 @@ export interface NarrativeSection {
   /** Markdown prose for this section. */
   body: string;
 
-  /** Spec item references (e.g., "page:login", "flow:checkout", "cli:help"). */
+  /** Spec item references (e.g., "area:auth", "behavior:auth/login"). */
   specRefs: string[];
 
   /** Nested subsections. */
@@ -61,45 +53,37 @@ export interface NarrativeSection {
 }
 
 // ---------------------------------------------------------------------------
-// Conversion: Spec embedded narrative → NarrativeDocument
+// Conversion: Spec → NarrativeDocument
 // ---------------------------------------------------------------------------
 
-import type { Spec, SpecV1, NarrativeSection as SpecNarrativeSection } from './types.js';
-import { isV1 } from './types.js';
+import type { Spec } from './types.js';
 
 /**
- * Convert embedded narrative sections (spec.narrative) into a NarrativeDocument
- * suitable for the review generator.
+ * Convert a spec into a NarrativeDocument suitable for the review generator.
  *
  * Mapping:
- *   SpecNarrativeSection.section     → NarrativeSection.title
- *   SpecNarrativeSection.prose       → NarrativeSection.body
- *   SpecNarrativeSection.covers      → NarrativeSection.specRefs
- *   SpecNarrativeSection.requirements → appended as "requirement:{id}" in specRefs
- *   Spec.name                        → NarrativeDocument.title
+ *   Spec.name         → NarrativeDocument.title
+ *   Spec.description   → NarrativeDocument.overview
+ *   Area.prose         → NarrativeSection.body
+ *   Area.id            → NarrativeSection.specRefs (as "area:{id}")
  */
 export function specNarrativeToDocument(spec: Spec): NarrativeDocument {
-  if (!isV1(spec)) {
-    return { title: spec.name, overview: spec.description ?? '', sections: [] };
-  }
-  const sections: NarrativeSection[] = (spec.narrative ?? []).map((ns: SpecNarrativeSection) => {
-    const specRefs: string[] = [...(ns.covers ?? [])];
-    for (const req of ns.requirements ?? []) {
-      specRefs.push(`requirement:${req.id}`);
+  const sections: NarrativeSection[] = spec.areas.map((area) => {
+    const specRefs: string[] = [`area:${area.id}`];
+    for (const behavior of area.behaviors) {
+      specRefs.push(`behavior:${area.id}/${behavior.id}`);
     }
     return {
-      title: ns.section,
-      body: ns.prose,
+      title: area.name,
+      body: area.prose ?? '',
       specRefs,
       children: [],
     };
   });
 
-  const overview = spec.description ?? '';
-
   return {
     title: spec.name,
-    overview,
+    overview: spec.description ?? '',
     sections,
   };
 }

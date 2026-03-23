@@ -12,7 +12,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
-import { isV1 } from '../../spec/types.js';
 
 type CapturePage = {
   goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
@@ -195,10 +194,10 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     // Auto-generate spec from captured data (unless --no-generate)
     if (!options.noGenerate) {
       try {
-        const { generateSpecV2 } = await import('../../spec/generator.js');
+        const { generateSpec } = await import('../../spec/generator.js');
         const { specToYaml } = await import('../../spec/parser.js');
 
-        const spec = generateSpecV2({
+        const spec = generateSpec({
           inputDir: outputDir,
           specName: options.specName ?? new URL(options.url).hostname,
         });
@@ -209,7 +208,7 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
         fs.mkdirSync(path.dirname(resolvedSpecFile), { recursive: true });
         fs.writeFileSync(resolvedSpecFile, specToYaml(spec), 'utf-8');
         const areaCount = spec.areas.length;
-        const behaviorCount = spec.areas.reduce((n, a) => n + a.behaviors.length, 0);
+        const behaviorCount = spec.areas.reduce((n: number, a: { behaviors: unknown[] }) => n + a.behaviors.length, 0);
         log(`Spec generated: ${resolvedSpecFile} (${areaCount} areas, ${behaviorCount} behaviors)`);
 
         (summary as Record<string, unknown>).spec = resolvedSpecFile;

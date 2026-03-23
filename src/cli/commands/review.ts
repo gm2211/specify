@@ -12,13 +12,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execFile } from 'child_process';
 import { loadSpec } from '../../spec/parser.js';
-import { isV1 } from '../../spec/types.js';
-import { markdownToNarrative, specNarrativeToDocument } from '../../spec/narrative.js';
+import { markdownToNarrative } from '../../spec/narrative.js';
 import { generateReviewHtml } from '../../review/generator.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
-import type { GapReport } from '../../validation/types.js';
-import type { CliGapReport } from '../../cli-test/types.js';
 import type { AgentVerifyResult } from '../../review/generator.js';
 
 export interface ReviewOptions {
@@ -51,56 +48,25 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     return ExitCode.PARSE_ERROR;
   }
 
-  // Load narrative — prefer embedded spec.narrative, fall back to external markdown file
+  // Load narrative from external markdown file
   const specDir = path.dirname(path.resolve(options.spec));
   let narrative;
-  const v1Spec = isV1(spec) ? spec : null;
-  if (v1Spec?.narrative && v1Spec.narrative.length > 0 && !options.narrative) {
-    narrative = specNarrativeToDocument(spec);
-    log(`Loaded narrative from spec`);
-  } else {
-    const rawNarrativePath = options.narrative
-      ?? v1Spec?.narrative_path
-      ?? path.basename(options.spec).replace(/\.(ya?ml|json)$/, '.narrative.md');
-    const resolvedNarrative = path.isAbsolute(rawNarrativePath)
-      ? rawNarrativePath
-      : path.resolve(specDir, rawNarrativePath);
+  const rawNarrativePath = options.narrative
+    ?? path.basename(options.spec).replace(/\.(ya?ml|json)$/, '.narrative.md');
+  const resolvedNarrative = path.isAbsolute(rawNarrativePath)
+    ? rawNarrativePath
+    : path.resolve(specDir, rawNarrativePath);
 
-    if (fs.existsSync(resolvedNarrative)) {
-      try {
-        const md = fs.readFileSync(resolvedNarrative, 'utf-8');
-        narrative = markdownToNarrative(md);
-        log(`Loaded narrative: ${resolvedNarrative}`);
-      } catch (err) {
-        log(`Warning: failed to parse narrative ${resolvedNarrative}: ${(err as Error).message}`);
-      }
-    } else {
-      log(`No narrative file found (tried: ${resolvedNarrative}), building from spec structure`);
-    }
-  }
-
-  // Load report(s) if specified
-  let webReport: GapReport | undefined;
-  let cliReport: CliGapReport | undefined;
-
-  if (options.report) {
+  if (fs.existsSync(resolvedNarrative)) {
     try {
-      const reportPath = path.resolve(options.report);
-      const reportData = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-
-      // Detect report type by structure
-      if (reportData.pages) {
-        webReport = reportData as GapReport;
-        log(`Loaded web report: ${options.report}`);
-      } else if (reportData.commands) {
-        cliReport = reportData as CliGapReport;
-        log(`Loaded CLI report: ${options.report}`);
-      } else {
-        log(`Warning: unrecognized report format in ${options.report}`);
-      }
+      const md = fs.readFileSync(resolvedNarrative, 'utf-8');
+      narrative = markdownToNarrative(md);
+      log(`Loaded narrative: ${resolvedNarrative}`);
     } catch (err) {
-      log(`Warning: failed to load report ${options.report}: ${(err as Error).message}`);
+      log(`Warning: failed to parse narrative ${resolvedNarrative}: ${(err as Error).message}`);
     }
+  } else {
+    log(`No narrative file found (tried: ${resolvedNarrative}), building from spec structure`);
   }
 
   // Load agent report if specified
@@ -117,26 +83,6 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
       if (agentResult) log(`Loaded agent report: ${options.agentReport}`);
     } catch (err) {
       log(`Warning: failed to load agent report ${options.agentReport}: ${(err as Error).message}`);
-    }
-  }
-
-  // Auto-discover reports in common locations
-  if (!options.report) {
-    const specDir = path.dirname(path.resolve(options.spec));
-    for (const candidate of ['gap-report.json', 'cli-report.json']) {
-      const p = path.join(specDir, candidate);
-      if (fs.existsSync(p)) {
-        try {
-          const data = JSON.parse(fs.readFileSync(p, 'utf-8'));
-          if (candidate === 'gap-report.json' && data.pages) {
-            webReport = data as GapReport;
-            log(`Auto-discovered web report: ${candidate}`);
-          } else if (candidate === 'cli-report.json' && data.commands) {
-            cliReport = data as CliGapReport;
-            log(`Auto-discovered CLI report: ${candidate}`);
-          }
-        } catch { /* skip */ }
-      }
     }
   }
 
@@ -170,7 +116,7 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
   }
 
   // Generate HTML
-  const html = generateReviewHtml({ spec, narrative, webReport, cliReport, agentResult });
+  const html = generateReviewHtml({ spec, narrative, agentResult });
 
   // Determine output path
   const outputPath = options.output
@@ -204,8 +150,6 @@ export async function review(options: ReviewOptions, ctx: CliContext): Promise<n
     output: resolvedOutput,
     spec: spec.name,
     hasNarrative: !!narrative,
-    hasWebReport: !!webReport,
-    hasCliReport: !!cliReport,
     hasAgentReport: !!agentResult,
   };
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
