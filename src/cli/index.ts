@@ -197,6 +197,7 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
   ${c.cyan('review')}            Inspect the contract in a browser
+  ${c.cyan('serve')}             Serve the review webapp with live reload
   ${c.cyan('verify')}            Verify an implementation against a contract
 
 ${c.bold('Advanced:')}
@@ -600,6 +601,17 @@ async function main(): Promise<void> {
       });
       // MCP server runs until client disconnects — don't exit
       return;
+
+    } else if (noun === 'serve') {
+      // serve is a standalone command (no verb) — recombine args
+      const serveArgs = verb ? [verb, ...rest] : rest;
+      const { serveCommand } = await import('./commands/serve.js');
+      exitCode = await serveCommand({
+        spec: resolveSpecArg(serveArgs, ctx),
+        port: getArg(serveArgs, '--port'),
+        noOpen: hasFlag(serveArgs, '--no-open'),
+        agentReport: getArg(serveArgs, '--agent-report'),
+      }, ctx);
 
     } else if (noun === 'review') {
       // review is a standalone command (no verb) — recombine args
