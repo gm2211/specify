@@ -26,6 +26,7 @@ import type {
 import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
 import { specToYaml } from './parser.js';
 import { smartGenerate } from './smart-generator.js';
+import { deduplicateBehaviors } from './migrate.js';
 
 // ---------------------------------------------------------------------------
 // CLI argument parsing
@@ -521,20 +522,6 @@ export function generateSpecV2(options: { inputDir: string; specName: string }):
   };
 }
 
-function deduplicateBehaviors(behaviors: Behavior[]): Behavior[] {
-  const seen = new Set<string>();
-  const result: Behavior[] = [];
-  for (const b of behaviors) {
-    let id = b.id;
-    let suffix = 2;
-    while (seen.has(id)) {
-      id = `${b.id}-${suffix++}`;
-    }
-    seen.add(id);
-    result.push({ ...b, id });
-  }
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // Main

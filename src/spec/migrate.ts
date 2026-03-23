@@ -173,10 +173,10 @@ export function migrateV1toV2(spec: SpecV1): SpecV2 {
     areas.push({
       id: 'flows',
       name: 'User Flows',
-      behaviors: spec.flows.map((flow) => ({
+      behaviors: deduplicateBehaviors(spec.flows.map((flow) => ({
         id: flow.id,
         description: flow.description || `Flow: ${flow.id}`,
-      })),
+      }))),
     });
   }
 
@@ -215,7 +215,13 @@ export function migrateV1toV2(spec: SpecV1): SpecV2 {
 
 function buildTarget(spec: SpecV1): SpecV2['target'] {
   if (spec.cli?.binary) {
-    return { type: 'cli', binary: spec.cli.binary };
+    const target: { type: 'cli'; binary: string; env?: Record<string, string>; timeout_ms?: number } = {
+      type: 'cli',
+      binary: spec.cli.binary,
+    };
+    if (spec.cli.env && Object.keys(spec.cli.env).length > 0) target.env = spec.cli.env;
+    if (spec.cli.timeout_ms) target.timeout_ms = spec.cli.timeout_ms;
+    return target;
   }
   // Try to infer URL from assumptions
   if (spec.assumptions) {
@@ -225,8 +231,12 @@ function buildTarget(spec: SpecV1): SpecV2['target'] {
       }
     }
   }
-  // Default
-  return { type: 'cli', binary: spec.cli?.binary ?? '.' };
+  // Try to infer from pages (web spec without explicit URL)
+  if (spec.pages && spec.pages.length > 0) {
+    return { type: 'web', url: '${TARGET_URL}' };
+  }
+  // Default to CLI
+  return { type: 'cli', binary: '.' };
 }
 
 function migrateAssumptions(spec: SpecV1): AssumptionV2[] {
@@ -243,7 +253,10 @@ function migrateAssumptions(spec: SpecV1): AssumptionV2[] {
           check: `curl -sf -o /dev/null -w '%{http_code}' ${a.url}`,
         };
       case 'selector_exists':
-        return { description: a.description || `Element ${a.selector} exists on ${a.url}` };
+        return {
+          description: a.description || `Element ${a.selector} exists on ${a.url}`,
+          check: `curl -sf ${a.url} | grep -q '${a.selector}'`,
+        };
       default:
         return { description: (a as { description?: string }).description ?? 'Unknown assumption' };
     }
@@ -266,7 +279,11 @@ function migrateHooks(spec: SpecV1): HooksV2 | undefined {
 }
 
 function hookToV2(hook: import('./types.js').HookStep): HookStepV2 {
-  const h = hook as { name: string; type: string; command?: string; method?: string; url?: string; save_as?: string };
+  const h = hook as {
+    name: string; type: string; command?: string;
+    method?: string; url?: string; headers?: Record<string, string>;
+    body?: unknown; save_as?: string;
+  };
   if (h.type === 'shell') {
     return {
       name: h.name,
@@ -274,10 +291,20 @@ function hookToV2(hook: import('./types.js').HookStep): HookStepV2 {
       ...(h.save_as ? { save_as: h.save_as } : {}),
     };
   }
-  // api_call → curl command
+  // api_call → curl command with headers and body
+  const parts = [`curl -X ${h.method ?? 'GET'}`];
+  if (h.headers) {
+    for (const [key, val] of Object.entries(h.headers)) {
+      parts.push(`-H '${key}: ${val}'`);
+    }
+  }
+  if (h.body) {
+    parts.push(`-d '${JSON.stringify(h.body)}'`);
+  }
+  parts.push(h.url ?? '');
   return {
     name: h.name,
-    run: `curl -X ${h.method ?? 'GET'} ${h.url ?? ''}`,
+    run: parts.join(' '),
     ...(h.save_as ? { save_as: h.save_as } : {}),
   };
 }
@@ -307,7 +334,7 @@ function toKebabCase(s: string): string {
     .slice(0, 80);
 }
 
-function deduplicateBehaviors(behaviors: Behavior[]): Behavior[] {
+export function deduplicateBehaviors(behaviors: Behavior[]): Behavior[] {
   const seen = new Set<string>();
   const result: Behavior[] = [];
   for (const b of behaviors) {

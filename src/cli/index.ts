@@ -494,12 +494,12 @@ async function main(): Promise<void> {
             }
             if (validUrl) {
               const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-              const { getCapturePrompt } = await import('../agent/prompts.js');
+              const { getCapturePromptV2 } = await import('../agent/prompts.js');
               const outputDir = path.resolve(output || '.specify/capture');
               const specOutput = getArg(captureArgs, '--spec-output');
               const specName = getArg(captureArgs, '--spec-name');
               const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
-              const prompt = getCapturePrompt(url, specOutputPath);
+              const prompt = getCapturePromptV2(url, specOutputPath);
               try {
                 const { result, costUsd } = await runSpecifyAgent({
                   task: 'capture',
@@ -800,14 +800,21 @@ async function main(): Promise<void> {
 
             if (spec) {
               const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-              const { getVerifyPrompt } = await import('../agent/prompts.js');
+              const { getVerifyPrompt, getVerifyPromptV2 } = await import('../agent/prompts.js');
+              const { isV2: checkV2 } = await import('../spec/types.js');
+              const { specToYaml } = await import('../spec/parser.js');
               const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
-              const prompt = getVerifyPrompt(resolvedSpecPath, url);
+              const useV2 = checkV2(spec);
+              const prompt = useV2
+                ? getVerifyPromptV2(specToYaml(spec))
+                : getVerifyPrompt(resolvedSpecPath, url);
               try {
                 const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-                  task: 'verify',
+                  task: useV2 ? 'verify_v2' : 'verify',
                   systemPrompt: prompt,
-                  userPrompt: `Verify ${url} against the spec at ${resolvedSpecPath}.`,
+                  userPrompt: useV2
+                    ? `Verify ${url} against the v2 behavioral spec.`
+                    : `Verify ${url} against the spec at ${resolvedSpecPath}.`,
                   url,
                   spec: resolvedSpecPath,
                   outputDir,
