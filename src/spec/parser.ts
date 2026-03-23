@@ -101,12 +101,6 @@ function validateSpec(data: unknown, source: string): Spec {
   const isV2 = obj.version === '2';
   const validator = isV2 ? validateV2 : validateV1;
 
-  if (isV2) {
-    process.stderr.write('');  // v2 is the new format, no warning needed
-  } else if (obj.version === '1.0') {
-    // v1 still supported — deprecation warning will be added later
-  }
-
   const valid = validator(data);
 
   if (!valid && validator.errors) {

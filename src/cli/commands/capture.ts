@@ -195,13 +195,12 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     // Auto-generate spec from captured data (unless --no-generate)
     if (!options.noGenerate) {
       try {
-        const { generateSpec } = await import('../../spec/generator.js');
+        const { generateSpecV2 } = await import('../../spec/generator.js');
         const { specToYaml } = await import('../../spec/parser.js');
 
-        const spec = generateSpec({
+        const spec = generateSpecV2({
           inputDir: outputDir,
           specName: options.specName ?? new URL(options.url).hostname,
-          smart: false,
         });
 
         const specFile = options.specOutput
@@ -209,11 +208,13 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
         const resolvedSpecFile = path.resolve(specFile);
         fs.mkdirSync(path.dirname(resolvedSpecFile), { recursive: true });
         fs.writeFileSync(resolvedSpecFile, specToYaml(spec), 'utf-8');
-        const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
-        log(`Spec generated: ${resolvedSpecFile} (${pageCount} pages)`);
+        const areaCount = spec.areas.length;
+        const behaviorCount = spec.areas.reduce((n, a) => n + a.behaviors.length, 0);
+        log(`Spec generated: ${resolvedSpecFile} (${areaCount} areas, ${behaviorCount} behaviors)`);
 
         (summary as Record<string, unknown>).spec = resolvedSpecFile;
-        (summary as Record<string, unknown>).specPages = pageCount;
+        (summary as Record<string, unknown>).specAreas = areaCount;
+        (summary as Record<string, unknown>).specBehaviors = behaviorCount;
       } catch (err) {
         log(`Warning: spec generation failed: ${(err as Error).message}`);
         log('Run "specify spec generate" manually to generate a spec from the capture data.');

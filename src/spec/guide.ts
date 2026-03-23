@@ -114,7 +114,7 @@ export function getAuthoringGuide(): AuthoringGuide {
       {
         name: 'Minimal v2 spec',
         description: 'The smallest valid v2 spec — version, name, and one area with a behavior',
-        yaml_snippet: `version: "2.0"\nname: "My App"\nareas:\n  - id: auth\n    name: Authentication\n    behaviors:\n      - id: login-valid-credentials\n        description: A user with valid credentials can log in and sees the dashboard`,
+        yaml_snippet: `version: "2"\nname: "My App"\ntarget:\n  type: web\n  url: "http://localhost:3000"\nareas:\n  - id: auth\n    name: Authentication\n    behaviors:\n      - id: login-valid-credentials\n        description: A user with valid credentials can log in and sees the dashboard`,
       },
       {
         name: 'Area with multiple behaviors',
