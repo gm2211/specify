@@ -146,6 +146,21 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'serve',
+    description: 'Start the review webapp server with live reload via WebSocket',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
+      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
+      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
+      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
+    ],
+    examples: [
+      'specify serve --spec spec.yaml',
+      'specify serve --spec spec.yaml --port 8080',
+      'specify serve --spec spec.yaml --agent-report .specify/verify/verify-result.json --no-open',
+    ],
+  },
+  {
     name: 'review',
     description: 'Open an interactive spec browser — narrative view with spec toggle and validation results overlay',
     parameters: [
