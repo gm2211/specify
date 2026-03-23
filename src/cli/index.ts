@@ -872,7 +872,45 @@ async function main(): Promise<void> {
         const { loadSpec } = await import('../spec/parser.js');
         try {
           const spec = loadSpec(specPath);
-          if (isV1(spec) && spec.cli) {
+          const { isV2: checkV2Auto } = await import('../spec/types.js');
+          if (checkV2Auto(spec)) {
+            // V2 spec — agent-driven verification
+            const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+            const { getVerifyPromptV2 } = await import('../agent/prompts.js');
+            const { specToYaml } = await import('../spec/parser.js');
+            const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
+            const prompt = getVerifyPromptV2(specToYaml(spec));
+            // For CLI targets, the agent uses the binary directly; for web/api, it needs a URL
+            const targetUrl = spec.target.type === 'web' || spec.target.type === 'api'
+              ? spec.target.url
+              : undefined;
+            try {
+              const { result, costUsd, structuredOutput } = await runSpecifyAgent({
+                task: 'verify_v2',
+                systemPrompt: prompt,
+                userPrompt: targetUrl
+                  ? `Verify ${targetUrl} against the v2 behavioral spec.`
+                  : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the v2 behavioral spec.`,
+                ...(targetUrl ? { url: targetUrl } : {}),
+                spec: specPath,
+                outputDir,
+                headed: hasFlag(verifyArgs, '--headed'),
+              });
+              const { extractBool } = await import('../agent/sdk-runner.js');
+              const pass = extractBool(structuredOutput, 'pass');
+              process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
+              process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+              exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+
+              const verifyResultPath = path.join(outputDir, 'verify-result.json');
+              fs.mkdirSync(outputDir, { recursive: true });
+              fs.writeFileSync(verifyResultPath, JSON.stringify(structuredOutput, null, 2) + '\n', 'utf-8');
+            } catch (err) {
+              const msg = (err as Error).message;
+              process.stderr.write(`Agent error: ${msg}\n`);
+              exitCode = ExitCode.ASSERTION_FAILURE;
+            }
+          } else if (isV1(spec) && spec.cli) {
             // Spec has a cli section → run CLI verification
             const { cliRun } = await import('./commands/cli-run.js');
             exitCode = await cliRun({
