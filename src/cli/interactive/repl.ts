@@ -232,13 +232,19 @@ async function handleRun(args: string[], state: ReplState): Promise<void> {
   state.report = null;
   state.agentResult = null;
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getVerifyPrompt } = await import('../../agent/prompts.js');
+  const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
+  const { loadSpec } = await import('../../spec/parser.js');
+  const { isV2: checkV2 } = await import('../../spec/types.js');
   const resolvedSpec = path.resolve(state.specPath);
-  const prompt = getVerifyPrompt(resolvedSpec, state.targetUrl);
+  const spec = loadSpec(resolvedSpec);
+  const useV2 = checkV2(spec);
+  const prompt = useV2
+    ? getVerifyPromptV2((await import('../../spec/parser.js')).specToYaml(spec))
+    : getVerifyPrompt(resolvedSpec, state.targetUrl);
   const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-    task: 'verify',
+    task: useV2 ? 'verify_v2' : 'verify',
     systemPrompt: prompt,
-    userPrompt: `Verify ${state.targetUrl} against the spec at ${resolvedSpec}.`,
+    userPrompt: useV2 ? `Verify ${state.targetUrl} against the v2 behavioral spec.` : `Verify ${state.targetUrl} against the spec at ${resolvedSpec}.`,
     url: state.targetUrl,
     spec: resolvedSpec,
     outputDir: '.specify/verify',

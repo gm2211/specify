@@ -111,13 +111,19 @@ export async function runTui(options: {
         render(state);
         try {
           const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-          const { getVerifyPrompt } = await import('../../agent/prompts.js');
+          const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
+          const { loadSpec } = await import('../../spec/parser.js');
+          const { isV2: checkV2 } = await import('../../spec/types.js');
           const resolvedSpec = path.resolve(options.spec);
-          const prompt = getVerifyPrompt(resolvedSpec, options.url);
+          const spec = loadSpec(resolvedSpec);
+          const useV2 = checkV2(spec);
+          const prompt = useV2
+            ? getVerifyPromptV2((await import('../../spec/parser.js')).specToYaml(spec))
+            : getVerifyPrompt(resolvedSpec, options.url);
           const { structuredOutput } = await runSpecifyAgent({
-            task: 'verify',
+            task: useV2 ? 'verify_v2' : 'verify',
             systemPrompt: prompt,
-            userPrompt: `Verify ${options.url} against the spec at ${resolvedSpec}.`,
+            userPrompt: useV2 ? `Verify ${options.url} against the v2 behavioral spec.` : `Verify ${options.url} against the spec at ${resolvedSpec}.`,
             url: options.url,
             spec: resolvedSpec,
             outputDir: '.specify/verify',
