@@ -451,13 +451,19 @@ async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFn
   console.error('\n  Launching agent...\n');
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getVerifyPrompt } = await import('../../agent/prompts.js');
+  const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
+  const { loadSpec, specToYaml } = await import('../../spec/parser.js');
+  const { isV2: checkV2 } = await import('../../spec/types.js');
   const resolvedSpec = path.resolve(specPath);
-  const prompt = getVerifyPrompt(resolvedSpec, url);
+  const spec = loadSpec(resolvedSpec);
+  const useV2 = checkV2(spec);
+  const prompt = useV2
+    ? getVerifyPromptV2(specToYaml(spec))
+    : getVerifyPrompt(resolvedSpec, url);
   const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-    task: 'verify',
+    task: useV2 ? 'verify_v2' : 'verify',
     systemPrompt: prompt,
-    userPrompt: `Verify ${url} against the spec at ${resolvedSpec}.`,
+    userPrompt: useV2 ? `Verify ${url} against the v2 behavioral spec.` : `Verify ${url} against the spec at ${resolvedSpec}.`,
     url,
     spec: resolvedSpec,
     outputDir: '.specify/verify',
@@ -704,10 +710,10 @@ async function flowCaptureLive({ ask, askPath }: PromptFns): Promise<number> {
   console.error('\n  Launching agent capture...\n');
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getCapturePrompt } = await import('../../agent/prompts.js');
+  const { getCapturePromptV2 } = await import('../../agent/prompts.js');
   const resolvedOutputDir = path.resolve(outputDir);
   const specOutputPath = path.resolve(path.join(path.dirname(resolvedOutputDir), 'spec.yaml'));
-  const prompt = getCapturePrompt(url, specOutputPath);
+  const prompt = getCapturePromptV2(url, specOutputPath);
 
   try {
     const { costUsd } = await runSpecifyAgent({

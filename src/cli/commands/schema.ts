@@ -1,6 +1,7 @@
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
 import { specSchema } from '../../spec/schema.js';
+import { specSchemaV2 } from '../../spec/schema-v2.js';
 import { COMMANDS } from '../commands-manifest.js';
 
 export async function schemaCommand(target: string, ctx: CliContext): Promise<number> {
@@ -8,7 +9,7 @@ export async function schemaCommand(target: string, ctx: CliContext): Promise<nu
 
   switch (target) {
     case 'spec':
-      output = specSchema;
+      output = { v1: specSchema, v2: specSchemaV2 };
       break;
     case 'report':
       output = getReportSchema();
