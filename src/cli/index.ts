@@ -14,19 +14,13 @@
  *   - `specify human` enters interactive mode (wizard, REPL, TUI)
  *
  * Command structure:
- *   specify spec validate   --spec <path|-> --capture <dir>
- *   specify spec generate   --input <dir> --output <path> [--smart]
- *   specify spec import     --from <path> [--framework playwright|cypress]
- *   specify spec export     --spec <path> --framework playwright|cypress
- *   specify spec sync       --spec <path> --tests <dir>
+ *   specify spec generate   --input <dir> --output <path>
  *   specify spec lint       --spec <path|->
  *   specify spec guide
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
  *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
- *   specify report diff      --a <path> --b <path>
- *   specify report stats     --history-dir <dir>
  *   specify schema spec|report|commands
  *   specify mcp              MCP server for LLM tool integration
  *   specify human            Interactive mode (wizard / REPL / TUI)
@@ -44,7 +38,6 @@ import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 import { resolveSpecPath } from './spec-finder.js';
-import { isV1 } from '../spec/types.js';
 
 // Read version from package.json at startup
 const __filename = fileURLToPath(import.meta.url);
@@ -209,12 +202,7 @@ ${c.bold('Primary Flows:')}
 ${c.bold('Advanced:')}
   ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
-  ${c.cyan('spec migrate')}     Migrate a v1 spec to v2 behavioral format
-  ${c.cyan('spec import')}      Import existing e2e tests as spec items
-  ${c.cyan('spec export')}      Export spec items as e2e test code
-  ${c.cyan('spec sync')}        Compare contract vs e2e tests
-  ${c.cyan('report diff')}      Diff two gap reports
-  ${c.cyan('report stats')}     Show statistical confidence from history
+  ${c.cyan('spec generate')}    Generate a spec from capture data
 
 ${c.bold('Infrastructure:')}
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
@@ -375,73 +363,14 @@ async function main(): Promise<void> {
     // -----------------------------------------------------------------
     // Agent-friendly commands — structured output to stdout
     // -----------------------------------------------------------------
-    } else if (noun === 'spec' && verb === 'validate') {
-      const { specValidate } = await import('./commands/spec-validate.js');
-      exitCode = await specValidate({
-        spec: resolveSpecArg(rest, ctx),
-        capture: getArg(rest, '--capture') ?? '',
-        output: getArg(rest, '--output'),
-        historyDir: getArg(rest, '--history-dir'),
-      }, ctx);
-
     } else if (noun === 'spec' && verb === 'generate') {
       const { specGenerate } = await import('./commands/spec-generate.js');
       exitCode = await specGenerate({
         input: getArg(rest, '--input') ?? '',
         output: getArg(rest, '--output'),
         name: getArg(rest, '--name'),
-        smart: hasFlag(rest, '--smart'),
-        v1: hasFlag(rest, '--v1'),
       }, ctx);
 
-    } else if (noun === 'spec' && verb === 'migrate') {
-      const { loadSpec } = await import('../spec/parser.js');
-      const { isV1: checkV1 } = await import('../spec/types.js');
-      const { migrateV1toV2 } = await import('../spec/migrate.js');
-      const { writeSpec } = await import('../spec/parser.js');
-
-      const inputPath = getArg(rest, '--input') ?? '';
-      if (!inputPath) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--input', hint: 'Provide the path to a v1 spec file' }) + '\n');
-        exitCode = ExitCode.PARSE_ERROR;
-      } else {
-        try {
-          const spec = loadSpec(path.resolve(inputPath));
-          if (!checkV1(spec)) {
-            process.stderr.write('Spec is not v1 format — nothing to migrate.\n');
-            exitCode = ExitCode.PARSE_ERROR;
-          } else {
-            const v2 = migrateV1toV2(spec);
-            const outputPath = getArg(rest, '--output') ?? inputPath.replace(/\.(ya?ml|json)$/, '.v2.yaml');
-            writeSpec(v2, path.resolve(outputPath));
-            process.stderr.write(`Migrated v1 spec to v2: ${outputPath}\n`);
-            if (ctx.outputFormat === 'json') {
-              process.stdout.write(JSON.stringify({ input: inputPath, output: outputPath }) + '\n');
-            }
-            exitCode = ExitCode.SUCCESS;
-          }
-        } catch (err) {
-          process.stderr.write(`Migration failed: ${(err as Error).message}\n`);
-          exitCode = ExitCode.PARSE_ERROR;
-        }
-      }
-
-    } else if (noun === 'spec' && verb === 'import') {
-      const { specImport } = await import('./commands/spec-import.js');
-      exitCode = await specImport({
-        from: getArg(rest, '--from') ?? '',
-        framework: getArg(rest, '--framework'),
-        output: getArg(rest, '--output'),
-      }, ctx);
-
-    } else if (noun === 'spec' && verb === 'export') {
-      const { specExport } = await import('./commands/spec-export.js');
-      exitCode = await specExport({
-        spec: resolveSpecArg(rest, ctx),
-        framework: getArg(rest, '--framework') ?? '',
-        output: getArg(rest, '--output'),
-        splitFiles: hasFlag(rest, '--split-files'),
-      }, ctx);
 
     } else if (noun === 'spec' && verb === 'lint') {
       const { specLint } = await import('./commands/spec-lint.js');
@@ -453,27 +382,10 @@ async function main(): Promise<void> {
       const { specGuide } = await import('./commands/spec-guide.js');
       exitCode = await specGuide(ctx);
 
-    } else if (noun === 'spec' && verb === 'sync') {
-      const { specSync } = await import('./commands/spec-sync.js');
-      exitCode = await specSync({
-        spec: resolveSpecArg(rest, ctx),
-        tests: getArg(rest, '--tests') ?? '',
-        framework: getArg(rest, '--framework'),
-      }, ctx);
-
     } else if (noun === 'capture') {
       // capture is a standalone command (no verb) — recombine args
       const captureArgs = verb ? [verb, ...rest] : rest;
-      const from = getArg(captureArgs, '--from') ?? 'live';
-      if (from === 'code') {
-        // capture --from code delegates to spec import
-        const { specImport } = await import('./commands/spec-import.js');
-        exitCode = await specImport({
-          from: getArg(captureArgs, '--input') ?? '',
-          framework: getArg(captureArgs, '--framework'),
-          output: getArg(captureArgs, '--output'),
-        }, ctx);
-      } else {
+      {
         const human = hasFlag(captureArgs, '--human');
         const url = getArg(captureArgs, '--url') ?? '';
         const output = getArg(captureArgs, '--output') ?? '';
@@ -494,12 +406,12 @@ async function main(): Promise<void> {
             }
             if (validUrl) {
               const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-              const { getCapturePromptV2 } = await import('../agent/prompts.js');
+              const { getCapturePrompt } = await import('../agent/prompts.js');
               const outputDir = path.resolve(output || '.specify/capture');
               const specOutput = getArg(captureArgs, '--spec-output');
               const specName = getArg(captureArgs, '--spec-name');
               const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
-              const prompt = getCapturePromptV2(url, specOutputPath);
+              const prompt = getCapturePrompt(url, specOutputPath);
               try {
                 const { result, costUsd } = await runSpecifyAgent({
                   task: 'capture',
@@ -522,9 +434,9 @@ async function main(): Promise<void> {
                   try {
                     const { loadSpec } = await import('../spec/parser.js');
                     const spec = loadSpec(specOutputPath);
-                    const pageCount = isV1(spec) ? spec.pages?.length ?? 0 : 0;
-                    process.stderr.write(`Spec validated: ${specOutputPath} (${pageCount} pages)\n`);
-                    process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, pages: pageCount }) + '\n');
+                    const areaCount = spec.areas?.length ?? 0;
+                    process.stderr.write(`Spec validated: ${specOutputPath} (${areaCount} areas)\n`);
+                    process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, areas: areaCount }) + '\n');
                     exitCode = ExitCode.SUCCESS;
 
                     process.stderr.write(`\n  To review the spec:\n`);
@@ -675,27 +587,6 @@ async function main(): Promise<void> {
         }
       }
 
-    } else if (noun === 'cli' && verb === 'run') {
-      const { cliRun } = await import('./commands/cli-run.js');
-      exitCode = await cliRun({
-        spec: resolveSpecArg(rest, ctx),
-        output: getArg(rest, '--output'),
-        historyDir: getArg(rest, '--history-dir'),
-      }, ctx);
-
-    } else if (noun === 'report' && verb === 'diff') {
-      const { reportDiff } = await import('./commands/report-diff.js');
-      exitCode = await reportDiff({
-        a: getArg(rest, '--a') ?? '',
-        b: getArg(rest, '--b') ?? '',
-      }, ctx);
-
-    } else if (noun === 'report' && verb === 'stats') {
-      const { reportStats } = await import('./commands/report-stats.js');
-      exitCode = await reportStats({
-        historyDir: getArg(rest, '--history-dir') ?? '',
-      }, ctx);
-
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
       exitCode = await schemaCommand(verb ?? '', ctx);
@@ -734,197 +625,54 @@ async function main(): Promise<void> {
     // Top-level lifecycle aliases
     // -----------------------------------------------------------------
     } else if (noun === 'verify') {
-      // Unified verification dispatcher
-      // Routing: explicit flags > spec auto-detection
+      // Agent-driven verification
       const verifyArgs = verb ? [verb, ...rest] : rest;
       const specPath = resolveSpecArg(verifyArgs, ctx);
       const url = getArg(verifyArgs, '--url');
-      const capture = getArg(verifyArgs, '--capture');
 
-      if (url && !capture) {
-        // verify --url (no --capture) → Agent SDK verification
-        if (!specPath) {
-          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
-          exitCode = ExitCode.PARSE_ERROR;
-        } else {
-          const { loadSpec } = await import('../spec/parser.js');
-          const resolvedSpecPath = path.resolve(specPath);
-          let spec;
-          try {
-            spec = loadSpec(resolvedSpecPath);
-          } catch (loadErr) {
-            const msg = loadErr instanceof Error ? loadErr.message : String(loadErr);
-            process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: msg }) + '\n');
-            exitCode = ExitCode.PARSE_ERROR;
-          }
-          if (spec) {
-            // Pre-flight: check assumptions before spending agent turns
-            if (isV1(spec) && spec.assumptions?.length) {
-              const { validateAssumptions, allAssumptionsMet } = await import('../validation/assumptions.js');
-              const assumptionResults = await validateAssumptions(spec.assumptions, {
-                variables: spec.variables,
-                baseUrl: url,
-              });
-              if (!allAssumptionsMet(assumptionResults)) {
-                const failed = assumptionResults.filter(a => a.status === 'failed');
-                process.stderr.write(`Assumptions not met:\n`);
-                for (const a of failed) {
-                  process.stderr.write(`  - ${a.type}: ${a.reason}\n`);
-                }
-                process.stdout.write(JSON.stringify({ error: 'assumptions_failed', assumptions: failed }) + '\n');
-                exitCode = ExitCode.ASSUMPTION_FAILURE;
-                spec = null;
-              }
-            }
-          }
-          if (spec) {
-            // Pre-flight: run setup hooks (v1 only)
-            let hookRunResult: { ctx: { specVars: Record<string, string>; runtimeVars: Record<string, unknown> } } | undefined;
-            if (isV1(spec) && spec.hooks?.setup?.length) {
-              try {
-                const { executeHooks } = await import('../agent/hooks.js');
-                hookRunResult = await executeHooks(
-                  spec.hooks.setup,
-                  { specVars: spec.variables ?? {}, runtimeVars: {} },
-                  (msg: string) => process.stderr.write(msg + '\n'),
-                );
-                process.stderr.write(`Setup hooks complete\n`);
-              } catch (hookErr) {
-                const msg = hookErr instanceof Error ? hookErr.message : String(hookErr);
-                process.stderr.write(`Setup hook failed: ${msg}\n`);
-                process.stdout.write(JSON.stringify({ error: 'hook_failure', message: msg }) + '\n');
-                exitCode = ExitCode.ASSUMPTION_FAILURE;
-                spec = null;
-              }
-            }
-
-            if (spec) {
-              const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-              const { getVerifyPrompt, getVerifyPromptV2 } = await import('../agent/prompts.js');
-              const { isV2: checkV2 } = await import('../spec/types.js');
-              const { specToYaml } = await import('../spec/parser.js');
-              const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
-              const useV2 = checkV2(spec);
-              const prompt = useV2
-                ? getVerifyPromptV2(specToYaml(spec))
-                : getVerifyPrompt(resolvedSpecPath, url);
-              try {
-                const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-                  task: useV2 ? 'verify_v2' : 'verify',
-                  systemPrompt: prompt,
-                  userPrompt: useV2
-                    ? `Verify ${url} against the v2 behavioral spec.`
-                    : `Verify ${url} against the spec at ${resolvedSpecPath}.`,
-                  url,
-                  spec: resolvedSpecPath,
-                  outputDir,
-                  headed: hasFlag(verifyArgs, '--headed'),
-                });
-                const { extractBool } = await import('../agent/sdk-runner.js');
-                const pass = extractBool(structuredOutput, 'pass');
-                process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
-                process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
-                exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
-
-                // Save structured output for review
-                const verifyResultPath = path.join(outputDir, 'verify-result.json');
-                fs.mkdirSync(outputDir, { recursive: true });
-                fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
-
-                // Human-friendly hint
-                process.stderr.write(`\n  To review interactively:\n`);
-                process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                process.stderr.write(`Verification failed: ${msg}\n`);
-                process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-                exitCode = agentExitCode(err);
-              }
-
-              // Teardown hooks (best-effort, v1 only)
-              if (isV1(spec) && spec.hooks?.teardown?.length) {
-                try {
-                  const { executeHooks } = await import('../agent/hooks.js');
-                  await executeHooks(
-                    spec.hooks.teardown,
-                    hookRunResult?.ctx ?? { specVars: spec.variables ?? {}, runtimeVars: {} },
-                    (msg: string) => process.stderr.write(msg + '\n'),
-                  );
-                } catch {
-                  process.stderr.write(`Warning: teardown hook failed\n`);
-                }
-              }
-            }
-          }
-        }
-      } else if (capture) {
-        // verify --capture → spec validate
-        const { specValidate } = await import('./commands/spec-validate.js');
-        exitCode = await specValidate({
-          spec: specPath,
-          capture: capture,
-          output: getArg(verifyArgs, '--output'),
-          historyDir: getArg(verifyArgs, '--history-dir'),
-        }, ctx);
+      if (!specPath) {
+        process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
       } else {
-        // No explicit target — auto-detect from spec
-        // Load the spec to check what sections it has
-        const { loadSpec } = await import('../spec/parser.js');
+        const { loadSpec, specToYaml } = await import('../spec/parser.js');
         try {
-          const spec = loadSpec(specPath);
-          const { isV2: checkV2Auto } = await import('../spec/types.js');
-          if (checkV2Auto(spec)) {
-            // V2 spec — agent-driven verification
-            const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-            const { getVerifyPromptV2 } = await import('../agent/prompts.js');
-            const { specToYaml } = await import('../spec/parser.js');
-            const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
-            const prompt = getVerifyPromptV2(specToYaml(spec));
-            // For CLI targets, the agent uses the binary directly; for web/api, it needs a URL
-            const targetUrl = spec.target.type === 'web' || spec.target.type === 'api'
-              ? spec.target.url
-              : undefined;
-            try {
-              const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-                task: 'verify_v2',
-                systemPrompt: prompt,
-                userPrompt: targetUrl
-                  ? `Verify ${targetUrl} against the v2 behavioral spec.`
-                  : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the v2 behavioral spec.`,
-                ...(targetUrl ? { url: targetUrl } : {}),
-                spec: specPath,
-                outputDir,
-                headed: hasFlag(verifyArgs, '--headed'),
-              });
-              const { extractBool } = await import('../agent/sdk-runner.js');
-              const pass = extractBool(structuredOutput, 'pass');
-              process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
-              process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
-              exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+          const spec = loadSpec(path.resolve(specPath));
+          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+          const { getVerifyPrompt } = await import('../agent/prompts.js');
+          const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
+          const prompt = getVerifyPrompt(specToYaml(spec));
+          // Determine target URL: explicit --url, or from spec target
+          const targetUrl = url
+            ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
+          try {
+            const { result, costUsd, structuredOutput } = await runSpecifyAgent({
+              task: 'verify',
+              systemPrompt: prompt,
+              userPrompt: targetUrl
+                ? `Verify ${targetUrl} against the behavioral spec.`
+                : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the behavioral spec.`,
+              ...(targetUrl ? { url: targetUrl } : {}),
+              spec: path.resolve(specPath),
+              outputDir,
+              headed: hasFlag(verifyArgs, '--headed'),
+            });
+            const { extractBool } = await import('../agent/sdk-runner.js');
+            const pass = extractBool(structuredOutput, 'pass');
+            process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
+            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+            exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
 
-              const verifyResultPath = path.join(outputDir, 'verify-result.json');
-              fs.mkdirSync(outputDir, { recursive: true });
-              fs.writeFileSync(verifyResultPath, JSON.stringify(structuredOutput, null, 2) + '\n', 'utf-8');
-            } catch (err) {
-              const msg = (err as Error).message;
-              process.stderr.write(`Agent error: ${msg}\n`);
-              exitCode = ExitCode.ASSERTION_FAILURE;
-            }
-          } else if (isV1(spec) && spec.cli) {
-            // Spec has a cli section → run CLI verification
-            const { cliRun } = await import('./commands/cli-run.js');
-            exitCode = await cliRun({
-              spec: specPath,
-              output: getArg(verifyArgs, '--output'),
-              historyDir: getArg(verifyArgs, '--history-dir'),
-            }, ctx);
-          } else if (isV1(spec) && spec.pages?.length) {
-            // Spec has pages but no URL — can't verify without a target
-            process.stderr.write('Spec has pages but no --url or --capture provided. Provide a target to verify against.\n');
-            exitCode = ExitCode.PARSE_ERROR;
-          } else {
-            process.stderr.write('Spec has no verifiable sections (no cli, no pages). Nothing to verify.\n');
-            exitCode = ExitCode.PARSE_ERROR;
+            const verifyResultPath = path.join(outputDir, 'verify-result.json');
+            fs.mkdirSync(outputDir, { recursive: true });
+            fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+
+            process.stderr.write(`\n  To review interactively:\n`);
+            process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            process.stderr.write(`Verification failed: ${msg}\n`);
+            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+            exitCode = agentExitCode(err);
           }
         } catch (err) {
           process.stderr.write(`Failed to load spec: ${(err as Error).message}\n`);

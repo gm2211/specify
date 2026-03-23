@@ -11,7 +11,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'verify_v2' | 'replay' | 'compare';
+  task: 'capture' | 'verify' | 'replay' | 'compare';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -118,7 +118,7 @@ function browserToolNames(serverName: string): string[] {
 }
 
 function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
-  if (task === 'verify_v2') {
+  if (task === 'verify') {
     return {
       type: 'json_schema',
       schema: {
@@ -160,32 +160,6 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                 duration_ms: { type: 'number' },
               },
               required: ['id', 'description', 'status'],
-            },
-          },
-        },
-        required: ['pass', 'summary', 'results'],
-      },
-    };
-  }
-  if (task === 'verify') {
-    return {
-      type: 'json_schema',
-      schema: {
-        type: 'object',
-        properties: {
-          pass: { type: 'boolean', description: 'True only if ALL requirements pass' },
-          summary: { type: 'string', description: 'One-line summary of results' },
-          results: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                id: { type: 'string', description: 'Page id, scenario id, requirement id, or assertion reference' },
-                pass: { type: 'boolean' },
-                evidence: { type: 'string', description: 'What was observed' },
-                type: { type: 'string', enum: ['page', 'scenario', 'assertion', 'requirement', 'flow'], description: 'What kind of check this result is for' },
-              },
-              required: ['id', 'pass', 'evidence'],
             },
           },
         },

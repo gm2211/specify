@@ -1,9 +1,6 @@
 /**
  * src/spec/parser.ts — Load and validate a spec from YAML or JSON
  *
- * Supports both v1 (computable) and v2 (behavioral) spec formats.
- * Version is detected from the `version` field and the correct schema is applied.
- *
  * Usage:
  *   import { loadSpec } from './parser.js';
  *   const spec = loadSpec('path/to/spec.yaml');
@@ -15,12 +12,10 @@ import * as path from 'path';
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import { specSchema } from './schema.js';
-import { specSchemaV2 } from './schema-v2.js';
 import type { Spec } from './types.js';
 
 const ajv = new Ajv({ allErrors: true });
-const validateV1 = ajv.compile(specSchema);
-const validateV2 = ajv.compile(specSchemaV2);
+const validate = ajv.compile(specSchema);
 
 /** Error thrown when a spec file fails validation. */
 export class SpecValidationError extends Error {
@@ -89,22 +84,17 @@ export function parseSpec(content: string, sourceName = '<string>'): Spec {
 }
 
 /**
- * Validate a parsed object against the appropriate spec schema.
- * Detects v1 vs v2 from the `version` field.
+ * Validate a parsed object against the spec schema.
  */
 function validateSpec(data: unknown, source: string): Spec {
   if (data === null || data === undefined || typeof data !== 'object') {
     throw new SpecValidationError(source, ['Spec must be a non-null object']);
   }
 
-  const obj = data as Record<string, unknown>;
-  const isV2 = obj.version === '2';
-  const validator = isV2 ? validateV2 : validateV1;
+  const valid = validate(data);
 
-  const valid = validator(data);
-
-  if (!valid && validator.errors) {
-    const errors = validator.errors.map((err) => {
+  if (!valid && validate.errors) {
+    const errors = validate.errors.map((err) => {
       const path = err.instancePath || '/';
       const msg = err.message ?? 'unknown error';
       return `${path}: ${msg}`;

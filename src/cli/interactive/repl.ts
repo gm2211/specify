@@ -9,15 +9,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import type { Spec } from '../../spec/types.js';
-import { isV1 } from '../../spec/types.js';
-import type { GapReport } from '../../validation/types.js';
 import { ExitCode } from '../exit-codes.js';
 import { buildReplCompleter } from './completer.js';
 
 interface ReplState {
   spec: Spec | null;
   specPath: string | null;
-  report: GapReport | null;
+  report: unknown;
   agentResult: unknown;
   capturePath: string | null;
   targetUrl: string | null;
@@ -176,7 +174,7 @@ async function handleLoad(args: string[], state: ReplState): Promise<void> {
     const { loadSpec } = await import('../../spec/parser.js');
     state.spec = loadSpec(filePath);
     state.specPath = filePath;
-    console.log(`Loaded spec: ${state.spec.name} (${isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0} pages)`);
+    console.log(`Loaded spec: ${state.spec.name} (${state.spec.areas?.length ?? 0} areas)`);
   } else if (type === 'capture') {
     state.capturePath = filePath;
     console.log(`Capture path set: ${filePath}`);
@@ -199,23 +197,8 @@ function handleSet(args: string[], state: ReplState): void {
   }
 }
 
-async function handleValidate(state: ReplState): Promise<void> {
-  if (!state.spec) {
-    console.log('No spec loaded. Use: load spec <path>');
-    return;
-  }
-  if (!state.capturePath) {
-    console.log('No capture loaded. Use: load capture <path>');
-    return;
-  }
-
-  const { loadCaptureData, validate } = await import('../../validation/validator.js');
-  const capture = loadCaptureData(state.capturePath);
-  const report = validate(state.spec, capture);
-  state.report = report;
-
-  const { summary } = report;
-  console.log(`Validation: ${summary.passed} passed, ${summary.failed} failed, ${summary.untested} untested (${summary.coverage}% coverage)`);
+async function handleValidate(_state: ReplState): Promise<void> {
+  console.log('Passive data validation has been removed. Use "run" for agent-driven verification.');
 }
 
 async function handleRun(args: string[], state: ReplState): Promise<void> {
@@ -232,19 +215,15 @@ async function handleRun(args: string[], state: ReplState): Promise<void> {
   state.report = null;
   state.agentResult = null;
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-  const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
-  const { loadSpec } = await import('../../spec/parser.js');
-  const { isV2: checkV2 } = await import('../../spec/types.js');
+  const { getVerifyPrompt } = await import('../../agent/prompts.js');
+  const { loadSpec, specToYaml } = await import('../../spec/parser.js');
   const resolvedSpec = path.resolve(state.specPath);
   const spec = loadSpec(resolvedSpec);
-  const useV2 = checkV2(spec);
-  const prompt = useV2
-    ? getVerifyPromptV2((await import('../../spec/parser.js')).specToYaml(spec))
-    : getVerifyPrompt(resolvedSpec, state.targetUrl);
+  const prompt = getVerifyPrompt(specToYaml(spec));
   const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-    task: useV2 ? 'verify_v2' : 'verify',
+    task: 'verify',
     systemPrompt: prompt,
-    userPrompt: useV2 ? `Verify ${state.targetUrl} against the v2 behavioral spec.` : `Verify ${state.targetUrl} against the spec at ${resolvedSpec}.`,
+    userPrompt: `Verify ${state.targetUrl} against the behavioral spec.`,
     url: state.targetUrl,
     spec: resolvedSpec,
     outputDir: '.specify/verify',
@@ -262,86 +241,24 @@ async function handleRun(args: string[], state: ReplState): Promise<void> {
   console.log(result);
 }
 
-function handleShow(args: string[], state: ReplState): void {
-  if (!state.report && !state.agentResult) {
-    console.log('No report available. Run "validate" or "run" first.');
+function handleShow(_args: string[], state: ReplState): void {
+  if (!state.agentResult) {
+    console.log('No report available. Run "run" first.');
     return;
   }
 
-  if (!state.report && state.agentResult) {
-    // Display agent verification results
-    const ar = state.agentResult as { pass?: boolean; summary?: string; results?: { id: string; pass: boolean; evidence: string }[] };
-    console.log(`Result: ${ar.pass ? 'PASS' : 'FAIL'}`);
-    if (ar.summary) console.log(`Summary: ${ar.summary}`);
-    if (ar.results?.length) {
-      for (const r of ar.results) {
-        console.log(`  ${r.pass ? '✓' : '✗'} ${r.id}: ${r.evidence}`);
-      }
+  const ar = state.agentResult as { pass?: boolean; summary?: string; results?: { id: string; pass: boolean; evidence: string }[] };
+  console.log(`Result: ${ar.pass ? 'PASS' : 'FAIL'}`);
+  if (ar.summary) console.log(`Summary: ${ar.summary}`);
+  if (ar.results?.length) {
+    for (const r of ar.results) {
+      console.log(`  ${r.pass ? 'PASS' : 'FAIL'} ${r.id}: ${r.evidence}`);
     }
-    return;
-  }
-
-  if (!state.report) return;
-  const target = args[0] ?? 'summary';
-
-  switch (target) {
-    case 'summary':
-      console.log(`Passed: ${state.report.summary.passed}`);
-      console.log(`Failed: ${state.report.summary.failed}`);
-      console.log(`Untested: ${state.report.summary.untested}`);
-      console.log(`Coverage: ${state.report.summary.coverage}%`);
-      break;
-
-    case 'failures': {
-      const failures: string[] = [];
-      for (const page of state.report.pages) {
-        for (const req of page.requests) {
-          if (req.status === 'failed') failures.push(`  ${page.pageId}: ${req.method} ${req.urlPattern} -- ${req.reason}`);
-        }
-      }
-      if (failures.length === 0) console.log('No failures.');
-      else failures.forEach(f => console.log(f));
-      break;
-    }
-
-    case 'page': {
-      const pageId = args[1];
-      if (!pageId) {
-        console.log('Usage: show page <pageId|path>');
-        return;
-      }
-      const page = state.report.pages.find(p => p.pageId === pageId || p.path === pageId);
-      if (!page) {
-        console.log(`Page not found: ${pageId}`);
-        return;
-      }
-      console.log(`Page: ${page.pageId} (${page.path}) -- visited: ${page.visited}`);
-      console.log(`  Requests: ${page.requests.length} (${page.requests.filter(r => r.status === 'passed').length} passed, ${page.requests.filter(r => r.status === 'failed').length} failed)`);
-      console.log(`  Visual: ${page.visualAssertions.length}`);
-      console.log(`  Console: ${page.consoleExpectations.length}`);
-      console.log(`  Scenarios: ${page.scenarios.length}`);
-      break;
-    }
-
-    default:
-      console.log('Usage: show summary | show failures | show page <id>');
   }
 }
 
-async function handleDiff(args: string[], state: ReplState): Promise<void> {
-  if (!state.report) {
-    console.log('No current report. Run "validate" or "run" first.');
-    return;
-  }
-  if (args.length < 1) {
-    console.log('Usage: diff <path-to-previous-report.json>');
-    return;
-  }
-
-  const { diffReports, diffToMarkdown } = await import('../../history/diff.js');
-  const previous = JSON.parse(fs.readFileSync(path.resolve(args[0]), 'utf-8')) as GapReport;
-  const diff = diffReports(previous, state.report);
-  console.log(diffToMarkdown(diff));
+async function handleDiff(_args: string[], _state: ReplState): Promise<void> {
+  console.log('Report diffing has been removed.');
 }
 
 async function handleRefine(state: ReplState): Promise<void> {
@@ -350,15 +267,7 @@ async function handleRefine(state: ReplState): Promise<void> {
     return;
   }
 
-  const { analyzeGaps, suggestionsToMarkdown } = await import('../../spec/refiner.js');
-  const suggestions = analyzeGaps(state.spec, state.report);
-
-  if (suggestions.length === 0) {
-    console.log('No refinement suggestions.');
-    return;
-  }
-
-  console.log(suggestionsToMarkdown(suggestions));
+  console.log('Spec refinement has been removed. Edit the spec directly to add areas and behaviors.');
 }
 
 async function handleSave(args: string[], state: ReplState): Promise<void> {
@@ -378,34 +287,11 @@ async function handleSave(args: string[], state: ReplState): Promise<void> {
 }
 
 async function handleHistory(): Promise<void> {
-  const histDir = path.resolve('.specify', 'history');
-  if (!fs.existsSync(histDir)) {
-    console.log('No history found. Use --history-dir with validate to save history.');
-    return;
-  }
-
-  const { createHistoryStore } = await import('../../history/store.js');
-  const store = createHistoryStore(histDir);
-  const ids = store.list();
-  console.log(`History: ${ids.length} run(s)`);
-  for (const id of ids.slice(-10)) {
-    console.log(`  ${id}`);
-  }
+  console.log('History tracking has been removed.');
 }
 
 async function handleStats(): Promise<void> {
-  const histDir = path.resolve('.specify', 'history');
-  if (!fs.existsSync(histDir)) {
-    console.log('No history found.');
-    return;
-  }
-
-  const { createHistoryStore } = await import('../../history/store.js');
-  const { computeStats, statsToMarkdown } = await import('../../history/statistics.js');
-  const store = createHistoryStore(histDir);
-  const reports = store.list().map(id => store.load(id));
-  const stats = computeStats(reports);
-  console.log(statsToMarkdown(stats));
+  console.log('Statistics have been removed.');
 }
 
 function printState(state: ReplState): void {
@@ -414,7 +300,7 @@ function printState(state: ReplState): void {
   else console.log('  Spec: (none)');
   if (state.targetUrl) console.log(`  URL: ${state.targetUrl}`);
   if (state.capturePath) console.log(`  Capture: ${state.capturePath}`);
-  if (state.report) console.log(`  Report: ${state.report.summary.passed}p/${state.report.summary.failed}f/${state.report.summary.untested}u`);
+  if (state.agentResult) console.log(`  Agent result: available`);
   console.log('');
 }
 

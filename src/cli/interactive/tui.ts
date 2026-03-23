@@ -8,8 +8,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type { Spec } from '../../spec/types.js';
-import { isV1 } from '../../spec/types.js';
-import type { GapReport, PageResult, CheckStatus } from '../../validation/types.js';
 import { ExitCode } from '../exit-codes.js';
 
 // ANSI escape codes
@@ -23,6 +21,8 @@ const RED = `${ESC}31m`;
 const YELLOW = `${ESC}33m`;
 const CYAN = `${ESC}36m`;
 const WHITE = `${ESC}37m`;
+
+type CheckStatus = 'passed' | 'failed' | 'untested';
 
 const STATUS_ICON: Record<CheckStatus, string> = {
   passed: `${GREEN}[pass]${RESET}`,
@@ -38,7 +38,6 @@ interface AgentResult {
 
 interface TuiState {
   spec: Spec | null;
-  report: GapReport | null;
   agentResult: AgentResult | null;
   selectedPage: number;
   running: boolean;
@@ -62,7 +61,6 @@ export async function runTui(options: {
 
   const state: TuiState = {
     spec,
-    report: null,
     agentResult: null,
     selectedPage: 0,
     running: false,
@@ -96,7 +94,7 @@ export async function runTui(options: {
       state.selectedPage = Math.max(0, state.selectedPage - 1);
     } else if (key === '\u001b[B') {
       // Down
-      const maxPages = state.report?.pages.length ?? (state.spec && isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0);
+      const maxPages = state.agentResult?.results?.length ?? 0;
       if (maxPages > 0) {
         state.selectedPage = Math.min(maxPages - 1, state.selectedPage + 1);
       }
@@ -111,19 +109,15 @@ export async function runTui(options: {
         render(state);
         try {
           const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
-          const { getVerifyPrompt, getVerifyPromptV2 } = await import('../../agent/prompts.js');
-          const { loadSpec } = await import('../../spec/parser.js');
-          const { isV2: checkV2 } = await import('../../spec/types.js');
+          const { getVerifyPrompt } = await import('../../agent/prompts.js');
+          const { loadSpec, specToYaml } = await import('../../spec/parser.js');
           const resolvedSpec = path.resolve(options.spec);
           const spec = loadSpec(resolvedSpec);
-          const useV2 = checkV2(spec);
-          const prompt = useV2
-            ? getVerifyPromptV2((await import('../../spec/parser.js')).specToYaml(spec))
-            : getVerifyPrompt(resolvedSpec, options.url);
+          const prompt = getVerifyPrompt(specToYaml(spec));
           const { structuredOutput } = await runSpecifyAgent({
-            task: useV2 ? 'verify_v2' : 'verify',
+            task: 'verify',
             systemPrompt: prompt,
-            userPrompt: useV2 ? `Verify ${options.url} against the v2 behavioral spec.` : `Verify ${options.url} against the spec at ${resolvedSpec}.`,
+            userPrompt: `Verify ${options.url} against the behavioral spec.`,
             url: options.url,
             spec: resolvedSpec,
             outputDir: '.specify/verify',
@@ -193,51 +187,10 @@ function render(state: TuiState): void {
       output += `\n ${RED}Error: ${state.lastError}${RESET}\n`;
     }
     output += `\n${DIM} [R]un again  [Q]uit${RESET}\n`;
-  } else if (state.report) {
-    // Split view: pages list + detail
-    const pages = state.report.pages;
-    const midCol = Math.min(30, Math.floor(columns / 3));
-
-    // Summary bar
-    const { passed, failed, untested, coverage } = state.report.summary;
-    output += ` ${GREEN}${passed} passed${RESET} | ${RED}${failed} failed${RESET} | ${DIM}${untested} untested${RESET} | Coverage: ${coverage}%\n`;
-    output += `${DIM}${'-'.repeat(Math.min(columns, 80))}${RESET}\n`;
-
-    // Page list
-    for (let i = 0; i < pages.length && i < rows - 8; i++) {
-      const page = pages[i];
-      const selected = i === state.selectedPage;
-      const pageStatus = getPageStatus(page);
-      const prefix = selected ? `${BOLD}> ` : '  ';
-      const suffix = selected ? RESET : '';
-      output += `${prefix}${STATUS_ICON[pageStatus]} ${page.path.substring(0, midCol - 5)}${suffix}\n`;
-    }
-
-    // Detail view for selected page
-    if (pages[state.selectedPage]) {
-      const page = pages[state.selectedPage];
-      output += `\n${DIM}${'-'.repeat(Math.min(columns, 80))}${RESET}\n`;
-      output += `${BOLD} ${page.pageId} -- ${page.path}${RESET}\n\n`;
-
-      for (const req of page.requests.slice(0, 8)) {
-        output += `  ${STATUS_ICON[req.status]} ${req.method} ${req.urlPattern.substring(0, 50)}`;
-        if (req.actualStatus) output += ` (${req.actualStatus})`;
-        output += '\n';
-      }
-
-      for (const va of page.visualAssertions.slice(0, 4)) {
-        output += `  ${STATUS_ICON[va.status]} ${va.type} ${va.selector ?? ''}\n`;
-      }
-
-      for (const sc of page.scenarios.slice(0, 4)) {
-        output += `  ${STATUS_ICON[sc.status]} scenario: ${sc.scenarioId}\n`;
-      }
-    }
   } else {
     // Idle — no results yet
     output += `\n${WHITE} Spec loaded: ${state.spec?.name ?? 'none'}${RESET}\n`;
-    output += ` Pages: ${state.spec && isV1(state.spec) ? state.spec.pages?.length ?? 0 : 0}\n`;
-    output += ` Flows: ${state.spec && isV1(state.spec) ? state.spec.flows?.length ?? 0 : 0}\n`;
+    output += ` Areas: ${state.spec?.areas?.length ?? 0}\n`;
     if (state.lastError) {
       output += `\n ${RED}Error: ${state.lastError}${RESET}\n`;
     }
@@ -251,15 +204,3 @@ function render(state: TuiState): void {
   process.stdout.write(output);
 }
 
-function getPageStatus(page: PageResult): CheckStatus {
-  if (!page.visited) return 'untested';
-  const allResults = [
-    ...page.requests.map(r => r.status),
-    ...page.visualAssertions.map(v => v.status),
-    ...page.consoleExpectations.map(c => c.status),
-    ...page.scenarios.map(s => s.status),
-  ];
-  if (allResults.some(s => s === 'failed')) return 'failed';
-  if (allResults.some(s => s === 'passed')) return 'passed';
-  return 'untested';
-}

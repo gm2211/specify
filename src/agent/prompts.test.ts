@@ -17,47 +17,44 @@ test('getCapturePrompt does not reference sp CLI commands', () => {
   assert.ok(!prompt.includes('sp capture'), 'should not reference sp capture');
 });
 
-test('getCapturePrompt includes spec YAML format instructions', () => {
+test('getCapturePrompt includes v2 spec YAML format instructions', () => {
   const prompt = getCapturePrompt('http://localhost:3000', '/tmp/output/spec.yaml');
-  assert.ok(prompt.includes('version: "1.0"'));
-  assert.ok(prompt.includes('pages:'));
-  assert.ok(prompt.includes('visual_assertions:'));
+  assert.ok(prompt.includes('version: "2"'));
+  assert.ok(prompt.includes('areas:'));
+  assert.ok(prompt.includes('behaviors:'));
 });
 
-test('getVerifyPrompt returns non-empty string with spec and URL', () => {
-  const prompt = getVerifyPrompt('/abs/path/spec.yaml', 'http://localhost:3000');
+test('getVerifyPrompt returns non-empty string with spec YAML', () => {
+  const specYaml = 'version: "2"\nname: test\nareas: []';
+  const prompt = getVerifyPrompt(specYaml);
   assert.ok(prompt.length > 0);
-  assert.ok(prompt.includes('/abs/path/spec.yaml'));
-  assert.ok(prompt.includes('http://localhost:3000'));
-  assert.ok(prompt.includes('PASSES'));
+  assert.ok(prompt.includes('version: "2"'));
 });
 
 test('getVerifyPrompt does not reference sp CLI commands', () => {
-  const prompt = getVerifyPrompt('/abs/path/spec.yaml', 'http://localhost:3000');
+  const prompt = getVerifyPrompt('version: "2"\nname: test');
   assert.ok(!prompt.includes('sp verify'), 'should not reference sp verify');
   assert.ok(!prompt.includes('sp spec'), 'should not reference sp spec');
 });
 
 test('getVerifyPrompt describes structured output format', () => {
-  const prompt = getVerifyPrompt('/abs/path/spec.yaml', 'http://localhost:3000');
+  const prompt = getVerifyPrompt('version: "2"\nname: test');
   assert.ok(prompt.includes('pass'));
   assert.ok(prompt.includes('summary'));
   assert.ok(prompt.includes('results'));
   assert.ok(prompt.includes('JSON'));
 });
 
-test('getVerifyPrompt mentions requirements and validation_plan', () => {
-  const prompt = getVerifyPrompt('/abs/path/spec.yaml', 'http://localhost:3000');
-  assert.ok(prompt.includes('requirements'), 'should mention requirements');
-  assert.ok(prompt.includes('validation_plan'), 'should mention validation_plan');
+test('getVerifyPrompt mentions behaviors and areas', () => {
+  const prompt = getVerifyPrompt('version: "2"\nname: test');
+  assert.ok(prompt.includes('areas'), 'should mention areas');
+  assert.ok(prompt.includes('behaviors'), 'should mention behaviors');
   assert.ok(prompt.includes('evidence'), 'should mention evidence');
 });
 
-test('getCapturePrompt includes requirements and assumptions format', () => {
+test('getCapturePrompt includes assumptions format', () => {
   const prompt = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml');
-  assert.ok(prompt.includes('requirements:'), 'should show requirements YAML');
   assert.ok(prompt.includes('assumptions:'), 'should show assumptions YAML');
-  assert.ok(prompt.includes('validation_plan'), 'should show validation_plan field');
 });
 
 test('getReplayPrompt returns non-empty string with capture dir and URL', () => {

@@ -1,78 +1,84 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import path from 'node:path';
 import test from 'node:test';
 
 import type { Spec } from './types.js';
-import { lintSpec, lintNarrativeSync } from './lint.js';
+import { lintSpec } from './lint.js';
 
-test('lintSpec rejects invalid claim refs and invalid description claims', () => {
+test('lintSpec detects duplicate area IDs', () => {
   const spec: Spec = {
-    version: '1.0',
-    name: 'Invalid Claim Spec',
-    description_claims: ['missing-claim'],
-    claims: [
-      {
-        id: 'claim-1',
-        description: 'Broken grounding',
-        grounded_by: {
-          commands: ['missing-command'],
-        },
-      },
+    version: '2',
+    name: 'Test Spec',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: 'User can log in' }] },
+      { id: 'auth', name: 'Auth Dup', behaviors: [{ id: 'logout', description: 'User can log out' }] },
     ],
-    cli: {
-      binary: 'echo',
-      commands: [],
-    },
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'description-claim-invalid'));
-  assert.ok(errors.some(err => err.rule === 'claim-invalid-command-ref'));
+  assert.ok(errors.some(err => err.rule === 'duplicate-area-id'));
 });
 
-test('lintNarrativeSync accepts claim refs', () => {
-  const tempDir = mkdtempSync(path.join(tmpdir(), 'specify-lint-'));
-  const narrativePath = path.join(tempDir, 'app.narrative.md');
-  writeFileSync(
-    narrativePath,
-    [
-      '# Test Spec',
-      '',
-      '## Claims',
-      '<!-- spec:claims -->',
-      '<!-- spec:claim:claim-1 -->',
-      '',
-      'This section grounds a normative statement.',
-      '',
-    ].join('\n'),
-    'utf-8',
-  );
-
+test('lintSpec detects duplicate behavior IDs within an area', () => {
   const spec: Spec = {
-    version: '1.0',
-    name: 'Narrative Claim Spec',
-    narrative_path: 'app.narrative.md',
-    claims: [
+    version: '2',
+    name: 'Test Spec',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
       {
-        id: 'claim-1',
-        description: 'Example claim',
-        grounded_by: {
-          requirements: ['req-1'],
-        },
-      },
-    ],
-    requirements: [
-      {
-        id: 'req-1',
-        description: 'Example requirement',
-        verification: 'agent',
+        id: 'auth',
+        name: 'Auth',
+        behaviors: [
+          { id: 'login', description: 'User can log in' },
+          { id: 'login', description: 'User can log in again' },
+        ],
       },
     ],
   };
 
-  const errors = lintNarrativeSync(spec, spec.narrative_path!, path.join(tempDir, 'app.spec.yaml'));
-  assert.ok(!errors.some(err => err.rule === 'narrative-ref-invalid'));
-  assert.ok(!errors.some(err => err.rule === 'narrative-ref-missing' && /claim:claim-1/.test(err.message)));
+  const errors = lintSpec(spec);
+  assert.ok(errors.some(err => err.rule === 'duplicate-behavior-id'));
+});
+
+test('lintSpec detects empty behavior descriptions', () => {
+  const spec: Spec = {
+    version: '2',
+    name: 'Test Spec',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: '   ' }] },
+    ],
+  };
+
+  const errors = lintSpec(spec);
+  assert.ok(errors.some(err => err.rule === 'empty-behavior-description'));
+});
+
+test('lintSpec warns about ambiguous behavior IDs across areas', () => {
+  const spec: Spec = {
+    version: '2',
+    name: 'Test Spec',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      { id: 'auth', name: 'Auth', behaviors: [{ id: 'submit', description: 'Submit login form' }] },
+      { id: 'settings', name: 'Settings', behaviors: [{ id: 'submit', description: 'Submit settings form' }] },
+    ],
+  };
+
+  const errors = lintSpec(spec);
+  assert.ok(errors.some(err => err.rule === 'ambiguous-behavior-id'));
+});
+
+test('lintSpec returns no errors for a valid spec', () => {
+  const spec: Spec = {
+    version: '2',
+    name: 'Test Spec',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: 'User can log in' }] },
+    ],
+  };
+
+  const errors = lintSpec(spec);
+  assert.equal(errors.length, 0);
 });
