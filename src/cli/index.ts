@@ -199,6 +199,7 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('review')}            Inspect the contract in a browser
   ${c.cyan('serve')}             Serve the review webapp with live reload
   ${c.cyan('verify')}            Verify an implementation against a contract
+  ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
 ${c.bold('Advanced:')}
   ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
@@ -587,6 +588,17 @@ async function main(): Promise<void> {
           }
         }
       }
+
+    } else if (noun === 'impersonate') {
+      const { impersonateCommand } = await import('./commands/impersonate.js');
+      exitCode = await impersonateCommand({
+        url: getArg(rest, '--url'),
+        capture: getArg(rest, '--capture'),
+        port: getArg(rest, '--port'),
+        output: getArg(rest, '--output'),
+        noAugment: hasFlag(rest, '--no-augment'),
+        headed: hasFlag(rest, '--headed'),
+      }, ctx);
 
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
