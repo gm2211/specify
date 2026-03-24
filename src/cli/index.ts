@@ -196,8 +196,8 @@ ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
-  ${c.cyan('review')}            Inspect the contract in a browser
-  ${c.cyan('serve')}             Serve the review webapp with live reload
+  ${c.cyan('review')}            Launch the review webapp in a browser
+  ${c.cyan('serve')}             Alias for review
   ${c.cyan('verify')}            Verify an implementation against a contract
   ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
@@ -626,15 +626,13 @@ async function main(): Promise<void> {
       }, ctx);
 
     } else if (noun === 'review') {
-      // review is a standalone command (no verb) — recombine args
+      // review delegates to the webapp server (same as `serve`)
       const reviewArgs = verb ? [verb, ...rest] : rest;
       const { review: reviewCmd } = await import('./commands/review.js');
       exitCode = await reviewCmd({
         spec: resolveSpecArg(reviewArgs, ctx),
-        narrative: getArg(reviewArgs, '--narrative'),
-        report: getArg(reviewArgs, '--report'),
         agentReport: getArg(reviewArgs, '--agent-report'),
-        output: getArg(reviewArgs, '--output'),
+        port: getArg(reviewArgs, '--port'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
       }, ctx);
 
