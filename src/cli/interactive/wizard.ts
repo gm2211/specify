@@ -306,10 +306,11 @@ export async function runWizard(options: { fromCapture?: string; action?: string
 
     // Lifecycle-aligned menu — task-oriented labels
     const menuOptions: { label: string; action: string }[] = [
-      { label: 'Create   — start a new spec from scratch', action: 'create' },
-      { label: 'Capture  — derive a spec from a running app or existing tests', action: 'capture' },
-      { label: 'Review   — read the spec in a browser', action: 'review' },
-      { label: 'Verify   — check that the implementation matches the spec', action: 'verify' },
+      { label: 'Create      — start a new spec from scratch', action: 'create' },
+      { label: 'Capture     — derive a spec from a running app or existing tests', action: 'capture' },
+      { label: 'Review      — read the spec in a browser', action: 'review' },
+      { label: 'Verify      — check that the implementation matches the spec', action: 'verify' },
+      { label: 'Impersonate — impersonate a captured system via MockServer', action: 'impersonate' },
     ];
 
     let action: string;
@@ -322,7 +323,7 @@ export async function runWizard(options: { fromCapture?: string; action?: string
         console.error(`\n  → ${match.label}\n`);
       } else {
         console.error(`\n  Unknown action: ${options.action}`);
-        console.error('  Available: create, capture, review, verify\n');
+        console.error('  Available: create, capture, review, verify, impersonate\n');
         rl.close();
         return ExitCode.PARSE_ERROR;
       }
@@ -350,6 +351,9 @@ export async function runWizard(options: { fromCapture?: string; action?: string
         break;
       case 'verify':
         exitCode = await flowVerifyMenu(state, prompts, options.subAction);
+        break;
+      case 'impersonate':
+        exitCode = await flowImpersonate(prompts);
         break;
       default:
         exitCode = ExitCode.SUCCESS;
@@ -410,22 +414,33 @@ async function flowValidate(_state: ProjectState, _prompts: PromptFns): Promise<
 async function flowAgent(state: ProjectState, { ask, askPath, choose }: PromptFns): Promise<number> {
   const specPath = await pickSpec(state, { askPath, choose } as PromptFns);
 
-  const url = await ask('Target URL', 'http://localhost:3000');
+  const { loadSpec, specToYaml } = await import('../../spec/parser.js');
+  const resolvedSpec = path.resolve(specPath);
+  const spec = loadSpec(resolvedSpec);
+
+  // Only ask for URL when the target type requires it (web or api)
+  const needsUrl = spec.target.type === 'web' || spec.target.type === 'api';
+  const defaultUrl = needsUrl && (spec.target.type === 'web' || spec.target.type === 'api')
+    ? spec.target.url
+    : undefined;
+  const url = needsUrl
+    ? await ask('Target URL', defaultUrl ?? 'http://localhost:3000')
+    : undefined;
+
   const headed = await ask('Browser mode', 'headless');
 
   console.error('\n  Launching agent...\n');
 
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
   const { getVerifyPrompt } = await import('../../agent/prompts.js');
-  const { loadSpec, specToYaml } = await import('../../spec/parser.js');
-  const resolvedSpec = path.resolve(specPath);
-  const spec = loadSpec(resolvedSpec);
   const prompt = getVerifyPrompt(specToYaml(spec));
   const { result, costUsd, structuredOutput } = await runSpecifyAgent({
     task: 'verify',
     systemPrompt: prompt,
-    userPrompt: `Verify ${url} against the behavioral spec.`,
-    url,
+    userPrompt: url
+      ? `Verify ${url} against the behavioral spec.`
+      : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the behavioral spec.`,
+    ...(url ? { url } : {}),
     spec: resolvedSpec,
     outputDir: '.specify/verify',
     headed: headed === 'headed',
@@ -619,5 +634,44 @@ async function flowVerifyMenu(state: ProjectState, prompts: PromptFns, subAction
     return ExitCode.PARSE_ERROR;
   }
   return await flowAgent(state, prompts);
+}
+
+// ---------------------------------------------------------------------------
+// Flow: Impersonate
+// ---------------------------------------------------------------------------
+
+async function flowImpersonate({ ask, askPath, confirm }: PromptFns): Promise<number> {
+  console.error('');
+  console.error('  Impersonate — run a MockServer that replays captured traffic');
+  console.error('');
+
+  const useExisting = await confirm('Use an existing capture directory?', false);
+
+  let url: string | undefined;
+  let capture: string | undefined;
+
+  if (useExisting) {
+    capture = await askPath('Path to capture directory', './captures/latest');
+  } else {
+    url = await ask('URL to capture and impersonate', 'http://localhost:3000');
+    try {
+      new URL(url);
+    } catch {
+      console.error(`  Invalid URL: ${url}`);
+      return ExitCode.PARSE_ERROR;
+    }
+  }
+
+  const port = await ask('MockServer port', '1080');
+  const output = await askPath('Output directory for expectations', '.specify/impersonate');
+  const noAugment = !(await confirm('Augment with synthetic data via LLM?', true));
+
+  console.error('\n  Launching impersonate...\n');
+
+  const { impersonateCommand } = await import('../commands/impersonate.js');
+  return await impersonateCommand(
+    { url, capture, port, output, noAugment, headed: false },
+    { outputFormat: 'text', quiet: false },
+  );
 }
 

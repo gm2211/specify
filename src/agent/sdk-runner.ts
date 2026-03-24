@@ -11,7 +11,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'replay' | 'compare';
+  task: 'capture' | 'verify' | 'replay' | 'compare' | 'augment';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -191,6 +191,31 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
           },
         },
         required: ['match', 'summary', 'diffs'],
+      },
+    };
+  }
+  if (task === 'augment') {
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          synthetic_traffic: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                url: { type: 'string' },
+                method: { type: 'string' },
+                status: { type: 'number' },
+                contentType: { type: 'string' },
+                responseBody: { type: 'string' },
+              },
+              required: ['url', 'method', 'status', 'contentType', 'responseBody'],
+            },
+          },
+        },
+        required: ['synthetic_traffic'],
       },
     };
   }

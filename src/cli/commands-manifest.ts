@@ -88,6 +88,23 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'impersonate',
+    description: 'Impersonate a captured system via MockServer Docker container',
+    parameters: [
+      { name: '--url', type: 'string', required: false, description: 'Target URL to capture and impersonate' },
+      { name: '--capture', type: 'string', required: false, description: 'Use existing capture directory' },
+      { name: '--port', type: 'string', required: false, description: 'MockServer port (default: 1080)' },
+      { name: '--output', type: 'string', required: false, description: 'Output directory for expectations' },
+      { name: '--no-augment', type: 'boolean', required: false, description: 'Skip LLM synthetic data augmentation' },
+      { name: '--headed', type: 'boolean', required: false, description: 'Run capture browser visibly' },
+    ],
+    examples: [
+      '$ specify impersonate --url https://example.com',
+      '$ specify impersonate --capture ./captures/myapp --port 8080',
+      '$ specify impersonate --url https://api.example.com --no-augment',
+    ],
+  },
+  {
     name: 'schema',
     description: 'Output JSON Schema for spec, report, or commands',
     parameters: [
