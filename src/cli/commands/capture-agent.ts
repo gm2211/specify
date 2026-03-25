@@ -138,10 +138,14 @@ export async function executeCommand(
         break;
     }
 
-    // Auto-screenshot on navigation
+    // Auto-screenshot after every mutating action (deterministic evidence capture)
+    const MUTATING_ACTIONS = new Set(['goto', 'click', 'fill', 'type', 'selectOption', 'check', 'uncheck', 'hover', 'press']);
     const urlAfter = page.url();
-    if (urlBefore !== urlAfter && screenshotFn && cmd.action !== 'screenshot') {
-      screenshot = await screenshotFn(`nav-${slugifyUrl(urlAfter)}`);
+    if (screenshotFn && cmd.action !== 'screenshot' && MUTATING_ACTIONS.has(cmd.action)) {
+      const label = urlBefore !== urlAfter
+        ? `nav-${slugifyUrl(urlAfter)}`
+        : `${cmd.action}-${'selector' in cmd ? slugifyUrl(cmd.selector) : slugifyUrl(urlAfter)}`;
+      screenshot = await screenshotFn(label);
     }
 
     return {

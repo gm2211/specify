@@ -30,6 +30,7 @@ export interface SdkRunnerResult {
   result: string;
   costUsd: number;
   structuredOutput?: unknown;
+  sessionId?: string;
 }
 
 /** Error thrown when the Agent SDK returns a non-success result. */
@@ -162,8 +163,13 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
               required: ['id', 'description', 'status'],
             },
           },
+          test_files: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Paths to generated Playwright test files',
+          },
         },
-        required: ['pass', 'summary', 'results'],
+        required: ['pass', 'summary', 'results', 'test_files'],
       },
     };
   }
@@ -261,6 +267,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     let finalResult = '';
     let costUsd = 0;
     let structuredOutput: unknown | undefined;
+    let sessionId: string | undefined;
 
     const outputFormat = getOutputFormat(opts.task);
 
@@ -268,19 +275,24 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // Bash, Edit, Glob, Grep are excluded to prevent prompt injection
     // from target pages reaching the local filesystem or shell.
     const fileTools: string[] = ['Read'];
-    if (opts.task === 'capture' || opts.task === 'compare') {
+    if (opts.task === 'capture' || opts.task === 'compare' || opts.task === 'verify') {
       fileTools.push('Write');
     }
 
     const queryOptions: Options = {
+      model: 'claude-opus-4-6',
       systemPrompt: opts.systemPrompt,
+      thinking: { type: 'adaptive' },
       mcpServers,
       allowedTools: [
         ...fileTools,
         ...allowedBrowserTools,
       ],
+      permissionMode: 'bypassPermissions',
+      allowDangerouslySkipPermissions: true,
       cwd: opts.cwd ?? process.cwd(),
       maxTurns: 200,
+      maxBudgetUsd: 5,
       persistSession: false,
       ...(outputFormat ? { outputFormat } : {}),
     };
@@ -289,15 +301,16 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       prompt: opts.userPrompt,
       options: queryOptions,
     })) {
-      if (message.type === 'assistant') {
+      if (message.type === 'system' && 'subtype' in message && message.subtype === 'init' && 'session_id' in message) {
+        sessionId = message.session_id as string;
+      } else if (message.type === 'assistant') {
         const textBlocks = message.message.content.filter((b: { type: string }) => b.type === 'text');
         for (const block of textBlocks) {
           process.stderr.write((block as { type: 'text'; text: string }).text + '\n');
         }
         process.stderr.write('\n');
-      } else if (message.type === 'tool_use_summary') {
-        const summary = (message as { summary: string }).summary;
-        process.stderr.write(`  \x1b[2m${summary}\x1b[0m\n`);
+      } else if (message.type === 'tool_use_summary' && 'summary' in message) {
+        process.stderr.write(`  \x1b[2m${(message as { summary: string }).summary}\x1b[0m\n`);
       } else if (message.type === 'result') {
         if (message.subtype === 'success') {
           finalResult = message.result;
@@ -310,7 +323,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       }
     }
 
-    return { result: finalResult, costUsd, structuredOutput };
+    return { result: finalResult, costUsd, structuredOutput, sessionId };
   } finally {
     for (const session of sessions) {
       session.collector.save();
