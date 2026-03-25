@@ -690,6 +690,8 @@ async function main(): Promise<void> {
 
             process.stderr.write(`\n  To review interactively:\n`);
             process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+            process.stderr.write(`  To run generated e2e tests:\n`);
+            process.stderr.write(`  $ cd ${outputDir} && npx playwright test\n\n`);
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             process.stderr.write(`Verification failed: ${msg}\n`);

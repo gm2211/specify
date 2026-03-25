@@ -160,9 +160,52 @@ Your final output MUST be a JSON object with this structure:
       "evidence": [{ "type": "text", "label": "observation", "content": "..." }],
       "rationale": "Login form present with email and password fields"
     }
-  ]
+  ],
+  "test_files": ["authentication.spec.ts", "dashboard.spec.ts"]
 }
-\`\`\``;
+\`\`\`
+
+## E2E Test Generation
+
+After verifying all behaviors, write Playwright test files to the output directory.
+
+### File structure:
+- Write a \`playwright.config.ts\` with baseURL set to the target URL
+- Write one \`<area-id>.spec.ts\` file per area
+- Each behavior becomes a \`test()\` block
+
+### Test format:
+\`\`\`typescript
+import { test, expect } from '@playwright/test';
+
+test.describe('<Area Name>', () => {
+  test('<behavior description>', async ({ page }) => {
+    // The actual steps you used to verify this behavior
+    await page.goto('/path');
+    await expect(page.locator('...')).toBeVisible();
+    // etc.
+  });
+});
+\`\`\`
+
+### playwright.config.ts format:
+\`\`\`typescript
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  use: {
+    baseURL: '<target-url>',
+  },
+});
+\`\`\`
+
+### Rules:
+- Only generate tests for behaviors with status "passed" or "failed" (not skipped)
+- Use the ACTUAL selectors and steps you used during verification
+- Prefer user-visible text selectors (getByText, getByRole) over CSS selectors
+- Include meaningful expect() assertions that map to the behavioral claim
+- Write file paths relative to the output directory
+- List all written spec file names (not playwright.config.ts) in the \`test_files\` field of the JSON output`;
 }
 
 export function getComparePrompt(remoteUrl: string, localUrl: string, outputDir: string): string {
