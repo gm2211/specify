@@ -1,0 +1,118 @@
+# Specify QA Gate — GitHub Actions Workflow Template
+#
+# Drop this file into .github/workflows/ in your project.
+# Then make two edits (marked with TODO):
+#   1. Replace the "Start app" step with your actual start command.
+#   2. Set HEALTH_CHECK_URL to the URL Specify should probe (and later verify against).
+#
+# Required secret: ANTHROPIC_API_KEY
+#   Settings → Secrets and variables → Actions → New repository secret
+
+name: Specify QA
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# ── Customise these ───────────────────────────────────────────────────────────
+env:
+  # Path to your spec file, relative to the repo root.
+  SPEC_FILE: spec.yaml
+
+  # URL that Specify should hit when verifying your app.
+  # Must match what your app listens on (see "Start app" step below).
+  HEALTH_CHECK_URL: http://localhost:3000
+
+  # How long (seconds) to wait for the app to become healthy before giving up.
+  HEALTH_CHECK_TIMEOUT: 60
+# ─────────────────────────────────────────────────────────────────────────────
+
+jobs:
+  specify-qa:
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── 1. Check out source ──────────────────────────────────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── 2. Start your app ───────────────────────────────────────────────
+      #
+      # TODO: Replace this step with the commands that launch your app.
+      #       The app must keep running in the background so subsequent steps
+      #       can reach it at HEALTH_CHECK_URL.
+      #
+      # Examples:
+      #
+      #   docker-compose:
+      #     run: docker compose up -d
+      #
+      #   Next.js / Node:
+      #     run: npm ci && npm run build && npm start &
+      #
+      #   Express (dev server):
+      #     run: npm ci && node server.js &
+      #
+      #   Rails:
+      #     run: bundle install && RAILS_ENV=test rails db:setup && rails server -d
+      #
+      #   FastAPI / uvicorn:
+      #     run: pip install -r requirements.txt && uvicorn main:app --port 3000 &
+      #
+      - name: Start app
+        run: |
+          # TODO: replace with your start command
+          # Example: docker compose up -d
+          echo "ERROR: Replace this step with your app start command." >&2
+          exit 1
+
+      # ── 3. Wait for the app to be healthy ───────────────────────────────
+      - name: Wait for app to be healthy
+        run: |
+          echo "Waiting for $HEALTH_CHECK_URL (timeout: ${HEALTH_CHECK_TIMEOUT}s)..."
+          deadline=$(( $(date +%s) + HEALTH_CHECK_TIMEOUT ))
+          until curl --silent --fail --output /dev/null "$HEALTH_CHECK_URL"; do
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              echo "ERROR: App did not become healthy within ${HEALTH_CHECK_TIMEOUT}s." >&2
+              exit 1
+            fi
+            echo "  Not ready yet — retrying in 2s..."
+            sleep 2
+          done
+          echo "App is healthy."
+
+      # ── 4. Run Specify verify ────────────────────────────────────────────
+      #
+      # Uses the official Specify Docker image (includes Chromium via Playwright).
+      # --network host lets the container reach your app on localhost.
+      # The spec file is bind-mounted read-only; output is written to the host
+      # workspace so it can be uploaded as an artifact.
+      - name: Run Specify verify
+        run: |
+          docker run --rm \
+            --network host \
+            -e ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY }}" \
+            -v "${{ github.workspace }}/${{ env.SPEC_FILE }}:/spec/spec.yaml:ro" \
+            -v "${{ github.workspace }}/.specify:/workspace/.specify" \
+            ghcr.io/gm2211/specify:latest \
+            verify \
+              --spec /spec/spec.yaml \
+              --url "${{ env.HEALTH_CHECK_URL }}" \
+              --output /workspace/.specify/verify
+
+      # ── 5. Upload verification artifacts on failure ──────────────────────
+      #
+      # The .specify/verify/ directory contains:
+      #   - verify-result.json  — structured pass/fail breakdown
+      #   - screenshots/        — browser screenshots per behavior (web targets)
+      #
+      # Artifacts are kept for 7 days to limit storage usage.
+      - name: Upload Specify artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: specify-verify-results
+          path: .specify/verify/
+          retention-days: 7
