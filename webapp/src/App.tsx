@@ -63,7 +63,7 @@ export default function App() {
     setSelectedArea(id);
     setExpandedAreas((prev) => new Set(prev).add(id));
     const el = document.getElementById(`area-${id}`);
-    el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (el) (el as unknown as { scrollIntoView: (opts: ScrollIntoViewOptions) => void }).scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, []);
 
   const handleToggleArea = useCallback((id: string) => {
