@@ -1,0 +1,10 @@
+node_modules
+dist
+webapp/node_modules
+.specify
+.auth
+.env
+.git
+*.log
+*.review.html
+.dolt
