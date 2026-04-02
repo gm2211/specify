@@ -6,7 +6,8 @@
  * capture-agent.ts, which handles Playwright actions + auto-screenshots.
  *
  * Also exposes `ask_user` — the agent's channel to request credentials,
- * choices, or any input from the human operator.
+ * choices, or any input from the human operator. Supports a pluggable
+ * handler for chat mode / WebSocket / external agent integration.
  */
 
 import * as readline from 'readline';
@@ -14,6 +15,7 @@ import type { Page } from 'playwright';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { executeCommand } from '../cli/commands/capture-agent.js';
+import { eventBus } from './event-bus.js';
 
 function promptUser(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
@@ -29,7 +31,10 @@ export function createBrowserMcpServer(
   page: Page,
   screenshotFn: (name: string) => Promise<string>,
   serverName: string = 'browser',
+  askUserHandler?: (question: string) => Promise<string>,
 ) {
+  const handleAskUser = askUserHandler ?? promptUser;
+
   const server = createSdkMcpServer({
     name: serverName,
     tools: [
@@ -155,7 +160,9 @@ export function createBrowserMcpServer(
         'Ask the human operator a question. Use this when you need credentials (username, password, API key), must choose between ambiguous options, or need any information you cannot discover autonomously. The user sees the question on stderr and types a response.',
         { question: z.string().describe('The question to ask the human operator') },
         async (args) => {
-          const answer = await promptUser(args.question);
+          eventBus.send('agent:ask_user', { question: args.question });
+          const answer = await handleAskUser(args.question);
+          eventBus.send('user:answer', { question: args.question });
           return { content: [{ type: 'text' as const, text: answer }] };
         },
       ),

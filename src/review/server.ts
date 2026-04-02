@@ -9,9 +9,18 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { eventBus } from '../agent/event-bus.js';
+import type { MessageInjector } from '../agent/message-injector.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/** Module-level reference to the active message injector (if any). */
+let activeInjector: MessageInjector | null = null;
+
+export function setActiveInjector(injector: MessageInjector | null): void {
+  activeInjector = injector;
+}
 
 export interface ServeOptions {
   specPath: string;
@@ -116,6 +125,67 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   });
 
   // -------------------------------------------------------------------------
+  // Event stream (SSE) — inter-agent event channel
+  // -------------------------------------------------------------------------
+
+  app.get('/api/events/stream', async (c) => {
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        // Send recent events for catch-up
+        for (const event of eventBus.recent(20)) {
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+        }
+        // Subscribe to new events
+        const unsub = eventBus.onAny((event) => {
+          try {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
+          } catch {
+            unsub();
+          }
+        });
+        // Clean up on close (handled by AbortSignal)
+        c.req.raw.signal.addEventListener('abort', () => unsub());
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    });
+  });
+
+  // Publish an event from an external agent
+  app.post('/api/events/publish', async (c) => {
+    try {
+      const body = await c.req.json<{ type: string; data?: Record<string, unknown> }>();
+      if (!body.type) return c.json({ error: 'missing type' }, 400);
+      eventBus.send(body.type, body.data ?? {});
+      return c.json({ published: true });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  // Inject a message into the running agent session
+  app.post('/api/agent/inject', async (c) => {
+    if (!activeInjector) {
+      return c.json({ error: 'no_active_session' }, 404);
+    }
+    try {
+      const body = await c.req.json<{ message: string; priority?: 'now' | 'next' | 'later' }>();
+      if (!body.message) return c.json({ error: 'missing message' }, 400);
+      activeInjector.inject(body.message, body.priority ?? 'next');
+      return c.json({ injected: true });
+    } catch (err) {
+      return c.json({ error: (err as Error).message }, 400);
+    }
+  });
+
+  // -------------------------------------------------------------------------
   // Static file serving (built React app)
   // -------------------------------------------------------------------------
 
@@ -181,6 +251,11 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       }
     }
   }
+
+  // Forward agent events over WebSocket
+  const unsubEvents = eventBus.onAny((event) => {
+    broadcast({ type: 'agent:event', event });
+  });
 
   // -------------------------------------------------------------------------
   // File watching
@@ -248,6 +323,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   // Keep the process alive — wait for SIGINT/SIGTERM
   await new Promise<void>((resolve) => {
     const cleanup = () => {
+      unsubEvents();
       for (const w of watchers) w.close();
       wss.close();
       resolve();

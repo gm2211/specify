@@ -13,6 +13,7 @@ import { parseSpec, loadSpec, specToYaml } from '../spec/parser.js';
 import { lintRaw } from '../spec/lint.js';
 import { getAuthoringGuide } from '../spec/guide.js';
 import { COMMANDS } from '../cli/commands-manifest.js';
+import { eventBus } from '../agent/event-bus.js';
 
 export function registerTools(server: McpServer): void {
   // -------------------------------------------------------------------------
@@ -94,6 +95,99 @@ export function registerTools(server: McpServer): void {
         const spec = parseSpec(content);
         return {
           content: [{ type: 'text', text: JSON.stringify(spec, null, 2) }],
+        };
+      } catch (err) {
+        return {
+          content: [{ type: 'text', text: JSON.stringify({ error: (err as Error).message }) }],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // subscribe_events — Get the SSE endpoint URL for event streaming
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    'subscribe_events',
+    {
+      title: 'Subscribe to Events',
+      description:
+        'Returns the SSE endpoint URL for subscribing to real-time Specify events ' +
+        '(behavior progress, agent status, errors). Connect to this URL with an ' +
+        'EventSource to receive events as they happen.',
+      inputSchema: {
+        port: z.number().optional().describe('Review server port (default: 3456)'),
+      },
+    },
+    async ({ port }) => {
+      const p = port ?? 3456;
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            sse_url: `http://localhost:${p}/api/events/stream`,
+            inject_url: `http://localhost:${p}/api/agent/inject`,
+            publish_url: `http://localhost:${p}/api/events/publish`,
+          }),
+        }],
+      };
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // publish_event — Push an event to the Specify event bus
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    'publish_event',
+    {
+      title: 'Publish Event',
+      description:
+        'Publish a structured event to the Specify event bus. Other agents and the ' +
+        'review UI will receive this event in real-time.',
+      inputSchema: {
+        type: z.string().describe('Event type (e.g. "external:status", "ci:result")'),
+        data: z.string().optional().describe('JSON string of event data'),
+      },
+    },
+    async ({ type, data }) => {
+      const parsedData = data ? JSON.parse(data) : {};
+      eventBus.send(type, parsedData);
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ published: true, eventType: type }) }],
+      };
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // inject_message — Send a message into a running agent session
+  // -------------------------------------------------------------------------
+  server.registerTool(
+    'inject_message',
+    {
+      title: 'Inject Message',
+      description:
+        'Send a message into a running Specify agent session (verify, capture, etc.). ' +
+        'The message will be injected as a user turn in the agent conversation. ' +
+        'Requires the review server to be running with an active agent session.',
+      inputSchema: {
+        message: z.string().describe('The message to inject'),
+        priority: z.enum(['now', 'next', 'later']).optional().describe('Message priority (default: next)'),
+        port: z.number().optional().describe('Review server port (default: 3456)'),
+      },
+    },
+    async ({ message, priority, port }) => {
+      const p = port ?? 3456;
+      try {
+        const resp = await fetch(`http://localhost:${p}/api/agent/inject`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, priority: priority ?? 'next' }),
+        });
+        const result = await resp.json();
+        return {
+          content: [{ type: 'text', text: JSON.stringify(result) }],
+          ...(resp.ok ? {} : { isError: true }),
         };
       } catch (err) {
         return {
