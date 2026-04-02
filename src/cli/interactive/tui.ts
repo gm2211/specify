@@ -9,6 +9,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { Spec } from '../../spec/types.js';
 import { ExitCode } from '../exit-codes.js';
+import { eventBus } from '../../agent/event-bus.js';
 
 // ANSI escape codes
 const ESC = '\x1b[';
@@ -36,6 +37,12 @@ interface AgentResult {
   results: { id: string; pass: boolean; evidence: string }[];
 }
 
+interface LiveBehavior {
+  id: string;
+  status: 'passed' | 'failed' | 'skipped';
+  description?: string;
+}
+
 interface TuiState {
   spec: Spec | null;
   agentResult: AgentResult | null;
@@ -43,6 +50,8 @@ interface TuiState {
   running: boolean;
   lastVerifyPass?: boolean;
   lastError?: string;
+  /** Live behavior results streamed during agent run (before final result). */
+  liveBehaviors: LiveBehavior[];
 }
 
 export async function runTui(options: {
@@ -64,6 +73,7 @@ export async function runTui(options: {
     agentResult: null,
     selectedPage: 0,
     running: false,
+    liveBehaviors: [],
   };
 
   // Check if terminal supports raw mode
@@ -78,6 +88,21 @@ export async function runTui(options: {
 
   // Initial render
   render(state);
+
+  // Subscribe to live behavior events from the agent
+  eventBus.onAny((event) => {
+    if (event.type.startsWith('behavior:') && state.running) {
+      const data = event.data as { id: string; status?: string; description?: string };
+      if (data.id && data.status) {
+        state.liveBehaviors.push({
+          id: data.id,
+          status: data.status as LiveBehavior['status'],
+          description: data.description,
+        });
+        render(state);
+      }
+    }
+  });
 
   // Handle keyboard input
   process.stdin.on('data', async (key: string) => {
@@ -106,6 +131,7 @@ export async function runTui(options: {
         state.running = true;
         state.agentResult = null;
         state.lastError = undefined;
+        state.liveBehaviors = [];
         render(state);
         try {
           const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
@@ -173,6 +199,17 @@ function render(state: TuiState): void {
 
   if (state.running) {
     output += `\n${YELLOW} Running agent...${RESET}\n`;
+    // Show live behavior results as they stream in
+    if (state.liveBehaviors.length > 0) {
+      output += `\n`;
+      for (const b of state.liveBehaviors.slice(-(rows - 10))) {
+        const icon = b.status === 'passed' ? `${GREEN}[pass]${RESET}`
+          : b.status === 'failed' ? `${RED}[FAIL]${RESET}`
+          : `${DIM}[skip]${RESET}`;
+        const desc = b.description ? ` ${b.description.substring(0, 50)}` : '';
+        output += `  ${icon} ${b.id}${desc}\n`;
+      }
+    }
   } else if (state.agentResult) {
     // Agent verification results
     const ar = state.agentResult;

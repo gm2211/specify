@@ -8,7 +8,17 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { McpServerConfig, Options, JsonSchemaOutputFormat } from '@anthropic-ai/claude-agent-sdk';
+import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { eventBus } from './event-bus.js';
+import type { MessageInjector } from './message-injector.js';
+
+export interface BehaviorProgress {
+  id: string;
+  description?: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration_ms?: number;
+  rationale?: string;
+}
 
 export interface SdkRunnerOptions {
   task: 'capture' | 'verify' | 'replay' | 'compare' | 'augment';
@@ -24,6 +34,16 @@ export interface SdkRunnerOptions {
   specOutput?: string;
   specName?: string;
   headed?: boolean;
+  /** Enable verbose/debug output to stderr. */
+  debug?: boolean;
+  /** Max retry attempts for transient API errors (default: 3). */
+  maxRetries?: number;
+  /** Callback fired when a behavior result is detected during verify. */
+  onBehaviorProgress?: (progress: BehaviorProgress) => void;
+  /** Message injector for interleaved human/agent input. */
+  messageInjector?: MessageInjector;
+  /** Custom ask_user handler (for chat mode / WebSocket). */
+  askUserHandler?: (question: string) => Promise<string>;
 }
 
 export interface SdkRunnerResult {
@@ -38,6 +58,7 @@ export class AgentError extends Error {
   constructor(
     public readonly subtype: string,
     public readonly costUsd: number,
+    public readonly cause?: unknown,
   ) {
     super(`Agent ended with ${subtype}`);
     this.name = 'AgentError';
@@ -53,6 +74,40 @@ export function extractBool(output: unknown, field: string): boolean | null {
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// Error classification for retry logic
+// ---------------------------------------------------------------------------
+
+type ErrorClass = 'transient' | 'auth' | 'fatal';
+
+function classifyError(err: unknown): ErrorClass {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+
+  // Transient network/connection errors
+  const transientPatterns = [
+    'ebadf', 'econnreset', 'econnrefused', 'etimedout', 'epipe',
+    'socket hang up', 'network error', 'fetch failed',
+    'overloaded', '529', '500', '502', '503', '504', '429',
+  ];
+  if (transientPatterns.some(p => lower.includes(p))) return 'transient';
+
+  // Auth errors
+  if (lower.includes('401') || lower.includes('authentication') || lower.includes('unauthorized')) {
+    return 'auth';
+  }
+
+  return 'fatal';
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Browser session management
+// ---------------------------------------------------------------------------
+
 interface BrowserSession {
   browser: import('playwright').Browser;
   collector: import('./capture.js').CaptureCollector;
@@ -65,6 +120,7 @@ async function launchBrowserSession(
   captureOutputDir: string,
   headed: boolean,
   serverName: string,
+  askUserHandler?: (question: string) => Promise<string>,
 ): Promise<BrowserSession> {
   const { chromium } = await import('playwright');
   const { CaptureCollector } = await import('./capture.js');
@@ -101,7 +157,12 @@ async function launchBrowserSession(
   await page.goto(navigateUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
   await collector.screenshot(page, 'initial');
 
-  const mcpServer = createBrowserMcpServer(page, (name: string) => collector.screenshot(page, name), serverName);
+  const mcpServer = createBrowserMcpServer(
+    page,
+    (name: string) => collector.screenshot(page, name),
+    serverName,
+    askUserHandler,
+  );
 
   return { browser, collector, page, mcpServer };
 }
@@ -228,6 +289,139 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
   return undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Core agent execution with retry
+// ---------------------------------------------------------------------------
+
+interface QueryResult {
+  result: string;
+  costUsd: number;
+  structuredOutput?: unknown;
+  sessionId?: string;
+}
+
+async function executeQuery(
+  queryOptions: Options,
+  prompt: string | AsyncIterable<SDKUserMessage>,
+  opts: SdkRunnerOptions,
+): Promise<QueryResult> {
+  let finalResult = '';
+  let costUsd = 0;
+  let structuredOutput: unknown | undefined;
+  let sessionId: string | undefined;
+  let receivedFirstMessage = false;
+
+  const q = query({ prompt, options: queryOptions });
+
+  // Timeout for initial connection — if no message arrives in 30s, bail
+  const INIT_TIMEOUT_MS = 30_000;
+  let initTimer: ReturnType<typeof setTimeout> | undefined;
+  const initTimeout = new Promise<never>((_, reject) => {
+    initTimer = setTimeout(() => {
+      if (!receivedFirstMessage) {
+        reject(new Error(
+          'Timed out waiting for API connection (30s). ' +
+          'This usually means authentication failed. ' +
+          'Check your ANTHROPIC_API_KEY and try again.',
+        ));
+      }
+    }, INIT_TIMEOUT_MS);
+  });
+
+  try {
+    // Race: either we get messages or we time out
+    const iterator = q[Symbol.asyncIterator]();
+    while (true) {
+      const nextPromise = iterator.next();
+      const result = receivedFirstMessage
+        ? await nextPromise
+        : await Promise.race([nextPromise, initTimeout]);
+
+      if (result.done) break;
+      const message = result.value;
+
+      if (!receivedFirstMessage) {
+        receivedFirstMessage = true;
+        if (initTimer) clearTimeout(initTimer);
+        process.stderr.write('  Agent connected.\n');
+      }
+
+      if (message.type === 'auth_status') {
+        const authMsg = message as { isAuthenticating: boolean; output: string[]; error?: string };
+        if (authMsg.error) {
+          throw new Error(`Authentication failed: ${authMsg.error}`);
+        }
+        if (authMsg.isAuthenticating) {
+          process.stderr.write('  Authenticating...\n');
+        }
+        for (const line of authMsg.output) {
+          if (opts.debug) process.stderr.write(`  ${line}\n`);
+        }
+        continue;
+      }
+
+      if (message.type === 'system' && 'subtype' in message && message.subtype === 'init' && 'session_id' in message) {
+        sessionId = message.session_id as string;
+        eventBus.send('agent:started', { task: opts.task }, sessionId);
+      } else if (message.type === 'assistant') {
+        const textBlocks = message.message.content.filter((b: { type: string }) => b.type === 'text');
+        for (const block of textBlocks) {
+          const text = (block as { type: 'text'; text: string }).text;
+          if (opts.debug) {
+            process.stderr.write(text + '\n');
+          }
+          eventBus.send('agent:text', { text }, sessionId);
+        }
+        if (opts.debug) process.stderr.write('\n');
+      } else if (message.type === 'tool_use_summary' && 'summary' in message) {
+        const summary = (message as { summary: string }).summary;
+        if (opts.debug) {
+          process.stderr.write(`  \x1b[2m${summary}\x1b[0m\n`);
+        }
+        eventBus.send('agent:tool_use', { summary }, sessionId);
+      } else if (message.type === 'result') {
+      if (message.subtype === 'success') {
+        finalResult = message.result;
+        costUsd = message.total_cost_usd;
+        structuredOutput = message.structured_output;
+        eventBus.send('agent:completed', {
+          task: opts.task,
+          costUsd,
+          pass: extractBool(structuredOutput, 'pass'),
+        }, sessionId);
+
+        // Emit per-behavior progress from structured output
+        if (structuredOutput && typeof structuredOutput === 'object' && 'results' in structuredOutput) {
+          const results = (structuredOutput as { results: Array<{ id: string; description?: string; status: string; duration_ms?: number; rationale?: string }> }).results;
+          if (Array.isArray(results)) {
+            for (const r of results) {
+              const status = r.status as BehaviorProgress['status'];
+              const progress: BehaviorProgress = {
+                id: r.id,
+                description: r.description,
+                status,
+                duration_ms: r.duration_ms,
+                rationale: r.rationale,
+              };
+              eventBus.send(`behavior:${status}`, { ...progress }, sessionId);
+              opts.onBehaviorProgress?.(progress);
+            }
+          }
+        }
+      } else {
+        costUsd = message.total_cost_usd;
+        eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
+        throw new AgentError(message.subtype, costUsd);
+      }
+    }
+    }
+  } finally {
+    if (initTimer) clearTimeout(initTimer);
+  }
+
+  return { result: finalResult, costUsd, structuredOutput, sessionId };
+}
+
 export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunnerResult> {
   fs.mkdirSync(opts.outputDir, { recursive: true });
 
@@ -241,43 +435,37 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       if (!opts.remoteUrl || !opts.localUrl) {
         throw new Error('compare task requires both remoteUrl and localUrl');
       }
-      // Launch sequentially so a failure in the second doesn't leak the first.
-      // The first session is pushed to sessions[] immediately, so the finally
-      // block cleans it up if the second launch throws.
-      const remoteSession = await launchBrowserSession(opts.remoteUrl, path.join(opts.outputDir, 'remote'), !!opts.headed, 'remote');
+      process.stderr.write('  Launching browsers...\n');
+      const remoteSession = await launchBrowserSession(opts.remoteUrl, path.join(opts.outputDir, 'remote'), !!opts.headed, 'remote', opts.askUserHandler);
       sessions.push(remoteSession);
-      const localSession = await launchBrowserSession(opts.localUrl, path.join(opts.outputDir, 'local'), !!opts.headed, 'local');
+      const localSession = await launchBrowserSession(opts.localUrl, path.join(opts.outputDir, 'local'), !!opts.headed, 'local', opts.askUserHandler);
       sessions.push(localSession);
       mcpServers.remote = remoteSession.mcpServer;
       mcpServers.local = localSession.mcpServer;
       allowedBrowserTools.push(...browserToolNames('remote'), ...browserToolNames('local'));
     } else if (opts.url) {
       // Single browser session for capture/verify/replay
+      process.stderr.write('  Launching browser...\n');
       const session = await launchBrowserSession(
         opts.url,
         path.join(opts.outputDir, 'capture'),
         !!opts.headed,
         'browser',
+        opts.askUserHandler,
       );
       sessions.push(session);
       mcpServers.browser = session.mcpServer;
       allowedBrowserTools.push(...browserToolNames('browser'));
+      process.stderr.write('  Browser ready.\n');
     }
 
-    let finalResult = '';
-    let costUsd = 0;
-    let structuredOutput: unknown | undefined;
-    let sessionId: string | undefined;
-
-    const outputFormat = getOutputFormat(opts.task);
-
     // Sandbox: web-target sessions only get the tools they need.
-    // Bash, Edit, Glob, Grep are excluded to prevent prompt injection
-    // from target pages reaching the local filesystem or shell.
     const fileTools: string[] = ['Read'];
     if (opts.task === 'capture' || opts.task === 'compare' || opts.task === 'verify') {
       fileTools.push('Write');
     }
+
+    const outputFormat = getOutputFormat(opts.task);
 
     const queryOptions: Options = {
       model: 'claude-opus-4-6',
@@ -297,33 +485,59 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       ...(outputFormat ? { outputFormat } : {}),
     };
 
-    for await (const message of query({
-      prompt: opts.userPrompt,
-      options: queryOptions,
-    })) {
-      if (message.type === 'system' && 'subtype' in message && message.subtype === 'init' && 'session_id' in message) {
-        sessionId = message.session_id as string;
-      } else if (message.type === 'assistant') {
-        const textBlocks = message.message.content.filter((b: { type: string }) => b.type === 'text');
-        for (const block of textBlocks) {
-          process.stderr.write((block as { type: 'text'; text: string }).text + '\n');
+    // Use message injector if provided, otherwise plain string prompt
+    const prompt: string | AsyncIterable<SDKUserMessage> =
+      opts.messageInjector ?? opts.userPrompt;
+
+    process.stderr.write('  Connecting to API...\n');
+
+    // Retry loop for transient errors
+    const maxRetries = opts.maxRetries ?? 3;
+    let lastError: unknown;
+    let totalCostUsd = 0;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        if (attempt > 1) {
+          const delayMs = 1000 * Math.pow(2, attempt - 1); // 2s, 4s
+          process.stderr.write(`  Retrying in ${delayMs / 1000}s (attempt ${attempt}/${maxRetries})...\n`);
+          eventBus.send('agent:retry', { attempt, maxRetries, delayMs });
+          await sleep(delayMs);
         }
-        process.stderr.write('\n');
-      } else if (message.type === 'tool_use_summary' && 'summary' in message) {
-        process.stderr.write(`  \x1b[2m${(message as { summary: string }).summary}\x1b[0m\n`);
-      } else if (message.type === 'result') {
-        if (message.subtype === 'success') {
-          finalResult = message.result;
-          costUsd = message.total_cost_usd;
-          structuredOutput = message.structured_output;
+
+        const result = await executeQuery(queryOptions, prompt, opts);
+        result.costUsd += totalCostUsd;
+        return result;
+      } catch (err) {
+        lastError = err;
+        const errClass = classifyError(err);
+
+        if (err instanceof AgentError) {
+          totalCostUsd += err.costUsd;
+        }
+
+        if (errClass === 'fatal' || attempt === maxRetries) {
+          // Fatal error or exhausted retries — propagate
+          const msg = err instanceof Error ? err.message : String(err);
+          eventBus.send('agent:failed', { error: msg, errorClass: errClass, attempt });
+          if (err instanceof AgentError) {
+            throw new AgentError(err.subtype, totalCostUsd, err);
+          }
+          throw err;
+        }
+
+        if (errClass === 'auth') {
+          process.stderr.write(`  Auth error — check ANTHROPIC_API_KEY and retry.\n`);
+          eventBus.send('agent:auth_error', { attempt });
         } else {
-          costUsd = message.total_cost_usd;
-          throw new AgentError(message.subtype, costUsd);
+          const msg = err instanceof Error ? err.message : String(err);
+          process.stderr.write(`  Transient error: ${msg}\n`);
         }
       }
     }
 
-    return { result: finalResult, costUsd, structuredOutput, sessionId };
+    // Should not reach here, but just in case
+    throw lastError;
   } finally {
     for (const session of sessions) {
       session.collector.save();

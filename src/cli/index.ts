@@ -64,10 +64,11 @@ export { COMMANDS };
 // Argument parsing
 // ---------------------------------------------------------------------------
 
-function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: string[] } {
+function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: string[]; debug: boolean } {
   let outputFormat: OutputFormat | undefined;
   let fields: string[] | undefined;
   let quiet = false;
+  let debug = false;
   const remaining: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
@@ -80,6 +81,8 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
       fields = args[++i].split(',');
     } else if (arg === '--quiet' || arg === '-q') {
       quiet = true;
+    } else if (arg === '--debug' || arg === '--verbose' || arg === '-v') {
+      debug = true;
     } else {
       remaining.push(arg);
     }
@@ -92,6 +95,7 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
       quiet,
     },
     remaining,
+    debug,
   };
 }
 
@@ -291,7 +295,7 @@ function printCommandHelp(noun: string, args: string[]): void {
 // ---------------------------------------------------------------------------
 
 async function main(): Promise<void> {
-  const { ctx, remaining } = parseGlobalOptions(process.argv.slice(2));
+  const { ctx, remaining, debug } = parseGlobalOptions(process.argv.slice(2));
 
   // --version flag
   if (hasFlag(remaining, '--version') || hasFlag(remaining, '-V')) {
@@ -348,17 +352,25 @@ async function main(): Promise<void> {
             url: tuiUrl,
           });
         }
-      } else {
-        // Default: wizard — pass verb as action for direct path access
-        // e.g. `specify human verify` → action='verify'
-        //      `specify human verify stats` → action='verify', subAction='stats'
-        const wizardArgs = verb ? [verb, ...rest] : rest;
+      } else if (verb === 'wizard' || verb === 'init') {
+        // Legacy wizard mode — preserved for backward compatibility
+        const wizardArgs = rest;
         const { runWizard } = await import('./interactive/wizard.js');
         exitCode = await runWizard({
           fromCapture: getArg(wizardArgs, '--from-capture'),
-          action: verb && verb !== 'init' ? verb : undefined,
-          subAction: verb && rest.length > 0 && !rest[0].startsWith('-') ? rest[0] : undefined,
+          action: undefined,
+          subAction: undefined,
           spec: getArg(wizardArgs, '--spec'),
+        });
+      } else {
+        // Default: chat REPL — freeform text interface
+        // e.g. `specify human` or `specify human chat`
+        const chatArgs = verb && verb !== 'chat' ? [verb, ...rest] : rest;
+        const { runChat } = await import('./interactive/chat.js');
+        exitCode = await runChat({
+          spec: resolveSpecArg(chatArgs, ctx) || undefined,
+          url: getArg(chatArgs, '--url'),
+          debug,
         });
       }
 
@@ -424,6 +436,7 @@ async function main(): Promise<void> {
                   specOutput: specOutputPath,
                   specName: specName ?? new URL(url).hostname,
                   headed: hasFlag(captureArgs, '--headed'),
+                  debug,
                 });
                 process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
 
@@ -496,6 +509,7 @@ async function main(): Promise<void> {
             captureDir,
             outputDir,
             headed: hasFlag(replayArgs, '--headed'),
+            debug,
           });
           process.stderr.write(`Replay complete (cost: $${costUsd.toFixed(4)})\n`);
           process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
@@ -561,6 +575,7 @@ async function main(): Promise<void> {
               localUrl,
               outputDir,
               headed: hasFlag(compareArgs, '--headed'),
+              debug,
             });
             const { extractBool } = await import('../agent/sdk-runner.js');
             const match = extractBool(structuredOutput, 'match');
@@ -667,6 +682,11 @@ async function main(): Promise<void> {
           const targetUrl = url
             ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
           try {
+            const { writeBehaviorProgress } = await import('./output.js');
+            const areas = spec.areas?.length ?? 0;
+            const behaviors = spec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
+            process.stderr.write(`${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`);
+            process.stderr.write(`${c.dim('Launching agent...')}\n`);
             const { result, costUsd, structuredOutput } = await runSpecifyAgent({
               task: 'verify',
               systemPrompt: prompt,
@@ -677,6 +697,8 @@ async function main(): Promise<void> {
               spec: path.resolve(specPath),
               outputDir,
               headed: hasFlag(verifyArgs, '--headed'),
+              debug,
+              onBehaviorProgress: writeBehaviorProgress,
             });
             const { extractBool } = await import('../agent/sdk-runner.js');
             const pass = extractBool(structuredOutput, 'pass');
