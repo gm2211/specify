@@ -202,6 +202,7 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
   ${c.cyan('review')}            Launch the review webapp in a browser
   ${c.cyan('serve')}             Alias for review
+  ${c.cyan('ui [start|stop]')}   Interactive UI; add ${c.dim('start')}/${c.dim('stop')} to daemonize
   ${c.cyan('verify')}            Verify an implementation against a contract
   ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
@@ -629,6 +630,17 @@ async function main(): Promise<void> {
       // MCP server runs until client disconnects — don't exit
       return;
 
+    } else if (noun === 'daemon') {
+      // daemon runs forever until SIGINT/SIGTERM — do not exit
+      const daemonArgs = verb ? [verb, ...rest] : rest;
+      const { daemonCommand } = await import('./commands/daemon.js');
+      await daemonCommand({
+        port: getArg(daemonArgs, '--port'),
+        host: getArg(daemonArgs, '--host'),
+        noAuth: hasFlag(daemonArgs, '--no-auth'),
+      }, ctx);
+      return;
+
     } else if (noun === 'serve') {
       // serve is a standalone command (no verb) — recombine args
       const serveArgs = verb ? [verb, ...rest] : rest;
@@ -650,6 +662,27 @@ async function main(): Promise<void> {
         port: getArg(reviewArgs, '--port'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
       }, ctx);
+
+    } else if (noun === 'ui') {
+      // ui: `specify ui` (foreground), `specify ui start` (daemonize), `specify ui stop` (kill).
+      // `stop` needs no spec — skip auto-discovery to avoid noise.
+      const uiArgs = verb ? [verb, ...rest] : rest;
+      const uiMod = await import('./commands/ui.js');
+      if (verb === 'stop') {
+        exitCode = await uiMod.uiStop({ spec: '' }, ctx);
+      } else {
+        const uiOpts = {
+          spec: resolveSpecArg(uiArgs, ctx),
+          port: getArg(uiArgs, '--port'),
+          noOpen: hasFlag(uiArgs, '--no-open'),
+          agentReport: getArg(uiArgs, '--agent-report'),
+        };
+        if (verb === 'start') {
+          exitCode = await uiMod.uiStart(uiOpts, ctx);
+        } else {
+          exitCode = await uiMod.uiInteractive(uiOpts, ctx);
+        }
+      }
 
     } else if (noun === 'create') {
       const { create: createCmd } = await import('./commands/create.js');

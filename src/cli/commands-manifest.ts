@@ -124,6 +124,21 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [],
   },
   {
+    name: 'daemon',
+    description: 'Long-running Specify process with HTTP inbox. Idle = 0 tokens. Accepts tasks pushed by other agents.',
+    parameters: [
+      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 4100 },
+      { name: '--host', type: 'string', required: false, description: 'Host to bind to', default: '127.0.0.1' },
+      { name: '--no-auth', type: 'boolean', required: false, description: 'Disable bearer-token auth (trusted localhost only)' },
+    ],
+    examples: [
+      'specify daemon',
+      'specify daemon --port 4100',
+      'curl -H "Authorization: Bearer $(cat ~/.specify/daemon.token)" \\',
+      '     -d \'{"task":"freeform","prompt":"lint spec.yaml"}\' http://localhost:4100/inbox',
+    ],
+  },
+  {
     name: 'mcp',
     description: 'Start MCP (Model Context Protocol) server for LLM tool integration',
     parameters: [
@@ -189,6 +204,34 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
     ],
     examples: ['specify review --spec spec.yaml', 'specify review --spec spec.yaml --report gap-report.json', 'specify review --spec spec.yaml --agent-report verify-result.json'],
+  },
+  {
+    name: 'ui',
+    description: 'Run the review UI in the foreground (Ctrl+C to stop)',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
+      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
+      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
+      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
+    ],
+    examples: ['specify ui --spec spec.yaml'],
+  },
+  {
+    name: 'ui start',
+    description: 'Start the review UI in the background; writes .specify/ui.pid',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
+      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
+      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
+      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
+    ],
+    examples: ['specify ui start --spec spec.yaml'],
+  },
+  {
+    name: 'ui stop',
+    description: 'Stop the background review UI (reads .specify/ui.pid)',
+    parameters: [],
+    examples: ['specify ui stop'],
   },
   {
     name: 'create',
