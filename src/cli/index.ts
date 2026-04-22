@@ -638,6 +638,7 @@ async function main(): Promise<void> {
         port: getArg(daemonArgs, '--port'),
         host: getArg(daemonArgs, '--host'),
         noAuth: hasFlag(daemonArgs, '--no-auth'),
+        maxWorkers: getArg(daemonArgs, '--max-workers'),
       }, ctx);
       return;
 

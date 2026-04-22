@@ -23,6 +23,7 @@ import { eventBus } from '../agent/event-bus.js';
 import { MessageInjector } from '../agent/message-injector.js';
 import { runSpecifyAgent } from '../agent/sdk-runner.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
+import { getPool } from './worker-pool.js';
 import {
   getVerifyPrompt,
   getCapturePrompt,
@@ -103,8 +104,9 @@ export function __setRunnerForTesting(fn: RunnerFn): RunnerFn {
 export class InboxRegistry {
   private history = new Map<string, InboxMessage>();
   private sessions = new Map<string, PersistentSession>();
-  /** Guard so we only run one stateless SDK query at a time to avoid
-   * fighting over stdout/stderr and Playwright resources. */
+  /** Fallback serialization when no worker pool is configured (tests or
+   *  in-process-only deployments). When a pool is configured, the pool
+   *  enforces concurrency instead. */
   private statelessInFlight = false;
   private statelessQueue: InboxMessage[] = [];
 
@@ -170,6 +172,14 @@ export class InboxRegistry {
   // ---------------------------------------------------------------------------
 
   private async dispatchStateless(message: InboxMessage): Promise<void> {
+    const pool = getPool();
+    if (pool) {
+      // Worker pool enforces its own concurrency (maxConcurrent). Queuing
+      // and slot management live there.
+      this.runStatelessViaPool(message).catch((err) => this.fail(message, err));
+      return;
+    }
+    // Fallback: in-process, serialized (tests + __setRunnerForTesting path).
     this.statelessQueue.push(message);
     if (this.statelessInFlight) return;
     this.statelessInFlight = true;
@@ -180,6 +190,27 @@ export class InboxRegistry {
       }
     } finally {
       this.statelessInFlight = false;
+    }
+  }
+
+  private async runStatelessViaPool(message: InboxMessage): Promise<void> {
+    message.status = 'running';
+    eventBus.send('inbox:running', { id: message.id }, message.id);
+    try {
+      const runnerOpts = this.buildRunnerOptions(message);
+      message.outputDir = runnerOpts.outputDir;
+      const pool = getPool()!;
+      const result = await pool.dispatch(message.id, runnerOpts);
+      message.status = 'completed';
+      message.result = result;
+      message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
+      eventBus.send('inbox:completed', {
+        id: message.id,
+        costUsd: result.costUsd,
+        resultPath: message.resultPath,
+      }, message.id);
+    } catch (err) {
+      this.fail(message, err);
     }
   }
 

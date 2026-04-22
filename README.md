@@ -149,8 +149,22 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 **Dispatch modes:**
 - `stateless` (default) — fresh SDK run per message, bounded cost.
+  Concurrent jobs run in forked worker processes up to `--max-workers`
+  (default 2), each with its own Playwright/Chromium.
 - `attach` — injects into a persistent SDK session keyed by `session`.
-  Holds context across messages; idle still uses 0 tokens.
+  Holds context across messages; idle still uses 0 tokens. Always
+  in-process, serial per session.
+
+**Live inspector:** `GET /` on the daemon serves a zero-build HTML page
+that streams agent events, lists recent messages, and shows structured
+results. Prompts for the token on first load. Useful for watching
+verify runs in real time from a browser tab.
+
+**Learned memory:** each verify run reads/writes `.specify/memory/<spec>/<target>.json`
+via `memory_record` + `memory_list` tools. Playbooks, quirks, and
+observations are injected into the system prompt on subsequent runs,
+scoped strictly to the same (spec, target) pair so staging and prod
+never cross-contaminate.
 
 **MCP bridge:** `specify mcp` exposes `daemon_verify`, `daemon_submit`,
 `daemon_status` tools so any LLM client (Claude Code with `--channels`,

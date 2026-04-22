@@ -11,6 +11,9 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
+import { loadMemory, memoryPath, renderMemoryPrompt, targetKey } from './memory.js';
+import { createMemoryMcpServer } from './memory-mcp.js';
+import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
   id: string;
@@ -216,6 +219,20 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                       content: { type: 'string' },
                     },
                     required: ['type', 'label', 'content'],
+                  },
+                },
+                action_trace: {
+                  type: 'array',
+                  description: 'Ordered, human-readable log of the steps the agent performed to verify this behavior. Each entry describes one action (navigate, click, observe, assert, ...) and may reference a screenshot file captured during that step.',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      type: { type: 'string', enum: ['navigation', 'click', 'fill', 'screenshot', 'observation', 'assertion', 'wait', 'other'] },
+                      description: { type: 'string', description: 'One-sentence plain-language description of the step' },
+                      screenshot: { type: 'string', description: 'Absolute path to a screenshot captured at this step, if any' },
+                      timestamp: { type: 'string', description: 'ISO timestamp, optional' },
+                    },
+                    required: ['type', 'description'],
                   },
                 },
                 rationale: { type: 'string' },
@@ -465,16 +482,52 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       fileTools.push('Write');
     }
 
+    // Learned memory: only verify tasks participate. Read the store and
+    // prepend the summary to the system prompt so the agent starts with
+    // prior knowledge; expose memory_record + memory_list tools so the
+    // agent can write back durable lessons.
+    let systemPrompt = opts.systemPrompt;
+    const memoryTools: string[] = [];
+    if (opts.task === 'verify' && opts.spec) {
+      try {
+        const { loadSpec } = await import('../spec/parser.js');
+        const spec = loadSpec(opts.spec);
+        const target = {
+          type: spec.target.type as 'web' | 'api' | 'cli',
+          url: (spec.target as { url?: string }).url,
+          binary: (spec.target as { binary?: string }).binary,
+        };
+        const memFile = memoryPath(opts.spec, spec.name, target);
+        const memory = loadMemory(memFile);
+        const memoryIntro = renderMemoryPrompt(memory);
+        if (memoryIntro) {
+          systemPrompt = memoryIntro + '\n\n' + systemPrompt;
+        }
+        const memoryServer = createMemoryMcpServer({
+          filePath: memFile,
+          runId: `run_${randomUUID().slice(0, 8)}`,
+          specId: spec.name,
+          targetKey: targetKey(target),
+        });
+        mcpServers.memory = memoryServer;
+        memoryTools.push('mcp__memory__memory_record', 'mcp__memory__memory_list');
+      } catch (err) {
+        // Non-fatal: memory is a learning aid, not a correctness requirement.
+        process.stderr.write(`  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
+
     const outputFormat = getOutputFormat(opts.task);
 
     const queryOptions: Options = {
       model: 'claude-opus-4-6',
-      systemPrompt: opts.systemPrompt,
+      systemPrompt,
       thinking: { type: 'adaptive' },
       mcpServers,
       allowedTools: [
         ...fileTools,
         ...allowedBrowserTools,
+        ...memoryTools,
       ],
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,

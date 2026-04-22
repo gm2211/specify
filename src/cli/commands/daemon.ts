@@ -13,6 +13,7 @@ export interface DaemonCliOptions {
   port?: string;
   host?: string;
   noAuth?: boolean;
+  maxWorkers?: string;
 }
 
 export async function daemonCommand(
@@ -24,10 +25,16 @@ export async function daemonCommand(
     process.stdout.write(JSON.stringify({ error: 'invalid_port', port: opts.port }) + '\n');
     return ExitCode.PARSE_ERROR;
   }
+  const maxWorkers = opts.maxWorkers ? parseInt(opts.maxWorkers, 10) : 2;
+  if (!Number.isFinite(maxWorkers) || maxWorkers <= 0) {
+    process.stdout.write(JSON.stringify({ error: 'invalid_max_workers', value: opts.maxWorkers }) + '\n');
+    return ExitCode.PARSE_ERROR;
+  }
   await startDaemonServer({
     port,
     host: opts.host ?? '127.0.0.1',
     noAuth: !!opts.noAuth,
+    maxWorkers,
   });
   return ExitCode.SUCCESS;
 }

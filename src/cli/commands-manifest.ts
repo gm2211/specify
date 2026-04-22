@@ -130,10 +130,11 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 4100 },
       { name: '--host', type: 'string', required: false, description: 'Host to bind to', default: '127.0.0.1' },
       { name: '--no-auth', type: 'boolean', required: false, description: 'Disable bearer-token auth (trusted localhost only)' },
+      { name: '--max-workers', type: 'number', required: false, description: 'Max concurrent forked worker processes for stateless jobs', default: 2 },
     ],
     examples: [
       'specify daemon',
-      'specify daemon --port 4100',
+      'specify daemon --port 4100 --max-workers 4',
       'curl -H "Authorization: Bearer $(cat ~/.specify/daemon.token)" \\',
       '     -d \'{"task":"freeform","prompt":"lint spec.yaml"}\' http://localhost:4100/inbox',
     ],

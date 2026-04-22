@@ -117,6 +117,19 @@ export function getVerifyPrompt(specYaml: string): string {
   return `You are Specify, a verification agent. You have a behavioral spec (v2 format)
 and your job is to verify every behavior in the spec against the live system.
 
+## Learned memory
+You have access to a per-(spec, target) memory store via the \`memory_record\`
+and \`memory_list\` tools. If any "Prior knowledge about this spec + target"
+appears earlier in this prompt, treat it as a hint — not ground truth.
+
+- Use \`memory_list\` early in a run to see what's stored.
+- Use \`memory_record\` sparingly to persist:
+  * **playbook** — a concrete procedure that works ("to verify login: fill #email, #password, click [type=submit], wait for /dashboard").
+  * **quirk** — a known weirdness or bug worth recording so future runs don't get stuck ("#save fires before the POST settles; wait 2s"). Always include a \`suggested_fix\` and \`severity\`.
+  * **observation** — rarely. Durable facts only.
+- If you find a stored row is wrong, call \`memory_record\` with \`contradicts_id\` so it gets demoted.
+- **File-and-continue**: when you hit a quirk, record it and keep going with the rest of the verification. Do not block the run on a known bug unless it makes further verification impossible.
+
 ## The Spec
 
 ${specYaml}
@@ -139,7 +152,25 @@ For each behavior, produce a result with:
 - **status**: "passed", "failed", or "skipped"
 - **method**: brief description of how you verified it
 - **evidence**: what you observed (text, screenshots taken, etc.)
+- **action_trace**: ordered, step-by-step log of what you did (see below)
 - **rationale**: why you judged it passed or failed
+
+### Action trace — the QA playback
+For every behavior, fill \`action_trace\` with an ordered list of the steps you
+actually performed. This is the playback a human will read to audit your work,
+so write it like a QA engineer narrating their test. Each entry has:
+- **type**: one of navigation | click | fill | screenshot | observation | assertion | wait | other
+- **description**: one sentence in your own words, e.g. "Clicked the Start button",
+  "Observed countdown showing 37 seconds", "Waited 37 seconds for countdown to end"
+- **screenshot**: (optional) the absolute file path returned by any browser tool
+  that took a screenshot. Copy it verbatim from the tool result.
+
+Take screenshots liberally — before and after each significant interaction, and
+especially to prove assertions ("countdown was at 37" → screenshot; "countdown
+reached 0" → screenshot). The reader wants to SEE what you saw.
+
+Keep the trace focused on the behavior being verified — don't include steps
+that were only setup or navigation from an unrelated behavior.
 
 ## Asking the User
 If you need credentials or other information to access the system under test,
@@ -158,6 +189,12 @@ Your final output MUST be a JSON object with this structure:
       "status": "passed",
       "method": "Navigated to /login, filled form, submitted",
       "evidence": [{ "type": "text", "label": "observation", "content": "..." }],
+      "action_trace": [
+        { "type": "navigation", "description": "Navigated to /login", "screenshot": "/abs/path/to/.specify/verify/capture/screenshots/001-login.png" },
+        { "type": "fill", "description": "Filled email input with test@example.com" },
+        { "type": "click", "description": "Clicked Submit button", "screenshot": "/abs/path/to/.specify/verify/capture/screenshots/002-after-submit.png" },
+        { "type": "observation", "description": "Redirected to /dashboard and welcome banner is visible" }
+      ],
       "rationale": "Login form present with email and password fields"
     }
   ],

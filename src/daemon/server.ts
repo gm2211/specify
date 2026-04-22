@@ -26,12 +26,17 @@ import { randomBytes } from 'node:crypto';
 import { eventBus } from '../agent/event-bus.js';
 import { inbox } from './inbox.js';
 import type { InboxRequest } from './inbox.js';
+import { configurePool } from './worker-pool.js';
+import { renderInspectorHtml } from './inspector.js';
 
 export interface DaemonOptions {
   port: number;
   host: string;
   /** Skip token auth entirely (for trusted-localhost usage). */
   noAuth?: boolean;
+  /** Max concurrent stateless jobs (each in its own forked process).
+   *  Default 2 — keeps memory bounded while still parallelizing verifies. */
+  maxWorkers?: number;
 }
 
 const TOKEN_DIR = path.join(os.homedir(), '.specify');
@@ -57,6 +62,10 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   const { serve } = await import('@hono/node-server');
 
   const token = opts.noAuth ? '' : resolveToken();
+  // maxWorkers=0 disables the worker pool (useful for tests that stub the
+  // SDK runner via __setRunnerForTesting — they need the in-process path).
+  const maxWorkers = opts.maxWorkers ?? 2;
+  if (maxWorkers > 0) configurePool(maxWorkers);
   const app = new Hono();
 
   // ---------------------------------------------------------------------------
@@ -65,10 +74,17 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   app.use('*', async (c, next) => {
     if (opts.noAuth) return next();
     const url = new URL(c.req.url);
-    if (url.pathname === '/health') return next();
+    // Unauthenticated: /health (liveness) and / (inspector HTML page; it
+    // authenticates via query-param token when it opens its SSE stream).
+    if (url.pathname === '/health' || url.pathname === '/') return next();
+    // Accept either `Authorization: Bearer <token>` or `?token=<token>`.
+    // EventSource in browsers can't set custom headers, so the query form
+    // is what the inspector UI uses when subscribing to SSE streams.
     const header = c.req.header('authorization') ?? '';
     const m = /^Bearer\s+(.+)$/i.exec(header);
-    if (!m || m[1].trim() !== token) {
+    const bearer = m ? m[1].trim() : '';
+    const query = url.searchParams.get('token') ?? '';
+    if (bearer !== token && query !== token) {
       return c.json({ error: 'unauthorized' }, 401);
     }
     return next();
@@ -83,8 +99,14 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
       ok: true,
       uptime_s: Math.round(process.uptime()),
       sessions: inbox.sessionIds().length,
+      maxWorkers,
     }),
   );
+
+  // Landing page: live inspector for agent events, messages, sessions.
+  app.get('/', (c) => {
+    return c.html(renderInspectorHtml({ authRequired: !opts.noAuth }));
+  });
 
   app.post('/inbox', async (c) => {
     let body: Partial<InboxRequest>;

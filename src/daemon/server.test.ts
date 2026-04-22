@@ -58,7 +58,7 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   process.env.SPECIFY_INBOX_TOKEN = 'test-token-123';
   // Start daemon in background; it resolves only when SIGINT fires, so we
   // fork it as a promise and close via SIGTERM at the end.
-  const serverPromise = startDaemonServer({ port, host: '127.0.0.1' });
+  const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
     try { await serverPromise; } catch { /* ignore */ }
