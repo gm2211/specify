@@ -8,7 +8,7 @@ interface SidebarProps {
 }
 
 function getAreaStatus(area: Area, results: VerifyResults | null): 'passed' | 'failed' | 'untested' {
-  if (!results) return 'untested';
+  if (!results?.results) return 'untested';
   const behaviorIds = new Set(area.behaviors.map((b) => b.id));
   const areaResults = results.results.filter((r) => behaviorIds.has(r.id));
   if (areaResults.length === 0) return 'untested';

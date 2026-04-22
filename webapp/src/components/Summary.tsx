@@ -7,9 +7,9 @@ interface SummaryProps {
 
 export default function Summary({ spec, results }: SummaryProps) {
   const total = spec.areas.reduce((sum, a) => sum + a.behaviors.length, 0);
-  const passed = results?.summary.passed ?? 0;
-  const failed = results?.summary.failed ?? 0;
-  const skipped = results?.summary.skipped ?? 0;
+  const passed = results?.summary?.passed ?? 0;
+  const failed = results?.summary?.failed ?? 0;
+  const skipped = results?.summary?.skipped ?? 0;
   const untested = total - passed - failed - skipped;
   const coverage = total > 0 ? Math.round(((passed + failed) / total) * 100) : 0;
 

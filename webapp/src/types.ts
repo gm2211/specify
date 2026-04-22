@@ -32,12 +32,20 @@ export interface Spec {
   areas: Area[];
 }
 
+export interface ActionTraceEntry {
+  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  description: string;
+  screenshot?: string;
+  timestamp?: string;
+}
+
 export interface BehaviorResult {
   id: string;
   description: string;
   status: 'passed' | 'failed' | 'skipped';
   method?: string;
   evidence?: Evidence[];
+  action_trace?: ActionTraceEntry[];
   rationale?: string;
 }
 

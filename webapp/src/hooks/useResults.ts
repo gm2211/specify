@@ -9,7 +9,15 @@ export function useResults() {
   const refresh = useCallback(() => {
     setLoading(true);
     fetchResults()
-      .then(setResults)
+      .then((r) => {
+        // Server returns {} when no verify-result.json exists yet. Normalize
+        // to null so consumers can assume a result has shape {summary, results}.
+        if (!r || !(r as VerifyResults).summary || !(r as VerifyResults).results) {
+          setResults(null);
+        } else {
+          setResults(r);
+        }
+      })
       .catch(() => setResults(null))
       .finally(() => setLoading(false));
   }, []);

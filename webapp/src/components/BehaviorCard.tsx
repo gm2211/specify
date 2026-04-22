@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Behavior, BehaviorResult } from '../types';
+import ActionTimeline from './ActionTimeline';
 
 interface BehaviorCardProps {
   areaId: string;
@@ -20,8 +21,10 @@ export default function BehaviorCard({
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(behavior.description);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [traceOpen, setTraceOpen] = useState(true);
 
   const status = result?.status ?? 'untested';
+  const trace = result?.action_trace ?? [];
 
   const handleSave = () => {
     if (editText.trim() && editText !== behavior.description) {
@@ -72,8 +75,35 @@ export default function BehaviorCard({
         </div>
       )}
 
+      {result?.method && (
+        <p className="behavior-method">
+          <span className="behavior-method-label">Method</span> {result.method}
+        </p>
+      )}
+
       {result?.rationale && (
         <p className="behavior-rationale">{result.rationale}</p>
+      )}
+
+      {trace.length > 0 && (
+        <div className="behavior-trace">
+          <button
+            className="evidence-toggle"
+            onClick={() => setTraceOpen(!traceOpen)}
+          >
+            <svg
+              className={`evidence-chevron ${traceOpen ? 'evidence-chevron--open' : ''}`}
+              viewBox="0 0 16 16"
+              width="12"
+              height="12"
+              fill="currentColor"
+            >
+              <path d="M6.22 3.22a.75.75 0 0 1 1.06 0l4.25 4.25a.75.75 0 0 1 0 1.06l-4.25 4.25a.751.751 0 0 1-1.042-.018.751.751 0 0 1-.018-1.042L9.94 8 6.22 4.28a.75.75 0 0 1 0-1.06Z" />
+            </svg>
+            QA trace ({trace.length} step{trace.length === 1 ? '' : 's'})
+          </button>
+          {traceOpen && <ActionTimeline trace={trace} />}
+        </div>
       )}
 
       {result?.evidence && result.evidence.length > 0 && (
@@ -120,6 +150,8 @@ export default function BehaviorCard({
               <span className="spinner" />
               Verifying...
             </>
+          ) : result ? (
+            'Re-verify'
           ) : (
             'Verify'
           )}

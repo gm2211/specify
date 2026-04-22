@@ -4,16 +4,20 @@ import { createWebSocket } from './api';
 import { useSpec } from './hooks/useSpec';
 import { useResults } from './hooks/useResults';
 import { useVerify } from './hooks/useVerify';
+import { useNarrative } from './hooks/useNarrative';
 import Layout from './components/Layout';
 import Sidebar from './components/Sidebar';
 import Summary from './components/Summary';
 import SearchBar from './components/SearchBar';
 import AreaCard from './components/AreaCard';
+import NarrativePanel from './components/NarrativePanel';
+import ActivityStream from './components/ActivityStream';
 
 export default function App() {
   const { spec, loading: specLoading, error: specError, refresh: refreshSpec } = useSpec();
   const { results, refresh: refreshResults } = useResults();
-  const { verifying, verifyBehavior, verifyAll } = useVerify();
+  const { verifying, verifyBehavior, verifyAll, lastError: verifyError } = useVerify();
+  const { narrative, refresh: refreshNarrative } = useNarrative();
 
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -27,8 +31,16 @@ export default function App() {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        if (msg.type === 'spec-updated') refreshSpec();
-        if (msg.type === 'results-updated' || msg.type === 'verify-complete') refreshResults();
+        if (msg.type === 'spec:updated' || msg.type === 'spec-updated') {
+          refreshSpec();
+          refreshNarrative();
+        }
+        if (msg.type === 'results:updated' || msg.type === 'results-updated' || msg.type === 'verify-complete') {
+          refreshResults();
+        }
+        if (msg.type === 'agent:event' && msg.event?.type === 'verify:completed') {
+          refreshResults();
+        }
       } catch {
         // ignore non-JSON messages
       }
@@ -40,7 +52,7 @@ export default function App() {
       }, 3000);
     };
     return () => ws.close();
-  }, [refreshSpec, refreshResults]);
+  }, [refreshSpec, refreshResults, refreshNarrative]);
 
   // Expand all areas by default when spec loads
   useEffect(() => {
@@ -150,6 +162,13 @@ export default function App() {
 
   return (
     <Layout header={header} sidebar={sidebar}>
+      <NarrativePanel description={spec.description} narrative={narrative} />
+      <ActivityStream active={verifying.size > 0} />
+      {verifyError && (
+        <div className="verify-error" role="alert">
+          <strong>Verify error:</strong> {verifyError}
+        </div>
+      )}
       <SearchBar
         searchText={searchText}
         onSearchChange={setSearchText}

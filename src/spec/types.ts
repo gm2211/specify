@@ -130,6 +130,12 @@ export interface BehaviorResult {
   /** How the agent verified this behavior. */
   method?: string;
   evidence?: Evidence[];
+  /**
+   * Ordered, human-readable log of what the agent did to verify this behavior.
+   * Each entry describes one step (navigate, click, observe, assert, …) and may
+   * reference a screenshot file captured at that moment.
+   */
+  action_trace?: ActionTraceEntry[];
   rationale?: string;
   duration_ms?: number;
 }
@@ -138,6 +144,26 @@ export interface Evidence {
   type: 'screenshot' | 'text' | 'network_log' | 'command_output' | 'file';
   label: string;
   content: string;
+}
+
+export interface ActionTraceEntry {
+  /**
+   * What kind of step this is. The agent picks the closest match.
+   */
+  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  /**
+   * One-sentence description of the step in the agent's own words, e.g.
+   * "Clicked the Start button" or "Observed countdown at 37 seconds".
+   */
+  description: string;
+  /**
+   * Path to a screenshot captured during this step, if any. Absolute paths
+   * are accepted; the server serves them by basename under
+   * `/api/screenshot/:name`.
+   */
+  screenshot?: string;
+  /** ISO timestamp, optional. */
+  timestamp?: string;
 }
 
 // ---------------------------------------------------------------------------

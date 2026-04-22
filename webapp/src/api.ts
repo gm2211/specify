@@ -19,7 +19,8 @@ export async function fetchNarrative(): Promise<string | null> {
   const res = await fetch(`${BASE}/api/narrative`);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`Failed to fetch narrative: ${res.status}`);
-  return res.text();
+  const body = await res.json();
+  return typeof body?.content === 'string' && body.content.length > 0 ? body.content : null;
 }
 
 export async function saveSpec(yaml: string): Promise<void> {
@@ -31,12 +32,20 @@ export async function saveSpec(yaml: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to save spec: ${res.status}`);
 }
 
-export async function triggerVerify(areaId?: string, behaviorId?: string): Promise<void> {
+export async function triggerVerify(areaId?: string, behaviorId?: string): Promise<{ started: boolean; busy?: boolean }> {
   const url = areaId && behaviorId
     ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
     : `${BASE}/api/verify`;
   const res = await fetch(url, { method: 'POST' });
+  if (res.status === 409) return { started: false, busy: true };
   if (!res.ok) throw new Error(`Failed to trigger verify: ${res.status}`);
+  return { started: true };
+}
+
+export async function fetchVerifyStatus(): Promise<{ inFlight: boolean }> {
+  const res = await fetch(`${BASE}/api/verify/status`);
+  if (!res.ok) return { inFlight: false };
+  return res.json();
 }
 
 export function createWebSocket(): WebSocket {

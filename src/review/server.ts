@@ -22,6 +22,126 @@ export function setActiveInjector(injector: MessageInjector | null): void {
   activeInjector = injector;
 }
 
+/** Guard so we don't run two verify agents at once from the server. */
+let verifyInFlight = false;
+
+async function runVerifyInBackground(
+  specPath: string,
+  resultsDir: string,
+  scope?: { areaId: string; behaviorId: string },
+): Promise<void> {
+  if (verifyInFlight) {
+    process.stderr.write('Verify already running — ignoring new request.\n');
+    return;
+  }
+  verifyInFlight = true;
+  try {
+    eventBus.send('verify:started', { scope: scope ?? null });
+    const { loadSpec, specToYaml } = await import('../spec/parser.js');
+    const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+    const { getVerifyPrompt } = await import('../agent/prompts.js');
+
+    const spec = loadSpec(specPath);
+
+    // Scope: narrow the spec to a single behavior if requested.
+    const scopedSpec = scope
+      ? (() => {
+          const area = spec.areas.find((a) => a.id === scope.areaId);
+          const behavior = area?.behaviors.find((b) => b.id === scope.behaviorId);
+          if (!area || !behavior) {
+            throw new Error(`Behavior ${scope.areaId}/${scope.behaviorId} not found in spec`);
+          }
+          return { ...spec, areas: [{ ...area, behaviors: [behavior] }] };
+        })()
+      : spec;
+
+    const prompt = getVerifyPrompt(specToYaml(scopedSpec));
+    const targetUrl =
+      spec.target.type === 'web' || spec.target.type === 'api'
+        ? (spec.target as { url: string }).url
+        : undefined;
+
+    const { structuredOutput } = await runSpecifyAgent({
+      task: 'verify',
+      systemPrompt: prompt,
+      userPrompt: scope
+        ? `Verify only behavior "${scope.areaId}/${scope.behaviorId}" against the spec.`
+        : `Verify the target against the behavioral spec.`,
+      ...(targetUrl ? { url: targetUrl } : {}),
+      spec: specPath,
+      outputDir: resultsDir,
+    });
+
+    // Merge: scoped runs update just the targeted behavior in the existing report.
+    const reportPath = path.join(resultsDir, 'verify-result.json');
+    const existing = fs.existsSync(reportPath)
+      ? (() => {
+          try {
+            const raw = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+            return raw && typeof raw === 'object' && 'structuredOutput' in raw
+              ? (raw as { structuredOutput: unknown }).structuredOutput
+              : raw;
+          } catch {
+            return null;
+          }
+        })()
+      : null;
+
+    const merged =
+      scope && existing && typeof existing === 'object' && 'results' in existing
+        ? mergeScopedResult(existing as Record<string, unknown>, structuredOutput, scope)
+        : structuredOutput;
+
+    fs.mkdirSync(resultsDir, { recursive: true });
+    fs.writeFileSync(reportPath, JSON.stringify({ structuredOutput: merged }, null, 2), 'utf-8');
+    eventBus.send('verify:completed', { scope: scope ?? null });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Strip ANSI escape sequences that Playwright (and others) emit in error
+    // messages — they look like garbage in HTML.
+    const clean = msg.replace(/\x1b\[[0-9;]*m/g, '');
+    eventBus.send('verify:failed', { scope: scope ?? null, error: clean });
+    throw err;
+  } finally {
+    verifyInFlight = false;
+  }
+}
+
+/**
+ * Merge a scoped (single-behavior) verify result into an existing full report.
+ * Replaces the matching result and recomputes the summary.
+ */
+function mergeScopedResult(
+  existing: Record<string, unknown>,
+  fresh: unknown,
+  scope: { areaId: string; behaviorId: string },
+): Record<string, unknown> {
+  const freshResults = Array.isArray((fresh as { results?: unknown })?.results)
+    ? ((fresh as { results: Array<Record<string, unknown>> }).results)
+    : [];
+  const targetId = `${scope.areaId}/${scope.behaviorId}`;
+  const incoming = freshResults.find((r) => r.id === targetId);
+  if (!incoming) return existing;
+
+  const prevResults = Array.isArray(existing.results)
+    ? (existing.results as Array<Record<string, unknown>>)
+    : [];
+  const nextResults = prevResults.some((r) => r.id === targetId)
+    ? prevResults.map((r) => (r.id === targetId ? incoming : r))
+    : [...prevResults, incoming];
+
+  const passed = nextResults.filter((r) => r.status === 'passed').length;
+  const failed = nextResults.filter((r) => r.status === 'failed').length;
+  const skipped = nextResults.filter((r) => r.status === 'skipped').length;
+
+  return {
+    ...existing,
+    results: nextResults,
+    summary: { total: nextResults.length, passed, failed, skipped },
+    pass: failed === 0 && nextResults.length > 0,
+  };
+}
+
 export interface ServeOptions {
   specPath: string;
   port: number;
@@ -73,11 +193,35 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       if (!fs.existsSync(reportPath)) {
         return c.json({});
       }
-      const data = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-      return c.json(data);
+      const raw = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
+      // CLI writes { structuredOutput: {...} }; unwrap for the webapp.
+      const data = raw && typeof raw === 'object' && 'structuredOutput' in raw
+        ? (raw as { structuredOutput: unknown }).structuredOutput
+        : raw;
+      return c.json(data ?? {});
     } catch {
       return c.json({});
     }
+  });
+
+  // Serve screenshot files captured during verify runs. The agent stores
+  // absolute paths in action_trace; the client passes the basename and we
+  // look it up under the known screenshots directory.
+  const screenshotsDir = path.join(resultsDir, 'capture', 'screenshots');
+  app.get('/api/screenshot/:name', async (c) => {
+    const name = c.req.param('name');
+    // Security: only allow plain filenames, no traversal.
+    if (!/^[a-zA-Z0-9._-]+\.png$/.test(name)) {
+      return c.text('Bad request', 400);
+    }
+    const filePath = path.join(screenshotsDir, name);
+    if (!filePath.startsWith(screenshotsDir) || !fs.existsSync(filePath)) {
+      return c.text('Not found', 404);
+    }
+    const content = fs.readFileSync(filePath);
+    return new Response(content, {
+      headers: { 'Content-Type': 'image/png', 'Cache-Control': 'no-cache' },
+    });
   });
 
   app.get('/api/narrative', async (c) => {
@@ -113,14 +257,24 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     }
   });
 
+  app.get('/api/verify/status', async (c) => {
+    return c.json({ inFlight: verifyInFlight });
+  });
+
   app.post('/api/verify', async (c) => {
-    // Placeholder — full verification not yet wired
+    if (verifyInFlight) return c.json({ error: 'busy' }, 409);
+    runVerifyInBackground(resolvedSpec, resultsDir).catch((err) => {
+      process.stderr.write(`Verify failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    });
     return c.json({ started: true });
   });
 
   app.post('/api/verify/:areaId/:behaviorId', async (c) => {
-    // Placeholder — single behavior verification not yet wired
+    if (verifyInFlight) return c.json({ error: 'busy' }, 409);
     const { areaId, behaviorId } = c.req.param();
+    runVerifyInBackground(resolvedSpec, resultsDir, { areaId, behaviorId }).catch((err) => {
+      process.stderr.write(`Scoped verify failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    });
     return c.json({ started: true, areaId, behaviorId });
   });
 
