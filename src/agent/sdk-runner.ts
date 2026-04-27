@@ -14,6 +14,7 @@ import type { MessageInjector } from './message-injector.js';
 import { defaultMemoryProvider, type MemoryScope } from './memory-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
 import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
+import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
@@ -506,6 +507,23 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // agent can write back durable lessons.
     let systemPrompt = opts.systemPrompt;
     const memoryTools: string[] = [];
+
+    // Layered context (user / project / per-spec observations) is loaded for
+    // every task — not just verify — since project-level guidance and user
+    // preferences apply to capture/replay/compare too.
+    if (opts.spec) {
+      try {
+        const layered = renderLayeredPrompt(loadLayeredContext(opts.spec));
+        if (layered) systemPrompt = layered + '\n\n' + systemPrompt;
+      } catch (err) {
+        process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
+
+    // Learned memory: only verify tasks participate. Read the store and
+    // prepend the summary to the system prompt so the agent starts with
+    // prior knowledge; expose memory_record + memory_list tools so the
+    // agent can write back durable lessons.
     if (opts.task === 'verify' && opts.spec) {
       try {
         const { loadSpec } = await import('../spec/parser.js');
