@@ -13,6 +13,7 @@ import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
 import { defaultMemoryProvider, type MemoryScope } from './memory-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
+import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
 import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
@@ -446,6 +447,23 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   const mcpServers: Record<string, McpServerConfig> = {};
   const allowedBrowserTools: string[] = [];
 
+  // Session indexer: persist every event from this run into a SQLite + FTS5
+  // store for cross-session recall. Spec-scoped DB by default.
+  let sessionStore: SessionStore | undefined;
+  let detachStore: (() => void) | undefined;
+  try {
+    sessionStore = openSessionStore(defaultSessionDbPath(opts.spec));
+    detachStore = sessionStore.attachToEventBus({
+      defaults: {
+        task: opts.task,
+        startedAt: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    // Indexer is best-effort; never break the run.
+    process.stderr.write(`  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+
   try {
     if (opts.task === 'compare') {
       // Dual browser sessions for compare
@@ -594,6 +612,10 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     for (const session of sessions) {
       session.collector.save();
       await session.browser.close().catch(() => {});
+    }
+    if (detachStore) detachStore();
+    if (sessionStore) {
+      try { sessionStore.close(); } catch { /* noop */ }
     }
   }
 }
