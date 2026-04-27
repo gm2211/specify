@@ -11,7 +11,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
-import { loadMemory, memoryPath, renderMemoryPrompt, targetKey } from './memory.js';
+import { defaultMemoryProvider, type MemoryScope } from './memory-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
 import { randomUUID } from 'node:crypto';
 
@@ -497,17 +497,16 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
         };
-        const memFile = memoryPath(opts.spec, spec.name, target);
-        const memory = loadMemory(memFile);
-        const memoryIntro = renderMemoryPrompt(memory);
+        const provider = defaultMemoryProvider();
+        const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
+        const memoryIntro = await provider.prefetch(scope);
         if (memoryIntro) {
           systemPrompt = memoryIntro + '\n\n' + systemPrompt;
         }
         const memoryServer = createMemoryMcpServer({
-          filePath: memFile,
+          scope,
           runId: `run_${randomUUID().slice(0, 8)}`,
-          specId: spec.name,
-          targetKey: targetKey(target),
+          provider,
         });
         mcpServers.memory = memoryServer;
         memoryTools.push('mcp__memory__memory_record', 'mcp__memory__memory_list');

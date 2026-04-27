@@ -6,29 +6,30 @@
  * learned during the run) and a `memory_list` tool (to re-read what's stored,
  * typically used during reflection).
  *
- * The store is scoped to a single (spec, target) file resolved at session
- * construction — the agent cannot write to other specs/targets even by
- * accident.
+ * The store is scoped to a single (spec, target) pair via the MemoryScope
+ * passed in at server construction — the agent cannot write to other
+ * specs/targets even by accident. The actual storage backend is a
+ * MemoryProvider, defaulting to file-backed.
  */
 
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
+import type { DeltaInput } from './memory.js';
 import {
-  applyDeltas,
-  loadMemory,
-  saveMemory,
-  type DeltaInput,
-  type MemoryFile,
-} from './memory.js';
+  defaultMemoryProvider,
+  scopeTargetKey,
+  type MemoryProvider,
+  type MemoryScope,
+} from './memory-provider.js';
 
 export interface MemoryMcpContext {
-  filePath: string;
+  scope: MemoryScope;
   runId: string;
-  specId: string;
-  targetKey: string;
+  provider?: MemoryProvider;
 }
 
 export function createMemoryMcpServer(ctx: MemoryMcpContext) {
+  const provider = ctx.provider ?? defaultMemoryProvider();
   return createSdkMcpServer({
     name: 'memory',
     tools: [
@@ -50,7 +51,6 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           contradicts_id: z.string().optional().describe('Pass an existing row id to mark it contradicted'),
         },
         async (args) => {
-          const file = ensureFile(loadMemory(ctx.filePath), ctx);
           const delta: DeltaInput = {
             type: args.type,
             content: args.content,
@@ -61,8 +61,7 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
             id: args.contradicts_id,
             contradicts: Boolean(args.contradicts_id),
           };
-          const next = applyDeltas(file, ctx.runId, [delta]);
-          saveMemory(ctx.filePath, next);
+          const next = await provider.write(ctx.scope, ctx.runId, [delta]);
           return {
             content: [{
               type: 'text' as const,
@@ -82,7 +81,7 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           type: z.enum(['observation', 'playbook', 'quirk']).optional(),
         },
         async (args) => {
-          const file = loadMemory(ctx.filePath);
+          const file = await provider.read(ctx.scope);
           const rows = args.type ? file.rows.filter((r) => r.type === args.type) : file.rows;
           return {
             content: [{ type: 'text' as const, text: JSON.stringify(rows, null, 2) }],
@@ -93,8 +92,5 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
   });
 }
 
-function ensureFile(file: MemoryFile, ctx: MemoryMcpContext): MemoryFile {
-  if (file.spec_id === 'unknown') file.spec_id = ctx.specId;
-  if (file.target_key === 'unknown') file.target_key = ctx.targetKey;
-  return file;
-}
+/** Re-exported for callers that need to derive the same key the provider uses. */
+export { scopeTargetKey };
