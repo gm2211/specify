@@ -11,7 +11,8 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
-import { defaultMemoryProvider, type MemoryScope } from './memory-provider.js';
+import { defaultMemoryProvider, type MemoryProvider, type MemoryScope } from './memory-provider.js';
+import { honchoFromEnv } from './honcho-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
 import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
 import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
@@ -558,7 +559,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
         };
-        const provider = defaultMemoryProvider();
+        const provider: MemoryProvider = honchoFromEnv() ?? defaultMemoryProvider();
         const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
         const memoryIntro = await provider.prefetch(scope);
         if (memoryIntro) {
