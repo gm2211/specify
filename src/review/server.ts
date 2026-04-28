@@ -324,6 +324,45 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     }
   });
 
+  // Cooperative-QA feedback: webapp sends per-event flags + free-text notes;
+  // we route by kind into an Observation (per-spec layer) and optionally a
+  // bd issue. See src/agent/feedback.ts for kind semantics.
+  app.post('/api/feedback', async (c) => {
+    try {
+      const body = await c.req.json<{
+        kind: string;
+        text: string;
+        sessionId?: string;
+        areaId?: string;
+        behaviorId?: string;
+        eventId?: string;
+      }>();
+      if (!body.kind || !body.text) {
+        return c.json({ error: 'invalid_body', message: 'Expected { kind, text, ... }' }, 400);
+      }
+      const allowed = new Set(['note', 'important_pattern', 'missed_check', 'false_positive', 'ignore_pattern', 'file_bug']);
+      if (!allowed.has(body.kind)) {
+        return c.json({ error: 'invalid_kind', message: `kind must be one of: ${Array.from(allowed).join(', ')}` }, 400);
+      }
+      const { ingestFeedback } = await import('../agent/feedback.js');
+      const result = await ingestFeedback(
+        {
+          kind: body.kind as 'note',
+          text: body.text,
+          sessionId: body.sessionId,
+          areaId: body.areaId,
+          behaviorId: body.behaviorId,
+          eventId: body.eventId,
+        },
+        { specPath: resolvedSpec },
+      );
+      return c.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'feedback_failed', message: msg }, 400);
+    }
+  });
+
   // Inject a message into the running agent session
   app.post('/api/agent/inject', async (c) => {
     if (!activeInjector) {

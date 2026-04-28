@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import FeedbackForm from './FeedbackForm';
 
 interface AgentEvent {
   type: string;
@@ -12,6 +13,9 @@ interface LogLine {
   kind: 'text' | 'tool' | 'behavior' | 'status' | 'error';
   text: string;
   ts: number;
+  sessionId?: string;
+  /** Behavior id when the underlying event was a behavior:* event. */
+  behaviorId?: string;
 }
 
 interface ActivityStreamProps {
@@ -49,7 +53,7 @@ function eventToLine(evt: AgentEvent, id: number): LogLine | null {
     case 'behavior:failed':
     case 'behavior:skipped': {
       const status = evt.type.split(':')[1];
-      return { id, kind: 'behavior', text: `${status}: ${d.id}`, ts: now };
+      return { id, kind: 'behavior', text: `${status}: ${d.id}`, ts: now, sessionId: evt.sessionId, behaviorId: typeof d.id === 'string' ? d.id : undefined };
     }
     case 'verify:started':
       return { id, kind: 'status', text: `verify started${d.scope ? ` (${(d.scope as { areaId: string; behaviorId: string }).areaId}/${(d.scope as { areaId: string; behaviorId: string }).behaviorId})` : ''}`, ts: now };
@@ -78,8 +82,24 @@ function clean(s: string): string {
 export default function ActivityStream({ active }: ActivityStreamProps) {
   const [lines, setLines] = useState<LogLine[]>([]);
   const [expanded, setExpanded] = useState(true);
+  const [feedbackFor, setFeedbackFor] = useState<number | null>(null);
+  const [flashIds, setFlashIds] = useState<Set<number>>(() => new Set());
+  const [sessionFeedbackOpen, setSessionFeedbackOpen] = useState(false);
   const nextId = useRef(0);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  const flashSuccess = (id: number): void => {
+    setFlashIds((prev) => new Set(prev).add(id));
+    window.setTimeout(() => {
+      setFlashIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }, 2400);
+  };
+
+  const lastSessionId = lines.length > 0 ? lines[lines.length - 1].sessionId : undefined;
 
   useEffect(() => {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -94,6 +114,9 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
       if (msg.type !== 'agent:event' || !msg.event) return;
       const line = eventToLine(msg.event, nextId.current++);
       if (!line) return;
+      // Carry the sessionId from the source event so feedback can attribute
+      // properly even when eventToLine didn't set it explicitly.
+      if (!line.sessionId && msg.event.sessionId) line.sessionId = msg.event.sessionId;
       setLines((prev) => {
         const next = [...prev, line];
         // Cap at 200 lines so the DOM doesn't grow forever.
@@ -133,12 +156,55 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
             <div className="activity-stream-empty">Waiting for agent output…</div>
           ) : (
             lines.map((line) => (
-              <div key={line.id} className={`activity-line activity-line--${line.kind}`}>
+              <div key={line.id} className={`activity-line activity-line--${line.kind} ${flashIds.has(line.id) ? 'activity-line--flagged' : ''}`}>
                 <span className="activity-time">{timeLabel(line.ts)}</span>
                 <span className="activity-kind">{line.kind}</span>
                 <span className="activity-text">{line.text}</span>
+                <button
+                  type="button"
+                  className="activity-flag-btn"
+                  title="Add feedback on this event"
+                  onClick={() => setFeedbackFor(feedbackFor === line.id ? null : line.id)}
+                  aria-pressed={feedbackFor === line.id}
+                >
+                  ⚑
+                </button>
+                {feedbackFor === line.id && (
+                  <div className="activity-feedback">
+                    <FeedbackForm
+                      compact
+                      sessionId={line.sessionId}
+                      behaviorId={line.behaviorId}
+                      eventId={`evt_${line.id}`}
+                      defaultKind={line.kind === 'error' || line.kind === 'behavior' ? 'file_bug' : 'note'}
+                      placeholder="What did you notice about this event?"
+                      onDone={() => {
+                        flashSuccess(line.id);
+                        setFeedbackFor(null);
+                      }}
+                      onCancel={() => setFeedbackFor(null)}
+                    />
+                  </div>
+                )}
               </div>
             ))
+          )}
+        </div>
+      )}
+      {expanded && lines.length > 0 && (
+        <div className="activity-session-feedback">
+          {sessionFeedbackOpen ? (
+            <FeedbackForm
+              sessionId={lastSessionId}
+              defaultKind="note"
+              placeholder="Session-level feedback (anything that didn't fit a single row)…"
+              onDone={() => setSessionFeedbackOpen(false)}
+              onCancel={() => setSessionFeedbackOpen(false)}
+            />
+          ) : (
+            <button type="button" className="activity-session-feedback-toggle" onClick={() => setSessionFeedbackOpen(true)}>
+              Add session-level feedback
+            </button>
           )}
         </div>
       )}

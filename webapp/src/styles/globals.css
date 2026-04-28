@@ -1306,3 +1306,138 @@ body {
   background: var(--bg-tertiary);
   border-color: var(--accent);
 }
+
+/* ----- Cooperative-QA feedback affordances ----- */
+
+.activity-line {
+  position: relative;
+}
+
+.activity-flag-btn {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary, #888);
+  padding: 0 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  font-size: 0.95rem;
+}
+
+.activity-line:hover .activity-flag-btn,
+.activity-flag-btn[aria-pressed="true"] {
+  opacity: 1;
+}
+
+.activity-flag-btn:hover {
+  color: var(--accent, #58a6ff);
+  border-color: var(--accent, #58a6ff);
+  background: var(--bg-secondary);
+}
+
+.activity-line--flagged {
+  background: rgba(63, 185, 80, 0.10);
+  border-left-color: #3fb950 !important;
+  transition: background 0.4s ease, border-left-color 0.4s ease;
+}
+
+.activity-feedback {
+  margin: 6px 0 4px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--bg-tertiary, #2a2a2a);
+  border-radius: 6px;
+  background: var(--bg-secondary, #1a1a1a);
+}
+
+.feedback-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.feedback-form-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.feedback-form--compact .feedback-form-row {
+  flex-direction: row;
+}
+
+.feedback-kind {
+  flex: 0 0 auto;
+  background: var(--bg-tertiary, #222);
+  color: var(--text-primary, #eee);
+  border: 1px solid var(--bg-tertiary, #333);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.85rem;
+}
+
+.feedback-text {
+  flex: 1 1 auto;
+  background: var(--bg-tertiary, #222);
+  color: var(--text-primary, #eee);
+  border: 1px solid var(--bg-tertiary, #333);
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.feedback-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.feedback-submit,
+.feedback-cancel {
+  background: var(--bg-tertiary, #222);
+  color: var(--text-primary, #eee);
+  border: 1px solid var(--bg-tertiary, #333);
+  border-radius: 4px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.feedback-submit:hover {
+  border-color: var(--accent, #58a6ff);
+  color: var(--accent, #58a6ff);
+}
+
+.feedback-submit:disabled,
+.feedback-cancel:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedback-error {
+  color: #f85149;
+  font-size: 0.85rem;
+}
+
+.activity-session-feedback {
+  padding: 8px 12px;
+  border-top: 1px solid var(--bg-tertiary, #2a2a2a);
+}
+
+.activity-session-feedback-toggle {
+  background: transparent;
+  border: 1px dashed var(--bg-tertiary, #444);
+  color: var(--text-secondary, #888);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.activity-session-feedback-toggle:hover {
+  color: var(--accent, #58a6ff);
+  border-color: var(--accent, #58a6ff);
+}

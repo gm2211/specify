@@ -53,3 +53,40 @@ export function createWebSocket(): WebSocket {
   const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
   return ws;
 }
+
+export type FeedbackKind =
+  | 'note'
+  | 'important_pattern'
+  | 'missed_check'
+  | 'false_positive'
+  | 'ignore_pattern'
+  | 'file_bug';
+
+export interface FeedbackInput {
+  kind: FeedbackKind;
+  text: string;
+  sessionId?: string;
+  areaId?: string;
+  behaviorId?: string;
+  eventId?: string;
+}
+
+export interface FeedbackResult {
+  ok: true;
+  observationId: string;
+  bdIssueId?: string;
+  observationsPath: string;
+}
+
+export async function postFeedback(input: FeedbackInput): Promise<FeedbackResult> {
+  const res = await fetch(`${BASE}/api/feedback`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ message: res.statusText }));
+    throw new Error(`Feedback failed: ${body?.message ?? res.status}`);
+  }
+  return res.json();
+}
