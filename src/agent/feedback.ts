@@ -32,6 +32,7 @@ import {
   defaultObservationsPath,
   type Observation,
 } from './memory-layers.js';
+import { defaultSessionDbPath, openSessionStore, type EventRow } from './session-store.js';
 
 export type FeedbackKind =
   | 'note'
@@ -64,16 +65,41 @@ export interface FeedbackContext {
   observationsPath?: string;
   /** Hook used in tests to stub bd-CLI behaviour. */
   spawnBd?: (args: string[]) => Promise<{ id?: string; ok: boolean; stderr?: string }>;
+  /** Override session-store db path; default derives from specPath. */
+  sessionDbPath?: string;
+  /** Override the recent-events fetcher (mostly tests). */
+  fetchRecentEvents?: (sessionId: string, limit: number) => EventRow[];
+  /** How many trailing events to include as context. Default 8. */
+  contextEventCount?: number;
 }
 
 export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext): Promise<FeedbackResult> {
   if (!input.kind) throw new Error('feedback: missing kind');
   if (!input.text || !input.text.trim()) throw new Error('feedback: missing text');
 
+  // Context-rich feedback: when we know which session this came from, pull
+  // the last N events and attach them to the observation description so
+  // future runs see what the user was looking at when they flagged this.
+  let contextBlock = '';
+  if (input.sessionId) {
+    try {
+      const recent = (ctx.fetchRecentEvents ?? defaultFetchRecentEvents(ctx.sessionDbPath ?? defaultSessionDbPath(ctx.specPath)))(
+        input.sessionId,
+        ctx.contextEventCount ?? 8,
+      );
+      if (recent.length) contextBlock = renderContextBlock(recent);
+    } catch {
+      // Best-effort: never block ingest on a context lookup failure.
+    }
+  }
+
   const observationId = `obs_${randomUUID().slice(0, 8)}`;
+  const description = contextBlock
+    ? `${input.text.trim()}\n\n${contextBlock}`
+    : input.text.trim();
   const observation: Observation = {
     id: observationId,
-    description: input.text.trim(),
+    description,
     area_id: input.areaId,
     behavior_id: input.behaviorId,
     source: feedbackSource(input.kind),
@@ -154,6 +180,27 @@ function defaultConfidenceForKind(kind: FeedbackKind): number {
 
 function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + '…';
+}
+
+function defaultFetchRecentEvents(dbPath: string): (sessionId: string, limit: number) => EventRow[] {
+  return (sessionId, limit) => {
+    const store = openSessionStore(dbPath);
+    try {
+      return store.recentEvents(sessionId, limit);
+    } finally {
+      store.close();
+    }
+  };
+}
+
+function renderContextBlock(events: EventRow[]): string {
+  const lines: string[] = ['Context (last events leading up to feedback):'];
+  for (const e of events) {
+    const t = e.ts.split('T')[1]?.split('.')[0] ?? e.ts;
+    const text = e.content.length > 200 ? e.content.slice(0, 200) + '…' : e.content;
+    lines.push(`- [${t}] ${e.role}/${e.kind}: ${text}`);
+  }
+  return lines.join('\n');
 }
 
 async function defaultSpawnBd(args: string[]): Promise<{ id?: string; ok: boolean; stderr?: string }> {

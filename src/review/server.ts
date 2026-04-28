@@ -324,6 +324,27 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     }
   });
 
+  // Session replay: chronological event log for a single session, powering
+  // Tier-2 replay views and downstream analysis (pattern miner, etc.).
+  app.get('/api/sessions/:id/replay', async (c) => {
+    try {
+      const sessionId = c.req.param('id');
+      const limitParam = c.req.query('limit');
+      const limit = limitParam ? Math.max(1, Math.min(2000, Number(limitParam))) : 500;
+      const { defaultSessionDbPath, openSessionStore } = await import('../agent/session-store.js');
+      const store = openSessionStore(defaultSessionDbPath(resolvedSpec));
+      try {
+        const events = store.replay(sessionId, { limit });
+        return c.json({ sessionId, events });
+      } finally {
+        store.close();
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'replay_failed', message: msg }, 500);
+    }
+  });
+
   // Cooperative-QA feedback: webapp sends per-event flags + free-text notes;
   // we route by kind into an Observation (per-spec layer) and optionally a
   // bd issue. See src/agent/feedback.ts for kind semantics.

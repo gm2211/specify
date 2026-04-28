@@ -95,6 +95,42 @@ test('ingestFeedback: confidence varies by kind', async () => {
   }
 });
 
+test('ingestFeedback: attaches recent-events context when sessionId is set', async () => {
+  const { specPath, cleanup } = tmpSpec();
+  try {
+    const ctx = {
+      specPath,
+      fetchRecentEvents: () => ([
+        { id: 1, sessionId: 'ses_x', ts: '2026-04-27T10:00:01Z', role: 'user', kind: 'message', content: 'click signup', tags: null },
+        { id: 2, sessionId: 'ses_x', ts: '2026-04-27T10:00:02Z', role: 'agent', kind: 'tool_call', content: 'browser_click #signup', tags: null },
+      ]),
+    };
+    await ingestFeedback({ kind: 'note', text: 'Empty state on signup form is missing.', sessionId: 'ses_x' }, ctx);
+    const obs = loadObservations(defaultObservationsPath(specPath));
+    assert.equal(obs.length, 1);
+    assert.match(obs[0].description, /Empty state on signup form/);
+    assert.match(obs[0].description, /Context \(last events/);
+    assert.match(obs[0].description, /browser_click #signup/);
+  } finally {
+    cleanup();
+  }
+});
+
+test('ingestFeedback: skips context fetch when no sessionId', async () => {
+  const { specPath, cleanup } = tmpSpec();
+  try {
+    let fetchCalled = false;
+    const ctx = {
+      specPath,
+      fetchRecentEvents: () => { fetchCalled = true; return []; },
+    };
+    await ingestFeedback({ kind: 'note', text: 'no session, no context' }, ctx);
+    assert.equal(fetchCalled, false);
+  } finally {
+    cleanup();
+  }
+});
+
 test('ingestFeedback: rejects empty text', async () => {
   const { specPath, cleanup } = tmpSpec();
   try {

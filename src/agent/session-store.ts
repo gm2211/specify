@@ -185,6 +185,45 @@ export class SessionStore {
     return this.db.prepare(sql).all(...args) as SearchHit[];
   }
 
+  /**
+   * Return the chronological event timeline for a single session. Powers
+   * Tier-2 replay views and the context-resolver feeding feedback ingest.
+   */
+  replay(sessionId: string, opts: { limit?: number; before?: string; after?: string } = {}): EventRow[] {
+    const limit = opts.limit ?? 500;
+    const conditions: string[] = ['session_id = ?'];
+    const args: unknown[] = [sessionId];
+    if (opts.before) {
+      conditions.push('ts <= ?');
+      args.push(opts.before);
+    }
+    if (opts.after) {
+      conditions.push('ts >= ?');
+      args.push(opts.after);
+    }
+    args.push(limit);
+    const rows = this.db.prepare(`
+      SELECT id, session_id AS sessionId, ts, role, kind, content, tags
+      FROM events WHERE ${conditions.join(' AND ')}
+      ORDER BY id ASC LIMIT ?
+    `).all(...args) as EventRow[];
+    return rows;
+  }
+
+  /**
+   * Tail the last N events for a session — most recent first. Used by the
+   * feedback ingest path to attach context (URL, last click, last input)
+   * to a flagged observation so the agent gets a fully-resolved record.
+   */
+  recentEvents(sessionId: string, limit = 10): EventRow[] {
+    const rows = this.db.prepare(`
+      SELECT id, session_id AS sessionId, ts, role, kind, content, tags
+      FROM events WHERE session_id = ?
+      ORDER BY id DESC LIMIT ?
+    `).all(sessionId, limit) as EventRow[];
+    return rows.reverse();
+  }
+
   listSessions(opts: { specId?: string; targetKey?: string; limit?: number } = {}): SessionMeta[] {
     const limit = opts.limit ?? 50;
     const conditions: string[] = [];

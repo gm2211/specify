@@ -109,6 +109,34 @@ test('SessionStore: events delete cleanly cascades and FTS stays consistent', ()
   });
 });
 
+test('replay: returns chronological event timeline for a session', () => {
+  withStore((store) => {
+    const sid = newSessionId();
+    store.recordSession({ sessionId: sid, specId: 'demo', startedAt: new Date().toISOString() });
+    store.recordEvent({ sessionId: sid, role: 'user', kind: 'message', content: 'first' });
+    store.recordEvent({ sessionId: sid, role: 'agent', kind: 'tool_call', content: 'second' });
+    store.recordEvent({ sessionId: sid, role: 'agent', kind: 'message', content: 'third' });
+    const replay = store.replay(sid);
+    assert.equal(replay.length, 3);
+    assert.equal(replay[0].content, 'first');
+    assert.equal(replay[2].content, 'third');
+  });
+});
+
+test('recentEvents: returns last N in chronological order', () => {
+  withStore((store) => {
+    const sid = newSessionId();
+    store.recordSession({ sessionId: sid, startedAt: new Date().toISOString() });
+    for (let i = 0; i < 12; i++) {
+      store.recordEvent({ sessionId: sid, role: 'agent', kind: 'message', content: `e${i}` });
+    }
+    const last5 = store.recentEvents(sid, 5);
+    assert.equal(last5.length, 5);
+    assert.equal(last5[0].content, 'e7');
+    assert.equal(last5[4].content, 'e11');
+  });
+});
+
 test('defaultSessionDbPath: spec-relative when given, user-level fallback otherwise', () => {
   const cwd = path.resolve('/tmp/some-project/specify.spec.yaml');
   const p = defaultSessionDbPath(cwd);
