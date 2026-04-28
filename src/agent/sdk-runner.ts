@@ -15,6 +15,8 @@ import { defaultMemoryProvider, type MemoryScope } from './memory-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
 import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
 import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
+import { setActivePropagator } from './pattern-propagator.js';
+import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
@@ -465,6 +467,18 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     process.stderr.write(`  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
   }
 
+  // Confidence store: tally per-behavior accept/override stats from feedback
+  // events. Only meaningful when we have a spec to scope the file to.
+  let confidenceStore: ConfidenceStore | undefined;
+  if (opts.spec) {
+    try {
+      confidenceStore = new ConfidenceStore(defaultConfidencePath(opts.spec));
+      confidenceStore.attachToEventBus();
+    } catch (err) {
+      process.stderr.write(`  Confidence store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
+  }
+
   try {
     if (opts.task === 'compare') {
       // Dual browser sessions for compare
@@ -577,6 +591,14 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     const prompt: string | AsyncIterable<SDKUserMessage> =
       opts.messageInjector ?? opts.userPrompt;
 
+    // Wire the in-session sibling-check propagator to the injector for the
+    // lifetime of this run. When user feedback fires
+    // feedback:propagate_pattern, the propagator injects a follow-up
+    // directive into the active session.
+    if (opts.messageInjector) {
+      setActivePropagator(opts.messageInjector);
+    }
+
     process.stderr.write('  Connecting to API...\n');
 
     // Retry loop for transient errors
@@ -635,5 +657,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     if (sessionStore) {
       try { sessionStore.close(); } catch { /* noop */ }
     }
+    if (confidenceStore) {
+      try { confidenceStore.close(); } catch { /* noop */ }
+    }
+    setActivePropagator(null);
   }
 }
