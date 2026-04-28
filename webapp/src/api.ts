@@ -78,6 +78,47 @@ export interface FeedbackResult {
   observationsPath: string;
 }
 
+export interface SkillDraft {
+  id: string;
+  filePath: string;
+  pattern: { id: string; signature: string; occurrences: number; sessionCount: number };
+  skill: { name: string; description: string; body: string; tags?: string[] };
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+}
+
+export async function fetchSkillDrafts(): Promise<SkillDraft[]> {
+  const res = await fetch(`${BASE}/api/skill-drafts`);
+  if (!res.ok) throw new Error(`Failed to fetch skill drafts: ${res.status}`);
+  const body = await res.json();
+  return Array.isArray(body?.drafts) ? body.drafts : [];
+}
+
+export async function approveSkillDraft(id: string): Promise<{ skillName: string; skillPath: string }> {
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `approve failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function rejectSkillDraft(id: string): Promise<{ ok: true }> {
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `reject failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchActiveSkills(): Promise<Array<{ name: string; filePath: string; description: string }>> {
+  const res = await fetch(`${BASE}/api/skills/active`);
+  if (!res.ok) return [];
+  const body = await res.json();
+  return Array.isArray(body?.skills) ? body.skills : [];
+}
+
 export async function postFeedback(input: FeedbackInput): Promise<FeedbackResult> {
   const res = await fetch(`${BASE}/api/feedback`, {
     method: 'POST',

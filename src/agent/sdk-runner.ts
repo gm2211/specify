@@ -17,6 +17,7 @@ import { defaultSessionDbPath, openSessionStore, type SessionStore } from './ses
 import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
+import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
 import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
@@ -531,6 +532,16 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         if (layered) systemPrompt = layered + '\n\n' + systemPrompt;
       } catch (err) {
         process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+
+      // Active learned skills (approved drafts from prior cooperative-QA
+      // sessions). Listed as available named skills so the agent knows it
+      // can replay them when the situation matches.
+      try {
+        const active = renderActiveSkillsPrompt(opts.spec);
+        if (active) systemPrompt = active + '\n\n' + systemPrompt;
+      } catch (err) {
+        process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
       }
     }
 

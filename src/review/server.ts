@@ -324,6 +324,60 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     }
   });
 
+  // Skill drafts: list / approve / reject. Approved drafts move from
+  // .specify/skill-drafts/<id>.md to .specify/skills/<name>/SKILL.md and
+  // become replayable in future verify runs.
+  app.get('/api/skill-drafts', async (c) => {
+    try {
+      const { listDrafts } = await import('../agent/skill-synthesizer.js');
+      const drafts = listDrafts(resolvedSpec);
+      return c.json({ drafts });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'list_failed', message: msg }, 500);
+    }
+  });
+
+  app.post('/api/skill-drafts/:id/approve', async (c) => {
+    try {
+      const { listDrafts, promoteDraft } = await import('../agent/skill-synthesizer.js');
+      const id = c.req.param('id');
+      const draft = listDrafts(resolvedSpec).find((d) => d.id === id);
+      if (!draft) return c.json({ error: 'not_found' }, 404);
+      const result = promoteDraft(draft.filePath, { specPath: resolvedSpec });
+      eventBus.send('skill:approved', { id, skillName: result.skillName, skillPath: result.skillPath });
+      return c.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'approve_failed', message: msg }, 500);
+    }
+  });
+
+  app.post('/api/skill-drafts/:id/reject', async (c) => {
+    try {
+      const { listDrafts, setDraftStatus } = await import('../agent/skill-synthesizer.js');
+      const id = c.req.param('id');
+      const draft = listDrafts(resolvedSpec).find((d) => d.id === id);
+      if (!draft) return c.json({ error: 'not_found' }, 404);
+      setDraftStatus(draft.filePath, 'rejected');
+      eventBus.send('skill:rejected', { id });
+      return c.json({ ok: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'reject_failed', message: msg }, 500);
+    }
+  });
+
+  app.get('/api/skills/active', async (c) => {
+    try {
+      const { listActiveSkills } = await import('../agent/skill-synthesizer.js');
+      return c.json({ skills: listActiveSkills(resolvedSpec) });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'list_failed', message: msg }, 500);
+    }
+  });
+
   // Session replay: chronological event log for a single session, powering
   // Tier-2 replay views and downstream analysis (pattern miner, etc.).
   app.get('/api/sessions/:id/replay', async (c) => {

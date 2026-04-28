@@ -12,6 +12,7 @@ import SearchBar from './components/SearchBar';
 import AreaCard from './components/AreaCard';
 import NarrativePanel from './components/NarrativePanel';
 import ActivityStream from './components/ActivityStream';
+import SkillDraftsPanel from './components/SkillDraftsPanel';
 
 export default function App() {
   const { spec, loading: specLoading, error: specError, refresh: refreshSpec } = useSpec();
@@ -164,6 +165,7 @@ export default function App() {
     <Layout header={header} sidebar={sidebar}>
       <NarrativePanel description={spec.description} narrative={narrative} />
       <ActivityStream active={verifying.size > 0} />
+      <SkillDraftsPanel />
       {verifyError && (
         <div className="verify-error" role="alert">
           <strong>Verify error:</strong> {verifyError}

@@ -103,6 +103,92 @@ export function setDraftStatus(filePath: string, status: 'approved' | 'rejected'
   fs.writeFileSync(filePath, updated, 'utf-8');
 }
 
+export interface PromoteResult {
+  skillName: string;
+  skillPath: string;
+}
+
+/**
+ * Resolve the active-skills directory for a spec. Approved drafts land
+ * here as the canonical SKILL.md location and become replayable in
+ * subsequent runs (SP-5i3).
+ */
+export function defaultSkillsDir(specPath: string): string {
+  return path.join(path.dirname(path.resolve(specPath)), '.specify', 'skills');
+}
+
+/**
+ * Promote an approved draft to an active skill. Moves the file from the
+ * drafts dir into `.specify/skills/<name>/SKILL.md`, flips the status to
+ * `approved`, and returns the new location.
+ *
+ * Throws when the draft cannot be parsed or when a skill with the same
+ * name already exists (collision is an explicit decision the user must
+ * resolve manually).
+ */
+export function promoteDraft(filePath: string, opts: { specPath: string; skillsDir?: string } = { specPath: '' }): PromoteResult {
+  const text = fs.readFileSync(filePath, 'utf-8');
+  const parsed = parseSkillMarkdown(text);
+  if (!parsed) throw new Error(`promoteDraft: malformed draft at ${filePath}`);
+  const skillsDir = opts.skillsDir ?? defaultSkillsDir(opts.specPath);
+  const target = path.join(skillsDir, parsed.skill.name);
+  if (fs.existsSync(target)) {
+    throw new Error(`promoteDraft: skill '${parsed.skill.name}' already exists at ${target}`);
+  }
+  fs.mkdirSync(target, { recursive: true });
+  const skillFile = path.join(target, 'SKILL.md');
+  const promoted = text.replace(/^status:.*$/m, 'status: "approved"');
+  fs.writeFileSync(skillFile, promoted, 'utf-8');
+  fs.unlinkSync(filePath);
+  return { skillName: parsed.skill.name, skillPath: skillFile };
+}
+
+/**
+ * List active (approved + promoted) skills available for replay. Each
+ * entry returns the canonical SKILL.md path so the agent context loader
+ * can inject them into upcoming runs.
+ */
+export function listActiveSkills(specPath: string, skillsDir?: string): Array<{ name: string; filePath: string; description: string }> {
+  const dir = skillsDir ?? defaultSkillsDir(specPath);
+  if (!fs.existsSync(dir)) return [];
+  const out: Array<{ name: string; filePath: string; description: string }> = [];
+  for (const entry of fs.readdirSync(dir)) {
+    const skillFile = path.join(dir, entry, 'SKILL.md');
+    if (!fs.existsSync(skillFile)) continue;
+    try {
+      const text = fs.readFileSync(skillFile, 'utf-8');
+      const parsed = parseSkillMarkdown(text);
+      if (!parsed) continue;
+      out.push({ name: parsed.skill.name, filePath: skillFile, description: parsed.skill.description });
+    } catch {
+      // skip malformed
+    }
+  }
+  return out;
+}
+
+/**
+ * Render a prompt-injectable preamble listing approved skills the agent
+ * can use this run. Returns '' when nothing is approved yet.
+ */
+export function renderActiveSkillsPrompt(specPath: string, skillsDir?: string, budgetBytes = 4 * 1024): string {
+  const skills = listActiveSkills(specPath, skillsDir);
+  if (!skills.length) return '';
+  const parts: string[] = [
+    '## Available learned skills',
+    '',
+    'Skills below were derived from past sessions and approved for replay. Use them when applicable; ignore otherwise.',
+    '',
+  ];
+  for (const s of skills) {
+    parts.push(`- **${s.name}** — ${s.description}`);
+  }
+  parts.push('');
+  const out = parts.join('\n');
+  if (Buffer.byteLength(out, 'utf-8') <= budgetBytes) return out;
+  return out.slice(0, budgetBytes);
+}
+
 export function heuristicDescribe(pattern: CandidatePattern): DescribedSkill {
   // Cheap human-readable derivation. The reviewer can rewrite this.
   const niceName = pattern.tokens
