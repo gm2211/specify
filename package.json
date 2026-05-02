@@ -32,7 +32,7 @@
     "ajv": "^8.18.0",
     "better-sqlite3": "^12.9.0",
     "chrome-remote-interface": "^0.33.2",
-    "hono": "^4.12.9",
+    "hono": "^4.12.16",
     "js-yaml": "^4.1.1",
     "playwright": "^1.50.0",
     "ws": "^8.20.0",
