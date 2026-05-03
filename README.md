@@ -252,6 +252,67 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 that streams agent events, lists recent messages, and shows structured
 results. Prompts for the token on first load.
 
+## Deploy as a QA agent in Kubernetes
+
+Specify ships a container image and a Terraform module so it can run as a
+long-lived QA agent inside a cluster. One pod per spec, PVC-backed memory
+that survives restarts, and pluggable triggers (k8s informer, webhook, or
+both).
+
+```hcl
+module "qa" {
+  source = "github.com/gm2211/specify//deploy/terraform/modules/specify-qa?ref=main"
+
+  name      = "renzo-qa"
+  namespace = "qa"
+
+  target_url  = "http://renzo.app.svc.cluster.local:8080"
+  spec_inline = file("${path.module}/specify.spec.yaml")
+
+  discovery = { mode = "watch", namespaces = ["app"] }
+
+  report_slack_webhook     = var.slack_webhook_url
+  anthropic_api_key_secret = "anthropic-api-key"
+}
+```
+
+| Group | Pick exactly one |
+|-------|------------------|
+| Target | `target_url` · `target_dns` · `target_cluster_ip` · `target_from_configmap` |
+| Spec | `spec_inline` · `spec_url` (+ optional bearer) · `spec_git` |
+| Discovery | `webhook` (default) · `watch` · `both` · `none` |
+| Reports | `report_file_dir` (default) + optional `report_slack_webhook` |
+
+**Self-describing install for agents.** `specify deploy describe --format=json`
+emits a structured manifest: image coordinates, module ref, oneof groups,
+required Secrets, outputs, and an `agent_install_recipe`. Drop `specify
+deploy print-tf <preset>` into a consumer repo for a working `.tf`
+skeleton (`minimal`, `watch-mode`, `webhook-mode`, `gitops-spec`).
+
+```bash
+specify deploy describe --format=json | jq .
+specify deploy print-tf watch-mode > specify-qa.tf
+```
+
+**Worked examples** live in [`deploy/terraform/examples/`](deploy/terraform/examples):
+[`minimal`](deploy/terraform/examples/minimal),
+[`watch-mode`](deploy/terraform/examples/watch-mode),
+[`gitops-spec`](deploy/terraform/examples/gitops-spec). Each example is a
+runnable `terraform apply` directory with a per-example README.
+
+The pod's `/work` PVC keeps everything the daemon learns:
+
+| Path | Content |
+|------|---------|
+| `/work/.specify/memory/<spec_id>/<target>.json` | learned memory rows |
+| `/work/.specify/sessions.db` | session SQLite + FTS5 |
+| `/work/.specify/skill-drafts/` | mined skills awaiting approval |
+| `/work/.specify/skills/` | active skills replayed each run |
+| `/work/reports/` | per-run JSON reports (file sink) |
+
+See [`deploy/terraform/modules/specify-qa/README.md`](deploy/terraform/modules/specify-qa/README.md)
+for the full input / output reference.
+
 ## Spec format
 
 YAML or JSON. Human-readable, machine-verifiable.
