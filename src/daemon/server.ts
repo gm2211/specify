@@ -29,6 +29,7 @@ import type { InboxRequest } from './inbox.js';
 import { configurePool } from './worker-pool.js';
 import { renderInspectorHtml } from './inspector.js';
 import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
+import { attachReportSinks } from '../agent/report-sink.js';
 
 export interface DaemonOptions {
   port: number;
@@ -67,6 +68,14 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   // SDK runner via __setRunnerForTesting — they need the in-process path).
   const maxWorkers = opts.maxWorkers ?? 2;
   if (maxWorkers > 0) configurePool(maxWorkers);
+
+  // Wire outbound report sinks (file / slack). No-op when the env vars
+  // (SPECIFY_REPORT_FILE_DIR, SPECIFY_REPORT_SLACK_WEBHOOK_FILE) aren't set.
+  const sinks = attachReportSinks();
+  if (sinks.sinks.length > 0) {
+    process.stderr.write(`[daemon] report sinks attached: ${sinks.sinks.map((s) => s.name).join(', ')}\n`);
+  }
+
   const app = new Hono();
 
   // ---------------------------------------------------------------------------
