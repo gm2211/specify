@@ -1,0 +1,13 @@
+version: "2"
+name: DemoApp
+target:
+  type: web
+  url: http://demo.app.svc.cluster.local:8080
+areas:
+  - id: home
+    name: Home
+    behaviors:
+      - id: loads
+        description: Home page renders without 5xx errors
+      - id: nav-visible
+        description: Top navigation is visible to anonymous users

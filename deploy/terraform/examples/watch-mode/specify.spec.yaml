@@ -1,0 +1,18 @@
+version: "2"
+name: Renzo
+target:
+  type: web
+  url: http://renzo.app.svc.cluster.local:8080
+areas:
+  - id: home
+    name: Home
+    behaviors:
+      - id: loads
+        description: Home page renders without 5xx errors
+  - id: auth
+    name: Auth
+    behaviors:
+      - id: login-form-visible
+        description: Login form is visible to anonymous users
+      - id: invalid-credentials-rejected
+        description: Wrong credentials surface a clear error message
