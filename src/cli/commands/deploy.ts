@@ -117,12 +117,29 @@ interface ManifestExample {
   hcl: string;
 }
 
+interface TargetContract {
+  expected_scheme: string[];
+  expected_response_under_ms: number;
+  egress_required: string;
+  auth: string;
+  tls: string;
+}
+
+interface TriggerModel {
+  mode: 'webhook' | 'watch' | 'both' | 'none' | 'cron';
+  model: 'continuous' | 'push' | 'continuous + push' | 'manual' | 'scheduled';
+  status?: 'not_implemented';
+  tradeoff: string;
+}
+
 interface DescribeManifest {
   version: string;
   image: ManifestImage;
   terraform_module: ManifestModule;
   required_inputs: Array<{ name: string; type: string; doc: string }>;
   oneof_groups: OneOfGroup[];
+  target_contract: TargetContract;
+  trigger_models: TriggerModel[];
   report_sinks: ReportSinkOption[];
   secrets_to_create: ManifestSecret[];
   outputs: string[];
@@ -178,6 +195,41 @@ function buildManifest(versionOverride?: string): DescribeManifest {
           { name: 'both', type: 'string' },
           { name: 'none', type: 'string' },
         ],
+      },
+    ],
+    target_contract: {
+      expected_scheme: ['http', 'https'],
+      expected_response_under_ms: 5000,
+      egress_required: 'Pod must reach the target URL. If the cluster denies pod-to-pod traffic by default, the consumer needs a NetworkPolicy allowing egress from the QA pod to the target.',
+      auth: 'Spec describes any auth the agent needs. For login flows, capture credentials in spec.target or pass via env (SPECIFY_AUTH_*). The QA pod itself is auth\'d to its own /inbox via inbox_token.',
+      tls: 'https targets work transparently against public CAs. Self-signed / private CAs need an extra CA mounted into /etc/ssl/certs (target_extra_ca_secret — TODO).',
+    },
+    trigger_models: [
+      {
+        mode: 'watch',
+        model: 'continuous',
+        tradeoff: 'k8s informer holds an open watch on Deployments / StatefulSets matching the label selector. Daemon pod always up; idle = 0 Anthropic tokens. Catches every rollout, including out-of-band kubectl applies. Recommended default when the consumer can grant get/list/watch on apps/v1.',
+      },
+      {
+        mode: 'webhook',
+        model: 'push',
+        tradeoff: 'Daemon idle until your CI POSTs to inbox_url. No RBAC needed. Misses out-of-band deploys (manual kubectl, GitOps reconciler that does not POST).',
+      },
+      {
+        mode: 'both',
+        model: 'continuous + push',
+        tradeoff: 'Belt-and-braces. Can produce duplicate verifies for the same change — daemon dedupes by (namespace, name, resourceVersion).',
+      },
+      {
+        mode: 'none',
+        model: 'manual',
+        tradeoff: 'Daemon serves the inspector + receives manual /verify calls. Useful for stepping through reports interactively without arming any trigger.',
+      },
+      {
+        mode: 'cron',
+        model: 'scheduled',
+        status: 'not_implemented',
+        tradeoff: 'Periodic re-verify on a cadence regardless of rollouts. NOT recommended for change detection (collapses bursts of rollouts into one verify, adds cold-start overhead, loses in-process memory cache). Reserved for a future schedule.cadence input that runs alongside watch for "verify nightly even if nothing changed" cases.',
       },
     ],
     report_sinks: [
@@ -250,6 +302,18 @@ function renderText(m: DescribeManifest): string {
   lines.push('Pick-one groups:');
   for (const g of m.oneof_groups) {
     lines.push(`  ${g.name}: ${g.options.map((o) => o.name).join(' | ')}`);
+  }
+  lines.push('');
+  lines.push('Target contract:');
+  lines.push(`  expected_scheme: ${m.target_contract.expected_scheme.join(', ')}`);
+  lines.push(`  response under:  ${m.target_contract.expected_response_under_ms}ms`);
+  lines.push(`  egress:          ${m.target_contract.egress_required}`);
+  lines.push('');
+  lines.push('Trigger models:');
+  for (const t of m.trigger_models) {
+    const tag = t.status === 'not_implemented' ? ' [not implemented]' : '';
+    lines.push(`  ${t.mode} (${t.model})${tag}`);
+    lines.push(`    ${t.tradeoff}`);
   }
   lines.push('');
   lines.push('Outputs: ' + m.outputs.join(', '));
