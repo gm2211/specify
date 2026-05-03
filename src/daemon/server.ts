@@ -28,6 +28,7 @@ import { inbox } from './inbox.js';
 import type { InboxRequest } from './inbox.js';
 import { configurePool } from './worker-pool.js';
 import { renderInspectorHtml } from './inspector.js';
+import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 
 export interface DaemonOptions {
   port: number;
@@ -106,6 +107,31 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   // Landing page: live inspector for agent events, messages, sessions.
   app.get('/', (c) => {
     return c.html(renderInspectorHtml({ authRequired: !opts.noAuth }));
+  });
+
+  // Resolve the configured spec source on demand. Returns the spec hash so
+  // a watcher / TF webhook can detect version changes and trigger reverify.
+  // Source comes from env (SPECIFY_SPEC_INLINE_PATH | SPECIFY_SPEC_URL |
+  // SPECIFY_SPEC_GIT_REPO); when none configured, returns 400.
+  app.post('/control/reload-spec', async (c) => {
+    let src;
+    try {
+      src = specSourceFromEnv();
+    } catch (err) {
+      return c.json({ error: 'invalid_spec_source', detail: (err as Error).message }, 400);
+    }
+    if (!src) return c.json({ error: 'no_spec_source_configured' }, 400);
+    try {
+      const r = await resolveSpec(src);
+      return c.json({
+        ok: true,
+        hash: r.hash,
+        name: r.spec.name,
+        source: r.source,
+      });
+    } catch (err) {
+      return c.json({ error: 'spec_resolve_failed', detail: (err as Error).message }, 502);
+    }
   });
 
   app.post('/inbox', async (c) => {
