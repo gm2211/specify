@@ -67,7 +67,7 @@ test('executeCommand proxies goto and auto-screenshots on navigation', async () 
   assert.ok(screenshots[0].startsWith('nav-'));
 });
 
-test('executeCommand does not auto-screenshot when URL unchanged', async () => {
+test('executeCommand auto-screenshots every mutating action (evidence capture)', async () => {
   const screenshots: string[] = [];
   const page = mockPage();
   const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
@@ -75,7 +75,10 @@ test('executeCommand does not auto-screenshot when URL unchanged', async () => {
   const cmd: AgentCommand = { action: 'click', selector: '#btn' };
   await executeCommand(page, cmd, screenshotFn);
 
-  assert.equal(screenshots.length, 0, 'no screenshot when URL unchanged');
+  // Mutation always produces a screenshot; the prefix differs by action when
+  // the URL didn't change.
+  assert.equal(screenshots.length, 1);
+  assert.match(screenshots[0], /^click-/);
 });
 
 test('executeCommand returns done for done action', async () => {

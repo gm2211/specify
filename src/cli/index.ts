@@ -816,6 +816,23 @@ async function main(): Promise<void> {
         spec: resolveSpecArg(lintArgs, ctx),
       }, ctx);
 
+    } else if (noun === 'deploy') {
+      const { deployCommand } = await import('./commands/deploy.js');
+      // Normalize --foo=bar to --foo bar so getArg picks it up.
+      const deployArgs = rest.flatMap((a) => {
+        if (a.startsWith('--') && a.includes('=')) {
+          const [k, ...v] = a.split('=');
+          return [k, v.join('=')];
+        }
+        return [a];
+      });
+      const formatArg = getArg(deployArgs, '--format');
+      exitCode = await deployCommand({
+        verb,
+        format: formatArg === 'text' ? 'text' : 'json',
+        preset: deployArgs.find((a) => !a.startsWith('--')),
+      });
+
     } else {
       // Unknown command — structured error
       const error = { error: 'unknown_command', command: `${noun} ${verb ?? ''}`.trim(), hint: 'Run "specify schema commands" for available commands' };
