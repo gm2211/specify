@@ -128,6 +128,80 @@ test('inbox.submit stateless: serializes concurrent submits', async () => {
   }
 });
 
+test('inbox.submit: SPECIFY_TARGET_URL fills in url when caller omits it', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  const prevEnv = process.env.SPECIFY_TARGET_URL;
+  process.env.SPECIFY_TARGET_URL = 'http://envapp.svc.cluster.local:8080';
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
+    const specPath = path.join(tmpDir, 'spec.yaml');
+    fs.writeFileSync(specPath, [
+      'version: "2"',
+      'name: Test',
+      'target:',
+      '  type: web',
+      '  url: http://spec-default:3000',
+      'areas:',
+      '  - id: home',
+      '    name: Home',
+      '    behaviors:',
+      '      - id: loads',
+      '        description: Loads.',
+      '',
+    ].join('\n'));
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify after rollout.',
+      spec: specPath,
+      sender: 'k8s-watcher',
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].url, 'http://envapp.svc.cluster.local:8080');
+  } finally {
+    if (prevEnv === undefined) delete process.env.SPECIFY_TARGET_URL;
+    else process.env.SPECIFY_TARGET_URL = prevEnv;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit: explicit url wins over SPECIFY_TARGET_URL', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  const prevEnv = process.env.SPECIFY_TARGET_URL;
+  process.env.SPECIFY_TARGET_URL = 'http://from-env';
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
+    const specPath = path.join(tmpDir, 'spec.yaml');
+    fs.writeFileSync(specPath, [
+      'version: "2"',
+      'name: Test',
+      'target: { type: web, url: http://spec:3000 }',
+      'areas: [{ id: home, name: Home, behaviors: [{ id: loads, description: Loads. }] }]',
+      '',
+    ].join('\n'));
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify explicit url.',
+      spec: specPath,
+      url: 'http://caller-url',
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+    assert.equal(calls[0].url, 'http://caller-url');
+  } finally {
+    if (prevEnv === undefined) delete process.env.SPECIFY_TARGET_URL;
+    else process.env.SPECIFY_TARGET_URL = prevEnv;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
 test('inbox.list returns newest first', async () => {
   inbox.reset();
   const { runner } = makeFakeRunner();

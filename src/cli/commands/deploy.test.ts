@@ -27,6 +27,29 @@ test('describe: emits valid JSON manifest with required fields', async () => {
   assert.ok(m.examples.length >= 2);
 });
 
+test('describe: target_contract documents protocol + egress', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
+  assert.equal(code, 0);
+  const m = JSON.parse(out.buf);
+  assert.deepEqual(m.target_contract.expected_scheme, ['http', 'https']);
+  assert.ok(m.target_contract.expected_response_under_ms > 0);
+  assert.match(m.target_contract.egress_required, /NetworkPolicy/);
+});
+
+test('describe: trigger_models cover watch/webhook/both/none/cron with cron flagged not_implemented', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
+  assert.equal(code, 0);
+  const m = JSON.parse(out.buf);
+  const modes = m.trigger_models.map((t: { mode: string }) => t.mode);
+  for (const expected of ['watch', 'webhook', 'both', 'none', 'cron']) {
+    assert.ok(modes.includes(expected), `missing trigger mode: ${expected}`);
+  }
+  const cron = m.trigger_models.find((t: { mode: string }) => t.mode === 'cron');
+  assert.equal(cron.status, 'not_implemented');
+});
+
 test('describe: text format renders human summary', async () => {
   const out = new Sink();
   const code = await deployCommand({ verb: 'describe', format: 'text', versionOverride: '0.9.0', out });
@@ -34,6 +57,9 @@ test('describe: text format renders human summary', async () => {
   assert.match(out.buf, /specify-qa v0\.9\.0/);
   assert.match(out.buf, /Required inputs/);
   assert.match(out.buf, /Pick-one groups/);
+  assert.match(out.buf, /Target contract/);
+  assert.match(out.buf, /Trigger models/);
+  assert.match(out.buf, /\[not implemented\]/);
 });
 
 test('print-tf: minimal preset emits valid HCL skeleton', async () => {

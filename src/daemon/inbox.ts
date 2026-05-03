@@ -134,22 +134,31 @@ export class InboxRegistry {
 
   submit(req: InboxRequest): InboxMessage {
     const id = req.id ?? `msg_${randomUUID().slice(0, 8)}`;
+    // Default url from SPECIFY_TARGET_URL when caller didn't supply one.
+    // Lets the QA pod be configured once via Terraform and have every
+    // inbox-driven verify run against the same target — including the
+    // ones synthesized by the k8s rollout watcher, which has no URL of
+    // its own.
+    const envTargetUrl = process.env.SPECIFY_TARGET_URL?.trim();
+    const effectiveReq: InboxRequest = req.url || !envTargetUrl
+      ? req
+      : { ...req, url: envTargetUrl };
     const message: InboxMessage = {
       id,
       createdAt: new Date().toISOString(),
       status: 'queued',
-      request: req,
-      session: req.mode === 'attach' ? req.session ?? 'default' : undefined,
+      request: effectiveReq,
+      session: effectiveReq.mode === 'attach' ? effectiveReq.session ?? 'default' : undefined,
     };
     this.remember(message);
     eventBus.send('inbox:received', {
       id,
-      task: req.task,
-      mode: req.mode ?? 'stateless',
-      sender: req.sender,
+      task: effectiveReq.task,
+      mode: effectiveReq.mode ?? 'stateless',
+      sender: effectiveReq.sender,
     }, id);
 
-    if (req.mode === 'attach') {
+    if (effectiveReq.mode === 'attach') {
       this.dispatchAttach(message).catch((err) => this.fail(message, err));
     } else {
       this.dispatchStateless(message).catch((err) => this.fail(message, err));
