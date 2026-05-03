@@ -30,6 +30,7 @@ import { configurePool } from './worker-pool.js';
 import { renderInspectorHtml } from './inspector.js';
 import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 import { attachReportSinks } from '../agent/report-sink.js';
+import { startK8sWatcher } from '../agent/k8s-watcher.js';
 
 export interface DaemonOptions {
   port: number;
@@ -75,6 +76,14 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   if (sinks.sinks.length > 0) {
     process.stderr.write(`[daemon] report sinks attached: ${sinks.sinks.map((s) => s.name).join(', ')}\n`);
   }
+
+  // Cluster-watch discovery (no-op unless SPECIFY_K8S_WATCH=true). When a
+  // labelled Deployment / StatefulSet finishes rolling out, the watcher
+  // POSTs to our own /inbox and the daemon picks the verify up like any
+  // other webhook-driven trigger.
+  void startK8sWatcher().catch((err) => {
+    process.stderr.write(`[daemon] k8s watcher failed to start: ${(err as Error).message}\n`);
+  });
 
   const app = new Hono();
 
