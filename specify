@@ -40,7 +40,10 @@ needs_build() {
 
 if needs_build; then
   echo "Building TypeScript..." >&2
-  npx tsc --project "$SCRIPT_DIR/tsconfig.json"
+  # Use specify's own tsc, not whatever the caller's cwd resolves to.
+  # `npx tsc` from another project picks up the registry placeholder
+  # package whose only output is "this is not the tsc you are looking for".
+  "$SCRIPT_DIR/node_modules/.bin/tsc" --project "$SCRIPT_DIR/tsconfig.json"
 fi
 
 exec node "$DIST" "$@"
