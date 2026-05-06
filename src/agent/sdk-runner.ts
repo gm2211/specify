@@ -14,6 +14,7 @@ import type { MessageInjector } from './message-injector.js';
 import { defaultMemoryProvider, type MemoryProvider, type MemoryScope } from './memory-provider.js';
 import { honchoFromEnv } from './honcho-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
+import { createFeedbackMcpServer, feedbackSinkFromEnv } from './feedback-mcp.js';
 import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
 import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
@@ -523,6 +524,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // agent can write back durable lessons.
     let systemPrompt = opts.systemPrompt;
     const memoryTools: string[] = [];
+    const feedbackTools: string[] = [];
 
     // Layered context (user / project / per-spec observations) is loaded for
     // every task — not just verify — since project-level guidance and user
@@ -576,6 +578,23 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         // Non-fatal: memory is a learning aid, not a correctness requirement.
         process.stderr.write(`  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
       }
+
+      // Outbound ticket-filing tool. Default sink is `bd`; flip to HTTP by
+      // setting SPECIFY_FEEDBACK_URL. Loaded only for verify because that's
+      // the task whose findings warrant a ticket.
+      try {
+        const { loadSpec } = await import('../spec/parser.js');
+        const spec = loadSpec(opts.spec);
+        const feedbackServer = createFeedbackMcpServer({
+          specId: spec.name,
+          runId: `run_${randomUUID().slice(0, 8)}`,
+          sink: feedbackSinkFromEnv(),
+        });
+        mcpServers.feedback = feedbackServer;
+        feedbackTools.push('mcp__feedback__file_ticket');
+      } catch (err) {
+        process.stderr.write(`  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
     }
 
     const outputFormat = getOutputFormat(opts.task);
@@ -589,6 +608,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         ...fileTools,
         ...allowedBrowserTools,
         ...memoryTools,
+        ...feedbackTools,
       ],
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
