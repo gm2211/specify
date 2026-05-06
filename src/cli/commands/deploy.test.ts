@@ -37,6 +37,30 @@ test('describe: target_contract documents protocol + egress', async () => {
   assert.match(m.target_contract.egress_required, /NetworkPolicy/);
 });
 
+test('describe: agent_tools document file_ticket with feedback env vars', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
+  assert.equal(code, 0);
+  const m = JSON.parse(out.buf);
+  const ticket = m.agent_tools.find((t: { name: string }) => t.name === 'mcp__feedback__file_ticket');
+  assert.ok(ticket, 'agent_tools should include file_ticket');
+  assert.deepEqual(ticket.enabled_for_tasks, ['verify']);
+  const envs = ticket.configuration.map((c: { env: string }) => c.env);
+  assert.ok(envs.includes('SPECIFY_FEEDBACK_URL'));
+  assert.ok(envs.includes('SPECIFY_FEEDBACK_BEARER_FILE'));
+  // memory tools also surface
+  assert.ok(m.agent_tools.some((t: { name: string }) => t.name === 'mcp__memory__memory_record'));
+});
+
+test('describe: text format includes Agent tools section', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'text', versionOverride: 't', out });
+  assert.equal(code, 0);
+  assert.match(out.buf, /Agent tools:/);
+  assert.match(out.buf, /mcp__feedback__file_ticket/);
+  assert.match(out.buf, /SPECIFY_FEEDBACK_URL/);
+});
+
 test('describe: trigger_models cover watch/webhook/both/none/cron with cron flagged not_implemented', async () => {
   const out = new Sink();
   const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
