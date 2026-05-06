@@ -132,6 +132,13 @@ interface TriggerModel {
   tradeoff: string;
 }
 
+interface AgentTool {
+  name: string;
+  doc: string;
+  enabled_for_tasks: Array<'verify' | 'capture' | 'compare' | 'replay' | 'freeform'>;
+  configuration: Array<{ env: string; doc: string }>;
+}
+
 interface DescribeManifest {
   version: string;
   image: ManifestImage;
@@ -140,6 +147,7 @@ interface DescribeManifest {
   oneof_groups: OneOfGroup[];
   target_contract: TargetContract;
   trigger_models: TriggerModel[];
+  agent_tools: AgentTool[];
   report_sinks: ReportSinkOption[];
   secrets_to_create: ManifestSecret[];
   outputs: string[];
@@ -232,6 +240,29 @@ function buildManifest(versionOverride?: string): DescribeManifest {
         tradeoff: 'Periodic re-verify on a cadence regardless of rollouts. NOT recommended for change detection (collapses bursts of rollouts into one verify, adds cold-start overhead, loses in-process memory cache). Reserved for a future schedule.cadence input that runs alongside watch for "verify nightly even if nothing changed" cases.',
       },
     ],
+    agent_tools: [
+      {
+        name: 'mcp__memory__memory_record',
+        doc: 'Persist a durable lesson learned during a verify run (playbook / quirk / observation). Scoped to (spec, target). Use for stable facts; not per-run noise.',
+        enabled_for_tasks: ['verify'],
+        configuration: [],
+      },
+      {
+        name: 'mcp__memory__memory_list',
+        doc: 'List previously-learned memory rows for this spec+target. Useful at run start (recall) and during reflection.',
+        enabled_for_tasks: ['verify'],
+        configuration: [],
+      },
+      {
+        name: 'mcp__feedback__file_ticket',
+        doc: 'File an outbound ticket when the agent finds a reproducible bug worth a human looking at. Args: {summary, description, severity:cosmetic|minor|major|critical, area_id?, behavior_id?}. Returns the issue id. Use sparingly; lessons-learned still go through memory_record.',
+        enabled_for_tasks: ['verify'],
+        configuration: [
+          { env: 'SPECIFY_FEEDBACK_URL', doc: 'Optional. When set, tickets POST to this URL as JSON. When unset, the tool shells `bd create` instead.' },
+          { env: 'SPECIFY_FEEDBACK_BEARER_FILE', doc: 'Optional. Path to a file containing a bearer token for the HTTP sink. File-mounted so secret rotation does not require pod restart.' },
+        ],
+      },
+    ],
     report_sinks: [
       { type: 'file', shape: { path: 'string' }, enabled_by: 'report_file_dir (default /work/reports)' },
       { type: 'slack', shape: { webhook_url: 'string' }, enabled_by: 'report_slack_webhook' },
@@ -314,6 +345,15 @@ function renderText(m: DescribeManifest): string {
     const tag = t.status === 'not_implemented' ? ' [not implemented]' : '';
     lines.push(`  ${t.mode} (${t.model})${tag}`);
     lines.push(`    ${t.tradeoff}`);
+  }
+  lines.push('');
+  lines.push('Agent tools:');
+  for (const t of m.agent_tools) {
+    lines.push(`  ${t.name}  (tasks: ${t.enabled_for_tasks.join(', ')})`);
+    lines.push(`    ${t.doc}`);
+    for (const c of t.configuration) {
+      lines.push(`    env: ${c.env} — ${c.doc}`);
+    }
   }
   lines.push('');
   lines.push('Outputs: ' + m.outputs.join(', '));
