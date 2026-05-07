@@ -200,7 +200,7 @@ ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
-  ${c.cyan('review')}            Launch the review webapp in a browser
+  ${c.cyan('review')}            Launch the review webapp ${c.dim('(--background to daemonize, --stop to kill)')}
   ${c.cyan('verify')}            Verify an implementation against a contract
   ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
@@ -640,48 +640,20 @@ async function main(): Promise<void> {
       }, ctx);
       return;
 
-    } else if (noun === 'serve') {
-      // serve is a standalone command (no verb) — recombine args
-      const serveArgs = verb ? [verb, ...rest] : rest;
-      const { serveCommand } = await import('./commands/serve.js');
-      exitCode = await serveCommand({
-        spec: resolveSpecArg(serveArgs, ctx),
-        port: getArg(serveArgs, '--port'),
-        noOpen: hasFlag(serveArgs, '--no-open'),
-        agentReport: getArg(serveArgs, '--agent-report'),
-      }, ctx);
-
     } else if (noun === 'review') {
-      // review delegates to the webapp server (same as `serve`)
+      // `--stop` needs no spec — skip auto-discovery to avoid noise.
       const reviewArgs = verb ? [verb, ...rest] : rest;
+      const stop = hasFlag(reviewArgs, '--stop');
+      const background = hasFlag(reviewArgs, '--background');
       const { review: reviewCmd } = await import('./commands/review.js');
       exitCode = await reviewCmd({
-        spec: resolveSpecArg(reviewArgs, ctx),
+        spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
         agentReport: getArg(reviewArgs, '--agent-report'),
         port: getArg(reviewArgs, '--port'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
+        background,
+        stop,
       }, ctx);
-
-    } else if (noun === 'ui') {
-      // ui: `specify ui` (foreground), `specify ui start` (daemonize), `specify ui stop` (kill).
-      // `stop` needs no spec — skip auto-discovery to avoid noise.
-      const uiArgs = verb ? [verb, ...rest] : rest;
-      const uiMod = await import('./commands/ui.js');
-      if (verb === 'stop') {
-        exitCode = await uiMod.uiStop({ spec: '' }, ctx);
-      } else {
-        const uiOpts = {
-          spec: resolveSpecArg(uiArgs, ctx),
-          port: getArg(uiArgs, '--port'),
-          noOpen: hasFlag(uiArgs, '--no-open'),
-          agentReport: getArg(uiArgs, '--agent-report'),
-        };
-        if (verb === 'start') {
-          exitCode = await uiMod.uiStart(uiOpts, ctx);
-        } else {
-          exitCode = await uiMod.uiInteractive(uiOpts, ctx);
-        }
-      }
 
     } else if (noun === 'create') {
       const { create: createCmd } = await import('./commands/create.js');

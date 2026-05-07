@@ -67,7 +67,7 @@ it; flags become observations the agent reads as preamble next run.
 | `schema` | Emit JSON Schema for spec, report, or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
-| `serve` / `ui` / `ui start` / `ui stop` | Lower-level review-UI controls |
+| `review --background` / `review --stop` | Daemonize or stop the review webapp |
 | `human` | Interactive wizard / REPL / TUI dashboard |
 | `clean` | Remove generated reports, agent output, and `*.review.html` files |
 
