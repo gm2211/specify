@@ -201,13 +201,11 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
   ${c.cyan('review')}            Launch the review webapp in a browser
-  ${c.cyan('serve')}             Alias for review
-  ${c.cyan('ui [start|stop]')}   Interactive UI; add ${c.dim('start')}/${c.dim('stop')} to daemonize
   ${c.cyan('verify')}            Verify an implementation against a contract
   ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
 ${c.bold('Advanced:')}
-  ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec generate')}    Generate a spec from capture data
 
@@ -807,14 +805,6 @@ async function main(): Promise<void> {
       }
       process.stdout.write(JSON.stringify({ cleaned: removed, dryRun }) + '\n');
       exitCode = ExitCode.SUCCESS;
-
-    } else if (noun === 'lint') {
-      // Top-level alias for spec lint
-      const lintArgs = verb ? [verb, ...rest] : rest;
-      const { specLint } = await import('./commands/spec-lint.js');
-      exitCode = await specLint({
-        spec: resolveSpecArg(lintArgs, ctx),
-      }, ctx);
 
     } else if (noun === 'deploy') {
       const { deployCommand } = await import('./commands/deploy.js');

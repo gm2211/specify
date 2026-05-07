@@ -62,7 +62,7 @@ it; flags become observations the agent reads as preamble next run.
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
 | `replay` | Replay captured traffic against a target and diff results |
 | `impersonate` | Spin up a MockServer container that impersonates the captured system |
-| `lint` / `spec lint` | Structural validation (no captures needed) |
+| `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
 | `schema` | Emit JSON Schema for spec, report, or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |

@@ -268,12 +268,4 @@ export const COMMANDS: CommandDefinition[] = [
       'specify clean --dry-run',
     ],
   },
-  {
-    name: 'lint',
-    description: 'Validate contract structure without captures (schema + semantic checks)',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-    ],
-    examples: ['specify lint --spec spec.yaml'],
-  },
 ];
