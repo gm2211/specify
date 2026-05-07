@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as http from 'node:http';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { startDaemonServer, resolveToken } from './server.js';
 import { inbox, __setRunnerForTesting } from './inbox.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
+import { appendDecision } from '../agent/pending-decisions.js';
 
 const fakeRunner = async (_opts: SdkRunnerOptions): Promise<SdkRunnerResult> => ({
   result: 'ok',
@@ -120,4 +124,85 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
     body: JSON.stringify({ url: 'http://x' }),
   });
   assert.equal(verifyNoSpec.status, 400);
+});
+
+test('daemon HTTP: /decisions endpoints require bearer and behave correctly', async (t) => {
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-dec-srv-'));
+  const origHome = process.env.HOME;
+  process.env.HOME = tmpHome;
+
+  inbox.reset();
+  const prev = __setRunnerForTesting(fakeRunner);
+  const port = pickPort();
+  const original = process.env.SPECIFY_INBOX_TOKEN;
+  process.env.SPECIFY_INBOX_TOKEN = 'dec-token-456';
+  const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
+  t.after(async () => {
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
+    else process.env.SPECIFY_INBOX_TOKEN = original;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+    process.env.HOME = origHome;
+    fs.rmSync(tmpHome, { recursive: true, force: true });
+  });
+
+  await waitForHealth(port);
+  const token = 'dec-token-456';
+  const auth = { authorization: `Bearer ${token}` };
+
+  // Seed a decision directly via the store
+  const d = appendDecision({
+    specId: 'testspec',
+    runId: 'run_001',
+    question: 'Bug or feature?',
+    context: 'Page shows 404',
+    proposed_resolutions: [
+      { scope: 'narrow', label: 'Skip' },
+      { scope: 'medium', label: 'Known issue' },
+    ],
+  });
+
+  // GET /decisions returns list
+  const listRes = await request(port, `/decisions?specId=testspec&status=open`, { headers: auth });
+  assert.equal(listRes.status, 200);
+  const listBody = listRes.json as { decisions: Array<{ id: string }> };
+  assert.ok(Array.isArray(listBody.decisions));
+  assert.ok(listBody.decisions.some((x) => x.id === d.id));
+
+  // GET /decisions/:id returns the decision
+  const getRes = await request(port, `/decisions/${d.id}`, { headers: auth });
+  assert.equal(getRes.status, 200);
+  assert.equal((getRes.json as { id: string }).id, d.id);
+
+  // GET /decisions/:id with unknown id → 404
+  const missingRes = await request(port, `/decisions/dec_deadbeef`, { headers: auth });
+  assert.equal(missingRes.status, 404);
+
+  // POST /decisions/:id/resolve with scope mismatch → 400
+  const mismatchRes = await request(port, `/decisions/${d.id}/resolve`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ resolution_index: 0, scope: 'broad' }),
+  });
+  assert.equal(mismatchRes.status, 400);
+  assert.equal((mismatchRes.json as { error: string }).error, 'scope_mismatch');
+
+  // POST /decisions/:id/resolve with valid body → resolves
+  const resolveRes = await request(port, `/decisions/${d.id}/resolve`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ resolution_index: 0, scope: 'narrow', resolved_by: 'tester' }),
+  });
+  assert.equal(resolveRes.status, 200);
+  assert.equal((resolveRes.json as { status: string }).status, 'resolved');
+
+  // POST /decisions/:id/resolve again → 409
+  const doubleRes = await request(port, `/decisions/${d.id}/resolve`, {
+    method: 'POST',
+    headers: { ...auth, 'content-type': 'application/json' },
+    body: JSON.stringify({ resolution_index: 0, scope: 'narrow' }),
+  });
+  assert.equal(doubleRes.status, 409);
 });

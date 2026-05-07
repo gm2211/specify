@@ -13,6 +13,7 @@ import AreaCard from './components/AreaCard';
 import NarrativePanel from './components/NarrativePanel';
 import ActivityStream from './components/ActivityStream';
 import SkillDraftsPanel from './components/SkillDraftsPanel';
+import DecisionsList from './components/DecisionsList';
 
 export default function App() {
   const { spec, loading: specLoading, error: specError, refresh: refreshSpec } = useSpec();
@@ -25,6 +26,8 @@ export default function App() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
+  const [activeTab, setActiveTab] = useState<'behaviors' | 'decisions'>('behaviors');
+  const [openDecisionCount, setOpenDecisionCount] = useState(0);
 
   // WebSocket for live updates
   useEffect(() => {
@@ -132,6 +135,27 @@ export default function App() {
           <span className="header-description">{spec.description}</span>
         )}
       </div>
+      <div className="header-center">
+        <nav className="tab-bar">
+          <button
+            type="button"
+            className={`tab-btn${activeTab === 'behaviors' ? ' tab-btn--active' : ''}`}
+            onClick={() => setActiveTab('behaviors')}
+          >
+            Behaviors
+          </button>
+          <button
+            type="button"
+            className={`tab-btn${activeTab === 'decisions' ? ' tab-btn--active' : ''}`}
+            onClick={() => setActiveTab('decisions')}
+          >
+            Decisions
+            {openDecisionCount > 0 && (
+              <span className="tab-badge">{openDecisionCount}</span>
+            )}
+          </button>
+        </nav>
+      </div>
       <div className="header-right">
         <Summary spec={spec} results={results} />
         <button
@@ -163,40 +187,47 @@ export default function App() {
 
   return (
     <Layout header={header} sidebar={sidebar}>
-      <NarrativePanel description={spec.description} narrative={narrative} />
-      <ActivityStream active={verifying.size > 0} />
-      <SkillDraftsPanel />
-      {verifyError && (
-        <div className="verify-error" role="alert">
-          <strong>Verify error:</strong> {verifyError}
-        </div>
-      )}
-      <SearchBar
-        searchText={searchText}
-        onSearchChange={setSearchText}
-        statusFilter={statusFilter}
-        onStatusChange={setStatusFilter}
-        tagFilter={tagFilter}
-        onTagChange={setTagFilter}
-        allTags={allTags}
-      />
-      <div className="area-list">
-        {spec.areas.map((area) => (
-          <AreaCard
-            key={area.id}
-            area={area}
-            results={results}
-            expanded={expandedAreas.has(area.id)}
-            onToggle={() => handleToggleArea(area.id)}
+      {activeTab === 'behaviors' && (
+        <>
+          <NarrativePanel description={spec.description} narrative={narrative} />
+          <ActivityStream active={verifying.size > 0} />
+          <SkillDraftsPanel />
+          {verifyError && (
+            <div className="verify-error" role="alert">
+              <strong>Verify error:</strong> {verifyError}
+            </div>
+          )}
+          <SearchBar
             searchText={searchText}
+            onSearchChange={setSearchText}
             statusFilter={statusFilter}
+            onStatusChange={setStatusFilter}
             tagFilter={tagFilter}
-            onVerify={handleVerify}
-            verifying={verifying}
-            onEdit={handleEdit}
+            onTagChange={setTagFilter}
+            allTags={allTags}
           />
-        ))}
-      </div>
+          <div className="area-list">
+            {spec.areas.map((area) => (
+              <AreaCard
+                key={area.id}
+                area={area}
+                results={results}
+                expanded={expandedAreas.has(area.id)}
+                onToggle={() => handleToggleArea(area.id)}
+                searchText={searchText}
+                statusFilter={statusFilter}
+                tagFilter={tagFilter}
+                onVerify={handleVerify}
+                verifying={verifying}
+                onEdit={handleEdit}
+              />
+            ))}
+          </div>
+        </>
+      )}
+      {activeTab === 'decisions' && (
+        <DecisionsList onCountChange={setOpenDecisionCount} />
+      )}
     </Layout>
   );
 }
