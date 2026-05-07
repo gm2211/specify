@@ -149,3 +149,37 @@ test('describe: agent_tools includes file_decision for verify + capture with all
   assert.match(decision.doc, /medium/);
   assert.match(decision.doc, /broad/);
 });
+
+test('describe: agent_tools include budget_default and budget_env_override', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
+  assert.equal(code, 0);
+  const m = JSON.parse(out.buf);
+
+  interface ToolEntry { name: string; budget_default: number; budget_env_override: string }
+  for (const t of m.agent_tools as ToolEntry[]) {
+    assert.ok('budget_default' in t, `${t.name} missing budget_default`);
+    assert.ok('budget_env_override' in t, `${t.name} missing budget_env_override`);
+  }
+
+  const record = m.agent_tools.find((t: ToolEntry) => t.name === 'mcp__memory__memory_record');
+  assert.equal(record.budget_default, 50);
+  assert.equal(record.budget_env_override, 'SPECIFY_TOOL_BUDGET_MEMORY_RECORD');
+
+  const ticket = m.agent_tools.find((t: ToolEntry) => t.name === 'mcp__feedback__file_ticket');
+  assert.equal(ticket.budget_default, 10);
+  assert.equal(ticket.budget_env_override, 'SPECIFY_TOOL_BUDGET_FILE_TICKET');
+
+  const decision = m.agent_tools.find((t: ToolEntry) => t.name === 'mcp__decisions__file_decision');
+  assert.equal(decision.budget_default, 5);
+  assert.equal(decision.budget_env_override, 'SPECIFY_TOOL_BUDGET_FILE_DECISION');
+});
+
+test('describe: text format includes budget line for each agent tool', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'text', versionOverride: 't', out });
+  assert.equal(code, 0);
+  assert.match(out.buf, /budget: 50 \(override: SPECIFY_TOOL_BUDGET_MEMORY_RECORD\)/);
+  assert.match(out.buf, /budget: 10 \(override: SPECIFY_TOOL_BUDGET_FILE_TICKET\)/);
+  assert.match(out.buf, /budget: 5 \(override: SPECIFY_TOOL_BUDGET_FILE_DECISION\)/);
+});

@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, beforeEach } from 'node:test';
 import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -10,6 +10,12 @@ import {
   type FeedbackMcpContext,
 } from './feedback-mcp.js';
 import { eventBus } from './event-bus.js';
+import { _internals as budgetInternals } from './tool-budget.js';
+
+beforeEach(() => {
+  budgetInternals.counters.clear();
+  delete process.env.SPECIFY_TOOL_BUDGET_FILE_TICKET;
+});
 
 test('feedbackSinkFromEnv: defaults to bd when nothing set', () => {
   assert.deepEqual(feedbackSinkFromEnv({}), { kind: 'bd' });
@@ -166,4 +172,35 @@ test('file_ticket via http: non-OK response surfaces a clean error', async () =>
     handler({ summary: 'x', description: 'y', severity: 'critical' }),
     /Feedback HTTP sink 429/,
   );
+});
+
+test('file_ticket budget exceeded returns structured error without filing ticket', async () => {
+  process.env.SPECIFY_TOOL_BUDGET_FILE_TICKET = '2';
+  const filedIds: string[] = [];
+  const ctx: FeedbackMcpContext = {
+    specId: 'Renzo',
+    runId: 'run_budget',
+    sink: { kind: 'bd' },
+    bdExec: async () => {
+      const id = `SP-budget${filedIds.length}`;
+      filedIds.push(id);
+      return { stdout: `✓ Created issue: ${id} — Bug\n`, code: 0 };
+    },
+  };
+  const server = createFeedbackMcpServer(ctx);
+  const handler = findHandler(server, 'file_ticket');
+  const args = { summary: 'x', description: 'y', severity: 'minor' };
+
+  await handler(args);
+  await handler(args);
+  assert.equal(filedIds.length, 2);
+
+  const res = await handler(args);
+  const body = JSON.parse(res.content[0].text);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, 'budget_exceeded');
+  assert.equal(body.tool, 'file_ticket');
+  assert.equal(body.limit, 2);
+  assert.equal(body.used, 2);
+  assert.equal(filedIds.length, 2, 'should not have filed a third ticket');
 });
