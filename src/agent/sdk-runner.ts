@@ -15,6 +15,7 @@ import { defaultMemoryProvider, type MemoryProvider, type MemoryScope } from './
 import { honchoFromEnv } from './honcho-provider.js';
 import { createMemoryMcpServer } from './memory-mcp.js';
 import { createFeedbackMcpServer, feedbackSinkFromEnv } from './feedback-mcp.js';
+import { createDecisionsMcpServer } from './decisions-mcp.js';
 import { defaultSessionDbPath, openSessionStore, type SessionStore } from './session-store.js';
 import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
@@ -525,6 +526,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     let systemPrompt = opts.systemPrompt;
     const memoryTools: string[] = [];
     const feedbackTools: string[] = [];
+    const decisionTools: string[] = [];
 
     // Layered context (user / project / per-spec observations) is loaded for
     // every task — not just verify — since project-level guidance and user
@@ -552,6 +554,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // prepend the summary to the system prompt so the agent starts with
     // prior knowledge; expose memory_record + memory_list tools so the
     // agent can write back durable lessons.
+    let verifyMemoryScope: MemoryScope | undefined;
+    let verifyMemoryProvider: MemoryProvider | undefined;
     if (opts.task === 'verify' && opts.spec) {
       try {
         const { loadSpec } = await import('../spec/parser.js');
@@ -563,6 +567,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         };
         const provider: MemoryProvider = honchoFromEnv() ?? defaultMemoryProvider();
         const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
+        verifyMemoryScope = scope;
+        verifyMemoryProvider = provider;
         const memoryIntro = await provider.prefetch(scope);
         if (memoryIntro) {
           systemPrompt = memoryIntro + '\n\n' + systemPrompt;
@@ -597,6 +603,37 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       }
     }
 
+    // Decisions queue: available for verify and capture. Capture benefits from
+    // being able to ask "is this an actual broken page or expected for an
+    // unauthenticated user?" without the agent having to make that call alone.
+    if ((opts.task === 'verify' || opts.task === 'capture') && opts.spec) {
+      try {
+        const { loadSpec } = await import('../spec/parser.js');
+        const spec = loadSpec(opts.spec);
+        const target = {
+          type: spec.target.type as 'web' | 'api' | 'cli',
+          url: (spec.target as { url?: string }).url,
+          binary: (spec.target as { binary?: string }).binary,
+        };
+        const memoryScope: MemoryScope = verifyMemoryScope ?? {
+          specPath: opts.spec,
+          specId: spec.name,
+          target,
+        };
+        const memoryProvider = verifyMemoryProvider ?? defaultMemoryProvider();
+        const decisionsServer = createDecisionsMcpServer({
+          specId: spec.name,
+          runId: `run_${randomUUID().slice(0, 8)}`,
+          memoryScope,
+          memoryProvider,
+        });
+        mcpServers.decisions = decisionsServer;
+        decisionTools.push('mcp__decisions__file_decision');
+      } catch (err) {
+        process.stderr.write(`  Decisions tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
+
     const outputFormat = getOutputFormat(opts.task);
 
     const queryOptions: Options = {
@@ -609,6 +646,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         ...allowedBrowserTools,
         ...memoryTools,
         ...feedbackTools,
+        ...decisionTools,
       ],
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,

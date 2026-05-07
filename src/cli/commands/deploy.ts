@@ -262,6 +262,12 @@ function buildManifest(versionOverride?: string): DescribeManifest {
           { env: 'SPECIFY_FEEDBACK_BEARER_FILE', doc: 'Optional. Path to a file containing a bearer token for the HTTP sink. File-mounted so secret rotation does not require pod restart.' },
         ],
       },
+      {
+        name: 'mcp__decisions__file_decision',
+        doc: 'Pause the run to ask a human a typed question with pre-drafted resolutions at narrow (this run only), medium (this behavior — persisted as memory), or broad (this spec — persisted as memory) scope. The blocking flag holds the run until a human resolves via POST /decisions/:id/resolve in the cooperative-QA webapp.',
+        enabled_for_tasks: ['verify', 'capture'],
+        configuration: [],
+      },
     ],
     report_sinks: [
       { type: 'file', shape: { path: 'string' }, enabled_by: 'report_file_dir (default /work/reports)' },

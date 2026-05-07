@@ -31,6 +31,7 @@ import { renderInspectorHtml } from './inspector.js';
 import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 import { attachReportSinks } from '../agent/report-sink.js';
 import { startK8sWatcher } from '../agent/k8s-watcher.js';
+import { listDecisions, getDecision, resolveDecision } from '../agent/pending-decisions.js';
 
 export interface DaemonOptions {
   port: number;
@@ -322,6 +323,54 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
         'Connection': 'keep-alive',
       },
     });
+  });
+
+  app.get('/decisions', (c) => {
+    const specId = c.req.query('specId') ?? undefined;
+    const rawStatus = c.req.query('status') ?? 'open';
+    const status = rawStatus as 'open' | 'resolved' | 'expired';
+    const decisions = listDecisions(specId, { status });
+    return c.json({ decisions });
+  });
+
+  app.get('/decisions/:id', (c) => {
+    const id = c.req.param('id');
+    const decision = getDecision(id);
+    if (!decision) return c.json({ error: 'not_found', id }, 404);
+    return c.json(decision);
+  });
+
+  app.post('/decisions/:id/resolve', async (c) => {
+    const id = c.req.param('id');
+    let body: { resolution_index?: unknown; scope?: unknown; resolved_by?: unknown; note?: unknown };
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'invalid_json' }, 400);
+    }
+    if (typeof body.resolution_index !== 'number') {
+      return c.json({ error: 'missing_field', field: 'resolution_index' }, 400);
+    }
+    if (typeof body.scope !== 'string' || !['narrow', 'medium', 'broad'].includes(body.scope)) {
+      return c.json({ error: 'invalid_scope', scope: body.scope }, 400);
+    }
+    const existing = getDecision(id);
+    if (!existing) return c.json({ error: 'not_found', id }, 404);
+    if (existing.status !== 'open') return c.json({ error: 'already_resolved', id, status: existing.status }, 409);
+    try {
+      const resolved = await resolveDecision(id, {
+        resolution_index: body.resolution_index,
+        scope: body.scope as 'narrow' | 'medium' | 'broad',
+        resolved_by: typeof body.resolved_by === 'string' ? body.resolved_by : undefined,
+        note: typeof body.note === 'string' ? body.note : undefined,
+      });
+      return c.json(resolved);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes('Scope mismatch')) return c.json({ error: 'scope_mismatch', detail: msg }, 400);
+      if (msg.includes('Invalid resolution_index')) return c.json({ error: 'invalid_resolution_index', detail: msg }, 400);
+      return c.json({ error: 'resolve_failed', detail: msg }, 500);
+    }
   });
 
   app.get('/sessions', (c) => c.json({ sessions: inbox.sessionIds() }));

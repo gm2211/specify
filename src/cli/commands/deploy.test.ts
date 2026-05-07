@@ -135,3 +135,17 @@ test('manifest covers every printed preset', () => {
     assert.ok(_internals.TF_PRESETS[ex.name], `missing preset for example ${ex.name}`);
   }
 });
+
+test('describe: agent_tools includes file_decision for verify + capture with all three scopes in doc', async () => {
+  const out = new Sink();
+  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
+  assert.equal(code, 0);
+  const m = JSON.parse(out.buf);
+  const decision = m.agent_tools.find((t: { name: string }) => t.name === 'mcp__decisions__file_decision');
+  assert.ok(decision, 'agent_tools should include mcp__decisions__file_decision');
+  assert.ok(decision.enabled_for_tasks.includes('verify'), 'should be enabled for verify');
+  assert.ok(decision.enabled_for_tasks.includes('capture'), 'should be enabled for capture');
+  assert.match(decision.doc, /narrow/);
+  assert.match(decision.doc, /medium/);
+  assert.match(decision.doc, /broad/);
+});
