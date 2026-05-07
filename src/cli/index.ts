@@ -11,7 +11,7 @@
  *   - Field masks via --fields for context-window discipline
  *   - Stdin support (--spec -) for piping
  *   - TTY auto-detection: pretty text for humans, JSON for pipes
- *   - `specify human` enters interactive mode (wizard, REPL, TUI)
+ *   - `specify human` enters interactive chat REPL
  *
  * Command structure:
  *   specify spec generate   --input <dir> --output <path>
@@ -213,7 +213,7 @@ ${c.bold('Infrastructure:')}
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
   ${c.cyan('mcp')}               MCP server for agent integration
 
-${c.dim(`Run "specify human" for interactive guided mode`)}
+${c.dim(`Run "specify human" for interactive chat REPL`)}
 ${c.dim(`Run "specify <command> --help" for command-specific help`)}
 
 ${c.bold('Common tasks:')}
@@ -333,45 +333,14 @@ async function main(): Promise<void> {
     // Interactive modes — `specify human [init|shell|watch]`
     // -----------------------------------------------------------------
     if (noun === 'human') {
-      if (verb === 'shell' || verb === 'repl') {
-        const { runRepl } = await import('./interactive/repl.js');
-        exitCode = await runRepl({
-          spec: resolveSpecArg(rest, ctx) || undefined,
-          url: getArg(rest, '--url'),
-        });
-      } else if (verb === 'watch' || verb === 'tui') {
-        const tuiUrl = getArg(rest, '--url') ?? '';
-        if (!tuiUrl) {
-          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide a target URL for the TUI dashboard' }) + '\n');
-          exitCode = ExitCode.PARSE_ERROR;
-        } else {
-          const { runTui } = await import('./interactive/tui.js');
-          exitCode = await runTui({
-            spec: resolveSpecArg(rest, ctx),
-            url: tuiUrl,
-          });
-        }
-      } else if (verb === 'wizard' || verb === 'init') {
-        // Legacy wizard mode — preserved for backward compatibility
-        const wizardArgs = rest;
-        const { runWizard } = await import('./interactive/wizard.js');
-        exitCode = await runWizard({
-          fromCapture: getArg(wizardArgs, '--from-capture'),
-          action: undefined,
-          subAction: undefined,
-          spec: getArg(wizardArgs, '--spec'),
-        });
-      } else {
-        // Default: chat REPL — freeform text interface
-        // e.g. `specify human` or `specify human chat`
-        const chatArgs = verb && verb !== 'chat' ? [verb, ...rest] : rest;
-        const { runChat } = await import('./interactive/chat.js');
-        exitCode = await runChat({
-          spec: resolveSpecArg(chatArgs, ctx) || undefined,
-          url: getArg(chatArgs, '--url'),
-          debug,
-        });
-      }
+      // Always run chat REPL — pass any extra args through.
+      const chatArgs = verb && verb !== 'chat' ? [verb, ...rest] : rest;
+      const { runChat } = await import('./interactive/chat.js');
+      exitCode = await runChat({
+        spec: resolveSpecArg(chatArgs, ctx) || undefined,
+        url: getArg(chatArgs, '--url'),
+        debug,
+      });
 
     // -----------------------------------------------------------------
     // Agent-friendly commands — structured output to stdout

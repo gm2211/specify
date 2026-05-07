@@ -156,27 +156,12 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'human',
-    description: 'Interactive mode — context-aware wizard that detects project state and guides you',
-    parameters: [
-      { name: '--from-capture', type: 'string', required: false, description: 'Pre-populate wizard from capture directory' },
-    ],
-    examples: ['specify human', 'specify human shell --spec spec.yaml', 'specify human watch --spec spec.yaml --url http://localhost:3000'],
-  },
-  {
-    name: 'human shell',
-    description: 'Interactive REPL for iterative spec development with tab completion',
+    description: 'Interactive chat REPL — freeform text interface for working with Specify',
     parameters: [
       { name: '--spec', type: 'string', required: false, description: 'Initial spec to load' },
       { name: '--url', type: 'string', required: false, description: 'Target URL' },
     ],
-  },
-  {
-    name: 'human watch',
-    description: 'Live TUI dashboard for monitoring agent runs and spec status',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--url', type: 'string', required: true, description: 'Target URL' },
-    ],
+    examples: ['specify human', 'specify human --spec spec.yaml', 'specify human --spec spec.yaml --url http://localhost:3000'],
   },
   {
     name: 'review',

@@ -68,7 +68,7 @@ it; flags become observations the agent reads as preamble next run.
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
 | `review --background` / `review --stop` | Daemonize or stop the review webapp |
-| `human` | Interactive wizard / REPL / TUI dashboard |
+| `human` | Interactive chat REPL |
 | `clean` | Remove generated reports, agent output, and `*.review.html` files |
 
 Run `specify <cmd> --help` for full flags. Source: [`src/cli/commands-manifest.ts`](src/cli/commands-manifest.ts).
