@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { createDecisionsMcpServer, type DecisionsMcpContext } from './decisions-mcp.js';
 import { resolveDecision } from './pending-decisions.js';
 import { eventBus } from './event-bus.js';
+import { _internals as budgetInternals } from './tool-budget.js';
 
 let origHome: string | undefined;
 let tmpHome: string;
@@ -14,6 +15,8 @@ beforeEach(() => {
   tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-dec-mcp-'));
   origHome = process.env.HOME;
   process.env.HOME = tmpHome;
+  budgetInternals.counters.clear();
+  delete process.env.SPECIFY_TOOL_BUDGET_FILE_DECISION;
 });
 
 afterEach(() => {
@@ -194,4 +197,30 @@ test('file_decision broad-scope resolution: writes playbook memory row', async (
   assert.ok(written.length > 0);
   const delta = (written[0].deltas as Array<{ type: string }>)[0];
   assert.equal(delta.type, 'playbook');
+});
+
+test('file_decision budget exceeded returns structured error and does not append decision', async () => {
+  process.env.SPECIFY_TOOL_BUDGET_FILE_DECISION = '2';
+  const server = createDecisionsMcpServer(makeCtx({ runId: 'run_budget_dec' }));
+  const handler = findHandler(server, 'file_decision');
+
+  const decisionIds: string[] = [];
+  const off = eventBus.onAny((ev) => {
+    if (ev.type === 'feedback:decision_filed') decisionIds.push(ev.data.id as string);
+  });
+
+  await handler(baseArgs);
+  await handler(baseArgs);
+  assert.equal(decisionIds.length, 2);
+
+  const res = await handler(baseArgs);
+  off();
+
+  const body = JSON.parse(res.content[0].text);
+  assert.equal(body.ok, false);
+  assert.equal(body.error, 'budget_exceeded');
+  assert.equal(body.tool, 'file_decision');
+  assert.equal(body.limit, 2);
+  assert.equal(body.used, 2);
+  assert.equal(decisionIds.length, 2, 'should not have appended a third decision');
 });

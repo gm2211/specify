@@ -7,6 +7,7 @@ import {
   type DecisionScope,
 } from './pending-decisions.js';
 import type { MemoryProvider, MemoryScope } from './memory-provider.js';
+import { enforceBudget } from './tool-budget.js';
 
 export interface DecisionsMcpContext {
   specId: string;
@@ -45,6 +46,22 @@ export function createDecisionsMcpServer(ctx: DecisionsMcpContext) {
           timeout_seconds: z.number().optional().describe('Seconds to wait before giving up (default 600, only meaningful when blocking=true)'),
         },
         async (args) => {
+          const budget = enforceBudget(ctx.runId, 'file_decision');
+          if (!budget.ok) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'budget_exceeded',
+                  tool: 'file_decision',
+                  limit: budget.limit,
+                  used: budget.used,
+                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                }),
+              }],
+            };
+          }
           const decision = appendDecision({
             specId: ctx.specId,
             runId: ctx.runId,

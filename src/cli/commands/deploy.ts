@@ -22,6 +22,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ExitCode } from '../exit-codes.js';
+import { TOOL_BUDGETS } from '../../agent/tool-budget.js';
 
 export interface DeployCliOptions {
   verb?: string;
@@ -137,6 +138,10 @@ interface AgentTool {
   doc: string;
   enabled_for_tasks: Array<'verify' | 'capture' | 'compare' | 'replay' | 'freeform'>;
   configuration: Array<{ env: string; doc: string }>;
+  /** Per-run call cap (Infinity → no cap). */
+  budget_default: number;
+  /** Env var name (full form, including SPECIFY_TOOL_BUDGET_ prefix) to override. */
+  budget_env_override: string;
 }
 
 interface DescribeManifest {
@@ -153,6 +158,16 @@ interface DescribeManifest {
   outputs: string[];
   agent_install_recipe: string[];
   examples: ManifestExample[];
+}
+
+function toolBudgetFields(mcpName: string): { budget_default: number; budget_env_override: string } {
+  const bare = mcpName.split('__').pop() ?? mcpName;
+  const cfg = TOOL_BUDGETS[bare];
+  if (!cfg) return { budget_default: Infinity, budget_env_override: '' };
+  return {
+    budget_default: cfg.default,
+    budget_env_override: `SPECIFY_TOOL_BUDGET_${cfg.envName}`,
+  };
 }
 
 function buildManifest(versionOverride?: string): DescribeManifest {
@@ -246,12 +261,14 @@ function buildManifest(versionOverride?: string): DescribeManifest {
         doc: 'Persist a durable lesson learned during a verify run (playbook / quirk / observation). Scoped to (spec, target). Use for stable facts; not per-run noise.',
         enabled_for_tasks: ['verify'],
         configuration: [],
+        ...toolBudgetFields('mcp__memory__memory_record'),
       },
       {
         name: 'mcp__memory__memory_list',
         doc: 'List previously-learned memory rows for this spec+target. Useful at run start (recall) and during reflection.',
         enabled_for_tasks: ['verify'],
         configuration: [],
+        ...toolBudgetFields('mcp__memory__memory_list'),
       },
       {
         name: 'mcp__feedback__file_ticket',
@@ -261,12 +278,14 @@ function buildManifest(versionOverride?: string): DescribeManifest {
           { env: 'SPECIFY_FEEDBACK_URL', doc: 'Optional. When set, tickets POST to this URL as JSON. When unset, the tool shells `bd create` instead.' },
           { env: 'SPECIFY_FEEDBACK_BEARER_FILE', doc: 'Optional. Path to a file containing a bearer token for the HTTP sink. File-mounted so secret rotation does not require pod restart.' },
         ],
+        ...toolBudgetFields('mcp__feedback__file_ticket'),
       },
       {
         name: 'mcp__decisions__file_decision',
         doc: 'Pause the run to ask a human a typed question with pre-drafted resolutions at narrow (this run only), medium (this behavior — persisted as memory), or broad (this spec — persisted as memory) scope. The blocking flag holds the run until a human resolves via POST /decisions/:id/resolve in the cooperative-QA webapp.',
         enabled_for_tasks: ['verify', 'capture'],
         configuration: [],
+        ...toolBudgetFields('mcp__decisions__file_decision'),
       },
     ],
     report_sinks: [
@@ -357,6 +376,8 @@ function renderText(m: DescribeManifest): string {
   for (const t of m.agent_tools) {
     lines.push(`  ${t.name}  (tasks: ${t.enabled_for_tasks.join(', ')})`);
     lines.push(`    ${t.doc}`);
+    const budgetStr = t.budget_default === Infinity ? 'unlimited' : String(t.budget_default);
+    lines.push(`    budget: ${budgetStr}${t.budget_env_override ? ` (override: ${t.budget_env_override})` : ''}`);
     for (const c of t.configuration) {
       lines.push(`    env: ${c.env} — ${c.doc}`);
     }

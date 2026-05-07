@@ -25,6 +25,7 @@ import * as fs from 'node:fs';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { eventBus } from './event-bus.js';
+import { enforceBudget } from './tool-budget.js';
 
 export type FeedbackSink =
   | { kind: 'bd' }
@@ -71,6 +72,22 @@ export function createFeedbackMcpServer(ctx: FeedbackMcpContext) {
           behavior_id: z.string().optional(),
         },
         async (args) => {
+          const budget = enforceBudget(ctx.runId, 'file_ticket');
+          if (!budget.ok) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'budget_exceeded',
+                  tool: 'file_ticket',
+                  limit: budget.limit,
+                  used: budget.used,
+                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                }),
+              }],
+            };
+          }
           const id = await fileTicket(ctx, args);
           eventBus.send('feedback:ticket_filed', {
             id,

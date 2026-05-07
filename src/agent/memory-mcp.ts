@@ -21,6 +21,7 @@ import {
   type MemoryProvider,
   type MemoryScope,
 } from './memory-provider.js';
+import { enforceBudget } from './tool-budget.js';
 
 export interface MemoryMcpContext {
   scope: MemoryScope;
@@ -51,6 +52,22 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           contradicts_id: z.string().optional().describe('Pass an existing row id to mark it contradicted'),
         },
         async (args) => {
+          const budget = enforceBudget(ctx.runId, 'memory_record');
+          if (!budget.ok) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'budget_exceeded',
+                  tool: 'memory_record',
+                  limit: budget.limit,
+                  used: budget.used,
+                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                }),
+              }],
+            };
+          }
           const delta: DeltaInput = {
             type: args.type,
             content: args.content,
@@ -81,6 +98,22 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           type: z.enum(['observation', 'playbook', 'quirk']).optional(),
         },
         async (args) => {
+          const budget = enforceBudget(ctx.runId, 'memory_list');
+          if (!budget.ok) {
+            return {
+              content: [{
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'budget_exceeded',
+                  tool: 'memory_list',
+                  limit: budget.limit,
+                  used: budget.used,
+                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                }),
+              }],
+            };
+          }
           const file = await provider.read(ctx.scope);
           const rows = args.type ? file.rows.filter((r) => r.type === args.type) : file.rows;
           return {
