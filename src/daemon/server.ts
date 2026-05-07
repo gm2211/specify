@@ -180,57 +180,6 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
     }, 202);
   });
 
-  // Convenience: POST /verify {spec, url} → shorthand for POST /inbox task=verify.
-  app.post('/verify', async (c) => {
-    let body: { spec?: string; url?: string; prompt?: string; mode?: 'stateless' | 'attach'; session?: string; sender?: string; outputDir?: string };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    if (!body.spec) return c.json({ error: 'missing_field', field: 'spec' }, 400);
-    const message = inbox.submit({
-      task: 'verify',
-      prompt: body.prompt ?? (body.url ? `Verify ${body.url} against the spec.` : 'Verify the target against the spec.'),
-      spec: body.spec,
-      url: body.url,
-      mode: body.mode,
-      session: body.session,
-      sender: body.sender,
-      outputDir: body.outputDir,
-    });
-    return c.json({
-      id: message.id,
-      status: message.status,
-      session: message.session,
-      stream: `/inbox/${message.id}/stream`,
-    }, 202);
-  });
-
-  // Convenience: POST /capture {url} → shorthand for POST /inbox task=capture.
-  app.post('/capture', async (c) => {
-    let body: { url?: string; spec?: string; prompt?: string; sender?: string; outputDir?: string };
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'invalid_json' }, 400);
-    }
-    if (!body.url) return c.json({ error: 'missing_field', field: 'url' }, 400);
-    const message = inbox.submit({
-      task: 'capture',
-      prompt: body.prompt ?? `Explore ${body.url} and generate a behavioral spec.`,
-      url: body.url,
-      spec: body.spec,
-      sender: body.sender,
-      outputDir: body.outputDir,
-    });
-    return c.json({
-      id: message.id,
-      status: message.status,
-      stream: `/inbox/${message.id}/stream`,
-    }, 202);
-  });
-
   app.get('/inbox', (c) => {
     const limit = Number(c.req.query('limit') ?? '50');
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 500) : 50;

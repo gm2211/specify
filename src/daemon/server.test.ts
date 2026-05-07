@@ -116,14 +116,6 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   });
   assert.equal(detail.status, 200);
   assert.equal((detail.json as { status: string }).status, 'completed');
-
-  // /verify missing spec
-  const verifyNoSpec = await request(port, '/verify', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
-    body: JSON.stringify({ url: 'http://x' }),
-  });
-  assert.equal(verifyNoSpec.status, 400);
 });
 
 test('daemon HTTP: /decisions endpoints require bearer and behave correctly', async (t) => {
