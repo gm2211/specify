@@ -156,83 +156,30 @@ export const COMMANDS: CommandDefinition[] = [
   },
   {
     name: 'human',
-    description: 'Interactive mode — context-aware wizard that detects project state and guides you',
-    parameters: [
-      { name: '--from-capture', type: 'string', required: false, description: 'Pre-populate wizard from capture directory' },
-    ],
-    examples: ['specify human', 'specify human shell --spec spec.yaml', 'specify human watch --spec spec.yaml --url http://localhost:3000'],
-  },
-  {
-    name: 'human shell',
-    description: 'Interactive REPL for iterative spec development with tab completion',
+    description: 'Interactive chat REPL — freeform text interface for working with Specify',
     parameters: [
       { name: '--spec', type: 'string', required: false, description: 'Initial spec to load' },
       { name: '--url', type: 'string', required: false, description: 'Target URL' },
     ],
-  },
-  {
-    name: 'human watch',
-    description: 'Live TUI dashboard for monitoring agent runs and spec status',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--url', type: 'string', required: true, description: 'Target URL' },
-    ],
-  },
-  {
-    name: 'serve',
-    description: 'Start the review webapp server with live reload via WebSocket',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
-      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
-      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
-    ],
-    examples: [
-      'specify serve --spec spec.yaml',
-      'specify serve --spec spec.yaml --port 8080',
-      'specify serve --spec spec.yaml --agent-report .specify/verify/verify-result.json --no-open',
-    ],
+    examples: ['specify human', 'specify human --spec spec.yaml', 'specify human --spec spec.yaml --url http://localhost:3000'],
   },
   {
     name: 'review',
-    description: 'Open an interactive spec browser — narrative view with spec toggle and validation results overlay',
+    description: 'Open the interactive spec browser (narrative view, validation overlay, live reload)',
     parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--narrative', type: 'string', required: false, description: 'Path to narrative companion file (auto-discovered if omitted)' },
-      { name: '--report', type: 'string', required: false, description: 'Path to validation report JSON (gap-report.json or cli-report.json)' },
+      { name: '--spec', type: 'string', required: false, description: 'Path to spec file (auto-discovered if omitted)' },
+      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
       { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON (from specify verify --url)' },
-      { name: '--output', type: 'string', required: false, description: 'Output HTML file path (default: <spec>.review.html)' },
       { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
+      { name: '--background', type: 'boolean', required: false, description: 'Daemonize the server; writes .specify/ui.pid' },
+      { name: '--stop', type: 'boolean', required: false, description: 'Kill a backgrounded server (reads .specify/ui.pid)' },
     ],
-    examples: ['specify review --spec spec.yaml', 'specify review --spec spec.yaml --report gap-report.json', 'specify review --spec spec.yaml --agent-report verify-result.json'],
-  },
-  {
-    name: 'ui',
-    description: 'Run the review UI in the foreground (Ctrl+C to stop)',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
-      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
-      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
+    examples: [
+      'specify review --spec spec.yaml',
+      'specify review --spec spec.yaml --background',
+      'specify review --stop',
+      'specify review --spec spec.yaml --agent-report .specify/verify/verify-result.json',
     ],
-    examples: ['specify ui --spec spec.yaml'],
-  },
-  {
-    name: 'ui start',
-    description: 'Start the review UI in the background; writes .specify/ui.pid',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file' },
-      { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
-      { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON' },
-      { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
-    ],
-    examples: ['specify ui start --spec spec.yaml'],
-  },
-  {
-    name: 'ui stop',
-    description: 'Stop the background review UI (reads .specify/ui.pid)',
-    parameters: [],
-    examples: ['specify ui stop'],
   },
   {
     name: 'create',
@@ -267,13 +214,5 @@ export const COMMANDS: CommandDefinition[] = [
       'specify clean',
       'specify clean --dry-run',
     ],
-  },
-  {
-    name: 'lint',
-    description: 'Validate contract structure without captures (schema + semantic checks)',
-    parameters: [
-      { name: '--spec', type: 'string', required: true, description: 'Path to spec file (or - for stdin)' },
-    ],
-    examples: ['specify lint --spec spec.yaml'],
   },
 ];

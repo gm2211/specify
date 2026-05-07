@@ -11,7 +11,7 @@
  *   - Field masks via --fields for context-window discipline
  *   - Stdin support (--spec -) for piping
  *   - TTY auto-detection: pretty text for humans, JSON for pipes
- *   - `specify human` enters interactive mode (wizard, REPL, TUI)
+ *   - `specify human` enters interactive chat REPL
  *
  * Command structure:
  *   specify spec generate   --input <dir> --output <path>
@@ -200,14 +200,12 @@ ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
-  ${c.cyan('review')}            Launch the review webapp in a browser
-  ${c.cyan('serve')}             Alias for review
-  ${c.cyan('ui [start|stop]')}   Interactive UI; add ${c.dim('start')}/${c.dim('stop')} to daemonize
+  ${c.cyan('review')}            Launch the review webapp ${c.dim('(--background to daemonize, --stop to kill)')}
   ${c.cyan('verify')}            Verify an implementation against a contract
   ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
 ${c.bold('Advanced:')}
-  ${c.cyan('lint')}              Validate contract structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec generate')}    Generate a spec from capture data
 
@@ -215,7 +213,7 @@ ${c.bold('Infrastructure:')}
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
   ${c.cyan('mcp')}               MCP server for agent integration
 
-${c.dim(`Run "specify human" for interactive guided mode`)}
+${c.dim(`Run "specify human" for interactive chat REPL`)}
 ${c.dim(`Run "specify <command> --help" for command-specific help`)}
 
 ${c.bold('Common tasks:')}
@@ -335,45 +333,14 @@ async function main(): Promise<void> {
     // Interactive modes — `specify human [init|shell|watch]`
     // -----------------------------------------------------------------
     if (noun === 'human') {
-      if (verb === 'shell' || verb === 'repl') {
-        const { runRepl } = await import('./interactive/repl.js');
-        exitCode = await runRepl({
-          spec: resolveSpecArg(rest, ctx) || undefined,
-          url: getArg(rest, '--url'),
-        });
-      } else if (verb === 'watch' || verb === 'tui') {
-        const tuiUrl = getArg(rest, '--url') ?? '';
-        if (!tuiUrl) {
-          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide a target URL for the TUI dashboard' }) + '\n');
-          exitCode = ExitCode.PARSE_ERROR;
-        } else {
-          const { runTui } = await import('./interactive/tui.js');
-          exitCode = await runTui({
-            spec: resolveSpecArg(rest, ctx),
-            url: tuiUrl,
-          });
-        }
-      } else if (verb === 'wizard' || verb === 'init') {
-        // Legacy wizard mode — preserved for backward compatibility
-        const wizardArgs = rest;
-        const { runWizard } = await import('./interactive/wizard.js');
-        exitCode = await runWizard({
-          fromCapture: getArg(wizardArgs, '--from-capture'),
-          action: undefined,
-          subAction: undefined,
-          spec: getArg(wizardArgs, '--spec'),
-        });
-      } else {
-        // Default: chat REPL — freeform text interface
-        // e.g. `specify human` or `specify human chat`
-        const chatArgs = verb && verb !== 'chat' ? [verb, ...rest] : rest;
-        const { runChat } = await import('./interactive/chat.js');
-        exitCode = await runChat({
-          spec: resolveSpecArg(chatArgs, ctx) || undefined,
-          url: getArg(chatArgs, '--url'),
-          debug,
-        });
-      }
+      // Always run chat REPL — pass any extra args through.
+      const chatArgs = verb && verb !== 'chat' ? [verb, ...rest] : rest;
+      const { runChat } = await import('./interactive/chat.js');
+      exitCode = await runChat({
+        spec: resolveSpecArg(chatArgs, ctx) || undefined,
+        url: getArg(chatArgs, '--url'),
+        debug,
+      });
 
     // -----------------------------------------------------------------
     // Agent-friendly commands — structured output to stdout
@@ -642,48 +609,20 @@ async function main(): Promise<void> {
       }, ctx);
       return;
 
-    } else if (noun === 'serve') {
-      // serve is a standalone command (no verb) — recombine args
-      const serveArgs = verb ? [verb, ...rest] : rest;
-      const { serveCommand } = await import('./commands/serve.js');
-      exitCode = await serveCommand({
-        spec: resolveSpecArg(serveArgs, ctx),
-        port: getArg(serveArgs, '--port'),
-        noOpen: hasFlag(serveArgs, '--no-open'),
-        agentReport: getArg(serveArgs, '--agent-report'),
-      }, ctx);
-
     } else if (noun === 'review') {
-      // review delegates to the webapp server (same as `serve`)
+      // `--stop` needs no spec — skip auto-discovery to avoid noise.
       const reviewArgs = verb ? [verb, ...rest] : rest;
+      const stop = hasFlag(reviewArgs, '--stop');
+      const background = hasFlag(reviewArgs, '--background');
       const { review: reviewCmd } = await import('./commands/review.js');
       exitCode = await reviewCmd({
-        spec: resolveSpecArg(reviewArgs, ctx),
+        spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
         agentReport: getArg(reviewArgs, '--agent-report'),
         port: getArg(reviewArgs, '--port'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
+        background,
+        stop,
       }, ctx);
-
-    } else if (noun === 'ui') {
-      // ui: `specify ui` (foreground), `specify ui start` (daemonize), `specify ui stop` (kill).
-      // `stop` needs no spec — skip auto-discovery to avoid noise.
-      const uiArgs = verb ? [verb, ...rest] : rest;
-      const uiMod = await import('./commands/ui.js');
-      if (verb === 'stop') {
-        exitCode = await uiMod.uiStop({ spec: '' }, ctx);
-      } else {
-        const uiOpts = {
-          spec: resolveSpecArg(uiArgs, ctx),
-          port: getArg(uiArgs, '--port'),
-          noOpen: hasFlag(uiArgs, '--no-open'),
-          agentReport: getArg(uiArgs, '--agent-report'),
-        };
-        if (verb === 'start') {
-          exitCode = await uiMod.uiStart(uiOpts, ctx);
-        } else {
-          exitCode = await uiMod.uiInteractive(uiOpts, ctx);
-        }
-      }
 
     } else if (noun === 'create') {
       const { create: createCmd } = await import('./commands/create.js');
@@ -807,14 +746,6 @@ async function main(): Promise<void> {
       }
       process.stdout.write(JSON.stringify({ cleaned: removed, dryRun }) + '\n');
       exitCode = ExitCode.SUCCESS;
-
-    } else if (noun === 'lint') {
-      // Top-level alias for spec lint
-      const lintArgs = verb ? [verb, ...rest] : rest;
-      const { specLint } = await import('./commands/spec-lint.js');
-      exitCode = await specLint({
-        spec: resolveSpecArg(lintArgs, ctx),
-      }, ctx);
 
     } else if (noun === 'deploy') {
       const { deployCommand } = await import('./commands/deploy.js');

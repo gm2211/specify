@@ -62,13 +62,13 @@ it; flags become observations the agent reads as preamble next run.
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
 | `replay` | Replay captured traffic against a target and diff results |
 | `impersonate` | Spin up a MockServer container that impersonates the captured system |
-| `lint` / `spec lint` | Structural validation (no captures needed) |
+| `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
 | `schema` | Emit JSON Schema for spec, report, or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
-| `serve` / `ui` / `ui start` / `ui stop` | Lower-level review-UI controls |
-| `human` | Interactive wizard / REPL / TUI dashboard |
+| `review --background` / `review --stop` | Daemonize or stop the review webapp |
+| `human` | Interactive chat REPL |
 | `clean` | Remove generated reports, agent output, and `*.review.html` files |
 
 Run `specify <cmd> --help` for full flags. Source: [`src/cli/commands-manifest.ts`](src/cli/commands-manifest.ts).
@@ -212,8 +212,8 @@ TOKEN=$(cat ~/.specify/daemon.token)
 
 curl -s -H "Authorization: Bearer $TOKEN" \
      -H 'Content-Type: application/json' \
-     -d '{"spec":"/abs/path/spec.yaml","url":"http://localhost:3000"}' \
-     http://127.0.0.1:4100/verify
+     -d '{"task":"verify","prompt":"Verify http://localhost:3000 against the spec.","spec":"/abs/path/spec.yaml","url":"http://localhost:3000"}' \
+     http://127.0.0.1:4100/inbox
 # → {"id":"msg_ab12","status":"queued","stream":"/inbox/msg_ab12/stream"}
 
 # Stream agent events for this message (SSE)
@@ -230,8 +230,6 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 | Method | Path | Purpose |
 |--------|------|---------|
 | GET | `/health` | Liveness + active session count |
-| POST | `/verify` | `{spec, url}` shorthand |
-| POST | `/capture` | `{url}` shorthand |
 | POST | `/inbox` | Generic: `{task, prompt, spec?, url?, mode?, session?}` |
 | GET | `/inbox` | Recent messages |
 | GET | `/inbox/:id` | Status + result + `resultPath` |
