@@ -16,6 +16,13 @@
  *                 → POSTs a compact summary to the webhook URL read from the
  *                 file. (File-mounted, not env-var-mounted, so it survives
  *                 secret rotation without pod restart.)
+ *   - Platform sink (rnz-tol9):
+ *                 PLATFORM_SPEC_RUN_RESULT_URL=https://resident.getrenzo.ai/api/platform/dev/spec-run-result
+ *                 PLATFORM_SPECIFY_TOKEN=<bearer>
+ *                 → After each verify run completes, POSTs area-level results
+ *                 array to the platform endpoint so the developer dashboard can
+ *                 surface pass/fail timelines. Fire-and-forget; failure is
+ *                 logged but never fatal to the verify run itself.
  *
  * `attachReportSinks()` wires the subscription; the returned function
  * detaches when called (mostly for tests). Production code attaches once
@@ -48,6 +55,13 @@ export interface SinkConfig {
   fileDir?: string;
   /** When set, slack sink POSTs a summary to the webhook URL inside this file. */
   slackWebhookFile?: string;
+  /**
+   * When both are set, platform sink POSTs area-level results to the Renzo
+   * platform spec-run-result endpoint (rnz-tol9).
+   * Set via PLATFORM_SPEC_RUN_RESULT_URL + PLATFORM_SPECIFY_TOKEN env vars.
+   */
+  platformSpecRunResultUrl?: string;
+  platformSpecifyToken?: string;
 }
 
 export interface AttachOptions {
@@ -62,6 +76,8 @@ export function sinkConfigFromEnv(env: Record<string, string | undefined> = proc
   return {
     fileDir: env.SPECIFY_REPORT_FILE_DIR,
     slackWebhookFile: env.SPECIFY_REPORT_SLACK_WEBHOOK_FILE,
+    platformSpecRunResultUrl: env.PLATFORM_SPEC_RUN_RESULT_URL || undefined,
+    platformSpecifyToken: env.PLATFORM_SPECIFY_TOKEN || undefined,
   };
 }
 
@@ -69,6 +85,9 @@ export function buildSinks(config: SinkConfig, fetchImpl: typeof fetch = globalT
   const sinks: ReportSink[] = [];
   if (config.fileDir) sinks.push(fileSink(config.fileDir));
   if (config.slackWebhookFile) sinks.push(slackSink(config.slackWebhookFile, fetchImpl));
+  if (config.platformSpecRunResultUrl && config.platformSpecifyToken) {
+    sinks.push(platformSink(config.platformSpecRunResultUrl, config.platformSpecifyToken, fetchImpl));
+  }
   return sinks;
 }
 
@@ -149,6 +168,110 @@ function slackSink(webhookFile: string, fetchImpl: typeof fetch): ReportSink {
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`Slack webhook ${res.status}: ${body.slice(0, 200)}`);
+      }
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Platform sink (rnz-tol9) — POST area-level results to platform spec-run-result
+// ---------------------------------------------------------------------------
+
+/** Shape the specify agent emits for each per-behavior result in structuredOutput. */
+interface BehaviorResult {
+  id: string;          // "area-id/behavior-id"
+  status: 'passed' | 'failed' | 'skipped';
+  duration_ms?: number;
+  rationale?: string;
+}
+
+/** Shape the platform POST body expects. */
+interface PlatformRunEntry {
+  area: string;
+  passed: boolean;
+  durationMs: number;
+  errorMessage?: string;
+}
+
+interface VerifyStructuredOutputFull {
+  pass?: boolean;
+  summary?: { total: number; passed: number; failed: number; skipped: number };
+  results?: BehaviorResult[];
+}
+
+/**
+ * Aggregate per-behavior results into area-level entries for the platform API.
+ *
+ * The verify output uses "area-id/behavior-id" as the behavior id. We split on
+ * the first "/" to derive the area key, then roll up: an area passes iff all
+ * non-skipped behaviors in it pass. Duration = sum of per-behavior durations.
+ * errorMessage = first failing rationale (truncated), if any.
+ */
+function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
+  const so =
+    body && typeof body === 'object' && 'structuredOutput' in body
+      ? (body as { structuredOutput?: VerifyStructuredOutputFull }).structuredOutput
+      : (body as VerifyStructuredOutputFull | undefined);
+
+  const results = so?.results;
+  if (!Array.isArray(results) || results.length === 0) return [];
+
+  const areaMap = new Map<string, { totalMs: number; failed: boolean; firstError?: string }>();
+
+  for (const r of results) {
+    if (r.status === 'skipped') continue;
+    const slashIdx = r.id.indexOf('/');
+    const area = slashIdx > 0 ? r.id.slice(0, slashIdx) : r.id;
+
+    const existing = areaMap.get(area);
+    const durationMs = typeof r.duration_ms === 'number' ? r.duration_ms : 0;
+    const failed = r.status === 'failed';
+
+    if (!existing) {
+      areaMap.set(area, {
+        totalMs: durationMs,
+        failed,
+        firstError: failed && r.rationale ? r.rationale.slice(0, 500) : undefined,
+      });
+    } else {
+      existing.totalMs += durationMs;
+      if (failed) {
+        existing.failed = true;
+        if (!existing.firstError && r.rationale) {
+          existing.firstError = r.rationale.slice(0, 500);
+        }
+      }
+    }
+  }
+
+  return Array.from(areaMap.entries()).map(([area, data]) => ({
+    area,
+    passed: !data.failed,
+    durationMs: Math.round(data.totalMs),
+    ...(data.firstError ? { errorMessage: data.firstError } : {}),
+  }));
+}
+
+function platformSink(url: string, token: string, fetchImpl: typeof fetch): ReportSink {
+  return {
+    name: 'platform',
+    async send(ctx) {
+      const entries = aggregateToAreaEntries(ctx.body);
+      if (entries.length === 0) {
+        // Verify run produced no behavior results (capture, compare, etc.) — skip.
+        return;
+      }
+      const res = await fetchImpl(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-specify-token': token,
+        },
+        body: JSON.stringify(entries),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`platform spec-run-result ${res.status}: ${text.slice(0, 200)}`);
       }
     },
   };

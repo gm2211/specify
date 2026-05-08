@@ -178,4 +178,21 @@ variable "pvc_storage_class" {
   default     = ""
 }
 
+# ----------------------------------------------------------------------------
+# Platform result reporting (rnz-tol9).
+# ----------------------------------------------------------------------------
+
+variable "platform_specify_token" {
+  type        = string
+  description = "Bearer token the pod sends as x-specify-token when POSTing verify results to platform_spec_run_result_url. Leave empty to disable the platform sink."
+  default     = ""
+  sensitive   = true
+}
+
+variable "platform_spec_run_result_url" {
+  type        = string
+  description = "Full URL of the platform spec-run-result endpoint. E.g. https://resident.getrenzo.ai/api/platform/dev/spec-run-result. Leave empty to disable the platform sink."
+  default     = ""
+}
+
 # Cross-field validation lives in main.tf, in a `terraform_data` precondition.

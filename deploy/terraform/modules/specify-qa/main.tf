@@ -105,6 +105,9 @@ resource "kubernetes_secret_v1" "internal" {
     var.report_slack_webhook == "" ? {} : {
       "slack-webhook" = var.report_slack_webhook
     },
+    var.platform_specify_token == "" ? {} : {
+      "platform-specify-token" = var.platform_specify_token
+    },
   )
 }
 
@@ -428,6 +431,28 @@ resource "kubernetes_deployment_v1" "this" {
             content {
               name  = "SPECIFY_REPORT_SLACK_WEBHOOK_FILE"
               value = "/run/secrets/specify/slack-webhook"
+            }
+          }
+
+          # Platform result reporting (rnz-tol9).
+          # Both vars must be non-empty to activate the platform sink in the image.
+          dynamic "env" {
+            for_each = var.platform_spec_run_result_url != "" ? [var.platform_spec_run_result_url] : []
+            content {
+              name  = "PLATFORM_SPEC_RUN_RESULT_URL"
+              value = env.value
+            }
+          }
+          dynamic "env" {
+            for_each = var.platform_specify_token != "" ? [1] : []
+            content {
+              name = "PLATFORM_SPECIFY_TOKEN"
+              value_from {
+                secret_key_ref {
+                  name = kubernetes_secret_v1.internal.metadata[0].name
+                  key  = "platform-specify-token"
+                }
+              }
             }
           }
 
