@@ -37,10 +37,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Production deps + Playwright Chromium
+# PLAYWRIGHT_BROWSERS_PATH is pinned to /app/.ms-playwright so the browser
+# binaries land at a fixed location inside the image layer, independent of
+# HOME.  Without this, `npx playwright install` writes to $HOME/.cache/…
+# (= /root/.cache/… at build time) but at runtime HOME is redirected to /work
+# (the PVC mount), causing browserType.launch to fail with "Executable doesn't
+# exist" because /work/.cache/ms-playwright is empty.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
- && npx playwright install chromium \
- && rm -rf /tmp/* /root/.cache/ms-playwright/.links
+ && PLAYWRIGHT_BROWSERS_PATH=/app/.ms-playwright npx playwright install chromium \
+ && rm -rf /tmp/*
 
 # Built artefacts
 COPY --from=build /app/dist/ dist/
@@ -52,8 +58,12 @@ RUN mkdir -p /work && chmod 777 /work
 WORKDIR /work
 # HOME=/work so the auto-generated daemon token lands on the PVC,
 # along with spec-relative state dirs (.specify/memory, .specify/sessions.db, …).
+# PLAYWRIGHT_BROWSERS_PATH is kept consistent with the install step above so
+# Playwright resolves the Chromium binary at /app/.ms-playwright/chromium-*/
+# regardless of where HOME points.
 ENV NODE_ENV=production \
     HOME=/work \
+    PLAYWRIGHT_BROWSERS_PATH=/app/.ms-playwright \
     PORT=4100 \
     HOST=0.0.0.0
 
