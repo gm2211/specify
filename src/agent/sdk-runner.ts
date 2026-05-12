@@ -21,6 +21,7 @@ import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
+import { learnedSkillsEnabled } from './feature-flags.js';
 import { randomUUID } from 'node:crypto';
 
 export interface BehaviorProgress {
@@ -32,7 +33,7 @@ export interface BehaviorProgress {
 }
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'replay' | 'compare' | 'augment';
+  task: 'capture' | 'verify' | 'replay' | 'compare';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -286,31 +287,6 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
       },
     };
   }
-  if (task === 'augment') {
-    return {
-      type: 'json_schema',
-      schema: {
-        type: 'object',
-        properties: {
-          synthetic_traffic: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                url: { type: 'string' },
-                method: { type: 'string' },
-                status: { type: 'number' },
-                contentType: { type: 'string' },
-                responseBody: { type: 'string' },
-              },
-              required: ['url', 'method', 'status', 'contentType', 'responseBody'],
-            },
-          },
-        },
-        required: ['synthetic_traffic'],
-      },
-    };
-  }
   return undefined;
 }
 
@@ -539,14 +515,15 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
       }
 
-      // Active learned skills (approved drafts from prior cooperative-QA
-      // sessions). Listed as available named skills so the agent knows it
-      // can replay them when the situation matches.
-      try {
-        const active = renderActiveSkillsPrompt(opts.spec);
-        if (active) systemPrompt = active + '\n\n' + systemPrompt;
-      } catch (err) {
-        process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      // Active learned skills are experimental. Keep them out of the default
+      // prompt unless the operator explicitly opts in.
+      if (learnedSkillsEnabled()) {
+        try {
+          const active = renderActiveSkillsPrompt(opts.spec);
+          if (active) systemPrompt = active + '\n\n' + systemPrompt;
+        } catch (err) {
+          process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        }
       }
     }
 
