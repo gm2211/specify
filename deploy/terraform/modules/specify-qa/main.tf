@@ -39,6 +39,21 @@ locals {
   watch_namespaces     = coalesce(var.discovery.namespaces, [])
   watch_label_selector = coalesce(var.discovery.label_selector, "specify.dev/target=true")
 
+  # RBAC resource names use PLURAL forms ("deployments", "statefulsets") while
+  # the daemon's filter env var (SPECIFY_K8S_RESOURCES) takes the singular
+  # forms ("deployment", "statefulset"). Map here so Role/ClusterRole rules
+  # render correctly. Unknown values pass through with a trailing "s" so
+  # callers can opt into other resources without code edits.
+  watch_resources_rbac = [
+    for r in local.watch_resources : (
+      r == "deployment"  ? "deployments" :
+      r == "statefulset" ? "statefulsets" :
+      r == "daemonset"   ? "daemonsets" :
+      r == "replicaset"  ? "replicasets" :
+      endswith(r, "s")   ? r : "${r}s"
+    )
+  ]
+
   labels = {
     "app.kubernetes.io/name"       = var.name
     "app.kubernetes.io/component"  = "specify-qa"
@@ -180,7 +195,7 @@ resource "kubernetes_role_v1" "watch" {
 
   rule {
     api_groups = ["apps"]
-    resources  = local.watch_resources
+    resources  = local.watch_resources_rbac
     verbs      = ["get", "list", "watch"]
   }
 }
@@ -217,7 +232,7 @@ resource "kubernetes_cluster_role_v1" "watch" {
 
   rule {
     api_groups = ["apps"]
-    resources  = local.watch_resources
+    resources  = local.watch_resources_rbac
     verbs      = ["get", "list", "watch"]
   }
 }
