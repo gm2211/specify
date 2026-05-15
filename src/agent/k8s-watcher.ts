@@ -121,13 +121,26 @@ export async function startK8sWatcher(
 ): Promise<() => Promise<void>> {
   const log = deps.log ?? ((line: string) => process.stderr.write(line));
   if (!config.enabled) {
+    log('[k8s-watcher] disabled (SPECIFY_K8S_WATCH != true)\n');
     return async () => undefined;
   }
 
+  // rnz-ukd9: surface watcher config + lifecycle so silent-failure modes
+  // (RBAC missing, informer.start hanging, isReady() filtering everything
+  // out) are visible in pod logs.
+  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl}\n`);
+
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
-  const watcher = deps.watcherImpl ?? (await defaultK8sWatcher(config, log));
+  let watcher: WatcherImpl;
+  try {
+    watcher = deps.watcherImpl ?? (await defaultK8sWatcher(config, log));
+  } catch (err) {
+    log(`[k8s-watcher] init failed: ${(err as Error).message}\n`);
+    throw err;
+  }
 
   const stop = await watcher.start(async (ev) => {
+    log(`[k8s-watcher] rollout detected ${ev.namespace}/${ev.name} kind=${ev.kind} image=${ev.image ?? 'unknown'} rv=${ev.resourceVersion ?? '?'} — posting verify\n`);
     eventBus.send('k8s:rollout', {
       kind: ev.kind,
       namespace: ev.namespace,
@@ -137,11 +150,13 @@ export async function startK8sWatcher(
     });
     try {
       await triggerVerifyForRollout(ev, config, fetchImpl);
+      log(`[k8s-watcher] inbox accepted verify for ${ev.namespace}/${ev.name}\n`);
     } catch (err) {
       log(`[k8s-watcher] inbox post failed for ${ev.namespace}/${ev.name}: ${(err as Error).message}\n`);
     }
   });
 
+  log(`[k8s-watcher] subscribed — waiting for rollout events\n`);
   return stop;
 }
 
@@ -169,9 +184,17 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
       const namespaces = config.namespaces.length > 0 ? config.namespaces : [''];
       const labelSelector = config.labelSelector;
 
-      const fire = (kind: string, raw: unknown) => {
+      // rnz-ukd9: log every event + isReady() result so we can see why the
+      // watcher might silently skip rollouts.
+      const fire = (kind: string, event: 'add' | 'update', raw: unknown) => {
         const obj = raw as AppsResource;
-        if (!isReady(obj)) return;
+        const name = obj.metadata?.name ?? '?';
+        const ns = obj.metadata?.namespace ?? '?';
+        const ready = isReady(obj);
+        const desired = obj.spec?.replicas ?? 0;
+        const status = obj.status ?? {};
+        log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → ${ready ? 'FIRE' : 'skip'}\n`);
+        if (!ready) return;
         handler(toRollout(kind, obj));
       };
 
@@ -181,6 +204,7 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
           const apiPath = namespace
             ? `/apis/apps/v1/namespaces/${namespace}/${isDeploy ? 'deployments' : 'statefulsets'}`
             : `/apis/apps/v1/${isDeploy ? 'deployments' : 'statefulsets'}`;
+          log(`[k8s-watcher] starting informer ns=${namespace || 'all'} resource=${resource} path=${apiPath}\n`);
           const lister = () => {
             if (isDeploy) {
               return (namespace
@@ -192,12 +216,18 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
               : apps.listStatefulSetForAllNamespaces({ labelSelector })) as Promise<{ items: AppsResource[] }>;
           };
           const informer = k8s.makeInformer(kc, apiPath, lister, labelSelector);
-          informer.on('add', (obj) => fire(resource, obj));
-          informer.on('update', (obj) => fire(resource, obj));
+          informer.on('add', (obj) => fire(resource, 'add', obj));
+          informer.on('update', (obj) => fire(resource, 'update', obj));
           informer.on('error', (err: Error) => {
             log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message}\n`);
           });
-          await informer.start();
+          try {
+            await informer.start();
+            log(`[k8s-watcher] informer started ns=${namespace || 'all'} resource=${resource}\n`);
+          } catch (err) {
+            log(`[k8s-watcher] informer.start failed ns=${namespace || 'all'} resource=${resource}: ${(err as Error).message}\n`);
+            throw err;
+          }
           informers.push({ stop: () => informer.stop() });
         }
       }
