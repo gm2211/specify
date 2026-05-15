@@ -12,20 +12,23 @@
  * other navigation links, etc.). The propagator just hands the agent the
  * pattern with a clear directive; the agent does the discovery.
  *
- * The injector reference is set when a verify run starts (via
- * `setActivePropagator`) and cleared on session end. Without an active
- * injector, the event is simply ignored.
+ * This speculative propagation loop is gated behind
+ * SPECIFY_ENABLE_LEARNED_SKILLS. The injector reference is set when a verify
+ * run starts (via `setActivePropagator`) and cleared on session end. Without
+ * the flag and an active injector, the event is simply ignored.
  */
 
 import { eventBus, type SpecifyEvent } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
+import { learnedSkillsEnabled } from './feature-flags.js';
 
 let activeInjector: MessageInjector | null = null;
 let detach: (() => void) | null = null;
 
 export function setActivePropagator(injector: MessageInjector | null): void {
   activeInjector = injector;
-  if (injector && !detach) {
+  const enabled = learnedSkillsEnabled();
+  if (injector && enabled && !detach) {
     const listener = (e: SpecifyEvent): void => {
       if (e.type !== 'feedback:propagate_pattern') return;
       const text = (e.data?.text as string | undefined) ?? '';
@@ -44,7 +47,7 @@ export function setActivePropagator(injector: MessageInjector | null): void {
     };
     eventBus.on('event', listener);
     detach = () => eventBus.off('event', listener);
-  } else if (!injector && detach) {
+  } else if ((!injector || !enabled) && detach) {
     detach();
     detach = null;
   }

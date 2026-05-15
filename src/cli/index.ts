@@ -23,7 +23,7 @@
  *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
  *   specify schema spec|report|commands
  *   specify mcp              MCP server for LLM tool integration
- *   specify human            Interactive mode (wizard / REPL / TUI)
+ *   specify human            Interactive chat REPL
  *
  * All commands auto-discover --spec from cwd when omitted.
  */
@@ -202,7 +202,6 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
   ${c.cyan('review')}            Launch the review webapp ${c.dim('(--background to daemonize, --stop to kill)')}
   ${c.cyan('verify')}            Verify an implementation against a contract
-  ${c.cyan('impersonate')}       Impersonate a captured system via MockServer
 
 ${c.bold('Advanced:')}
   ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
@@ -330,7 +329,7 @@ async function main(): Promise<void> {
 
   try {
     // -----------------------------------------------------------------
-    // Interactive modes — `specify human [init|shell|watch]`
+    // Interactive chat mode
     // -----------------------------------------------------------------
     if (noun === 'human') {
       // Always run chat REPL — pass any extra args through.
@@ -572,17 +571,6 @@ async function main(): Promise<void> {
         }
       }
 
-    } else if (noun === 'impersonate') {
-      const { impersonateCommand } = await import('./commands/impersonate.js');
-      exitCode = await impersonateCommand({
-        url: getArg(rest, '--url'),
-        capture: getArg(rest, '--capture'),
-        port: getArg(rest, '--port'),
-        output: getArg(rest, '--output'),
-        noAugment: hasFlag(rest, '--no-augment'),
-        headed: hasFlag(rest, '--headed'),
-      }, ctx);
-
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
       exitCode = await schemaCommand(verb ?? '', ctx);
@@ -698,54 +686,6 @@ async function main(): Promise<void> {
           exitCode = ExitCode.PARSE_ERROR;
         }
       }
-
-    } else if (noun === 'clean') {
-      // Clean up generated reports and agent output
-      const cleanArgs = verb ? [verb, ...rest] : rest;
-      const dryRun = hasFlag(cleanArgs, '--dry-run');
-      const patterns = [
-        '.specify/capture', '.specify/verify', '.specify/compare', '.specify/replay',
-        '.specify/evidence',
-      ];
-      const htmlGlob = '*.review.html';
-
-      let removed = 0;
-      // Remove .specify subdirectories
-      for (const dir of patterns) {
-        const resolved = path.resolve(dir);
-        if (fs.existsSync(resolved)) {
-          if (dryRun) {
-            process.stderr.write(`  Would remove: ${resolved}\n`);
-          } else {
-            fs.rmSync(resolved, { recursive: true, force: true });
-            process.stderr.write(`  Removed: ${resolved}\n`);
-          }
-          removed++;
-        }
-      }
-      // Remove *.review.html files in cwd
-      const cwd = process.cwd();
-      for (const f of fs.readdirSync(cwd)) {
-        if (f.endsWith('.review.html')) {
-          const fullPath = path.join(cwd, f);
-          if (dryRun) {
-            process.stderr.write(`  Would remove: ${fullPath}\n`);
-          } else {
-            fs.unlinkSync(fullPath);
-            process.stderr.write(`  Removed: ${fullPath}\n`);
-          }
-          removed++;
-        }
-      }
-      if (removed === 0) {
-        process.stderr.write('  Nothing to clean.\n');
-      } else if (dryRun) {
-        process.stderr.write(`\n  ${removed} items would be removed. Run without --dry-run to delete.\n`);
-      } else {
-        process.stderr.write(`\n  Cleaned ${removed} items.\n`);
-      }
-      process.stdout.write(JSON.stringify({ cleaned: removed, dryRun }) + '\n');
-      exitCode = ExitCode.SUCCESS;
 
     } else if (noun === 'deploy') {
       const { deployCommand } = await import('./commands/deploy.js');

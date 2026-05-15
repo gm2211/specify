@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { eventBus } from '../agent/event-bus.js';
+import { learnedSkillsEnabled } from '../agent/feature-flags.js';
 import type { MessageInjector } from '../agent/message-injector.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -324,10 +325,10 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     }
   });
 
-  // Skill drafts: list / approve / reject. Approved drafts move from
-  // .specify/skill-drafts/<id>.md to .specify/skills/<name>/SKILL.md and
-  // become replayable in future verify runs.
+  // Skill drafts: list / approve / reject. This experimental surface is hidden
+  // unless SPECIFY_ENABLE_LEARNED_SKILLS=true.
   app.get('/api/skill-drafts', async (c) => {
+    if (!learnedSkillsEnabled()) return c.json({ drafts: [] });
     try {
       const { listDrafts } = await import('../agent/skill-synthesizer.js');
       const drafts = listDrafts(resolvedSpec);
@@ -339,6 +340,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   });
 
   app.post('/api/skill-drafts/:id/approve', async (c) => {
+    if (!learnedSkillsEnabled()) return c.json({ error: 'learned_skills_disabled' }, 404);
     try {
       const { listDrafts, promoteDraft } = await import('../agent/skill-synthesizer.js');
       const id = c.req.param('id');
@@ -354,6 +356,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   });
 
   app.post('/api/skill-drafts/:id/reject', async (c) => {
+    if (!learnedSkillsEnabled()) return c.json({ error: 'learned_skills_disabled' }, 404);
     try {
       const { listDrafts, setDraftStatus } = await import('../agent/skill-synthesizer.js');
       const id = c.req.param('id');
@@ -369,6 +372,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   });
 
   app.get('/api/skills/active', async (c) => {
+    if (!learnedSkillsEnabled()) return c.json({ skills: [] });
     try {
       const { listActiveSkills } = await import('../agent/skill-synthesizer.js');
       return c.json({ skills: listActiveSkills(resolvedSpec) });

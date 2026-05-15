@@ -13,7 +13,7 @@
 
 Specify turns functional requirements into machine-verifiable specs and runs an autonomous agent against them. Define what your app should do — pages, flows, assertions, API contracts — and Specify tells you what's met, what's not, and what's untested. Every assertion shows its work: expected value, actual value, raw output.
 
-Cooperative QA: the agent runs, you watch the activity stream in the browser, flag what looks wrong, and the next run remembers. Per-spec memory, session transcripts, and a confidence model accumulate into mined skills the agent replays automatically.
+Cooperative QA: the agent runs, you watch the activity stream in the browser, flag what looks wrong, and the next run remembers. Per-spec memory, session transcripts, and a confidence model accumulate into optional learned skills when explicitly enabled.
 
 No opinions about your test framework. No lock-in. Just structured truth.
 
@@ -61,7 +61,6 @@ it; flags become observations the agent reads as preamble next run.
 | **`review`** | Browser UI: narrative, activity stream, feedback, skill drafts |
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
 | `replay` | Replay captured traffic against a target and diff results |
-| `impersonate` | Spin up a MockServer container that impersonates the captured system |
 | `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
 | `schema` | Emit JSON Schema for spec, report, or commands |
@@ -69,7 +68,6 @@ it; flags become observations the agent reads as preamble next run.
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
 | `review --background` / `review --stop` | Daemonize or stop the review webapp |
 | `human` | Interactive chat REPL |
-| `clean` | Remove generated reports, agent output, and `*.review.html` files |
 
 Run `specify <cmd> --help` for full flags. Source: [`src/cli/commands-manifest.ts`](src/cli/commands-manifest.ts).
 
@@ -98,9 +96,8 @@ state under `<spec_dir>/.specify/`:
   sessions.db                          # SQLite + FTS5 transcripts of every session
   confidence.json                      # accept/override tally per behavior
   specify.observations.yaml            # per-spec observations (user feedback + reflection)
-  skill-drafts/<id>.md                 # mined-pattern → SKILL.md draft, pending review
-  skills/<name>/SKILL.md               # approved skills, replayed in future runs
-  prompts/<id>.md                      # versioned, evolved system prompts
+  skill-drafts/<id>.md                 # optional learned-skill drafts
+  skills/<name>/SKILL.md               # approved skills, replayed when enabled
   verify/verify-result.json            # latest agent run result
 ```
 
@@ -127,18 +124,9 @@ before flagging, run silently, or skip.
 **Pattern miner → skill drafts**
 ([`src/agent/pattern-miner.ts`](src/agent/pattern-miner.ts),
 [`src/agent/skill-synthesizer.ts`](src/agent/skill-synthesizer.ts))
-walks the session corpus, extracts recurring `(role, kind)` n-grams, and emits
-draft SKILL.md files. You approve or reject in the webapp; approved drafts
-move to `.specify/skills/<name>/SKILL.md` and are injected as a preamble in
-future runs.
-
-**Prompt evolution loop**
-([`src/agent/prompt-evolution.ts`](src/agent/prompt-evolution.ts))
-folds high-confidence observations and frequently-overridden behaviors into a
-"lessons learned" preamble. Pure text + deterministic by default; if a Python
-script lives at `scripts/evolve-prompt.py`, it's used as an optional
-DSPy/GEPA-style optimiser. Evolved prompts are versioned under
-`.specify/prompts/`.
+is experimental and disabled by default. Set
+`SPECIFY_ENABLE_LEARNED_SKILLS=true` to expose draft review endpoints and inject
+approved `.specify/skills/<name>/SKILL.md` entries into future runs.
 
 **Optional dialectic provider**
 ([`src/agent/honcho-provider.ts`](src/agent/honcho-provider.ts)) —
@@ -165,10 +153,11 @@ Each flag is one of: `note`, `important_pattern`, `missed_check`,
 - updates the confidence store (`important_pattern` / `file_bug` reinforce;
   `missed_check` / `false_positive` / `ignore_pattern` override)
 - on `file_bug`, best-effort spawns `bd create` if available
-- on `important_pattern`, publishes a `feedback:ingested` event so the
-  sibling-check propagator pre-flags similar rows in the same session
+- when `SPECIFY_ENABLE_LEARNED_SKILLS=true`, `important_pattern` feedback can
+  prompt the active agent to apply the same check to sibling behaviors
 
-Approved skill drafts surface in a dedicated panel:
+When `SPECIFY_ENABLE_LEARNED_SKILLS=true`, approved skill drafts surface in a
+dedicated panel:
 
 <p align="center">
   <img src="assets/screenshots/review-skill-drafts.png" alt="Learned skills panel with mined pending draft" width="780"/>
@@ -304,8 +293,8 @@ The pod's `/work` PVC keeps everything the daemon learns:
 |------|---------|
 | `/work/.specify/memory/<spec_id>/<target>.json` | learned memory rows |
 | `/work/.specify/sessions.db` | session SQLite + FTS5 |
-| `/work/.specify/skill-drafts/` | mined skills awaiting approval |
-| `/work/.specify/skills/` | active skills replayed each run |
+| `/work/.specify/skill-drafts/` | optional learned-skill drafts |
+| `/work/.specify/skills/` | active skills replayed when `SPECIFY_ENABLE_LEARNED_SKILLS=true` |
 | `/work/reports/` | per-run JSON reports (file sink) |
 
 See [`deploy/terraform/modules/specify-qa/README.md`](deploy/terraform/modules/specify-qa/README.md)

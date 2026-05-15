@@ -105,8 +105,8 @@ expectations from prior versions stay queryable.
 |------|---------|
 | `/work/.specify/memory/<spec_id>/<target>.json` | learned memory rows |
 | `/work/.specify/sessions.db` | session SQLite + FTS5 |
-| `/work/.specify/skill-drafts/` | mined skills awaiting approval |
-| `/work/.specify/skills/` | active skills replayed each run |
+| `/work/.specify/skill-drafts/` | optional learned-skill drafts |
+| `/work/.specify/skills/` | active skills replayed when `SPECIFY_ENABLE_LEARNED_SKILLS=true` |
 | `/work/reports/` | per-run JSON reports (file sink) |
 
 Resize the PVC with `pvc_size`; the daemon never deletes anything.
