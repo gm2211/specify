@@ -282,19 +282,6 @@ areas:
         description: >
           --http switches to HTTP transport with --port and --host options
 
-  - id: clean
-    name: "Cleanup"
-    behaviors:
-      - id: clean-removes-generated
-        description: >
-          Removes .specify/ directories and *.review.html files
-      - id: clean-dry-run
-        description: >
-          --dry-run shows what would be removed without deleting
-      - id: clean-exits-zero
-        description: >
-          Exits 0
-
   - id: error-handling
     name: "Error Handling & Exit Codes"
     prose: >
