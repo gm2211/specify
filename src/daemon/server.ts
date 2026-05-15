@@ -65,6 +65,29 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   const { Hono } = await import('hono');
   const { serve } = await import('@hono/node-server');
 
+  // rnz-8s92: Workers write progress to process.stderr (e.g. "Launching
+  // browser..." / "Connecting to API..."). When a child process pipe closes
+  // mid-run (HTTP client disconnects after the 202, browser child exits
+  // early, etc.), the next stderr.write throws EPIPE and bubbles up as an
+  // unhandled 'error' event on the Socket, crashing the Node process.
+  // The verify run we lose was already abandoned; surviving the EPIPE is
+  // the right behaviour. Install best-effort handlers on the well-known
+  // stdio streams so a closed-pipe write degrades to a no-op instead of a
+  // crash. (Reported errors are still written to file sinks + the platform
+  // result endpoint, so we don't lose observability — only the live
+  // streaming-stderr surface goes silent for that one orphaned run.)
+  for (const stream of [process.stdout, process.stderr] as const) {
+    stream.on('error', (err: NodeJS.ErrnoException) => {
+      if (err && err.code === 'EPIPE') return; // expected: peer closed
+      // Anything else (rare) — re-emit on next tick so existing listeners
+      // (if any) still see it, but don't synchronously throw.
+      setImmediate(() => {
+        // eslint-disable-next-line no-console
+        console.error('[daemon] stream error', err);
+      });
+    });
+  }
+
   const token = opts.noAuth ? '' : resolveToken();
   // maxWorkers=0 disables the worker pool (useful for tests that stub the
   // SDK runner via __setRunnerForTesting — they need the in-process path).
