@@ -153,8 +153,8 @@ Each flag is one of: `note`, `important_pattern`, `missed_check`,
 - updates the confidence store (`important_pattern` / `file_bug` reinforce;
   `missed_check` / `false_positive` / `ignore_pattern` override)
 - on `file_bug`, best-effort spawns `bd create` if available
-- on `important_pattern`, publishes a `feedback:ingested` event so the
-  sibling-check propagator pre-flags similar rows in the same session
+- when `SPECIFY_ENABLE_LEARNED_SKILLS=true`, `important_pattern` feedback can
+  prompt the active agent to apply the same check to sibling behaviors
 
 When `SPECIFY_ENABLE_LEARNED_SKILLS=true`, approved skill drafts surface in a
 dedicated panel:
