@@ -198,6 +198,9 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
         handler(toRollout(kind, obj));
       };
 
+      // Track watchdog intervals so we can clear them on stop.
+      const watchdogTimers: ReturnType<typeof setInterval>[] = [];
+
       for (const namespace of namespaces) {
         for (const resource of config.resources) {
           const isDeploy = resource === 'deployment';
@@ -216,11 +219,38 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
               : apps.listStatefulSetForAllNamespaces({ labelSelector })) as Promise<{ items: AppsResource[] }>;
           };
           const informer = k8s.makeInformer(kc, apiPath, lister, labelSelector);
-          informer.on('add', (obj) => fire(resource, 'add', obj));
-          informer.on('update', (obj) => fire(resource, 'update', obj));
+
+          // Per-informer state for debounce and watchdog.
+          let restartTimer: ReturnType<typeof setTimeout> | null = null;
+          let lastEventTs = Date.now();
+
+          const scheduleRestart = (reason: string) => {
+            if (restartTimer) return; // already scheduled
+            restartTimer = setTimeout(async () => {
+              restartTimer = null;
+              lastEventTs = Date.now(); // reset so watchdog doesn't immediately re-trigger
+              try {
+                await informer.start();
+                log(`[k8s-watcher] informer restarted ns=${namespace || 'all'} resource=${resource}\n`);
+              } catch (restartErr) {
+                log(`[k8s-watcher] informer restart failed ns=${namespace || 'all'} resource=${resource}: ${(restartErr as Error).message}\n`);
+                // Back off and try again rather than going silent.
+                scheduleRestart('restart-failed');
+              }
+            }, 5_000);
+            log(`[k8s-watcher] informer ${reason} (${namespace || 'all'}/${resource}) — scheduling restart in 5s\n`);
+          };
+
+          const touchEvent = () => { lastEventTs = Date.now(); };
+
+          informer.on('add', (obj) => { touchEvent(); fire(resource, 'add', obj); });
+          informer.on('update', (obj) => { touchEvent(); fire(resource, 'update', obj); });
           informer.on('error', (err: Error) => {
-            log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message}\n`);
+            touchEvent();
+            log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message} — scheduling restart in 5s\n`);
+            scheduleRestart(`error: ${err.message}`);
           });
+
           try {
             await informer.start();
             log(`[k8s-watcher] informer started ns=${namespace || 'all'} resource=${resource}\n`);
@@ -228,11 +258,25 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
             log(`[k8s-watcher] informer.start failed ns=${namespace || 'all'} resource=${resource}: ${(err as Error).message}\n`);
             throw err;
           }
-          informers.push({ stop: () => informer.stop() });
+
+          // Idle watchdog: if no event fires for 10 minutes, the watch stream
+          // has silently died. Log and restart.
+          const IDLE_THRESHOLD_MS = 10 * 60 * 1_000;
+          const watchdog = setInterval(() => {
+            const idleMs = Date.now() - lastEventTs;
+            if (idleMs > IDLE_THRESHOLD_MS) {
+              log(`[k8s-watcher] watchdog: ns=${namespace || 'all'} resource=${resource} idle ${Math.round(idleMs / 1000)}s — scheduling restart\n`);
+              scheduleRestart('watchdog-idle');
+            }
+          }, 60_000);
+          watchdogTimers.push(watchdog);
+
+          informers.push({ stop: () => { clearTimeout(restartTimer ?? undefined); informer.stop(); } });
         }
       }
 
       return async () => {
+        for (const t of watchdogTimers) clearInterval(t);
         for (const inf of informers) inf.stop();
       };
     },
