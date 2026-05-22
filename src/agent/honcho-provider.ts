@@ -29,7 +29,7 @@ import type {
   MemoryScope,
 } from './memory-provider.js';
 import { FileBackedMemoryProvider } from './memory-provider.js';
-import type { DeltaInput, MemoryFile, MemoryRow } from './memory.js';
+import type { DeltaInput, MemoryFile } from './memory.js';
 
 export interface HonchoConfig {
   /** Base URL of the Honcho service, e.g. http://localhost:8000. */
@@ -119,7 +119,7 @@ export class HonchoMemoryProvider implements MemoryProvider {
     return [dialectic, '', local].join('\n');
   }
 
-  private async fetchDialectic(scope: MemoryScope): Promise<string> {
+  private async fetchDialectic(_scope: MemoryScope): Promise<string> {
     const url = `${this.config.url.replace(/\/+$/, '')}/v1/apps/${encodeURIComponent(this.config.app ?? 'specify')}/users/${encodeURIComponent(this.config.user ?? 'default')}/dialectic`;
     const res = await this.timedFetch(url, { method: 'GET' });
     if (!res.ok) return '';

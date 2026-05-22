@@ -97,7 +97,7 @@ export function buildReplCompleter(commands: string[], pathCommands: Set<string>
     const cmd = parts[0];
     if (pathCommands.has(cmd)) {
       const lastPart = parts[parts.length - 1];
-      const [completions, original] = completePath(lastPart);
+      const [completions] = completePath(lastPart);
 
       // Rebuild full line with each completion
       const prefix = parts.slice(0, -1).join(' ') + ' ';
@@ -154,4 +154,3 @@ export function buildReplCompleter(commands: string[], pathCommands: Set<string>
     return [[], line];
   };
 }
-

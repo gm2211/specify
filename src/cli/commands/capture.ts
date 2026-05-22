@@ -70,7 +70,7 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     if (!ctx.quiet) process.stderr.write(msg + '\n');
   };
 
-  let hostFilter = '';
+  let hostFilter: string;
   try {
     hostFilter = new URL(options.url).hostname;
   } catch {

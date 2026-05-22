@@ -3,7 +3,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { eventBus } from './event-bus.js';
-import type { MemoryProvider, MemoryScope } from './memory-provider.js';
+import type { MemoryScope } from './memory-provider.js';
 import type { DeltaInput } from './memory.js';
 
 export type DecisionScope = 'narrow' | 'medium' | 'broad';

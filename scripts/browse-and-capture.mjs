@@ -120,7 +120,7 @@ function slugify(url) {
     const u = new URL(url);
     return u.pathname
       .replace(/^\//, "")
-      .replace(/[\/\?&#=.]/g, "_")
+      .replace(/[/?&#=.]/g, "_")
       .replace(/_+/g, "_")
       .replace(/_$/, "")
       .substring(0, 80);

@@ -87,7 +87,7 @@ test('setDraftStatus: flips pending to approved on disk', async () => {
 test('synthesizeDraft: respects custom describer (e.g. LLM-backed)', async () => {
   const { specPath, cleanup } = tmpSpec();
   try {
-    const describer = (p: CandidatePattern) => ({
+    const describer = (_p: CandidatePattern) => ({
       name: 'verify-signup-flow',
       description: 'Verify the signup flow happy path with empty-state probing.',
       body: '## Custom workflow\n\n1. Navigate to /signup\n2. Probe empty form submit\n',

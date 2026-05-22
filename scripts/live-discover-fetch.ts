@@ -484,7 +484,7 @@ function generateReport(
   report += `---\n\n## JS Bundle Analysis\n\n`;
   const ccScripts = scriptUrls.filter((u) => !HOST_FILTER || u.includes(HOST_FILTER));
   report += `**Target scripts (${ccScripts.length}):**\n`;
-  for (const s of [...new Set(ccScripts)]) {
+  for (const s of new Set(ccScripts)) {
     report += `- \`${s.replace(BASE_URL, '')}\`\n`;
   }
   if (jsAnalysis.length > 0) {

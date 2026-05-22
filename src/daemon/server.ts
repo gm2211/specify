@@ -82,7 +82,6 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
       // Anything else (rare) — re-emit on next tick so existing listeners
       // (if any) still see it, but don't synchronously throw.
       setImmediate(() => {
-        // eslint-disable-next-line no-console
         console.error('[daemon] stream error', err);
       });
     });

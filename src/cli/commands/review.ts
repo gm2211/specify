@@ -134,7 +134,7 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
   return ExitCode.SUCCESS;
 }
 
-export async function review(options: ReviewOptions, ctx: CliContext): Promise<number> {
+export async function review(options: ReviewOptions, _ctx: CliContext): Promise<number> {
   if (options.stop) {
     return reviewStop();
   }

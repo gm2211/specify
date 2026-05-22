@@ -6,6 +6,7 @@
  * WebSocket support for live updates when files change on disk.
  */
 
+import type { Server } from 'node:http';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -513,7 +514,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   // WebSocket server for live updates
   // -------------------------------------------------------------------------
 
-  const wss = new WebSocketServer({ server: server as any });
+  const wss = new WebSocketServer({ server: server as Server });
 
   function broadcast(message: Record<string, unknown>): void {
     const data = JSON.stringify(message);

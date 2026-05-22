@@ -116,7 +116,7 @@ function instrumentPage(page: Page, sessionId: string | undefined, detachers: Ar
   // Future navigations re-add it via the framenavigated handler.
   const installObserver = async (): Promise<void> => {
     try {
-      await page.evaluate(installInPageObserver.toString() + ';' + 'installInPageObserver();');
+      await page.evaluate(installInPageObserver.toString() + ';installInPageObserver();');
     } catch {
       // Page may have already navigated; ignore.
     }

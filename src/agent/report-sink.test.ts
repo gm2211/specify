@@ -21,12 +21,22 @@ test('sinkConfigFromEnv: pulls dir + slack webhook file from env', () => {
       SPECIFY_REPORT_FILE_DIR: '/work/reports',
       SPECIFY_REPORT_SLACK_WEBHOOK_FILE: '/run/secrets/slack',
     }),
-    { fileDir: '/work/reports', slackWebhookFile: '/run/secrets/slack' },
+    {
+      fileDir: '/work/reports',
+      platformSpecRunResultUrl: undefined,
+      platformSpecifyToken: undefined,
+      slackWebhookFile: '/run/secrets/slack',
+    },
   );
 });
 
 test('sinkConfigFromEnv: empty when nothing set', () => {
-  assert.deepEqual(sinkConfigFromEnv({}), { fileDir: undefined, slackWebhookFile: undefined });
+  assert.deepEqual(sinkConfigFromEnv({}), {
+    fileDir: undefined,
+    platformSpecRunResultUrl: undefined,
+    platformSpecifyToken: undefined,
+    slackWebhookFile: undefined,
+  });
 });
 
 test('buildSinks: empty config → no sinks', () => {

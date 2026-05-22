@@ -157,7 +157,7 @@ export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext)
   return { ok: true, observationId, bdIssueId, observationsPath };
 }
 
-function feedbackSource(kind: FeedbackKind): Observation['source'] {
+function feedbackSource(_kind: FeedbackKind): Observation['source'] {
   return 'user_feedback';
 }
 

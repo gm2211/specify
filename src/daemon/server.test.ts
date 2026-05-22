@@ -29,7 +29,9 @@ function request(port: number, path: string, init: { method?: string; headers?: 
       headers: init.headers ?? {},
     }, (res) => {
       let buf = '';
-      res.on('data', (chunk) => (buf += chunk));
+      res.on('data', (chunk) => {
+        buf += chunk;
+      });
       res.on('end', () => {
         let json: unknown = null;
         try { json = JSON.parse(buf); } catch { /* not json */ }
