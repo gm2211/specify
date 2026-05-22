@@ -155,7 +155,33 @@ test('startK8sWatcher: rollout event triggers inbox post', async () => {
   assert.equal(posted, true);
 });
 
-test('startK8sWatcher: inbox failure logged but doesn’t throw', async () => {
+// rnz-15c9: isTransientStreamClose
+test('isTransientStreamClose: "Premature close" is transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('Premature close')), true);
+});
+
+test('isTransientStreamClose: EPIPE is transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('write EPIPE')), true);
+});
+
+test('isTransientStreamClose: ECONNRESET is transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('read ECONNRESET')), true);
+});
+
+test('isTransientStreamClose: socket hang up is transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('socket hang up')), true);
+});
+
+test('isTransientStreamClose: auth error is NOT transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('Unauthorized: 401')), false);
+});
+
+test('isTransientStreamClose: DNS error is NOT transient', () => {
+  assert.equal(_internals.isTransientStreamClose(new Error('getaddrinfo ENOTFOUND kubernetes.default.svc')), false);
+});
+
+
+test("startK8sWatcher: inbox failure logged but doesn't throw", async () => {
   const fetchImpl = (async () => new Response('nope', { status: 503 })) as typeof fetch;
   let logged = '';
   const watcherImpl: WatcherImpl = {
