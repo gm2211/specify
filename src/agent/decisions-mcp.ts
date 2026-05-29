@@ -1,11 +1,7 @@
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { eventBus } from './event-bus.js';
-import {
-  appendDecision,
-  registerAwaiter,
-  type DecisionScope,
-} from './pending-decisions.js';
+import { appendDecision, registerAwaiter, type DecisionScope } from './pending-decisions.js';
 import type { MemoryProvider, MemoryScope } from './memory-provider.js';
 import { enforceBudget } from './tool-budget.js';
 
@@ -40,26 +36,36 @@ export function createDecisionsMcpServer(ctx: DecisionsMcpContext) {
         ].join(' '),
         {
           question: z.string().min(1).describe('One-sentence ask'),
-          context: z.string().min(1).describe('Longer description — what the agent saw, repro steps'),
+          context: z
+            .string()
+            .min(1)
+            .describe('Longer description — what the agent saw, repro steps'),
           proposed_resolutions: z.array(ProposedResolutionSchema).min(2),
           blocking: z.boolean().describe('When true, hold the run until a human resolves'),
-          timeout_seconds: z.number().optional().describe('Seconds to wait before giving up (default 600, only meaningful when blocking=true)'),
+          timeout_seconds: z
+            .number()
+            .optional()
+            .describe(
+              'Seconds to wait before giving up (default 600, only meaningful when blocking=true)',
+            ),
         },
         async (args) => {
           const budget = enforceBudget(ctx.runId, 'file_decision');
           if (!budget.ok) {
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'budget_exceeded',
-                  tool: 'file_decision',
-                  limit: budget.limit,
-                  used: budget.used,
-                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
-                }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'budget_exceeded',
+                    tool: 'file_decision',
+                    limit: budget.limit,
+                    used: budget.used,
+                    hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                  }),
+                },
+              ],
             };
           }
           const decision = appendDecision({
@@ -82,10 +88,12 @@ export function createDecisionsMcpServer(ctx: DecisionsMcpContext) {
 
           if (!args.blocking) {
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({ ok: true, id: decision.id, status: 'open' }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({ ok: true, id: decision.id, status: 'open' }),
+                },
+              ],
             };
           }
 
@@ -95,27 +103,31 @@ export function createDecisionsMcpServer(ctx: DecisionsMcpContext) {
             const res = resolved.resolved!;
             const proposal = resolved.proposed_resolutions[res.resolution_index];
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: true,
-                  id: decision.id,
-                  resolution: {
-                    scope: res.scope,
-                    resolution_index: res.resolution_index,
-                    label: proposal.label,
-                    action_hint: proposal.action_hint,
-                  },
-                }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: true,
+                    id: decision.id,
+                    resolution: {
+                      scope: res.scope,
+                      resolution_index: res.resolution_index,
+                      label: proposal.label,
+                      action_hint: proposal.action_hint,
+                    },
+                  }),
+                },
+              ],
             };
           } catch (err) {
             const reason = err instanceof Error ? err.message : String(err);
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({ ok: false, id: decision.id, reason }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({ ok: false, id: decision.id, reason }),
+                },
+              ],
             };
           }
         },

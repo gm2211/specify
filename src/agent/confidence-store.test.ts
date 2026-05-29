@@ -44,7 +44,10 @@ test('persistence: state survives a fresh store on the same file', () => {
 });
 
 test('confidenceFor: returns 0.5 for unknown, monotone in accepts', () => {
-  assert.equal(confidenceFor({ behaviorId: 'x', accepts: 0, overrides: 0, lastUpdatedAt: '' }), 0.5);
+  assert.equal(
+    confidenceFor({ behaviorId: 'x', accepts: 0, overrides: 0, lastUpdatedAt: '' }),
+    0.5,
+  );
   const lo = confidenceFor({ behaviorId: 'x', accepts: 1, overrides: 1, lastUpdatedAt: '' });
   const hi = confidenceFor({ behaviorId: 'x', accepts: 9, overrides: 1, lastUpdatedAt: '' });
   assert.ok(hi > lo);

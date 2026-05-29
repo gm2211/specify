@@ -66,7 +66,11 @@ test('getReplayPrompt returns non-empty string with capture dir and URL', () => 
 });
 
 test('getComparePrompt includes both URLs and output dir', () => {
-  const prompt = getComparePrompt('https://prod.example.com', 'http://localhost:3000', '/tmp/compare');
+  const prompt = getComparePrompt(
+    'https://prod.example.com',
+    'http://localhost:3000',
+    '/tmp/compare',
+  );
   assert.ok(prompt.length > 0);
   assert.ok(prompt.includes('https://prod.example.com'));
   assert.ok(prompt.includes('http://localhost:3000'));
@@ -74,18 +78,30 @@ test('getComparePrompt includes both URLs and output dir', () => {
 });
 
 test('getComparePrompt references both remote and local browser tools', () => {
-  const prompt = getComparePrompt('https://prod.example.com', 'http://localhost:3000', '/tmp/compare');
+  const prompt = getComparePrompt(
+    'https://prod.example.com',
+    'http://localhost:3000',
+    '/tmp/compare',
+  );
   assert.ok(prompt.includes('mcp__remote__browser_'), 'should reference remote browser tools');
   assert.ok(prompt.includes('mcp__local__browser_'), 'should reference local browser tools');
 });
 
 test('getComparePrompt does not reference sp CLI commands', () => {
-  const prompt = getComparePrompt('https://prod.example.com', 'http://localhost:3000', '/tmp/compare');
+  const prompt = getComparePrompt(
+    'https://prod.example.com',
+    'http://localhost:3000',
+    '/tmp/compare',
+  );
   assert.ok(!prompt.includes('sp '), 'should not reference sp commands');
 });
 
 test('getComparePrompt describes structured output format', () => {
-  const prompt = getComparePrompt('https://prod.example.com', 'http://localhost:3000', '/tmp/compare');
+  const prompt = getComparePrompt(
+    'https://prod.example.com',
+    'http://localhost:3000',
+    '/tmp/compare',
+  );
   assert.ok(prompt.includes('match'));
   assert.ok(prompt.includes('summary'));
   assert.ok(prompt.includes('diffs'));
@@ -94,6 +110,10 @@ test('getComparePrompt describes structured output format', () => {
 });
 
 test('getComparePrompt instructs markdown report writing', () => {
-  const prompt = getComparePrompt('https://prod.example.com', 'http://localhost:3000', '/tmp/compare');
+  const prompt = getComparePrompt(
+    'https://prod.example.com',
+    'http://localhost:3000',
+    '/tmp/compare',
+  );
   assert.ok(prompt.includes('compare-report.md'));
 });

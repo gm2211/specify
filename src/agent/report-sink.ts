@@ -72,7 +72,9 @@ export interface AttachOptions {
   detached?: boolean;
 }
 
-export function sinkConfigFromEnv(env: Record<string, string | undefined> = process.env): SinkConfig {
+export function sinkConfigFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): SinkConfig {
   return {
     fileDir: env.SPECIFY_REPORT_FILE_DIR,
     slackWebhookFile: env.SPECIFY_REPORT_SLACK_WEBHOOK_FILE,
@@ -81,12 +83,17 @@ export function sinkConfigFromEnv(env: Record<string, string | undefined> = proc
   };
 }
 
-export function buildSinks(config: SinkConfig, fetchImpl: typeof fetch = globalThis.fetch): ReportSink[] {
+export function buildSinks(
+  config: SinkConfig,
+  fetchImpl: typeof fetch = globalThis.fetch,
+): ReportSink[] {
   const sinks: ReportSink[] = [];
   if (config.fileDir) sinks.push(fileSink(config.fileDir));
   if (config.slackWebhookFile) sinks.push(slackSink(config.slackWebhookFile, fetchImpl));
   if (config.platformSpecRunResultUrl && config.platformSpecifyToken) {
-    sinks.push(platformSink(config.platformSpecRunResultUrl, config.platformSpecifyToken, fetchImpl));
+    sinks.push(
+      platformSink(config.platformSpecRunResultUrl, config.platformSpecifyToken, fetchImpl),
+    );
   }
   return sinks;
 }
@@ -113,7 +120,12 @@ interface VerifyStructuredOutput {
   summary?: string;
 }
 
-function summarizeForSlack(body: unknown): { text: string; pass: number; fail: number; total: number } {
+function summarizeForSlack(body: unknown): {
+  text: string;
+  pass: number;
+  fail: number;
+  total: number;
+} {
   // Match the loose shape persistResult writes: { id, task, structuredOutput }
   const so =
     (body && typeof body === 'object' && 'structuredOutput' in body
@@ -179,7 +191,7 @@ function slackSink(webhookFile: string, fetchImpl: typeof fetch): ReportSink {
 
 /** Shape the specify agent emits for each per-behavior result in structuredOutput. */
 interface BehaviorResult {
-  id: string;          // "area-id/behavior-id"
+  id: string; // "area-id/behavior-id"
   status: 'passed' | 'failed' | 'skipped';
   duration_ms?: number;
   rationale?: string;
@@ -294,7 +306,14 @@ export function attachReportSinks(opts: AttachOptions = {}): AttachResult {
     const id = String(ev.data.id ?? '');
     const resultPath = ev.data.resultPath;
     if (!id || typeof resultPath !== 'string' || !resultPath) return;
-    void dispatch({ id, resultPath, costUsd: typeof ev.data.costUsd === 'number' ? ev.data.costUsd : undefined }, sinks);
+    void dispatch(
+      {
+        id,
+        resultPath,
+        costUsd: typeof ev.data.costUsd === 'number' ? ev.data.costUsd : undefined,
+      },
+      sinks,
+    );
   };
   const detach = eventBus.onAny(handler);
   return { sinks, detach };
@@ -305,7 +324,9 @@ async function dispatch(meta: Omit<ReportContext, 'body'>, sinks: ReportSink[]):
   try {
     body = JSON.parse(fs.readFileSync(meta.resultPath, 'utf-8'));
   } catch (err) {
-    process.stderr.write(`[report-sink] could not read ${meta.resultPath}: ${(err as Error).message}\n`);
+    process.stderr.write(
+      `[report-sink] could not read ${meta.resultPath}: ${(err as Error).message}\n`,
+    );
     return;
   }
   const ctx: ReportContext = { ...meta, body };
@@ -314,7 +335,9 @@ async function dispatch(meta: Omit<ReportContext, 'body'>, sinks: ReportSink[]):
       try {
         await s.send(ctx);
       } catch (err) {
-        process.stderr.write(`[report-sink:${s.name}] send failed for ${meta.id}: ${(err as Error).message}\n`);
+        process.stderr.write(
+          `[report-sink:${s.name}] send failed for ${meta.id}: ${(err as Error).message}\n`,
+        );
       }
     }),
   );

@@ -32,10 +32,14 @@ export async function saveSpec(yaml: string): Promise<void> {
   if (!res.ok) throw new Error(`Failed to save spec: ${res.status}`);
 }
 
-export async function triggerVerify(areaId?: string, behaviorId?: string): Promise<{ started: boolean; busy?: boolean }> {
-  const url = areaId && behaviorId
-    ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
-    : `${BASE}/api/verify`;
+export async function triggerVerify(
+  areaId?: string,
+  behaviorId?: string,
+): Promise<{ started: boolean; busy?: boolean }> {
+  const url =
+    areaId && behaviorId
+      ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
+      : `${BASE}/api/verify`;
   const res = await fetch(url, { method: 'POST' });
   if (res.status === 409) return { started: false, busy: true };
   if (!res.ok) throw new Error(`Failed to trigger verify: ${res.status}`);
@@ -94,8 +98,12 @@ export async function fetchSkillDrafts(): Promise<SkillDraft[]> {
   return Array.isArray(body?.drafts) ? body.drafts : [];
 }
 
-export async function approveSkillDraft(id: string): Promise<{ skillName: string; skillPath: string }> {
-  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+export async function approveSkillDraft(
+  id: string,
+): Promise<{ skillName: string; skillPath: string }> {
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `approve failed: ${res.status}`);
@@ -104,7 +112,9 @@ export async function approveSkillDraft(id: string): Promise<{ skillName: string
 }
 
 export async function rejectSkillDraft(id: string): Promise<{ ok: true }> {
-  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `reject failed: ${res.status}`);
@@ -112,7 +122,9 @@ export async function rejectSkillDraft(id: string): Promise<{ ok: true }> {
   return res.json();
 }
 
-export async function fetchActiveSkills(): Promise<Array<{ name: string; filePath: string; description: string }>> {
+export async function fetchActiveSkills(): Promise<
+  Array<{ name: string; filePath: string; description: string }>
+> {
   const res = await fetch(`${BASE}/api/skills/active`);
   if (!res.ok) return [];
   const body = await res.json();
@@ -176,7 +188,11 @@ export async function resolveDecision(
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { detail?: string; error?: string }).detail ?? (err as { error?: string }).error ?? `resolve failed: ${res.status}`);
+    throw new Error(
+      (err as { detail?: string; error?: string }).detail ??
+        (err as { error?: string }).error ??
+        `resolve failed: ${res.status}`,
+    );
   }
   return res.json();
 }

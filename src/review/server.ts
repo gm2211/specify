@@ -118,7 +118,7 @@ function mergeScopedResult(
   scope: { areaId: string; behaviorId: string },
 ): Record<string, unknown> {
   const freshResults = Array.isArray((fresh as { results?: unknown })?.results)
-    ? ((fresh as { results: Array<Record<string, unknown>> }).results)
+    ? (fresh as { results: Array<Record<string, unknown>> }).results
     : [];
   const targetId = `${scope.areaId}/${scope.behaviorId}`;
   const incoming = freshResults.find((r) => r.id === targetId);
@@ -196,9 +196,10 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       }
       const raw = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
       // CLI writes { structuredOutput: {...} }; unwrap for the webapp.
-      const data = raw && typeof raw === 'object' && 'structuredOutput' in raw
-        ? (raw as { structuredOutput: unknown }).structuredOutput
-        : raw;
+      const data =
+        raw && typeof raw === 'object' && 'structuredOutput' in raw
+          ? (raw as { structuredOutput: unknown }).structuredOutput
+          : raw;
       return c.json(data ?? {});
     } catch {
       return c.json({});
@@ -274,7 +275,9 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     if (verifyInFlight) return c.json({ error: 'busy' }, 409);
     const { areaId, behaviorId } = c.req.param();
     runVerifyInBackground(resolvedSpec, resultsDir, { areaId, behaviorId }).catch((err) => {
-      process.stderr.write(`Scoped verify failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `Scoped verify failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     });
     return c.json({ started: true, areaId, behaviorId });
   });
@@ -308,7 +311,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   });
@@ -347,7 +350,11 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       const draft = listDrafts(resolvedSpec).find((d) => d.id === id);
       if (!draft) return c.json({ error: 'not_found' }, 404);
       const result = promoteDraft(draft.filePath, { specPath: resolvedSpec });
-      eventBus.send('skill:approved', { id, skillName: result.skillName, skillPath: result.skillPath });
+      eventBus.send('skill:approved', {
+        id,
+        skillName: result.skillName,
+        skillPath: result.skillPath,
+      });
       return c.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -419,9 +426,22 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       if (!body.kind || !body.text) {
         return c.json({ error: 'invalid_body', message: 'Expected { kind, text, ... }' }, 400);
       }
-      const allowed = new Set(['note', 'important_pattern', 'missed_check', 'false_positive', 'ignore_pattern', 'file_bug']);
+      const allowed = new Set([
+        'note',
+        'important_pattern',
+        'missed_check',
+        'false_positive',
+        'ignore_pattern',
+        'file_bug',
+      ]);
       if (!allowed.has(body.kind)) {
-        return c.json({ error: 'invalid_kind', message: `kind must be one of: ${Array.from(allowed).join(', ')}` }, 400);
+        return c.json(
+          {
+            error: 'invalid_kind',
+            message: `kind must be one of: ${Array.from(allowed).join(', ')}`,
+          },
+          400,
+        );
       }
       const { ingestFeedback } = await import('../agent/feedback.js');
       const result = await ingestFeedback(
@@ -578,12 +598,8 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   if (shouldOpen) {
     const { execFile } = await import('child_process');
     const platform = process.platform;
-    const openCmd = platform === 'darwin' ? 'open'
-      : platform === 'win32' ? 'cmd'
-      : 'xdg-open';
-    const openArgs = platform === 'win32'
-      ? ['/c', 'start', '', url]
-      : [url];
+    const openCmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
+    const openArgs = platform === 'win32' ? ['/c', 'start', '', url] : [url];
     execFile(openCmd, openArgs, (err) => {
       if (err) {
         process.stderr.write(`Could not auto-open browser: ${err.message}\n`);

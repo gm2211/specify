@@ -52,7 +52,10 @@ export interface ResolveDeps {
   tmpRoot?: string;
 }
 
-export async function resolveSpec(source: SpecSource, deps: ResolveDeps = {}): Promise<ResolvedSpec> {
+export async function resolveSpec(
+  source: SpecSource,
+  deps: ResolveDeps = {},
+): Promise<ResolvedSpec> {
   let content: string;
   switch (source.kind) {
     case 'inline':
@@ -62,7 +65,11 @@ export async function resolveSpec(source: SpecSource, deps: ResolveDeps = {}): P
       content = await fetchUrl(source, deps.fetchImpl ?? globalThis.fetch);
       break;
     case 'git':
-      content = await cloneAndRead(source, deps.execImpl ?? runGitClone, deps.tmpRoot ?? os.tmpdir());
+      content = await cloneAndRead(
+        source,
+        deps.execImpl ?? runGitClone,
+        deps.tmpRoot ?? os.tmpdir(),
+      );
       break;
   }
   const spec = parseSpec(content, describeSource(source));
@@ -72,9 +79,12 @@ export async function resolveSpec(source: SpecSource, deps: ResolveDeps = {}): P
 
 function describeSource(s: SpecSource): string {
   switch (s.kind) {
-    case 'inline': return s.path;
-    case 'url':    return s.url;
-    case 'git':    return `${s.repo}@${s.ref}:${s.path}`;
+    case 'inline':
+      return s.path;
+    case 'url':
+      return s.url;
+    case 'git':
+      return `${s.repo}@${s.ref}:${s.path}`;
   }
 }
 
@@ -83,8 +93,13 @@ async function readInline(p: string): Promise<string> {
   return fs.readFileSync(p, 'utf-8');
 }
 
-async function fetchUrl(src: { url: string; bearerFile?: string }, fetchImpl: typeof fetch): Promise<string> {
-  const headers: Record<string, string> = { Accept: 'application/yaml, text/yaml, application/json, text/plain' };
+async function fetchUrl(
+  src: { url: string; bearerFile?: string },
+  fetchImpl: typeof fetch,
+): Promise<string> {
+  const headers: Record<string, string> = {
+    Accept: 'application/yaml, text/yaml, application/json, text/plain',
+  };
   if (src.bearerFile) {
     if (!fs.existsSync(src.bearerFile)) {
       throw new Error(`Spec URL bearer file not found: ${src.bearerFile}`);
@@ -116,14 +131,18 @@ export async function runGitClone(opts: GitCloneOpts): Promise<void> {
     }
     env.GIT_SSH_COMMAND = `ssh -i ${opts.deployKeyFile} -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new`;
   }
-  await spawnAwait('git', ['clone', '--depth=1', '--branch', opts.ref, opts.repo, opts.destDir], { env });
+  await spawnAwait('git', ['clone', '--depth=1', '--branch', opts.ref, opts.repo, opts.destDir], {
+    env,
+  });
 }
 
 function spawnAwait(cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv }): Promise<void> {
   return new Promise((resolve, reject) => {
     const proc = spawn(cmd, args, { env: opts.env, stdio: ['ignore', 'pipe', 'pipe'] });
     let stderr = '';
-    proc.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    proc.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
     proc.on('error', reject);
     proc.on('close', (code) => {
       if (code === 0) resolve();
@@ -132,7 +151,11 @@ function spawnAwait(cmd: string, args: string[], opts: { env: NodeJS.ProcessEnv 
   });
 }
 
-async function cloneAndRead(src: { repo: string; ref: string; path: string; deployKeyFile?: string }, exec: RunGitClone, tmpRoot: string): Promise<string> {
+async function cloneAndRead(
+  src: { repo: string; ref: string; path: string; deployKeyFile?: string },
+  exec: RunGitClone,
+  tmpRoot: string,
+): Promise<string> {
   const dest = fs.mkdtempSync(path.join(tmpRoot, 'specify-spec-'));
   try {
     await exec({ repo: src.repo, ref: src.ref, destDir: dest, deployKeyFile: src.deployKeyFile });
@@ -160,7 +183,9 @@ async function cloneAndRead(src: { repo: string; ref: string; path: string; depl
  *            SPECIFY_SPEC_GIT_PATH=specify.spec.yaml
  *            SPECIFY_SPEC_GIT_DEPLOY_KEY_FILE=/run/secrets/deploy-key  (optional)
  */
-export function specSourceFromEnv(env: Record<string, string | undefined> = process.env): SpecSource | null {
+export function specSourceFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): SpecSource | null {
   const sources: SpecSource[] = [];
   if (env.SPECIFY_SPEC_INLINE_PATH) {
     sources.push({ kind: 'inline', path: env.SPECIFY_SPEC_INLINE_PATH });
@@ -174,7 +199,9 @@ export function specSourceFromEnv(env: Record<string, string | undefined> = proc
   }
   if (env.SPECIFY_SPEC_GIT_REPO) {
     if (!env.SPECIFY_SPEC_GIT_REF || !env.SPECIFY_SPEC_GIT_PATH) {
-      throw new Error('SPECIFY_SPEC_GIT_REPO requires SPECIFY_SPEC_GIT_REF and SPECIFY_SPEC_GIT_PATH');
+      throw new Error(
+        'SPECIFY_SPEC_GIT_REPO requires SPECIFY_SPEC_GIT_REF and SPECIFY_SPEC_GIT_PATH',
+      );
     }
     sources.push({
       kind: 'git',
@@ -187,7 +214,9 @@ export function specSourceFromEnv(env: Record<string, string | undefined> = proc
   if (sources.length === 0) return null;
   if (sources.length > 1) {
     const kinds = sources.map((s) => s.kind).join(', ');
-    throw new Error(`Multiple spec sources configured (${kinds}); set exactly one of SPECIFY_SPEC_INLINE_PATH / SPECIFY_SPEC_URL / SPECIFY_SPEC_GIT_REPO`);
+    throw new Error(
+      `Multiple spec sources configured (${kinds}); set exactly one of SPECIFY_SPEC_INLINE_PATH / SPECIFY_SPEC_URL / SPECIFY_SPEC_GIT_REPO`,
+    );
   }
   return sources[0];
 }

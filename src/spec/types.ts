@@ -150,7 +150,15 @@ export interface ActionTraceEntry {
   /**
    * What kind of step this is. The agent picks the closest match.
    */
-  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  type:
+    | 'navigation'
+    | 'click'
+    | 'fill'
+    | 'screenshot'
+    | 'observation'
+    | 'assertion'
+    | 'wait'
+    | 'other';
   /**
    * One-sentence description of the step in the agent's own words, e.g.
    * "Clicked the Start button" or "Observed countdown at 37 seconds".

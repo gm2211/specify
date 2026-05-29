@@ -32,9 +32,7 @@ export function setActivePropagator(injector: MessageInjector | null): void {
       if (!text.trim()) return;
       const areaId = (e.data?.areaId as string | null | undefined) ?? null;
       const behaviorId = (e.data?.behaviorId as string | null | undefined) ?? null;
-      const scope = areaId || behaviorId
-        ? `(${areaId ?? '?'}/${behaviorId ?? '?'})`
-        : '';
+      const scope = areaId || behaviorId ? `(${areaId ?? '?'}/${behaviorId ?? '?'})` : '';
       const message = renderPropagationMessage(text, scope);
       try {
         activeInjector?.inject(message, 'next');

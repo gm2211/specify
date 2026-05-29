@@ -43,7 +43,7 @@ const BASE_URL = process.env.TARGET_BASE_URL ?? '';
 const HOST_FILTER = process.env.CAPTURE_HOST_FILTER ?? '';
 const STORAGE_STATE_PATH = path.resolve(
   process.cwd(),
-  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json'
+  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json',
 );
 const OUTPUT_DIR = path.resolve(process.cwd(), process.env.DISCOVER_OUTPUT_DIR ?? 'docs');
 const DELAY_MS = parseInt(process.env.DISCOVER_DELAY_MS ?? '600', 10);
@@ -173,10 +173,7 @@ function extractApiPatterns(jsContent: string): string[] {
 // ---------------------------------------------------------------------------
 // Probe helpers
 // ---------------------------------------------------------------------------
-async function probeDocument(
-  urlPath: string,
-  cookieHeader: string
-): Promise<ProbeResult> {
+async function probeDocument(urlPath: string, cookieHeader: string): Promise<ProbeResult> {
   const url = urlPath.startsWith('http') ? urlPath : `${BASE_URL}${urlPath}`;
   console.log(`  GET ${url}`);
 
@@ -207,7 +204,9 @@ async function probeDocument(
     const botBlocked = checkBotBlock(rawBody, response.status, serverHeader);
 
     const headers: Record<string, string> = {};
-    response.headers.forEach((v, k) => { headers[k] = v; });
+    response.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
 
     const result: ProbeResult = {
       url,
@@ -224,8 +223,8 @@ async function probeDocument(
 
     console.log(
       `    -> ${response.status} [${contentType.split(';')[0]}]` +
-      `${botBlocked ? ' [BOT-BLOCKED]' : ''}` +
-      `${response.redirected ? ` -> ${response.url}` : ''}`
+        `${botBlocked ? ' [BOT-BLOCKED]' : ''}` +
+        `${response.redirected ? ` -> ${response.url}` : ''}`,
     );
     return result;
   } catch (e: unknown) {
@@ -243,10 +242,7 @@ async function probeDocument(
   }
 }
 
-async function probeXhr(
-  urlPath: string,
-  cookieHeader: string
-): Promise<ProbeResult> {
+async function probeXhr(urlPath: string, cookieHeader: string): Promise<ProbeResult> {
   const url = urlPath.startsWith('http') ? urlPath : `${BASE_URL}${urlPath}`;
   console.log(`  XHR GET ${url}`);
 
@@ -275,7 +271,9 @@ async function probeXhr(
     const botBlocked = checkBotBlock(rawBody, response.status, serverHeader);
 
     const headers: Record<string, string> = {};
-    response.headers.forEach((v, k) => { headers[k] = v; });
+    response.headers.forEach((v, k) => {
+      headers[k] = v;
+    });
 
     const result: ProbeResult = {
       url,
@@ -292,8 +290,8 @@ async function probeXhr(
 
     console.log(
       `    -> ${response.status} [${contentType.split(';')[0]}]` +
-      `${botBlocked ? ' [BOT-BLOCKED]' : ''}` +
-      `${response.redirected ? ` -> ${response.url}` : ''}`
+        `${botBlocked ? ' [BOT-BLOCKED]' : ''}` +
+        `${response.redirected ? ` -> ${response.url}` : ''}`,
     );
     return result;
   } catch (e: unknown) {
@@ -317,7 +315,10 @@ async function probeXhr(
 function urlToInterfaceName(url: string): string {
   const parts = url.replace(BASE_URL, '').split('/').filter(Boolean);
   const meaningful = parts.filter((p) => !p.includes('.') && !p.includes('?'));
-  const name = meaningful.slice(-2).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join('');
+  const name = meaningful
+    .slice(-2)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join('');
   return (name || 'ApiResponse') + 'Response';
 }
 
@@ -363,24 +364,24 @@ function generateReport(
   jsAnalysis: { url: string; patterns: string[] }[],
   inlineApiPatterns: string[],
   scriptUrls: string[],
-  errors: { context: string; error: string }[]
+  errors: { context: string; error: string }[],
 ): string {
   const now = new Date().toISOString();
   const successfulPages = results.filter(
-    (r) => r.status >= 200 && r.status < 400 && r.contentType?.includes('html') && !r.botBlocked
+    (r) => r.status >= 200 && r.status < 400 && r.contentType?.includes('html') && !r.botBlocked,
   );
   const successfulApi = results.filter(
     (r) =>
       r.status >= 200 &&
       r.status < 400 &&
       (r.contentType?.includes('json') || r.contentType?.includes('xml')) &&
-      !r.botBlocked
+      !r.botBlocked,
   );
   const botBlocked = results.filter((r) => r.botBlocked);
   const authRedirects = results.filter(
     (r) =>
       r.redirectedTo?.toLowerCase().includes('login') ||
-      r.redirectedTo?.toLowerCase().includes('signin')
+      r.redirectedTo?.toLowerCase().includes('signin'),
   );
   const notFound = results.filter((r) => r.status === 404);
   const serverErrors = results.filter((r) => r.status >= 500);
@@ -421,7 +422,9 @@ function generateReport(
     let i = 1;
     for (const r of successfulPages) {
       const shortUrl = r.url.replace(BASE_URL, '');
-      const notes = r.redirectedTo ? `Redirected from: ${r.redirectedTo.replace(BASE_URL, '')}` : '';
+      const notes = r.redirectedTo
+        ? `Redirected from: ${r.redirectedTo.replace(BASE_URL, '')}`
+        : '';
       report += `| ${i} | \`${shortUrl}\` | ${r.status} | ${notes} |\n`;
       i++;
     }
@@ -442,7 +445,9 @@ function generateReport(
             const keys = Object.keys(parsed);
             shape = keys.length <= 5 ? `{${keys.join(', ')}}` : `Object(${keys.length} keys)`;
           }
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       report += `| ${i} | \`${shortUrl}\` | ${r.status} | ${r.contentType.split(';')[0]} | ${shape} |\n`;
       i++;
@@ -477,7 +482,9 @@ function generateReport(
         const shortUrl = r.url.replace(BASE_URL, '').split('?')[0];
         const name = urlToInterfaceName(shortUrl);
         report += `### From \`${shortUrl}\`\n\n\`\`\`typescript\n${generateTypeScript(parsed, name)}\n\`\`\`\n\n`;
-      } catch { /* skip */ }
+      } catch {
+        /* skip */
+      }
     }
   }
 
@@ -533,22 +540,31 @@ async function main(): Promise<void> {
   // Check if any JWT-like cookies are expired
   for (const cookie of storageState.cookies) {
     if (cookie.expires > 0 && cookie.expires < Date.now() / 1000) {
-      console.log(`  WARNING: Cookie "${cookie.name}" expired at ${new Date(cookie.expires * 1000).toISOString()}`);
+      console.log(
+        `  WARNING: Cookie "${cookie.name}" expired at ${new Date(cookie.expires * 1000).toISOString()}`,
+      );
     }
     // Try to decode JWT payload
     const parts = cookie.value.split('.');
     if (parts.length === 3) {
       try {
-        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString()) as Record<string, unknown>;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString()) as Record<
+          string,
+          unknown
+        >;
         if (typeof payload.exp === 'number') {
           const expiry = new Date(payload.exp * 1000);
           const remaining = Math.round((expiry.getTime() - Date.now()) / 1000);
-          console.log(`  Cookie "${cookie.name}" JWT exp: ${expiry.toISOString()} (${remaining}s from now)`);
+          console.log(
+            `  Cookie "${cookie.name}" JWT exp: ${expiry.toISOString()} (${remaining}s from now)`,
+          );
           if (remaining < 0) {
             console.log(`    WARNING: JWT has expired!`);
           }
         }
-      } catch { /* not a JWT */ }
+      } catch {
+        /* not a JWT */
+      }
     }
   }
 
@@ -597,7 +613,9 @@ async function main(): Promise<void> {
     }
   }
 
-  console.log(`Found ${scriptUrls.length} script URLs, ${inlineApiPatterns.length} inline patterns`);
+  console.log(
+    `Found ${scriptUrls.length} script URLs, ${inlineApiPatterns.length} inline patterns`,
+  );
 
   // Phase 3: Fetch JS bundles
   console.log('\n--- Phase 3: JS Bundle Analysis ---');
@@ -663,8 +681,8 @@ async function main(): Promise<void> {
         hostFilter: HOST_FILTER,
       },
       null,
-      2
-    )
+      2,
+    ),
   );
   console.log(`Raw data: ${rawPath}`);
   console.log(`\nDone at ${new Date().toISOString()}`);

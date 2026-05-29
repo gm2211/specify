@@ -28,18 +28,29 @@ interface ChatState {
 }
 
 const COMMANDS = [
-  'verify', 'capture', 'load', 'set', 'show', 'lint', 'review',
-  'help', 'status', 'exit', 'quit',
+  'verify',
+  'capture',
+  'load',
+  'set',
+  'show',
+  'lint',
+  'review',
+  'help',
+  'status',
+  'exit',
+  'quit',
 ];
 
 /** Commands whose last argument is a file/directory path */
 const PATH_COMMANDS = new Set(['load', 'review']);
 
-export async function runChat(options: {
-  spec?: string;
-  url?: string;
-  debug?: boolean;
-} = {}): Promise<number> {
+export async function runChat(
+  options: {
+    spec?: string;
+    url?: string;
+    debug?: boolean;
+  } = {},
+): Promise<number> {
   const state: ChatState = {
     spec: null,
     specPath: null,
@@ -73,7 +84,9 @@ export async function runChat(options: {
   const historyPath = path.resolve('.specify', '.chat_history');
   try {
     fs.mkdirSync(path.dirname(historyPath), { recursive: true });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 
   // Subscribe to agent events for inline display
   const unsubscribe = eventBus.onAny((event) => {
@@ -81,14 +94,18 @@ export async function runChat(options: {
       // ask_user is handled by the readline prompt directly
     } else if (event.type === 'agent:retry') {
       const { attempt, maxRetries, delayMs } = event.data;
-      process.stderr.write(`  ${c.yellow('⟳')} Retrying (${attempt}/${maxRetries}) in ${(delayMs as number) / 1000}s...\n`);
+      process.stderr.write(
+        `  ${c.yellow('⟳')} Retrying (${attempt}/${maxRetries}) in ${(delayMs as number) / 1000}s...\n`,
+      );
     } else if (event.type === 'agent:started' && state.debug) {
       process.stderr.write(`  ${c.dim('Agent session started')}\n`);
     }
   });
 
   process.stderr.write(`\n${c.boldCyan('Specify Chat')}\n`);
-  process.stderr.write(`${c.dim('Type commands naturally or use /help for available commands.')}\n`);
+  process.stderr.write(
+    `${c.dim('Type commands naturally or use /help for available commands.')}\n`,
+  );
   printStatus(state);
   process.stderr.write('\n');
   rl.prompt();
@@ -104,7 +121,9 @@ export async function runChat(options: {
       // Save to history
       try {
         fs.appendFileSync(historyPath, trimmed + '\n');
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
 
       // If agent is running, inject the message
       if (state.running && state.injector) {
@@ -123,7 +142,9 @@ export async function runChat(options: {
           return;
         }
       } catch (err) {
-        process.stderr.write(`${c.red('Error:')} ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `${c.red('Error:')} ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
 
       rl.prompt();
@@ -181,7 +202,7 @@ async function handleInput(input: string, state: ChatState): Promise<boolean> {
 
 async function handleVerify(args: string[], state: ChatState): Promise<void> {
   // Allow inline URL: "verify https://example.com"
-  const inlineUrl = args.find(a => a.startsWith('http'));
+  const inlineUrl = args.find((a) => a.startsWith('http'));
   if (inlineUrl) state.targetUrl = inlineUrl;
 
   // Allow inline spec: "verify --spec path.yaml"
@@ -194,7 +215,9 @@ async function handleVerify(args: string[], state: ChatState): Promise<void> {
   }
 
   if (!state.spec || !state.specPath) {
-    process.stderr.write(`${c.yellow('No spec loaded.')} Use: load <path> or verify --spec <path>\n`);
+    process.stderr.write(
+      `${c.yellow('No spec loaded.')} Use: load <path> or verify --spec <path>\n`,
+    );
     return;
   }
   if (!state.targetUrl) {
@@ -208,14 +231,14 @@ async function handleVerify(args: string[], state: ChatState): Promise<void> {
     }
   }
 
-  process.stderr.write(`\n  ${c.bold('Verifying')} ${c.cyan(state.targetUrl!)} against ${c.cyan(state.spec.name)}\n\n`);
+  process.stderr.write(
+    `\n  ${c.bold('Verifying')} ${c.cyan(state.targetUrl!)} against ${c.cyan(state.spec.name)}\n\n`,
+  );
 
   state.running = true;
   state.agentResult = null;
 
-  const injector = new MessageInjector(
-    `Verify ${state.targetUrl} against the behavioral spec.`,
-  );
+  const injector = new MessageInjector(`Verify ${state.targetUrl} against the behavioral spec.`);
   state.injector = injector;
 
   try {
@@ -241,16 +264,26 @@ async function handleVerify(args: string[], state: ChatState): Promise<void> {
     const pass = extractBool(structuredOutput, 'pass');
     state.agentResult = structuredOutput;
 
-    process.stderr.write(`\n  ${pass ? c.boldGreen('PASS') : c.boldRed('FAIL')} (cost: $${costUsd.toFixed(4)})\n`);
+    process.stderr.write(
+      `\n  ${pass ? c.boldGreen('PASS') : c.boldRed('FAIL')} (cost: $${costUsd.toFixed(4)})\n`,
+    );
 
     if (structuredOutput && typeof structuredOutput === 'object' && 'summary' in structuredOutput) {
-      const summary = (structuredOutput as { summary: { total: number; passed: number; failed: number; skipped: number } }).summary;
+      const summary = (
+        structuredOutput as {
+          summary: { total: number; passed: number; failed: number; skipped: number };
+        }
+      ).summary;
       if (summary && typeof summary === 'object') {
-        process.stderr.write(`  ${c.green(String(summary.passed))} passed, ${c.red(String(summary.failed))} failed, ${c.dim(String(summary.skipped))} skipped of ${summary.total} total\n`);
+        process.stderr.write(
+          `  ${c.green(String(summary.passed))} passed, ${c.red(String(summary.failed))} failed, ${c.dim(String(summary.skipped))} skipped of ${summary.total} total\n`,
+        );
       }
     }
   } catch (err) {
-    process.stderr.write(`  ${c.red('Verification failed:')} ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `  ${c.red('Verification failed:')} ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   } finally {
     state.running = false;
     state.injector = null;
@@ -259,7 +292,7 @@ async function handleVerify(args: string[], state: ChatState): Promise<void> {
 }
 
 async function handleCapture(args: string[], state: ChatState): Promise<void> {
-  const url = args.find(a => a.startsWith('http')) ?? state.targetUrl;
+  const url = args.find((a) => a.startsWith('http')) ?? state.targetUrl;
   if (!url) {
     process.stderr.write(`${c.yellow('Provide a URL:')} capture https://example.com\n`);
     return;
@@ -288,7 +321,9 @@ async function handleCapture(args: string[], state: ChatState): Promise<void> {
     process.stderr.write(`  ${c.green('Capture complete')} (cost: $${costUsd.toFixed(4)})\n`);
     process.stderr.write(`  Output: ${outputDir}\n`);
   } catch (err) {
-    process.stderr.write(`  ${c.red('Capture failed:')} ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `  ${c.red('Capture failed:')} ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   } finally {
     state.running = false;
   }
@@ -315,7 +350,9 @@ async function handleLoad(args: string[], state: ChatState): Promise<void> {
     const { loadSpec } = await import('../../spec/parser.js');
     state.spec = loadSpec(filePath);
     state.specPath = filePath;
-    process.stderr.write(`  ${c.green('Loaded:')} ${state.spec.name} (${state.spec.areas?.length ?? 0} areas)\n`);
+    process.stderr.write(
+      `  ${c.green('Loaded:')} ${state.spec.name} (${state.spec.areas?.length ?? 0} areas)\n`,
+    );
   } catch (err) {
     process.stderr.write(`  ${c.red('Failed:')} ${(err as Error).message}\n`);
   }
@@ -349,9 +386,8 @@ function handleShow(state: ChatState): void {
   process.stderr.write(`\n  ${ar.pass ? c.boldGreen('PASS') : c.boldRed('FAIL')}\n`);
   if (ar.results?.length) {
     for (const r of ar.results) {
-      const icon = r.status === 'passed' ? c.green('✓')
-        : r.status === 'failed' ? c.red('✗')
-        : c.yellow('-');
+      const icon =
+        r.status === 'passed' ? c.green('✓') : r.status === 'failed' ? c.red('✗') : c.yellow('-');
       process.stderr.write(`  ${icon} ${r.id}${r.description ? ` — ${r.description}` : ''}\n`);
       if (r.status === 'failed' && r.rationale) {
         process.stderr.write(`    ${c.dim(r.rationale)}\n`);
@@ -384,7 +420,7 @@ async function handleReview(args: string[], state: ChatState): Promise<void> {
     process.stderr.write(`  No spec loaded.\n`);
     return;
   }
-  const port = parseInt(args.find(a => /^\d+$/.test(a)) ?? '3456');
+  const port = parseInt(args.find((a) => /^\d+$/.test(a)) ?? '3456');
   const { startReviewServer } = await import('../../review/server.js');
   await startReviewServer({
     specPath: state.specPath,
@@ -393,7 +429,11 @@ async function handleReview(args: string[], state: ChatState): Promise<void> {
   });
 }
 
-async function handleNaturalLanguage(input: string, _args: string[], state: ChatState): Promise<void> {
+async function handleNaturalLanguage(
+  input: string,
+  _args: string[],
+  state: ChatState,
+): Promise<void> {
   const lower = input.toLowerCase();
 
   // Simple keyword matching for common intents
@@ -408,17 +448,21 @@ async function handleNaturalLanguage(input: string, _args: string[], state: Chat
   } else if (lower.includes('load') || lower.includes('open')) {
     const fileMatch = input.match(/(\S+\.(ya?ml|json))/);
     await handleLoad(fileMatch ? [fileMatch[1]] : [], state);
-  } else if (lower.includes('status') || lower.includes('what') && lower.includes('loaded')) {
+  } else if (lower.includes('status') || (lower.includes('what') && lower.includes('loaded'))) {
     printStatus(state);
   } else {
-    process.stderr.write(`  ${c.dim("I don't understand that. Type")} ${c.cyan('/help')} ${c.dim('for commands.')}\n`);
+    process.stderr.write(
+      `  ${c.dim("I don't understand that. Type")} ${c.cyan('/help')} ${c.dim('for commands.')}\n`,
+    );
   }
 }
 
 function printStatus(state: ChatState): void {
   process.stderr.write('\n');
   if (state.spec) {
-    process.stderr.write(`  ${c.bold('Spec:')} ${state.spec.name} ${c.dim(`(${state.specPath})`)}\n`);
+    process.stderr.write(
+      `  ${c.bold('Spec:')} ${state.spec.name} ${c.dim(`(${state.specPath})`)}\n`,
+    );
     process.stderr.write(`  ${c.bold('Areas:')} ${state.spec.areas?.length ?? 0}\n`);
   } else {
     process.stderr.write(`  ${c.dim('No spec loaded')}\n`);
@@ -428,7 +472,9 @@ function printStatus(state: ChatState): void {
   }
   if (state.agentResult) {
     const ar = state.agentResult as { pass?: boolean };
-    process.stderr.write(`  ${c.bold('Last result:')} ${ar.pass ? c.green('PASS') : c.red('FAIL')}\n`);
+    process.stderr.write(
+      `  ${c.bold('Last result:')} ${ar.pass ? c.green('PASS') : c.red('FAIL')}\n`,
+    );
   }
   process.stderr.write(`  ${c.bold('Debug:')} ${state.debug ? c.green('on') : c.dim('off')}\n`);
 }

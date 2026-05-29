@@ -33,7 +33,7 @@ export async function discoverPages(
       const url = new URL(path, baseUrl).toString();
       const response = await fetch(url, {
         signal: AbortSignal.timeout(timeout),
-        headers: { 'Accept': 'text/html' },
+        headers: { Accept: 'text/html' },
       });
 
       if (!response.ok) continue;
@@ -46,7 +46,7 @@ export async function discoverPages(
       const links = extractLinks(html, base.origin);
       const apiCalls: string[] = []; // Would need JS execution to detect
 
-      pages.push({ path, title, links: links.map(l => new URL(l, baseUrl).pathname), apiCalls });
+      pages.push({ path, title, links: links.map((l) => new URL(l, baseUrl).pathname), apiCalls });
 
       // Queue discovered internal links
       for (const link of links) {
@@ -80,7 +80,8 @@ function extractLinks(html: string, origin: string): string[] {
   while ((match = regex.exec(html)) !== null) {
     const href = match[1];
     // Skip anchors, javascript:, mailto:, external links
-    if (href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:')) continue;
+    if (href.startsWith('#') || href.startsWith('javascript:') || href.startsWith('mailto:'))
+      continue;
 
     try {
       const url = new URL(href, origin);

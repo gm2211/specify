@@ -58,7 +58,11 @@ export class ConfidenceStore {
   }
 
   record(behaviorId: string, outcome: ConfidenceOutcome): ConfidenceRow {
-    const existing = this.file.rows[behaviorId] ?? { accepts: 0, overrides: 0, lastUpdatedAt: new Date().toISOString() };
+    const existing = this.file.rows[behaviorId] ?? {
+      accepts: 0,
+      overrides: 0,
+      lastUpdatedAt: new Date().toISOString(),
+    };
     if (outcome === 'accept') existing.accepts += 1;
     else existing.overrides += 1;
     existing.lastUpdatedAt = new Date().toISOString();
@@ -136,7 +140,9 @@ function loadFile(filePath: string): ConfidenceFile {
     if (raw && raw.version === 1 && raw.rows && typeof raw.rows === 'object') {
       return raw as ConfidenceFile;
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return { version: 1, rows: {} };
 }
 

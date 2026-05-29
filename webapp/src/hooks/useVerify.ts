@@ -31,7 +31,13 @@ export function useVerify() {
     const ws = new WebSocket(`${proto}//${window.location.host}/ws`);
     wsRef.current = ws;
     ws.onmessage = (ev) => {
-      let msg: { type?: string; event?: { type?: string; data?: { scope?: { areaId: string; behaviorId: string } | null; error?: string } } };
+      let msg: {
+        type?: string;
+        event?: {
+          type?: string;
+          data?: { scope?: { areaId: string; behaviorId: string } | null; error?: string };
+        };
+      };
       try {
         msg = JSON.parse(ev.data);
       } catch {

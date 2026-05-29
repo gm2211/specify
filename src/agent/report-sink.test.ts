@@ -3,11 +3,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  attachReportSinks,
-  buildSinks,
-  sinkConfigFromEnv,
-} from './report-sink.js';
+import { attachReportSinks, buildSinks, sinkConfigFromEnv } from './report-sink.js';
 import { eventBus } from './event-bus.js';
 
 function tmp(): { dir: string; cleanup: () => void } {
@@ -69,7 +65,10 @@ test('slack sink: posts JSON payload, wraps non-OK as Error', async () => {
       costUsd: 0.1234,
     });
     assert.equal(posted.url, 'https://hooks.slack.com/T/B/X');
-    const p = posted.payload as { text: string; attachments: Array<{ color: string; fields: Array<{ title: string; value: string }> }> };
+    const p = posted.payload as {
+      text: string;
+      attachments: Array<{ color: string; fields: Array<{ title: string; value: string }> }>;
+    };
     assert.match(p.text, /all 5 behaviors passing/);
     assert.equal(p.attachments[0].color, 'good');
     assert.ok(p.attachments[0].fields.some((f) => f.title === 'Cost' && f.value === '$0.1234'));
@@ -99,7 +98,10 @@ test('slack sink: failure color when behaviors failed', async () => {
   try {
     const webhookFile = path.join(dir, 'webhook');
     fs.writeFileSync(webhookFile, 'https://x');
-    let payload: { attachments: Array<{ color: string }>; text: string } = { attachments: [], text: '' };
+    let payload: { attachments: Array<{ color: string }>; text: string } = {
+      attachments: [],
+      text: '',
+    };
     const fetchImpl = (async (_url: string, init?: RequestInit) => {
       payload = JSON.parse(init?.body as string);
       return new Response('ok', { status: 200 });

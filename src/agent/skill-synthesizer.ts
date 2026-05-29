@@ -53,8 +53,13 @@ export function defaultDraftsDir(specPath: string): string {
   return path.join(path.dirname(path.resolve(specPath)), '.specify', 'skill-drafts');
 }
 
-export async function synthesizeDraft(pattern: CandidatePattern, opts: SynthOptions): Promise<DraftRecord> {
-  const skill = await Promise.resolve(opts.describe ? opts.describe(pattern) : heuristicDescribe(pattern));
+export async function synthesizeDraft(
+  pattern: CandidatePattern,
+  opts: SynthOptions,
+): Promise<DraftRecord> {
+  const skill = await Promise.resolve(
+    opts.describe ? opts.describe(pattern) : heuristicDescribe(pattern),
+  );
   const draftsDir = opts.draftsDir ?? defaultDraftsDir(opts.specPath);
   fs.mkdirSync(draftsDir, { recursive: true });
   const filePath = path.join(draftsDir, `${pattern.id}.md`);
@@ -126,7 +131,10 @@ export function defaultSkillsDir(specPath: string): string {
  * name already exists (collision is an explicit decision the user must
  * resolve manually).
  */
-export function promoteDraft(filePath: string, opts: { specPath: string; skillsDir?: string } = { specPath: '' }): PromoteResult {
+export function promoteDraft(
+  filePath: string,
+  opts: { specPath: string; skillsDir?: string } = { specPath: '' },
+): PromoteResult {
   const text = fs.readFileSync(filePath, 'utf-8');
   const parsed = parseSkillMarkdown(text);
   if (!parsed) throw new Error(`promoteDraft: malformed draft at ${filePath}`);
@@ -148,7 +156,10 @@ export function promoteDraft(filePath: string, opts: { specPath: string; skillsD
  * entry returns the canonical SKILL.md path so the agent context loader
  * can inject them into upcoming runs.
  */
-export function listActiveSkills(specPath: string, skillsDir?: string): Array<{ name: string; filePath: string; description: string }> {
+export function listActiveSkills(
+  specPath: string,
+  skillsDir?: string,
+): Array<{ name: string; filePath: string; description: string }> {
   const dir = skillsDir ?? defaultSkillsDir(specPath);
   if (!fs.existsSync(dir)) return [];
   const out: Array<{ name: string; filePath: string; description: string }> = [];
@@ -159,7 +170,11 @@ export function listActiveSkills(specPath: string, skillsDir?: string): Array<{ 
       const text = fs.readFileSync(skillFile, 'utf-8');
       const parsed = parseSkillMarkdown(text);
       if (!parsed) continue;
-      out.push({ name: parsed.skill.name, filePath: skillFile, description: parsed.skill.description });
+      out.push({
+        name: parsed.skill.name,
+        filePath: skillFile,
+        description: parsed.skill.description,
+      });
     } catch {
       // skip malformed
     }
@@ -171,7 +186,11 @@ export function listActiveSkills(specPath: string, skillsDir?: string): Array<{ 
  * Render a prompt-injectable preamble listing approved skills the agent
  * can use this run. Returns '' when nothing is approved yet.
  */
-export function renderActiveSkillsPrompt(specPath: string, skillsDir?: string, budgetBytes = 4 * 1024): string {
+export function renderActiveSkillsPrompt(
+  specPath: string,
+  skillsDir?: string,
+  budgetBytes = 4 * 1024,
+): string {
   const skills = listActiveSkills(specPath, skillsDir);
   if (!skills.length) return '';
   const parts: string[] = [
@@ -242,23 +261,39 @@ export function heuristicDescribe(pattern: CandidatePattern): DescribedSkill {
 
 function humaniseKind(kind: string): string {
   switch (kind) {
-    case 'browser:click': return 'clicks an element';
-    case 'browser:input': return 'types into a field';
-    case 'browser:navigation': return 'navigates to a new URL';
-    case 'browser:console': return 'observes a console message';
-    case 'agent:tool_use': return 'invokes a tool';
-    case 'agent:text': return 'replies in text';
-    case 'tool_call': return 'calls a tool';
-    case 'message': return 'sends a message';
-    default: return `emits \`${kind}\``;
+    case 'browser:click':
+      return 'clicks an element';
+    case 'browser:input':
+      return 'types into a field';
+    case 'browser:navigation':
+      return 'navigates to a new URL';
+    case 'browser:console':
+      return 'observes a console message';
+    case 'agent:tool_use':
+      return 'invokes a tool';
+    case 'agent:text':
+      return 'replies in text';
+    case 'tool_call':
+      return 'calls a tool';
+    case 'message':
+      return 'sends a message';
+    default:
+      return `emits \`${kind}\``;
   }
 }
 
 function sanitizeName(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
-function renderSkillMarkdown(skill: DescribedSkill, pattern: CandidatePattern, createdAt: string): string {
+function renderSkillMarkdown(
+  skill: DescribedSkill,
+  pattern: CandidatePattern,
+  createdAt: string,
+): string {
   const fm: Record<string, unknown> = {
     name: skill.name,
     description: skill.description,
@@ -276,16 +311,9 @@ function renderSkillMarkdown(skill: DescribedSkill, pattern: CandidatePattern, c
     status: 'pending',
     createdAt,
   };
-  return [
-    '---',
-    yamlEncode(fm),
-    '---',
-    '',
-    `# ${skill.name}`,
-    '',
-    skill.body.trim(),
-    '',
-  ].join('\n');
+  return ['---', yamlEncode(fm), '---', '', `# ${skill.name}`, '', skill.body.trim(), ''].join(
+    '\n',
+  );
 }
 
 interface ParsedDraft {
@@ -299,7 +327,9 @@ function parseSkillMarkdown(text: string): ParsedDraft | null {
   const m = text.match(/^---\n([\s\S]*?)\n---\n/);
   if (!m) return null;
   const fm = yamlDecode(m[1]);
-  const meta = ((fm.metadata as Record<string, unknown> | undefined)?.specify) as Record<string, unknown> | undefined;
+  const meta = (fm.metadata as Record<string, unknown> | undefined)?.specify as
+    | Record<string, unknown>
+    | undefined;
   const tokens: Array<{ role: string; kind: string }> = String(meta?.pattern_signature ?? '')
     .split(' → ')
     .map((s) => {
@@ -317,8 +347,11 @@ function parseSkillMarkdown(text: string): ParsedDraft | null {
   const skill: DescribedSkill = {
     name: String(fm.name ?? 'unnamed'),
     description: String(fm.description ?? ''),
-    body: text.slice(m[0].length).replace(/^# .*\n/, '').trim(),
-    tags: Array.isArray(meta?.tags) ? meta?.tags as string[] : [],
+    body: text
+      .slice(m[0].length)
+      .replace(/^# .*\n/, '')
+      .trim(),
+    tags: Array.isArray(meta?.tags) ? (meta?.tags as string[]) : [],
   };
   return {
     skill,
@@ -358,7 +391,10 @@ function yamlDecode(text: string): Record<string, unknown> {
     while (i < lines.length) {
       const line = lines[i];
       const m = line.match(/^(\s*)([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/);
-      if (!m) { i++; continue; }
+      if (!m) {
+        i++;
+        continue;
+      }
       const lead = m[1].length / 2;
       if (lead < depth) return;
       i++;

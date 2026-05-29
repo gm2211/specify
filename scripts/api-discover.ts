@@ -39,7 +39,7 @@ const BASE_URL = process.env.TARGET_BASE_URL ?? '';
 const HOST_FILTER = process.env.CAPTURE_HOST_FILTER ?? '';
 const STORAGE_STATE_PATH = path.resolve(
   process.cwd(),
-  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json'
+  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json',
 );
 const OUTPUT_DIR = path.resolve(process.cwd(), process.env.DISCOVER_OUTPUT_DIR ?? 'docs');
 const DELAY_MS = parseInt(process.env.DISCOVER_DELAY_MS ?? '600', 10);
@@ -105,7 +105,7 @@ function dedupeEndpoints(endpoints: DiscoveredEndpoint[]): DiscoveredEndpoint[] 
 // Phase 1: Auth validation
 // ---------------------------------------------------------------------------
 async function validateAuth(
-  context: BrowserContext
+  context: BrowserContext,
 ): Promise<{ page: Page; authenticated: boolean }> {
   console.log('\n=== Phase 1: Auth Validation ===');
   const page = await context.newPage();
@@ -121,8 +121,7 @@ async function validateAuth(
     console.log(`  Response: ${status}, final URL: ${finalUrl}`);
 
     const isLoginPage =
-      finalUrl.toLowerCase().includes('login') ||
-      finalUrl.toLowerCase().includes('signin');
+      finalUrl.toLowerCase().includes('login') || finalUrl.toLowerCase().includes('signin');
 
     if (isLoginPage) {
       console.log('  WARNING: Redirected to login — session may be expired');
@@ -174,9 +173,7 @@ async function mineJavaScript(page: Page, context: BrowserContext): Promise<JsAn
   // Analyze external JS files matching the host filter
   const targetScripts = scriptSrcs.filter(
     (src) =>
-      (HOST_FILTER && src.includes(HOST_FILTER)) ||
-      src.startsWith('/') ||
-      src.startsWith(BASE_URL)
+      (HOST_FILTER && src.includes(HOST_FILTER)) || src.startsWith('/') || src.startsWith(BASE_URL),
   );
 
   console.log(`  Fetching ${targetScripts.length} target JS files...`);
@@ -235,8 +232,16 @@ function extractApiPatterns(source: string, sourceFile: string, analysis: JsAnal
 
   // Analytics/CDN domains to skip
   const SKIP_PATTERNS = [
-    'googleapis.com', 'google-analytics', 'facebook', 'clarity.ms',
-    'cloudflare', 'fonts.', 'cdn.', '.css', '.png', '.jpg',
+    'googleapis.com',
+    'google-analytics',
+    'facebook',
+    'clarity.ms',
+    'cloudflare',
+    'fonts.',
+    'cdn.',
+    '.css',
+    '.png',
+    '.jpg',
   ];
 
   for (const { regex, type } of patterns) {
@@ -302,7 +307,7 @@ async function interceptNetworkCalls(page: Page): Promise<DiscoveredEndpoint[]> 
 // ---------------------------------------------------------------------------
 async function probeEndpoints(
   endpoints: DiscoveredEndpoint[],
-  context: BrowserContext
+  context: BrowserContext,
 ): Promise<ProbeResult[]> {
   console.log('\n=== Phase 3: Probe Discovered Endpoints (GET only) ===');
   const results: ProbeResult[] = [];
@@ -354,8 +359,7 @@ async function probeEndpoints(
         contentType,
         bodyPreview,
         headers,
-        source:
-          endpoints.find((ep) => url.endsWith(ep.url) || url === ep.url)?.source ?? 'unknown',
+        source: endpoints.find((ep) => url.endsWith(ep.url) || url === ep.url)?.source ?? 'unknown',
       });
 
       if (status === 429) {
@@ -389,7 +393,7 @@ function generateReport(
   jsAnalysis: JsAnalysis,
   probeResults: ProbeResult[],
   networkEndpoints: DiscoveredEndpoint[],
-  authenticated: boolean
+  authenticated: boolean,
 ): string {
   const successfulEndpoints = probeResults.filter((r) => r.status >= 200 && r.status < 400);
   const jsonEndpoints = successfulEndpoints.filter((r) => r.contentType.includes('json'));
@@ -419,7 +423,7 @@ ${
       jsAnalysis.apiPatterns
         .map(
           (p) =>
-            `\n| \`${p.url.slice(0, 80)}\` | ${p.type} | \`${p.context.slice(0, 60).replace(/\|/g, '\\|')}\` |`
+            `\n| \`${p.url.slice(0, 80)}\` | ${p.type} | \`${p.context.slice(0, 60).replace(/\|/g, '\\|')}\` |`,
         )
         .join('')
     : 'No API patterns found in JavaScript'
@@ -446,7 +450,7 @@ ${
       successfulEndpoints
         .map(
           (r) =>
-            `\n| \`${r.url.replace(BASE_URL, '')}\` | ${r.status} | ${r.contentType.split(';')[0]} | ${r.source} |`
+            `\n| \`${r.url.replace(BASE_URL, '')}\` | ${r.status} | ${r.contentType.split(';')[0]} | ${r.source} |`,
         )
         .join('')
     : 'No successful endpoint responses received'
@@ -484,7 +488,7 @@ ${
         .slice(0, 50)
         .map(
           (r) =>
-            `\n| \`${r.url.replace(BASE_URL, '').slice(0, 60)}\` | ${r.status} | ${(r.error ?? '').slice(0, 50)} |`
+            `\n| \`${r.url.replace(BASE_URL, '').slice(0, 60)}\` | ${r.status} | ${(r.error ?? '').slice(0, 50)} |`,
         )
         .join('')
     : 'No failed endpoints'
@@ -526,7 +530,7 @@ function getTypeString(value: unknown, depth: number): string {
   if (typeof value === 'object') {
     if (depth > 3) return 'Record<string, any>';
     const props = Object.entries(value as Record<string, unknown>).map(
-      ([k, v]) => `${k}: ${getTypeString(v, depth + 1)}`
+      ([k, v]) => `${k}: ${getTypeString(v, depth + 1)}`,
     );
     return `{ ${props.join('; ')} }`;
   }
@@ -541,7 +545,9 @@ async function main(): Promise<void> {
   console.log(`Time: ${new Date().toISOString()}`);
   console.log(`Target: ${BASE_URL}`);
   console.log(`Host filter: ${HOST_FILTER || '(none)'}`);
-  console.log(`Pages to visit: ${PAGES_TO_VISIT.length > 0 ? PAGES_TO_VISIT.join(', ') : '(none)'}`);
+  console.log(
+    `Pages to visit: ${PAGES_TO_VISIT.length > 0 ? PAGES_TO_VISIT.join(', ') : '(none)'}`,
+  );
 
   if (!fs.existsSync(STORAGE_STATE_PATH)) {
     console.error(`\nStorage state not found at: ${STORAGE_STATE_PATH}`);
@@ -566,7 +572,7 @@ async function main(): Promise<void> {
 
     if (!authenticated) {
       console.log(
-        '\nWARNING: Not authenticated. Proceeding with limited discovery from public pages.'
+        '\nWARNING: Not authenticated. Proceeding with limited discovery from public pages.',
       );
     }
 
@@ -610,9 +616,9 @@ async function main(): Promise<void> {
           probeResults,
         },
         null,
-        2
+        2,
       ),
-      'utf-8'
+      'utf-8',
     );
     console.log(`Raw data written to: ${rawDataPath}`);
   } finally {

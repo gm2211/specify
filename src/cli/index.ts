@@ -64,7 +64,11 @@ export { COMMANDS };
 // Argument parsing
 // ---------------------------------------------------------------------------
 
-function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: string[]; debug: boolean } {
+function parseGlobalOptions(args: string[]): {
+  ctx: CliContext;
+  remaining: string[];
+  debug: boolean;
+} {
   let outputFormat: OutputFormat | undefined;
   let fields: string[] | undefined;
   let quiet = false;
@@ -73,11 +77,19 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if ((arg === '--output-format' || arg === '--format') && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
+    if (
+      (arg === '--output-format' || arg === '--format') &&
+      args[i + 1] &&
+      !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))
+    ) {
       outputFormat = args[++i] as OutputFormat;
     } else if (arg === '--json') {
       outputFormat = 'json';
-    } else if (arg === '--fields' && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
+    } else if (
+      arg === '--fields' &&
+      args[i + 1] &&
+      !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))
+    ) {
       fields = args[++i].split(',');
     } else if (arg === '--quiet' || arg === '-q') {
       quiet = true;
@@ -167,32 +179,47 @@ function agentExitCode(err: unknown): number {
 function printHelp(asJson: boolean): void {
   if (asJson) {
     // Agent-friendly: emit command manifest as JSON to stdout
-    process.stdout.write(JSON.stringify({
-      name: 'specify',
-      version: VERSION,
-      description: 'Spec-driven functional verification for web applications',
-      commands: COMMANDS,
-      global_options: [
-        { name: '--json', description: 'Force JSON output' },
-        { name: '--output-format', type: 'string', description: 'Output format: json|text|markdown|ndjson' },
-        { name: '--fields', type: 'string', description: 'Comma-separated field paths to select from output' },
-        { name: '--quiet', description: 'Suppress non-essential output' },
-      ],
-      exit_codes: {
-        '0': 'success',
-        '1': 'assertion_failure',
-        '2': 'all_untested',
-        '10': 'parse_error',
-        '11': 'network_error',
-        '12': 'timeout',
-        '13': 'assumption_failure',
-        '14': 'browser_error',
-      },
-      hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
-    }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify(
+        {
+          name: 'specify',
+          version: VERSION,
+          description: 'Spec-driven functional verification for web applications',
+          commands: COMMANDS,
+          global_options: [
+            { name: '--json', description: 'Force JSON output' },
+            {
+              name: '--output-format',
+              type: 'string',
+              description: 'Output format: json|text|markdown|ndjson',
+            },
+            {
+              name: '--fields',
+              type: 'string',
+              description: 'Comma-separated field paths to select from output',
+            },
+            { name: '--quiet', description: 'Suppress non-essential output' },
+          ],
+          exit_codes: {
+            '0': 'success',
+            '1': 'assertion_failure',
+            '2': 'all_untested',
+            '10': 'parse_error',
+            '11': 'network_error',
+            '12': 'timeout',
+            '13': 'assumption_failure',
+            '14': 'browser_error',
+          },
+          hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
+        },
+        null,
+        2,
+      ) + '\n',
+    );
   } else {
     // Human-readable to stderr
-    process.stderr.write(`
+    process.stderr.write(
+      `
 ${c.boldCyan('Specify')} ${c.dim('—')} contract lifecycle for web applications
 
 ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
@@ -232,17 +259,18 @@ ${c.bold('Examples:')}
   ${c.dim('$')} specify capture --url http://localhost:3000 --output ./captures
   ${c.dim('$')} specify verify --spec ./spec.yaml --capture ./captures/latest
   ${c.dim('$')} specify review --spec ./spec.yaml
-`.trimStart());
+`.trimStart(),
+    );
   }
 }
 
 function printCommandHelp(noun: string, args: string[]): void {
-  const verb = args.find(a => a !== noun && a !== '--help' && a !== '-h' && !a.startsWith('-'));
+  const verb = args.find((a) => a !== noun && a !== '--help' && a !== '-h' && !a.startsWith('-'));
   const searchName = verb ? `${noun} ${verb}` : noun;
 
   // Find matching commands in manifest
-  const matches = COMMANDS.filter(cmd =>
-    cmd.name === searchName || cmd.name.startsWith(searchName + ' ') || cmd.name === noun
+  const matches = COMMANDS.filter(
+    (cmd) => cmd.name === searchName || cmd.name.startsWith(searchName + ' ') || cmd.name === noun,
   );
 
   if (matches.length === 0) {
@@ -304,7 +332,7 @@ async function main(): Promise<void> {
 
   // --help flag
   if (hasFlag(remaining, '--help') || hasFlag(remaining, '-h')) {
-    const helpNoun = remaining.find(a => a !== '--help' && a !== '-h');
+    const helpNoun = remaining.find((a) => a !== '--help' && a !== '-h');
     if (helpNoun) {
       // Subcommand help — show command-specific info from manifest
       printCommandHelp(helpNoun, remaining);
@@ -341,28 +369,30 @@ async function main(): Promise<void> {
         debug,
       });
 
-    // -----------------------------------------------------------------
-    // Agent-friendly commands — structured output to stdout
-    // -----------------------------------------------------------------
+      // -----------------------------------------------------------------
+      // Agent-friendly commands — structured output to stdout
+      // -----------------------------------------------------------------
     } else if (noun === 'spec' && verb === 'generate') {
       const { specGenerate } = await import('./commands/spec-generate.js');
-      exitCode = await specGenerate({
-        input: getArg(rest, '--input') ?? '',
-        output: getArg(rest, '--output'),
-        name: getArg(rest, '--name'),
-      }, ctx);
-
-
+      exitCode = await specGenerate(
+        {
+          input: getArg(rest, '--input') ?? '',
+          output: getArg(rest, '--output'),
+          name: getArg(rest, '--name'),
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'lint') {
       const { specLint } = await import('./commands/spec-lint.js');
-      exitCode = await specLint({
-        spec: resolveSpecArg(rest, ctx),
-      }, ctx);
-
+      exitCode = await specLint(
+        {
+          spec: resolveSpecArg(rest, ctx),
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'guide') {
       const { specGuide } = await import('./commands/spec-guide.js');
       exitCode = await specGuide(ctx);
-
     } else if (noun === 'capture') {
       // capture is a standalone command (no verb) — recombine args
       const captureArgs = verb ? [verb, ...rest] : rest;
@@ -374,14 +404,26 @@ async function main(): Promise<void> {
         // Specify IS the agent — use SDK runner for live capture (human mode is the only exception)
         if (!human) {
           if (!url) {
-            process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' }) + '\n');
+            process.stdout.write(
+              JSON.stringify({
+                error: 'missing_parameter',
+                parameter: '--url',
+                hint: 'Provide the URL to capture',
+              }) + '\n',
+            );
             exitCode = ExitCode.PARSE_ERROR;
           } else {
             let validUrl = true;
             try {
               new URL(url);
             } catch {
-              process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+              process.stdout.write(
+                JSON.stringify({
+                  error: 'invalid_url',
+                  url,
+                  hint: 'Provide a valid URL (e.g. https://example.com)',
+                }) + '\n',
+              );
               exitCode = ExitCode.PARSE_ERROR;
               validUrl = false;
             }
@@ -391,7 +433,9 @@ async function main(): Promise<void> {
               const outputDir = path.resolve(output || '.specify/capture');
               const specOutput = getArg(captureArgs, '--spec-output');
               const specName = getArg(captureArgs, '--spec-name');
-              const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
+              const specOutputPath = path.resolve(
+                specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'),
+              );
               const prompt = getCapturePrompt(url, specOutputPath);
               try {
                 const { result, costUsd } = await runSpecifyAgent({
@@ -409,24 +453,52 @@ async function main(): Promise<void> {
 
                 // Post-run validation: verify the spec file exists and parses
                 if (!fs.existsSync(specOutputPath)) {
-                  process.stderr.write(`Warning: agent did not write spec file at ${specOutputPath}\n`);
-                  process.stdout.write(JSON.stringify({ error: 'spec_not_written', costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                  process.stderr.write(
+                    `Warning: agent did not write spec file at ${specOutputPath}\n`,
+                  );
+                  process.stdout.write(
+                    JSON.stringify({
+                      error: 'spec_not_written',
+                      costUsd,
+                      outputDir,
+                      specOutput: specOutputPath,
+                    }) + '\n',
+                  );
                   exitCode = ExitCode.PARSE_ERROR;
                 } else {
                   try {
                     const { loadSpec } = await import('../spec/parser.js');
                     const spec = loadSpec(specOutputPath);
                     const areaCount = spec.areas?.length ?? 0;
-                    process.stderr.write(`Spec validated: ${specOutputPath} (${areaCount} areas)\n`);
-                    process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, areas: areaCount }) + '\n');
+                    process.stderr.write(
+                      `Spec validated: ${specOutputPath} (${areaCount} areas)\n`,
+                    );
+                    process.stdout.write(
+                      JSON.stringify({
+                        result,
+                        costUsd,
+                        outputDir,
+                        specOutput: specOutputPath,
+                        areas: areaCount,
+                      }) + '\n',
+                    );
                     exitCode = ExitCode.SUCCESS;
 
                     process.stderr.write(`\n  To review the spec:\n`);
                     process.stderr.write(`  $ specify review --spec ${specOutputPath}\n\n`);
                   } catch (parseErr) {
-                    const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+                    const parseMsg =
+                      parseErr instanceof Error ? parseErr.message : String(parseErr);
                     process.stderr.write(`Warning: agent wrote invalid spec: ${parseMsg}\n`);
-                    process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: parseMsg, costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                    process.stdout.write(
+                      JSON.stringify({
+                        error: 'invalid_spec',
+                        message: parseMsg,
+                        costUsd,
+                        outputDir,
+                        specOutput: specOutputPath,
+                      }) + '\n',
+                    );
                     exitCode = ExitCode.PARSE_ERROR;
                   }
                 }
@@ -440,27 +512,34 @@ async function main(): Promise<void> {
           }
         } else {
           const { capture: captureCmd } = await import('./commands/capture.js');
-          exitCode = await captureCmd({
-            url,
-            output,
-            headed: hasFlag(captureArgs, '--headed') || human,
-            timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
-            noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
-            noGenerate: hasFlag(captureArgs, '--no-generate'),
-            specOutput: getArg(captureArgs, '--spec-output'),
-            specName: getArg(captureArgs, '--spec-name'),
-            human,
-          }, ctx);
+          exitCode = await captureCmd(
+            {
+              url,
+              output,
+              headed: hasFlag(captureArgs, '--headed') || human,
+              timeout: getArg(captureArgs, '--timeout')
+                ? parseInt(getArg(captureArgs, '--timeout')!)
+                : undefined,
+              noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
+              noGenerate: hasFlag(captureArgs, '--no-generate'),
+              specOutput: getArg(captureArgs, '--spec-output'),
+              specName: getArg(captureArgs, '--spec-name'),
+              human,
+            },
+            ctx,
+          );
         }
       }
-
     } else if (noun === 'replay') {
       // replay command — recombine args
       const replayArgs = verb ? [verb, ...rest] : rest;
       const captureDir = getArg(replayArgs, '--capture') ?? '';
       const url = getArg(replayArgs, '--url') ?? '';
       if (!captureDir || !url) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide --capture and --url' }) + '\n');
+        process.stdout.write(
+          JSON.stringify({ error: 'missing_parameter', hint: 'Provide --capture and --url' }) +
+            '\n',
+        );
         exitCode = ExitCode.PARSE_ERROR;
       } else {
         const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
@@ -488,7 +567,6 @@ async function main(): Promise<void> {
           exitCode = agentExitCode(err);
         }
       }
-
     } else if (noun === 'compare') {
       const compareArgs = verb ? [verb, ...rest] : rest;
       let remoteUrl = getArg(compareArgs, '--remote') ?? '';
@@ -503,7 +581,9 @@ async function main(): Promise<void> {
           u.username = encodeURIComponent(user);
           u.password = encodeURIComponent(passParts.join(':'));
           remoteUrl = u.toString();
-        } catch { /* URL validation below will catch */ }
+        } catch {
+          /* URL validation below will catch */
+        }
       }
       if (localAuth && localUrl) {
         try {
@@ -512,17 +592,32 @@ async function main(): Promise<void> {
           u.username = encodeURIComponent(user);
           u.password = encodeURIComponent(passParts.join(':'));
           localUrl = u.toString();
-        } catch { /* URL validation below will catch */ }
+        } catch {
+          /* URL validation below will catch */
+        }
       }
 
       if (!remoteUrl || !localUrl) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide both --remote and --local URLs' }) + '\n');
+        process.stdout.write(
+          JSON.stringify({
+            error: 'missing_parameter',
+            hint: 'Provide both --remote and --local URLs',
+          }) + '\n',
+        );
         exitCode = ExitCode.PARSE_ERROR;
       } else {
         let validUrls = true;
         for (const u of [remoteUrl, localUrl]) {
-          try { new URL(u); } catch {
-            process.stdout.write(JSON.stringify({ error: 'invalid_url', url: u, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+          try {
+            new URL(u);
+          } catch {
+            process.stdout.write(
+              JSON.stringify({
+                error: 'invalid_url',
+                url: u,
+                hint: 'Provide a valid URL (e.g. https://example.com)',
+              }) + '\n',
+            );
             exitCode = ExitCode.PARSE_ERROR;
             validUrls = false;
             break;
@@ -547,13 +642,19 @@ async function main(): Promise<void> {
             const { extractBool } = await import('../agent/sdk-runner.js');
             const match = extractBool(structuredOutput, 'match');
             process.stderr.write(`Compare complete (cost: $${costUsd.toFixed(4)})\n`);
-            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, match, structuredOutput }) + '\n');
+            process.stdout.write(
+              JSON.stringify({ result, costUsd, outputDir, match, structuredOutput }) + '\n',
+            );
             exitCode = match === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
 
             // Save structured output for review
             const compareResultPath = path.join(outputDir, 'compare-result.json');
             fs.mkdirSync(outputDir, { recursive: true });
-            fs.writeFileSync(compareResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+            fs.writeFileSync(
+              compareResultPath,
+              JSON.stringify({ structuredOutput }, null, 2),
+              'utf-8',
+            );
 
             // Human-friendly hint
             const reportPath = path.join(outputDir, 'compare-report.md');
@@ -561,7 +662,9 @@ async function main(): Promise<void> {
               process.stderr.write(`\n  Report: ${reportPath}\n`);
             }
             process.stderr.write(`\n  To review interactively:\n`);
-            process.stderr.write(`  $ specify review --spec <your-spec.yaml> --agent-report ${compareResultPath}\n\n`);
+            process.stderr.write(
+              `  $ specify review --spec <your-spec.yaml> --agent-report ${compareResultPath}\n\n`,
+            );
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             process.stderr.write(`Compare failed: ${msg}\n`);
@@ -570,11 +673,9 @@ async function main(): Promise<void> {
           }
         }
       }
-
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
       exitCode = await schemaCommand(verb ?? '', ctx);
-
     } else if (noun === 'mcp') {
       const { startMcpServer } = await import('../mcp/server.js');
       await startMcpServer({
@@ -584,34 +685,37 @@ async function main(): Promise<void> {
       });
       // MCP server runs until client disconnects — don't exit
       return;
-
     } else if (noun === 'daemon') {
       // daemon runs forever until SIGINT/SIGTERM — do not exit
       const daemonArgs = verb ? [verb, ...rest] : rest;
       const { daemonCommand } = await import('./commands/daemon.js');
-      await daemonCommand({
-        port: getArg(daemonArgs, '--port'),
-        host: getArg(daemonArgs, '--host'),
-        noAuth: hasFlag(daemonArgs, '--no-auth'),
-        maxWorkers: getArg(daemonArgs, '--max-workers'),
-      }, ctx);
+      await daemonCommand(
+        {
+          port: getArg(daemonArgs, '--port'),
+          host: getArg(daemonArgs, '--host'),
+          noAuth: hasFlag(daemonArgs, '--no-auth'),
+          maxWorkers: getArg(daemonArgs, '--max-workers'),
+        },
+        ctx,
+      );
       return;
-
     } else if (noun === 'review') {
       // `--stop` needs no spec — skip auto-discovery to avoid noise.
       const reviewArgs = verb ? [verb, ...rest] : rest;
       const stop = hasFlag(reviewArgs, '--stop');
       const background = hasFlag(reviewArgs, '--background');
       const { review: reviewCmd } = await import('./commands/review.js');
-      exitCode = await reviewCmd({
-        spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
-        agentReport: getArg(reviewArgs, '--agent-report'),
-        port: getArg(reviewArgs, '--port'),
-        noOpen: hasFlag(reviewArgs, '--no-open'),
-        background,
-        stop,
-      }, ctx);
-
+      exitCode = await reviewCmd(
+        {
+          spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
+          agentReport: getArg(reviewArgs, '--agent-report'),
+          port: getArg(reviewArgs, '--port'),
+          noOpen: hasFlag(reviewArgs, '--no-open'),
+          background,
+          stop,
+        },
+        ctx,
+      );
     } else if (noun === 'create') {
       const { create: createCmd } = await import('./commands/create.js');
       exitCode = await createCmd({
@@ -619,9 +723,9 @@ async function main(): Promise<void> {
         narrative: getArg(rest, '--narrative'),
       });
 
-    // -----------------------------------------------------------------
-    // Top-level lifecycle aliases
-    // -----------------------------------------------------------------
+      // -----------------------------------------------------------------
+      // Top-level lifecycle aliases
+      // -----------------------------------------------------------------
     } else if (noun === 'verify') {
       // Agent-driven verification
       const verifyArgs = verb ? [verb, ...rest] : rest;
@@ -629,7 +733,13 @@ async function main(): Promise<void> {
       const url = getArg(verifyArgs, '--url');
 
       if (!specPath) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
+        process.stdout.write(
+          JSON.stringify({
+            error: 'missing_parameter',
+            parameter: '--spec',
+            hint: 'Provide a spec file to verify against',
+          }) + '\n',
+        );
         exitCode = ExitCode.PARSE_ERROR;
       } else {
         const { loadSpec, specToYaml } = await import('../spec/parser.js');
@@ -640,13 +750,18 @@ async function main(): Promise<void> {
           const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
           const prompt = getVerifyPrompt(specToYaml(spec));
           // Determine target URL: explicit --url, or from spec target
-          const targetUrl = url
-            ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
+          const targetUrl =
+            url ??
+            (spec.target.type === 'web' || spec.target.type === 'api'
+              ? spec.target.url
+              : undefined);
           try {
             const { writeBehaviorProgress } = await import('./output.js');
             const areas = spec.areas?.length ?? 0;
             const behaviors = spec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
-            process.stderr.write(`${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`);
+            process.stderr.write(
+              `${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`,
+            );
             process.stderr.write(`${c.dim('Launching agent...')}\n`);
             const { result, costUsd, structuredOutput } = await runSpecifyAgent({
               task: 'verify',
@@ -664,15 +779,23 @@ async function main(): Promise<void> {
             const { extractBool } = await import('../agent/sdk-runner.js');
             const pass = extractBool(structuredOutput, 'pass');
             process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
-            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+            process.stdout.write(
+              JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n',
+            );
             exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
 
             const verifyResultPath = path.join(outputDir, 'verify-result.json');
             fs.mkdirSync(outputDir, { recursive: true });
-            fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+            fs.writeFileSync(
+              verifyResultPath,
+              JSON.stringify({ structuredOutput }, null, 2),
+              'utf-8',
+            );
 
             process.stderr.write(`\n  To review interactively:\n`);
-            process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+            process.stderr.write(
+              `  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`,
+            );
             process.stderr.write(`  To run generated e2e tests:\n`);
             process.stderr.write(`  $ cd ${outputDir} && npx playwright test\n\n`);
           } catch (err) {
@@ -686,7 +809,6 @@ async function main(): Promise<void> {
           exitCode = ExitCode.PARSE_ERROR;
         }
       }
-
     } else if (noun === 'deploy') {
       const { deployCommand } = await import('./commands/deploy.js');
       // Normalize --foo=bar to --foo bar so getArg picks it up.
@@ -703,10 +825,13 @@ async function main(): Promise<void> {
         format: formatArg === 'text' ? 'text' : 'json',
         preset: deployArgs.find((a) => !a.startsWith('--')),
       });
-
     } else {
       // Unknown command — structured error
-      const error = { error: 'unknown_command', command: `${noun} ${verb ?? ''}`.trim(), hint: 'Run "specify schema commands" for available commands' };
+      const error = {
+        error: 'unknown_command',
+        command: `${noun} ${verb ?? ''}`.trim(),
+        hint: 'Run "specify schema commands" for available commands',
+      };
       if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
         process.stdout.write(JSON.stringify(error) + '\n');
       } else {
@@ -716,7 +841,10 @@ async function main(): Promise<void> {
       exitCode = ExitCode.PARSE_ERROR;
     }
   } catch (err) {
-    const error = { error: 'internal_error', message: err instanceof Error ? err.message : String(err) };
+    const error = {
+      error: 'internal_error',
+      message: err instanceof Error ? err.message : String(err),
+    };
     if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
       process.stdout.write(JSON.stringify(error) + '\n');
     }

@@ -6,15 +6,18 @@ export interface BudgetConfig {
 }
 
 export const TOOL_BUDGETS: Record<string, BudgetConfig> = {
-  memory_record:  { default: 50,  envName: 'MEMORY_RECORD' },
-  memory_list:    { default: 100, envName: 'MEMORY_LIST' },
-  file_ticket:    { default: 10,  envName: 'FILE_TICKET' },
-  file_decision:  { default: 5,   envName: 'FILE_DECISION' },
+  memory_record: { default: 50, envName: 'MEMORY_RECORD' },
+  memory_list: { default: 100, envName: 'MEMORY_LIST' },
+  file_ticket: { default: 10, envName: 'FILE_TICKET' },
+  file_decision: { default: 5, envName: 'FILE_DECISION' },
 };
 
 const counters = new Map<string, Map<string, number>>();
 
-export function getBudget(toolName: string, env: Record<string, string | undefined> = process.env): number {
+export function getBudget(
+  toolName: string,
+  env: Record<string, string | undefined> = process.env,
+): number {
   const cfg = TOOL_BUDGETS[toolName];
   if (!cfg) return Infinity;
   const raw = env[`SPECIFY_TOOL_BUDGET_${cfg.envName}`];

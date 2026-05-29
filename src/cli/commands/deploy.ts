@@ -42,7 +42,13 @@ export async function deployCommand(opts: DeployCliOptions): Promise<number> {
   if (opts.verb === 'print-tf') {
     return runPrintTf(out, opts.preset);
   }
-  out.write(JSON.stringify({ error: 'unknown_verb', verb: opts.verb, supported: ['describe', 'print-tf'] }) + '\n');
+  out.write(
+    JSON.stringify({
+      error: 'unknown_verb',
+      verb: opts.verb,
+      supported: ['describe', 'print-tf'],
+    }) + '\n',
+  );
   return ExitCode.PARSE_ERROR;
 }
 
@@ -60,11 +66,13 @@ function runPrintTf(out: NodeJS.WritableStream, preset?: string): number {
   const presetName = preset ?? 'minimal';
   const tf = TF_PRESETS[presetName];
   if (!tf) {
-    out.write(JSON.stringify({
-      error: 'unknown_preset',
-      preset: presetName,
-      supported: Object.keys(TF_PRESETS),
-    }) + '\n');
+    out.write(
+      JSON.stringify({
+        error: 'unknown_preset',
+        preset: presetName,
+        supported: Object.keys(TF_PRESETS),
+      }) + '\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
   out.write(tf);
@@ -160,7 +168,10 @@ interface DescribeManifest {
   examples: ManifestExample[];
 }
 
-function toolBudgetFields(mcpName: string): { budget_default: number; budget_env_override: string } {
+function toolBudgetFields(mcpName: string): {
+  budget_default: number;
+  budget_env_override: string;
+} {
   const bare = mcpName.split('__').pop() ?? mcpName;
   const cfg = TOOL_BUDGETS[bare];
   if (!cfg) return { budget_default: Infinity, budget_env_override: '' };
@@ -185,9 +196,17 @@ function buildManifest(versionOverride?: string): DescribeManifest {
       providers: ['hashicorp/kubernetes >= 2.20', 'hashicorp/random >= 3.5'],
     },
     required_inputs: [
-      { name: 'name', type: 'string', doc: 'Base name for Deployment / Service / PVC / SA. Unique per namespace.' },
+      {
+        name: 'name',
+        type: 'string',
+        doc: 'Base name for Deployment / Service / PVC / SA. Unique per namespace.',
+      },
       { name: 'namespace', type: 'string', doc: 'K8s namespace; module does not create it.' },
-      { name: 'anthropic_api_key_secret', type: 'string', doc: 'Name of an existing Secret with key `api-key`.' },
+      {
+        name: 'anthropic_api_key_secret',
+        type: 'string',
+        doc: 'Name of an existing Secret with key `api-key`.',
+      },
     ],
     oneof_groups: [
       {
@@ -197,7 +216,11 @@ function buildManifest(versionOverride?: string): DescribeManifest {
           { name: 'target_url', type: 'string' },
           { name: 'target_dns', type: 'string' },
           { name: 'target_cluster_ip', type: 'string' },
-          { name: 'target_from_configmap', type: 'object', shape: { name: 'string', key: 'string' } },
+          {
+            name: 'target_from_configmap',
+            type: 'object',
+            shape: { name: 'string', key: 'string' },
+          },
         ],
       },
       {
@@ -205,8 +228,16 @@ function buildManifest(versionOverride?: string): DescribeManifest {
         doc: 'Where the spec comes from. Pick exactly one.',
         options: [
           { name: 'spec_inline', type: 'string' },
-          { name: 'spec_url', type: 'string', companion_secret: 'spec_url_bearer (auto-generated if empty)' },
-          { name: 'spec_git', type: 'object', shape: { repo: 'string', ref: 'string', path: 'string', deploy_key_secret: 'string?' } },
+          {
+            name: 'spec_url',
+            type: 'string',
+            companion_secret: 'spec_url_bearer (auto-generated if empty)',
+          },
+          {
+            name: 'spec_git',
+            type: 'object',
+            shape: { repo: 'string', ref: 'string', path: 'string', deploy_key_secret: 'string?' },
+          },
         ],
       },
       {
@@ -223,36 +254,42 @@ function buildManifest(versionOverride?: string): DescribeManifest {
     target_contract: {
       expected_scheme: ['http', 'https'],
       expected_response_under_ms: 5000,
-      egress_required: 'Pod must reach the target URL. If the cluster denies pod-to-pod traffic by default, the consumer needs a NetworkPolicy allowing egress from the QA pod to the target.',
-      auth: 'Spec describes any auth the agent needs. For login flows, capture credentials in spec.target or pass via env (SPECIFY_AUTH_*). The QA pod itself is auth\'d to its own /inbox via inbox_token.',
+      egress_required:
+        'Pod must reach the target URL. If the cluster denies pod-to-pod traffic by default, the consumer needs a NetworkPolicy allowing egress from the QA pod to the target.',
+      auth: "Spec describes any auth the agent needs. For login flows, capture credentials in spec.target or pass via env (SPECIFY_AUTH_*). The QA pod itself is auth'd to its own /inbox via inbox_token.",
       tls: 'https targets work transparently against public CAs. Self-signed / private CAs need an extra CA mounted into /etc/ssl/certs (target_extra_ca_secret — TODO).',
     },
     trigger_models: [
       {
         mode: 'watch',
         model: 'continuous',
-        tradeoff: 'k8s informer holds an open watch on Deployments / StatefulSets matching the label selector. Daemon pod always up; idle = 0 Anthropic tokens. Catches every rollout, including out-of-band kubectl applies. Recommended default when the consumer can grant get/list/watch on apps/v1.',
+        tradeoff:
+          'k8s informer holds an open watch on Deployments / StatefulSets matching the label selector. Daemon pod always up; idle = 0 Anthropic tokens. Catches every rollout, including out-of-band kubectl applies. Recommended default when the consumer can grant get/list/watch on apps/v1.',
       },
       {
         mode: 'webhook',
         model: 'push',
-        tradeoff: 'Daemon idle until your CI POSTs to inbox_url. No RBAC needed. Misses out-of-band deploys (manual kubectl, GitOps reconciler that does not POST).',
+        tradeoff:
+          'Daemon idle until your CI POSTs to inbox_url. No RBAC needed. Misses out-of-band deploys (manual kubectl, GitOps reconciler that does not POST).',
       },
       {
         mode: 'both',
         model: 'continuous + push',
-        tradeoff: 'Belt-and-braces. Can produce duplicate verifies for the same change — daemon dedupes by (namespace, name, resourceVersion).',
+        tradeoff:
+          'Belt-and-braces. Can produce duplicate verifies for the same change — daemon dedupes by (namespace, name, resourceVersion).',
       },
       {
         mode: 'none',
         model: 'manual',
-        tradeoff: 'Daemon serves the inspector + receives manual /verify calls. Useful for stepping through reports interactively without arming any trigger.',
+        tradeoff:
+          'Daemon serves the inspector + receives manual /verify calls. Useful for stepping through reports interactively without arming any trigger.',
       },
       {
         mode: 'cron',
         model: 'scheduled',
         status: 'not_implemented',
-        tradeoff: 'Periodic re-verify on a cadence regardless of rollouts. NOT recommended for change detection (collapses bursts of rollouts into one verify, adds cold-start overhead, loses in-process memory cache). Reserved for a future schedule.cadence input that runs alongside watch for "verify nightly even if nothing changed" cases.',
+        tradeoff:
+          'Periodic re-verify on a cadence regardless of rollouts. NOT recommended for change detection (collapses bursts of rollouts into one verify, adds cold-start overhead, loses in-process memory cache). Reserved for a future schedule.cadence input that runs alongside watch for "verify nightly even if nothing changed" cases.',
       },
     ],
     agent_tools: [
@@ -275,8 +312,14 @@ function buildManifest(versionOverride?: string): DescribeManifest {
         doc: 'File an outbound ticket when the agent finds a reproducible bug worth a human looking at. Args: {summary, description, severity:cosmetic|minor|major|critical, area_id?, behavior_id?}. Returns the issue id. Use sparingly; lessons-learned still go through memory_record.',
         enabled_for_tasks: ['verify'],
         configuration: [
-          { env: 'SPECIFY_FEEDBACK_URL', doc: 'Optional. When set, tickets POST to this URL as JSON. When unset, the tool shells `bd create` instead.' },
-          { env: 'SPECIFY_FEEDBACK_BEARER_FILE', doc: 'Optional. Path to a file containing a bearer token for the HTTP sink. File-mounted so secret rotation does not require pod restart.' },
+          {
+            env: 'SPECIFY_FEEDBACK_URL',
+            doc: 'Optional. When set, tickets POST to this URL as JSON. When unset, the tool shells `bd create` instead.',
+          },
+          {
+            env: 'SPECIFY_FEEDBACK_BEARER_FILE',
+            doc: 'Optional. Path to a file containing a bearer token for the HTTP sink. File-mounted so secret rotation does not require pod restart.',
+          },
         ],
         ...toolBudgetFields('mcp__feedback__file_ticket'),
       },
@@ -289,17 +332,31 @@ function buildManifest(versionOverride?: string): DescribeManifest {
       },
     ],
     report_sinks: [
-      { type: 'file', shape: { path: 'string' }, enabled_by: 'report_file_dir (default /work/reports)' },
+      {
+        type: 'file',
+        shape: { path: 'string' },
+        enabled_by: 'report_file_dir (default /work/reports)',
+      },
       { type: 'slack', shape: { webhook_url: 'string' }, enabled_by: 'report_slack_webhook' },
     ],
     secrets_to_create: [
       { name: 'anthropic-api-key', doc: 'Secret with key `api-key`. Required.' },
-      { name: '<name>-internal', doc: 'Module creates this — holds inbox token, optional spec URL bearer, optional Slack webhook.' },
+      {
+        name: '<name>-internal',
+        doc: 'Module creates this — holds inbox token, optional spec URL bearer, optional Slack webhook.',
+      },
     ],
-    outputs: ['inbox_url', 'inbox_token', 'spec_url_bearer', 'service_dns', 'service_account_name', 'pvc_name'],
+    outputs: [
+      'inbox_url',
+      'inbox_token',
+      'spec_url_bearer',
+      'service_dns',
+      'service_account_name',
+      'pvc_name',
+    ],
     agent_install_recipe: [
       'Read this manifest.',
-      'Pick exactly one option from each oneof_group based on the consumer repo\'s patterns.',
+      "Pick exactly one option from each oneof_group based on the consumer repo's patterns.",
       'Write a `<name>.tf` file under the consumer\'s Terraform tree wiring `module "specify_qa" { source = ... }`.',
       'Create the `anthropic-api-key` Secret using whatever pattern the repo uses (sops / sealed-secrets / external-secrets / raw).',
       'Run `terraform plan` and surface the diff to the user.',
@@ -313,7 +370,8 @@ function buildManifest(versionOverride?: string): DescribeManifest {
       },
       {
         name: 'watch-mode',
-        description: 'Same as minimal but the daemon watches its own namespace and triggers verifies on each rollout.',
+        description:
+          'Same as minimal but the daemon watches its own namespace and triggers verifies on each rollout.',
         hcl: TF_PRESETS['watch-mode'],
       },
       {
@@ -334,7 +392,10 @@ function readPackageVersion(): string {
     for (let i = 0; i < 6; i++) {
       const candidate = path.join(dir, 'package.json');
       if (fs.existsSync(candidate)) {
-        const pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as { name?: string; version?: string };
+        const pkg = JSON.parse(fs.readFileSync(candidate, 'utf-8')) as {
+          name?: string;
+          version?: string;
+        };
         if (pkg.name === 'specify' && pkg.version) return pkg.version;
       }
       dir = path.dirname(dir);
@@ -377,7 +438,9 @@ function renderText(m: DescribeManifest): string {
     lines.push(`  ${t.name}  (tasks: ${t.enabled_for_tasks.join(', ')})`);
     lines.push(`    ${t.doc}`);
     const budgetStr = t.budget_default === Infinity ? 'unlimited' : String(t.budget_default);
-    lines.push(`    budget: ${budgetStr}${t.budget_env_override ? ` (override: ${t.budget_env_override})` : ''}`);
+    lines.push(
+      `    budget: ${budgetStr}${t.budget_env_override ? ` (override: ${t.budget_env_override})` : ''}`,
+    );
     for (const c of t.configuration) {
       lines.push(`    env: ${c.env} — ${c.doc}`);
     }

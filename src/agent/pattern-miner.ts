@@ -76,9 +76,10 @@ export function minePatterns(store: SessionStore, opts: MineOptions = {}): Candi
   const topK = opts.topK ?? 20;
   const exclude = opts.excludeKindSubstrings ?? ['heartbeat'];
 
-  const sessions = opts.sessionIds && opts.sessionIds.length
-    ? opts.sessionIds.map((id) => ({ sessionId: id }))
-    : store.listSessions({ limit: 200 }).map((s) => ({ sessionId: s.sessionId }));
+  const sessions =
+    opts.sessionIds && opts.sessionIds.length
+      ? opts.sessionIds.map((id) => ({ sessionId: id }))
+      : store.listSessions({ limit: 200 }).map((s) => ({ sessionId: s.sessionId }));
 
   const accumulators = new Map<string, InternalAccumulator>();
 

@@ -42,27 +42,36 @@ test('isReady: false when desired replicas is 0', () => {
 });
 
 test('isReady: false when observedGeneration < generation', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 4 },
-    spec: { replicas: 2 },
-    status: { observedGeneration: 3, readyReplicas: 2, updatedReplicas: 2, replicas: 2 },
-  }), false);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 4 },
+      spec: { replicas: 2 },
+      status: { observedGeneration: 3, readyReplicas: 2, updatedReplicas: 2, replicas: 2 },
+    }),
+    false,
+  );
 });
 
 test('isReady: true when ready/updated/replicas all match desired', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 5 },
-    spec: { replicas: 3 },
-    status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 3, replicas: 3 },
-  }), true);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 5 },
+      spec: { replicas: 3 },
+      status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 3, replicas: 3 },
+    }),
+    true,
+  );
 });
 
 test('isReady: false when partial rollout (updatedReplicas < desired)', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 5 },
-    spec: { replicas: 3 },
-    status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 2, replicas: 3 },
-  }), false);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 5 },
+      spec: { replicas: 3 },
+      status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 2, replicas: 3 },
+    }),
+    false,
+  );
 });
 
 test('toRollout: extracts namespace, name, image, resourceVersion', () => {
@@ -132,7 +141,10 @@ test('startK8sWatcher: disabled config returns no-op stop', async () => {
 
 test('startK8sWatcher: rollout event triggers inbox post', async () => {
   let posted = false;
-  const fetchImpl = (async () => { posted = true; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    posted = true;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   const watcherImpl: WatcherImpl = {
     async start(handler) {
       // Synthesize one rollout shortly after start.
@@ -172,7 +184,13 @@ test('startK8sWatcher: inbox failure logged but doesn’t throw', async () => {
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
     },
-    { fetchImpl, watcherImpl, log: (line) => { logged += line; } },
+    {
+      fetchImpl,
+      watcherImpl,
+      log: (line) => {
+        logged += line;
+      },
+    },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();

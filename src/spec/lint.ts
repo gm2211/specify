@@ -90,7 +90,7 @@ export function lintRaw(content: string, sourceName = '<string>', _specPath?: st
   }
 
   // If schema validation failed badly, skip semantic checks
-  if (errors.some(e => e.rule === 'schema' && e.path === '/')) {
+  if (errors.some((e) => e.rule === 'schema' && e.path === '/')) {
     return { valid: false, errors };
   }
 
@@ -98,7 +98,7 @@ export function lintRaw(content: string, sourceName = '<string>', _specPath?: st
   const spec = data as Spec;
   errors.push(...lintSpec(spec));
 
-  const hasErrors = errors.some(e => e.severity === 'error');
+  const hasErrors = errors.some((e) => e.severity === 'error');
   return { valid: !hasErrors, errors };
 }
 

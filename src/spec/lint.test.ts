@@ -11,12 +11,16 @@ test('lintSpec detects duplicate area IDs', () => {
     target: { type: 'web', url: 'http://localhost:3000' },
     areas: [
       { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: 'User can log in' }] },
-      { id: 'auth', name: 'Auth Dup', behaviors: [{ id: 'logout', description: 'User can log out' }] },
+      {
+        id: 'auth',
+        name: 'Auth Dup',
+        behaviors: [{ id: 'logout', description: 'User can log out' }],
+      },
     ],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'duplicate-area-id'));
+  assert.ok(errors.some((err) => err.rule === 'duplicate-area-id'));
 });
 
 test('lintSpec detects duplicate behavior IDs within an area', () => {
@@ -37,7 +41,7 @@ test('lintSpec detects duplicate behavior IDs within an area', () => {
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'duplicate-behavior-id'));
+  assert.ok(errors.some((err) => err.rule === 'duplicate-behavior-id'));
 });
 
 test('lintSpec detects empty behavior descriptions', () => {
@@ -45,13 +49,11 @@ test('lintSpec detects empty behavior descriptions', () => {
     version: '2',
     name: 'Test Spec',
     target: { type: 'web', url: 'http://localhost:3000' },
-    areas: [
-      { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: '   ' }] },
-    ],
+    areas: [{ id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: '   ' }] }],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'empty-behavior-description'));
+  assert.ok(errors.some((err) => err.rule === 'empty-behavior-description'));
 });
 
 test('lintSpec warns about ambiguous behavior IDs across areas', () => {
@@ -61,12 +63,16 @@ test('lintSpec warns about ambiguous behavior IDs across areas', () => {
     target: { type: 'web', url: 'http://localhost:3000' },
     areas: [
       { id: 'auth', name: 'Auth', behaviors: [{ id: 'submit', description: 'Submit login form' }] },
-      { id: 'settings', name: 'Settings', behaviors: [{ id: 'submit', description: 'Submit settings form' }] },
+      {
+        id: 'settings',
+        name: 'Settings',
+        behaviors: [{ id: 'submit', description: 'Submit settings form' }],
+      },
     ],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'ambiguous-behavior-id'));
+  assert.ok(errors.some((err) => err.rule === 'ambiguous-behavior-id'));
 });
 
 test('lintSpec returns no errors for a valid spec', () => {

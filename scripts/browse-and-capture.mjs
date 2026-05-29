@@ -34,60 +34,65 @@
  * Give the output folder to an LLM for analysis.
  */
 
-import { chromium } from "playwright";
-import { writeFileSync, mkdirSync } from "fs";
-import { join, extname } from "path";
-import { fileURLToPath } from "url";
-import { dirname } from "path";
+import { chromium } from 'playwright';
+import { writeFileSync, mkdirSync } from 'fs';
+import { join, extname } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, "..");
+const PROJECT_ROOT = join(__dirname, '..');
 
 // ---------------------------------------------------------------------------
 // Config
 // ---------------------------------------------------------------------------
-const TARGET_URL = process.env.TARGET_BASE_URL ?? "";
+const TARGET_URL = process.env.TARGET_BASE_URL ?? '';
 if (!TARGET_URL) {
-  console.error("ERROR: TARGET_BASE_URL must be set.");
-  console.error("  Example: TARGET_BASE_URL=https://app.example.com npm run browse");
+  console.error('ERROR: TARGET_BASE_URL must be set.');
+  console.error('  Example: TARGET_BASE_URL=https://app.example.com npm run browse');
   process.exit(1);
 }
 
-let hostFilter = process.env.CAPTURE_HOST_FILTER ?? "";
+let hostFilter = process.env.CAPTURE_HOST_FILTER ?? '';
 if (!hostFilter) {
   try {
     hostFilter = new URL(TARGET_URL).hostname;
   } catch {
-    hostFilter = "";
+    hostFilter = '';
   }
 }
 
-const SCREENSHOT_DELAY_MS = parseInt(process.env.CAPTURE_SCREENSHOT_DELAY_MS ?? "800", 10);
+const SCREENSHOT_DELAY_MS = parseInt(process.env.CAPTURE_SCREENSHOT_DELAY_MS ?? '800', 10);
 
 const STATIC_EXT = new Set([
-  ".css", ".js", ".png", ".jpg", ".jpeg", ".gif", ".svg",
-  ".woff", ".woff2", ".ttf", ".ico", ".map", ".less",
+  '.css',
+  '.js',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.ico',
+  '.map',
+  '.less',
 ]);
 
 // ---------------------------------------------------------------------------
 // Parse args
 // ---------------------------------------------------------------------------
 const args = process.argv.slice(2);
-const baseOutputDir = process.env.CAPTURE_OUTPUT_DIR ?? join(PROJECT_ROOT, "captures");
-const outputIdx = args.indexOf("--output");
-const outputBase = outputIdx !== -1 && args[outputIdx + 1]
-  ? args[outputIdx + 1]
-  : baseOutputDir;
+const baseOutputDir = process.env.CAPTURE_OUTPUT_DIR ?? join(PROJECT_ROOT, 'captures');
+const outputIdx = args.indexOf('--output');
+const outputBase = outputIdx !== -1 && args[outputIdx + 1] ? args[outputIdx + 1] : baseOutputDir;
 
-const timestamp = new Date()
-  .toISOString()
-  .replace(/[:.]/g, "-")
-  .replace("T", "_")
-  .slice(0, 19);
+const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
 
 const outputDir = join(outputBase, timestamp);
-const screenshotDir = join(outputDir, "screenshots");
+const screenshotDir = join(outputDir, 'screenshots');
 
 // ---------------------------------------------------------------------------
 // State
@@ -95,7 +100,7 @@ const screenshotDir = join(outputDir, "screenshots");
 const traffic = [];
 const consoleLogs = [];
 let screenshotCount = 0;
-let lastUrl = "";
+let lastUrl = '';
 const pageUrls = new Set();
 const scriptSources = new Set();
 let pendingScreenshot = null; // debounce timer for API-triggered screenshots
@@ -119,13 +124,13 @@ function slugify(url) {
   try {
     const u = new URL(url);
     return u.pathname
-      .replace(/^\//, "")
-      .replace(/[\/\?&#=.]/g, "_")
-      .replace(/_+/g, "_")
-      .replace(/_$/, "")
+      .replace(/^\//, '')
+      .replace(/[\/\?&#=.]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/_$/, '')
       .substring(0, 80);
   } catch {
-    return "page";
+    return 'page';
   }
 }
 
@@ -134,15 +139,15 @@ function save() {
   mkdirSync(screenshotDir, { recursive: true });
 
   // Save traffic
-  writeFileSync(join(outputDir, "traffic.json"), JSON.stringify(traffic, null, 2));
+  writeFileSync(join(outputDir, 'traffic.json'), JSON.stringify(traffic, null, 2));
 
   // Save console logs
-  writeFileSync(join(outputDir, "console.json"), JSON.stringify(consoleLogs, null, 2));
+  writeFileSync(join(outputDir, 'console.json'), JSON.stringify(consoleLogs, null, 2));
 
   // Save script sources
   writeFileSync(
-    join(outputDir, "js-sources.json"),
-    JSON.stringify([...scriptSources].sort(), null, 2)
+    join(outputDir, 'js-sources.json'),
+    JSON.stringify([...scriptSources].sort(), null, 2),
   );
 
   // Build summary
@@ -155,7 +160,7 @@ function save() {
     } catch {
       pattern = req.url;
     }
-    const key = `${req.method}::${pattern}::${req.status || "?"}`;
+    const key = `${req.method}::${pattern}::${req.status || '?'}`;
     const existing = endpointMap.get(key);
     if (existing) {
       existing.count++;
@@ -163,8 +168,8 @@ function save() {
       endpointMap.set(key, {
         method: req.method,
         url: pattern,
-        status: req.status || "?",
-        contentType: (req.contentType || "").split(";")[0].trim(),
+        status: req.status || '?',
+        contentType: (req.contentType || '').split(';')[0].trim(),
         hasBody: !!req.responseBody,
         count: 1,
       });
@@ -181,17 +186,17 @@ function save() {
     `Screenshots: ${screenshotCount}`,
     `Pages visited: ${pageUrls.size}`,
     `Console logs: ${consoleLogs.length}`,
-    "",
-    `${"#".padEnd(5)} ${"METHOD".padEnd(7)} ${"STATUS".padEnd(7)} ${"BODY?".padEnd(6)} ${"TYPE".padEnd(25)} URL`,
-    "-".repeat(120),
+    '',
+    `${'#'.padEnd(5)} ${'METHOD'.padEnd(7)} ${'STATUS'.padEnd(7)} ${'BODY?'.padEnd(6)} ${'TYPE'.padEnd(25)} URL`,
+    '-'.repeat(120),
   ];
   for (const s of sorted) {
     lines.push(
-      `${String(s.count).padEnd(5)} ${s.method.padEnd(7)} ${String(s.status).padEnd(7)} ${(s.hasBody ? "YES" : "no").padEnd(6)} ${s.contentType.padEnd(25)} ${s.url}`
+      `${String(s.count).padEnd(5)} ${s.method.padEnd(7)} ${String(s.status).padEnd(7)} ${(s.hasBody ? 'YES' : 'no').padEnd(6)} ${s.contentType.padEnd(25)} ${s.url}`,
     );
   }
 
-  writeFileSync(join(outputDir, "summary.txt"), lines.join("\n") + "\n");
+  writeFileSync(join(outputDir, 'summary.txt'), lines.join('\n') + '\n');
   return sorted.length;
 }
 
@@ -205,7 +210,7 @@ function scheduleApiScreenshot(page, reason) {
     try {
       const currentUrl = page.url();
       const slug = slugify(currentUrl);
-      const name = `${String(screenshotCount + 1).padStart(3, "0")}-${slug}.png`;
+      const name = `${String(screenshotCount + 1).padStart(3, '0')}-${slug}.png`;
       await page.screenshot({ path: join(screenshotDir, name), fullPage: true });
       screenshotCount++;
       console.log(`  [screenshot] (${reason}): ${name}`);
@@ -217,30 +222,30 @@ function scheduleApiScreenshot(page, reason) {
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
-  console.log("┌──────────────────────────────────────────────────────────────┐");
-  console.log("│  Specify — Browse & Capture                                  │");
-  console.log("├──────────────────────────────────────────────────────────────┤");
-  console.log("│  1. A browser window will open                               │");
-  console.log("│  2. Log in and browse around the app                         │");
-  console.log("│  3. Visit every section you want captured                    │");
-  console.log("│  4. Press Ctrl+C when done                                   │");
-  console.log("│                                                               │");
+  console.log('┌──────────────────────────────────────────────────────────────┐');
+  console.log('│  Specify — Browse & Capture                                  │');
+  console.log('├──────────────────────────────────────────────────────────────┤');
+  console.log('│  1. A browser window will open                               │');
+  console.log('│  2. Log in and browse around the app                         │');
+  console.log('│  3. Visit every section you want captured                    │');
+  console.log('│  4. Press Ctrl+C when done                                   │');
+  console.log('│                                                               │');
   console.log(`│  Target: ${TARGET_URL.substring(0, 52).padEnd(52)} │`);
   console.log(`│  Filter: ${hostFilter.substring(0, 52).padEnd(52)} │`);
   console.log(`│  Output: ${outputDir.substring(0, 52).padEnd(52)} │`);
-  console.log("└──────────────────────────────────────────────────────────────┘");
+  console.log('└──────────────────────────────────────────────────────────────┘');
   console.log();
 
   // Use a persistent profile so cookies/cache survive across runs if desired
   const profileDir = join(
-    process.env.TMPDIR ?? "/tmp",
-    `specify-capture-profile-${Buffer.from(hostFilter).toString("hex").slice(0, 16)}`
+    process.env.TMPDIR ?? '/tmp',
+    `specify-capture-profile-${Buffer.from(hostFilter).toString('hex').slice(0, 16)}`,
   );
 
   const context = await chromium.launchPersistentContext(profileDir, {
     headless: false,
     viewport: { width: 1440, height: 900 },
-    args: ["--disable-blink-features=AutomationControlled"],
+    args: ['--disable-blink-features=AutomationControlled'],
   });
 
   const page = context.pages()[0] || (await context.newPage());
@@ -251,7 +256,7 @@ async function main() {
   // -----------------------------------------------------------------------
   // Console log capture
   // -----------------------------------------------------------------------
-  page.on("console", (msg) => {
+  page.on('console', (msg) => {
     consoleLogs.push({
       type: msg.type(),
       text: msg.text(),
@@ -262,7 +267,7 @@ async function main() {
   // -----------------------------------------------------------------------
   // Network capture via route interception
   // -----------------------------------------------------------------------
-  await context.route("**/*", async (route) => {
+  await context.route('**/*', async (route) => {
     const request = route.request();
     const url = request.url();
     const method = request.method();
@@ -283,14 +288,14 @@ async function main() {
         method,
         postData: request.postData() || null,
         status: response.status(),
-        contentType: response.headers()["content-type"] || "",
+        contentType: response.headers()['content-type'] || '',
         ts: Date.now(),
         responseBody: null,
       };
 
       // Try to capture JSON and text response bodies
-      const ct = (entry.contentType || "").toLowerCase();
-      if (ct.includes("json") || ct.includes("text")) {
+      const ct = (entry.contentType || '').toLowerCase();
+      if (ct.includes('json') || ct.includes('text')) {
         try {
           const body = await response.text();
           if (body.length < 2 * 1024 * 1024) {
@@ -300,20 +305,20 @@ async function main() {
       }
 
       traffic.push(entry);
-      const shortUrl = url.length > 100 ? url.substring(0, 100) + "..." : url;
+      const shortUrl = url.length > 100 ? url.substring(0, 100) + '...' : url;
       console.log(`  [${method}] ${entry.status} ${shortUrl}`);
 
       // Screenshot after significant API responses
       if (entry.responseBody && entry.status === 200) {
-        const isJsonData = ct.includes("json") && entry.responseBody.length > 50;
+        const isJsonData = ct.includes('json') && entry.responseBody.length > 50;
         if (isJsonData) {
-          scheduleApiScreenshot(page, "data-load");
+          scheduleApiScreenshot(page, 'data-load');
         }
       }
     }
 
     // Track script sources matching the host filter
-    if (hostFilter && url.includes(hostFilter) && (url.endsWith(".js") || url.includes("bundle"))) {
+    if (hostFilter && url.includes(hostFilter) && (url.endsWith('.js') || url.includes('bundle'))) {
       scriptSources.add(url);
     }
   });
@@ -321,7 +326,7 @@ async function main() {
   // -----------------------------------------------------------------------
   // Auto-screenshot on full page navigation
   // -----------------------------------------------------------------------
-  page.on("load", async () => {
+  page.on('load', async () => {
     const currentUrl = page.url();
     if (currentUrl === lastUrl) return;
     if (hostFilter && !currentUrl.includes(hostFilter)) return;
@@ -332,7 +337,7 @@ async function main() {
     // Wait for dynamic content to settle
     await new Promise((r) => setTimeout(r, 1500));
 
-    const name = `${String(screenshotCount + 1).padStart(3, "0")}-${slugify(currentUrl)}.png`;
+    const name = `${String(screenshotCount + 1).padStart(3, '0')}-${slugify(currentUrl)}.png`;
     try {
       await page.screenshot({ path: join(screenshotDir, name), fullPage: true });
       screenshotCount++;
@@ -350,7 +355,7 @@ async function main() {
         lastUrl = currentUrl;
         pageUrls.add(currentUrl);
         await new Promise((r) => setTimeout(r, 1000));
-        const name = `${String(screenshotCount + 1).padStart(3, "0")}-${slugify(currentUrl)}.png`;
+        const name = `${String(screenshotCount + 1).padStart(3, '0')}-${slugify(currentUrl)}.png`;
         await page.screenshot({ path: join(screenshotDir, name), fullPage: true });
         screenshotCount++;
         console.log(`  [screenshot] spa-nav: ${name}`);
@@ -362,7 +367,7 @@ async function main() {
   // Navigate to target
   // -----------------------------------------------------------------------
   console.log(`\nOpening ${TARGET_URL}...\n`);
-  await page.goto(TARGET_URL, { waitUntil: "domcontentloaded" });
+  await page.goto(TARGET_URL, { waitUntil: 'domcontentloaded' });
 
   // -----------------------------------------------------------------------
   // Periodic auto-save (every 30s)
@@ -383,7 +388,7 @@ async function main() {
 
     // Take one final screenshot
     try {
-      const name = `${String(screenshotCount + 1).padStart(3, "0")}-final-state.png`;
+      const name = `${String(screenshotCount + 1).padStart(3, '0')}-final-state.png`;
       await page.screenshot({ path: join(screenshotDir, name), fullPage: true });
       screenshotCount++;
     } catch {}
@@ -391,46 +396,46 @@ async function main() {
     // Grab all script tags from the current page
     try {
       const scripts = await page.evaluate(() =>
-        [...document.querySelectorAll("script[src]")].map((s) => s.src)
+        [...document.querySelectorAll('script[src]')].map((s) => s.src),
       );
       scripts.forEach((s) => scriptSources.add(s));
     } catch {}
 
     const endpointCount = save();
 
-    console.log("\n");
-    console.log("┌──────────────────────────────────────────────────────────────┐");
-    console.log("│  Capture Complete                                             │");
-    console.log("├──────────────────────────────────────────────────────────────┤");
+    console.log('\n');
+    console.log('┌──────────────────────────────────────────────────────────────┐');
+    console.log('│  Capture Complete                                             │');
+    console.log('├──────────────────────────────────────────────────────────────┤');
     console.log(`│  Requests captured: ${String(traffic.length).padEnd(41)} │`);
     console.log(`│  Unique endpoints:  ${String(endpointCount).padEnd(41)} │`);
     console.log(`│  Screenshots:       ${String(screenshotCount).padEnd(41)} │`);
     console.log(`│  Pages visited:     ${String(pageUrls.size).padEnd(41)} │`);
     console.log(`│  Console logs:      ${String(consoleLogs.length).padEnd(41)} │`);
-    console.log("├──────────────────────────────────────────────────────────────┤");
+    console.log('├──────────────────────────────────────────────────────────────┤');
     console.log(`│  Output: ${outputDir.substring(0, 52).padEnd(52)} │`);
-    console.log("│                                                               │");
-    console.log("│  Files:                                                       │");
-    console.log("│    traffic.json     — API requests + response bodies          │");
-    console.log("│    console.json     — browser console logs                    │");
-    console.log("│    screenshots/     — page screenshots (PNG)                  │");
-    console.log("│    summary.txt      — endpoint summary table                  │");
-    console.log("│    js-sources.json  — JavaScript URLs found                   │");
-    console.log("└──────────────────────────────────────────────────────────────┘");
+    console.log('│                                                               │');
+    console.log('│  Files:                                                       │');
+    console.log('│    traffic.json     — API requests + response bodies          │');
+    console.log('│    console.json     — browser console logs                    │');
+    console.log('│    screenshots/     — page screenshots (PNG)                  │');
+    console.log('│    summary.txt      — endpoint summary table                  │');
+    console.log('│    js-sources.json  — JavaScript URLs found                   │');
+    console.log('└──────────────────────────────────────────────────────────────┘');
 
     await context.close().catch(() => {});
     process.exit(0);
   };
 
-  process.on("SIGINT", cleanup);
-  process.on("SIGTERM", cleanup);
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 
   // Keep running until Ctrl+C
-  console.log("Recording... Press Ctrl+C to stop and save.\n");
+  console.log('Recording... Press Ctrl+C to stop and save.\n');
   await new Promise(() => {});
 }
 
 main().catch((err) => {
-  console.error("Fatal:", err);
+  console.error('Fatal:', err);
   process.exit(1);
 });

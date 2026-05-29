@@ -77,10 +77,7 @@ export function defaultUserMemoryPath(): string {
 
 export function defaultProjectMemoryPath(specPath: string): string | null {
   const specDir = path.dirname(path.resolve(specPath));
-  const candidates = [
-    path.join(specDir, 'SPECIFY.md'),
-    path.join(specDir, 'CLAUDE.md'),
-  ];
+  const candidates = [path.join(specDir, 'SPECIFY.md'), path.join(specDir, 'CLAUDE.md')];
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
   }
@@ -97,7 +94,9 @@ export function loadObservations(filePath: string): Observation[] {
   try {
     const raw = yaml.load(fs.readFileSync(filePath, 'utf-8')) as Partial<ObservationsFile> | null;
     if (!raw || !Array.isArray(raw.observations)) return [];
-    return raw.observations.filter((o): o is Observation => Boolean(o && typeof o === 'object' && o.id && o.description));
+    return raw.observations.filter((o): o is Observation =>
+      Boolean(o && typeof o === 'object' && o.id && o.description),
+    );
   } catch {
     return [];
   }
@@ -145,7 +144,10 @@ export function loadLayeredContext(specPath: string, opts: LayerLoadOptions = {}
  * The output is bounded to keep prompt budgets reasonable; per-section caps
  * apply per layer rather than truncating any single source mid-sentence.
  */
-export function renderLayeredPrompt(ctx: LayeredContext, opts: { observationConfidenceFloor?: number; budgetBytes?: number } = {}): string {
+export function renderLayeredPrompt(
+  ctx: LayeredContext,
+  opts: { observationConfidenceFloor?: number; budgetBytes?: number } = {},
+): string {
   const parts: string[] = [];
   const floor = opts.observationConfidenceFloor ?? 0;
 
@@ -167,12 +169,16 @@ export function renderLayeredPrompt(ctx: LayeredContext, opts: { observationConf
   if (filtered.length) {
     parts.push('## Derived observations for this spec');
     parts.push('');
-    parts.push("Soft checks accumulated from prior sessions and user feedback. Treat as");
-    parts.push("hints, not contracts: if a live observation contradicts one of these,");
-    parts.push("trust the live observation and flag the stale entry.");
+    parts.push('Soft checks accumulated from prior sessions and user feedback. Treat as');
+    parts.push('hints, not contracts: if a live observation contradicts one of these,');
+    parts.push('trust the live observation and flag the stale entry.');
     parts.push('');
     for (const o of filtered) {
-      const scope = o.behavior_id ? `(${o.area_id ?? '?'}/${o.behavior_id}) ` : o.area_id ? `(${o.area_id}) ` : '';
+      const scope = o.behavior_id
+        ? `(${o.area_id ?? '?'}/${o.behavior_id}) `
+        : o.area_id
+          ? `(${o.area_id}) `
+          : '';
       const conf = typeof o.confidence === 'number' ? ` [conf ${o.confidence.toFixed(2)}]` : '';
       const src = o.source ? ` <${o.source}>` : '';
       parts.push(`- ${scope}${o.description}${conf}${src}`);

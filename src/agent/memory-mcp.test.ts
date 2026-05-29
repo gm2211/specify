@@ -11,9 +11,14 @@ beforeEach(() => {
 
 type AnyServer = {
   instance?: {
-    _registeredTools?: Record<string, {
-      handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }>;
-    }>;
+    _registeredTools?: Record<
+      string,
+      {
+        handler: (
+          args: Record<string, unknown>,
+        ) => Promise<{ content: Array<{ type: string; text: string }> }>;
+      }
+    >;
   };
 };
 

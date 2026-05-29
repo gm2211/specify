@@ -27,7 +27,11 @@ function mockPage(overrides: Record<string, (...args: any[]) => any> = {}) {
 
 test('executeCommand proxies click to page.click', async () => {
   const clicks: string[] = [];
-  const page = mockPage({ click: async (s: string) => { clicks.push(s); } });
+  const page = mockPage({
+    click: async (s: string) => {
+      clicks.push(s);
+    },
+  });
 
   const cmd: AgentCommand = { action: 'click', selector: 'button#submit' };
   const result = await executeCommand(page, cmd);
@@ -39,7 +43,11 @@ test('executeCommand proxies click to page.click', async () => {
 
 test('executeCommand proxies fill to page.fill', async () => {
   const fills: Array<{ s: string; v: string }> = [];
-  const page = mockPage({ fill: async (s: string, v: string) => { fills.push({ s, v }); } });
+  const page = mockPage({
+    fill: async (s: string, v: string) => {
+      fills.push({ s, v });
+    },
+  });
 
   const cmd: AgentCommand = { action: 'fill', selector: 'input#email', value: 'a@b.com' };
   const result = await executeCommand(page, cmd);
@@ -53,9 +61,14 @@ test('executeCommand proxies goto and auto-screenshots on navigation', async () 
   const screenshots: string[] = [];
   const page = mockPage({
     url: () => currentUrl,
-    goto: async (url: string) => { currentUrl = url; },
+    goto: async (url: string) => {
+      currentUrl = url;
+    },
   });
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
   const cmd: AgentCommand = { action: 'goto', url: 'https://example.com/dashboard' };
   const result = await executeCommand(page, cmd, screenshotFn);
@@ -70,7 +83,10 @@ test('executeCommand proxies goto and auto-screenshots on navigation', async () 
 test('executeCommand auto-screenshots every mutating action (evidence capture)', async () => {
   const screenshots: string[] = [];
   const page = mockPage();
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
   const cmd: AgentCommand = { action: 'click', selector: '#btn' };
   await executeCommand(page, cmd, screenshotFn);
@@ -118,7 +134,11 @@ test('executeCommand proxies title', async () => {
 });
 
 test('executeCommand returns error on failure without throwing', async () => {
-  const page = mockPage({ click: async () => { throw new Error('Element not found'); } });
+  const page = mockPage({
+    click: async () => {
+      throw new Error('Element not found');
+    },
+  });
 
   const result = await executeCommand(page, { action: 'click', selector: '#nope' });
 
@@ -129,9 +149,16 @@ test('executeCommand returns error on failure without throwing', async () => {
 test('executeCommand proxies explicit screenshot via screenshotFn', async () => {
   const screenshots: string[] = [];
   const page = mockPage();
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
-  const result = await executeCommand(page, { action: 'screenshot', name: 'after-login' }, screenshotFn);
+  const result = await executeCommand(
+    page,
+    { action: 'screenshot', name: 'after-login' },
+    screenshotFn,
+  );
 
   assert.equal(result.success, true);
   assert.deepEqual(screenshots, ['after-login']);

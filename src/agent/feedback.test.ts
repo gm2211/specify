@@ -40,14 +40,17 @@ test('ingestFeedback: file_bug spawns bd create and captures the issue id', asyn
         return { ok: true, id: 'SP-fake1' };
       },
     };
-    const r = await ingestFeedback({
-      kind: 'file_bug',
-      text: 'Login button does nothing on click.',
-      sessionId: 'ses_xyz',
-      areaId: 'auth',
-      behaviorId: 'login',
-      eventId: 'evt_42',
-    }, ctx);
+    const r = await ingestFeedback(
+      {
+        kind: 'file_bug',
+        text: 'Login button does nothing on click.',
+        sessionId: 'ses_xyz',
+        areaId: 'auth',
+        behaviorId: 'login',
+        eventId: 'evt_42',
+      },
+      ctx,
+    );
     assert.equal(r.bdIssueId, 'SP-fake1');
     assert.equal(calls.length, 1);
     assert.equal(calls[0][0], 'create');
@@ -65,11 +68,14 @@ test('ingestFeedback: important_pattern emits propagation signal', async () => {
     const seen: string[] = [];
     const detach = eventBus.onAny((e) => seen.push(e.type));
     try {
-      await ingestFeedback({
-        kind: 'important_pattern',
-        text: 'Check empty state on every search bar.',
-        sessionId: 'ses_xyz',
-      }, { specPath });
+      await ingestFeedback(
+        {
+          kind: 'important_pattern',
+          text: 'Check empty state on every search bar.',
+          sessionId: 'ses_xyz',
+        },
+        { specPath },
+      );
     } finally {
       detach();
     }
@@ -100,12 +106,31 @@ test('ingestFeedback: attaches recent-events context when sessionId is set', asy
   try {
     const ctx = {
       specPath,
-      fetchRecentEvents: () => ([
-        { id: 1, sessionId: 'ses_x', ts: '2026-04-27T10:00:01Z', role: 'user', kind: 'message', content: 'click signup', tags: null },
-        { id: 2, sessionId: 'ses_x', ts: '2026-04-27T10:00:02Z', role: 'agent', kind: 'tool_call', content: 'browser_click #signup', tags: null },
-      ]),
+      fetchRecentEvents: () => [
+        {
+          id: 1,
+          sessionId: 'ses_x',
+          ts: '2026-04-27T10:00:01Z',
+          role: 'user',
+          kind: 'message',
+          content: 'click signup',
+          tags: null,
+        },
+        {
+          id: 2,
+          sessionId: 'ses_x',
+          ts: '2026-04-27T10:00:02Z',
+          role: 'agent',
+          kind: 'tool_call',
+          content: 'browser_click #signup',
+          tags: null,
+        },
+      ],
     };
-    await ingestFeedback({ kind: 'note', text: 'Empty state on signup form is missing.', sessionId: 'ses_x' }, ctx);
+    await ingestFeedback(
+      { kind: 'note', text: 'Empty state on signup form is missing.', sessionId: 'ses_x' },
+      ctx,
+    );
     const obs = loadObservations(defaultObservationsPath(specPath));
     assert.equal(obs.length, 1);
     assert.match(obs[0].description, /Empty state on signup form/);
@@ -122,7 +147,10 @@ test('ingestFeedback: skips context fetch when no sessionId', async () => {
     let fetchCalled = false;
     const ctx = {
       specPath,
-      fetchRecentEvents: () => { fetchCalled = true; return []; },
+      fetchRecentEvents: () => {
+        fetchCalled = true;
+        return [];
+      },
     };
     await ingestFeedback({ kind: 'note', text: 'no session, no context' }, ctx);
     assert.equal(fetchCalled, false);

@@ -123,9 +123,7 @@ export class InboxRegistry {
   }
 
   list(): InboxMessage[] {
-    return Array.from(this.history.values()).sort((a, b) =>
-      a.createdAt < b.createdAt ? 1 : -1,
-    );
+    return Array.from(this.history.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
 
   sessionIds(): string[] {
@@ -140,23 +138,26 @@ export class InboxRegistry {
     // ones synthesized by the k8s rollout watcher, which has no URL of
     // its own.
     const envTargetUrl = process.env.SPECIFY_TARGET_URL?.trim();
-    const effectiveReq: InboxRequest = req.url || !envTargetUrl
-      ? req
-      : { ...req, url: envTargetUrl };
+    const effectiveReq: InboxRequest =
+      req.url || !envTargetUrl ? req : { ...req, url: envTargetUrl };
     const message: InboxMessage = {
       id,
       createdAt: new Date().toISOString(),
       status: 'queued',
       request: effectiveReq,
-      session: effectiveReq.mode === 'attach' ? effectiveReq.session ?? 'default' : undefined,
+      session: effectiveReq.mode === 'attach' ? (effectiveReq.session ?? 'default') : undefined,
     };
     this.remember(message);
-    eventBus.send('inbox:received', {
+    eventBus.send(
+      'inbox:received',
+      {
+        id,
+        task: effectiveReq.task,
+        mode: effectiveReq.mode ?? 'stateless',
+        sender: effectiveReq.sender,
+      },
       id,
-      task: effectiveReq.task,
-      mode: effectiveReq.mode ?? 'stateless',
-      sender: effectiveReq.sender,
-    }, id);
+    );
 
     if (effectiveReq.mode === 'attach') {
       this.dispatchAttach(message).catch((err) => this.fail(message, err));
@@ -213,11 +214,15 @@ export class InboxRegistry {
       message.status = 'completed';
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
-      eventBus.send('inbox:completed', {
-        id: message.id,
-        costUsd: result.costUsd,
-        resultPath: message.resultPath,
-      }, message.id);
+      eventBus.send(
+        'inbox:completed',
+        {
+          id: message.id,
+          costUsd: result.costUsd,
+          resultPath: message.resultPath,
+        },
+        message.id,
+      );
     } catch (err) {
       this.fail(message, err);
     }
@@ -233,11 +238,15 @@ export class InboxRegistry {
       message.status = 'completed';
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
-      eventBus.send('inbox:completed', {
-        id: message.id,
-        costUsd: result.costUsd,
-        resultPath: message.resultPath,
-      }, message.id);
+      eventBus.send(
+        'inbox:completed',
+        {
+          id: message.id,
+          costUsd: result.costUsd,
+          resultPath: message.resultPath,
+        },
+        message.id,
+      );
     } catch (err) {
       this.fail(message, err);
     }
@@ -282,11 +291,15 @@ export class InboxRegistry {
         initial.status = 'completed';
         initial.result = result;
         initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
-        eventBus.send('inbox:session_ended', {
-          session: sessionKey,
-          costUsd: result.costUsd,
-          resultPath: initial.resultPath,
-        }, initial.id);
+        eventBus.send(
+          'inbox:session_ended',
+          {
+            session: sessionKey,
+            costUsd: result.costUsd,
+            resultPath: initial.resultPath,
+          },
+          initial.id,
+        );
         this.sessions.delete(sessionKey);
       },
       (err) => {
@@ -310,9 +323,7 @@ export class InboxRegistry {
 
   private buildRunnerOptions(message: InboxMessage): SdkRunnerOptions {
     const req = message.request;
-    const outputDir = path.resolve(
-      req.outputDir ?? path.join('.specify', 'inbox', message.id),
-    );
+    const outputDir = path.resolve(req.outputDir ?? path.join('.specify', 'inbox', message.id));
 
     const { systemPrompt, userPrompt } = buildPrompts(req, outputDir);
 
@@ -320,8 +331,7 @@ export class InboxRegistry {
     // tools, no structured output schema). 'verify' runner + freeform system
     // prompt gives the agent a web browser + filesystem, which covers the
     // common "go check the site" case.
-    const runnerTask: SdkRunnerOptions['task'] =
-      req.task === 'freeform' ? 'verify' : req.task;
+    const runnerTask: SdkRunnerOptions['task'] = req.task === 'freeform' ? 'verify' : req.task;
 
     const opts: SdkRunnerOptions = {
       task: runnerTask,
@@ -339,21 +349,37 @@ export class InboxRegistry {
 
   /** Persist structured output to disk so external tools can read results
    *  without streaming. Mirrors the shape `specify verify` writes. */
-  private persistResult(message: InboxMessage, outputDir: string, result: SdkRunnerResult): string | undefined {
+  private persistResult(
+    message: InboxMessage,
+    outputDir: string,
+    result: SdkRunnerResult,
+  ): string | undefined {
     if (!result.structuredOutput) return undefined;
     const filename =
-      message.request.task === 'compare' ? 'compare-result.json'
-      : message.request.task === 'verify' ? 'verify-result.json'
-      : message.request.task === 'capture' ? 'capture-result.json'
-      : message.request.task === 'replay' ? 'replay-result.json'
-      : 'result.json';
+      message.request.task === 'compare'
+        ? 'compare-result.json'
+        : message.request.task === 'verify'
+          ? 'verify-result.json'
+          : message.request.task === 'capture'
+            ? 'capture-result.json'
+            : message.request.task === 'replay'
+              ? 'replay-result.json'
+              : 'result.json';
     const full = path.join(outputDir, filename);
     fs.mkdirSync(outputDir, { recursive: true });
-    fs.writeFileSync(full, JSON.stringify({
-      id: message.id,
-      task: message.request.task,
-      structuredOutput: result.structuredOutput,
-    }, null, 2), 'utf-8');
+    fs.writeFileSync(
+      full,
+      JSON.stringify(
+        {
+          id: message.id,
+          task: message.request.task,
+          structuredOutput: result.structuredOutput,
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
     return full;
   }
 
@@ -373,15 +399,19 @@ export class InboxRegistry {
   }
 }
 
-function buildPrompts(req: InboxRequest, outputDir: string): { systemPrompt: string; userPrompt: string } {
+function buildPrompts(
+  req: InboxRequest,
+  outputDir: string,
+): { systemPrompt: string; userPrompt: string } {
   if (req.task === 'verify') {
     if (!req.spec) {
       throw new Error('verify task requires `spec` (path to spec file)');
     }
     const spec = loadSpec(path.resolve(req.spec));
     const specYaml = specToYaml(spec);
-    const targetUrl = req.url
-      ?? (spec.target.type === 'web' || spec.target.type === 'api'
+    const targetUrl =
+      req.url ??
+      (spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
         : undefined);
     return {

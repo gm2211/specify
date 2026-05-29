@@ -12,8 +12,19 @@ import type { BrowserContext, Page } from 'playwright';
 import type { CapturedTraffic, CapturedConsoleEntry, CaptureManifest } from '../capture/types.js';
 
 const STATIC_EXT = new Set([
-  '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg',
-  '.woff', '.woff2', '.ttf', '.ico', '.map', '.less',
+  '.css',
+  '.js',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.ico',
+  '.map',
+  '.less',
 ]);
 
 function shouldCapture(url: string, hostFilter: string): boolean {
@@ -31,12 +42,14 @@ function shouldCapture(url: string, hostFilter: string): boolean {
 function slugify(url: string): string {
   try {
     const u = new URL(url);
-    return u.pathname
-      .replace(/^\//, '')
-      .replace(/[/?&#=.]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/_$/, '')
-      .substring(0, 80) || 'page';
+    return (
+      u.pathname
+        .replace(/^\//, '')
+        .replace(/[/?&#=.]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/_$/, '')
+        .substring(0, 80) || 'page'
+    );
   } catch {
     return 'page';
   }
@@ -171,14 +184,18 @@ export class CaptureCollector {
 
     // Enumerate screenshot files
     const screenshotFiles = fs.existsSync(this.screenshotDir)
-      ? fs.readdirSync(this.screenshotDir)
+      ? fs
+          .readdirSync(this.screenshotDir)
           .filter((f) => f.endsWith('.png'))
           .sort()
           .map((f) => path.join('screenshots', f))
       : [];
 
     // Write summary.txt
-    const endpointMap = new Map<string, { method: string; url: string; status: number | string; count: number }>();
+    const endpointMap = new Map<
+      string,
+      { method: string; url: string; status: number | string; count: number }
+    >();
     for (const req of this.traffic) {
       let pattern: string;
       try {
@@ -192,7 +209,12 @@ export class CaptureCollector {
       if (existing) {
         existing.count++;
       } else {
-        endpointMap.set(key, { method: req.method, url: pattern, status: req.status ?? '?', count: 1 });
+        endpointMap.set(key, {
+          method: req.method,
+          url: pattern,
+          status: req.status ?? '?',
+          count: 1,
+        });
       }
     }
 
@@ -207,7 +229,11 @@ export class CaptureCollector {
       '',
       ...sorted.map((s) => `${s.method.padEnd(7)} ${String(s.status).padEnd(7)} ${s.url}`),
     ];
-    fs.writeFileSync(path.join(this.outputDir, 'summary.txt'), summaryLines.join('\n') + '\n', 'utf-8');
+    fs.writeFileSync(
+      path.join(this.outputDir, 'summary.txt'),
+      summaryLines.join('\n') + '\n',
+      'utf-8',
+    );
 
     // Build and write manifest
     const manifest: CaptureManifest = {
@@ -218,9 +244,17 @@ export class CaptureCollector {
         outputDir: this.outputDir,
         totalRequests: this.traffic.length,
         totalScreenshots: this.screenshotCount,
-        pagesVisited: new Set(this.traffic.filter((t) => t.method === 'GET').map((t) => {
-          try { return new URL(t.url).pathname; } catch { return t.url; }
-        })).size,
+        pagesVisited: new Set(
+          this.traffic
+            .filter((t) => t.method === 'GET')
+            .map((t) => {
+              try {
+                return new URL(t.url).pathname;
+              } catch {
+                return t.url;
+              }
+            }),
+        ).size,
         consoleLogCount: this.consoleLogs.length,
       },
       trafficFile: 'traffic.json',
@@ -229,7 +263,11 @@ export class CaptureCollector {
       summaryFile: 'summary.txt',
     };
 
-    fs.writeFileSync(path.join(this.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+    fs.writeFileSync(
+      path.join(this.outputDir, 'manifest.json'),
+      JSON.stringify(manifest, null, 2),
+      'utf-8',
+    );
 
     return manifest;
   }

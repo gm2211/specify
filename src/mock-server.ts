@@ -117,7 +117,7 @@ function setSessionCookies(res: http.ServerResponse, session: Session): void {
   ];
   if (SESSION_COOKIE_2_NAME && session.secondaryCookie) {
     cookieParts.push(
-      `${SESSION_COOKIE_2_NAME}=${session.secondaryCookie}; Path=/; HttpOnly; Max-Age=${maxAge}`
+      `${SESSION_COOKIE_2_NAME}=${session.secondaryCookie}; Path=/; HttpOnly; Max-Age=${maxAge}`,
     );
   }
   res.setHeader('Set-Cookie', cookieParts);
@@ -296,7 +296,9 @@ function loadTraffic(): { entries: TrafficEntry[]; index: RouteIndex } {
       for (const subdir of subdirs) {
         candidates.push(path.join(capturesDir, subdir, 'traffic.json'));
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   let trafficPath: string | undefined;
@@ -314,7 +316,7 @@ function loadTraffic(): { entries: TrafficEntry[]; index: RouteIndex } {
     }
     console.error(
       '[mock] Run "npm run browse" or "npm run capture" to generate traffic data,\n' +
-      '[mock] or set MOCK_DATA_PATH to the path of your traffic.json file.'
+        '[mock] or set MOCK_DATA_PATH to the path of your traffic.json file.',
     );
     process.exit(1);
   }
@@ -324,7 +326,7 @@ function loadTraffic(): { entries: TrafficEntry[]; index: RouteIndex } {
   const index = buildIndex(entries);
 
   console.error(
-    `[mock] Loaded ${entries.length} traffic entries from ${path.basename(trafficPath)} → ${index.size} unique routes`
+    `[mock] Loaded ${entries.length} traffic entries from ${path.basename(trafficPath)} → ${index.size} unique routes`,
   );
   return { entries, index };
 }
@@ -351,10 +353,10 @@ const ALL_FAULT_TYPES: FaultType[] = ['302', '500', 'timeout', 'empty', 'malform
 // Weighted distribution: 302=35%, 500=25%, empty=20%, malformed=15%, timeout=5%
 const FAULT_WEIGHTS: [FaultType, number][] = [
   ['302', 0.35],
-  ['500', 0.60],
-  ['empty', 0.80],
+  ['500', 0.6],
+  ['empty', 0.8],
   ['malformed', 0.95],
-  ['timeout', 1.00],
+  ['timeout', 1.0],
 ];
 
 interface FaultStats {
@@ -376,13 +378,13 @@ function parseFaultConfig(): { faultRate: number; enabledTypes: FaultType[] } {
   if (process.env.MOCK_FAULT_TYPES) {
     const requested = process.env.MOCK_FAULT_TYPES.split(',').map((s) => s.trim());
     const filtered = requested.filter((t): t is FaultType =>
-      ALL_FAULT_TYPES.includes(t as FaultType)
+      ALL_FAULT_TYPES.includes(t as FaultType),
     );
     if (filtered.length > 0) {
       enabledTypes = filtered;
     } else {
       console.error(
-        `[mock] WARNING: MOCK_FAULT_TYPES="${process.env.MOCK_FAULT_TYPES}" has no valid types. Using all.`
+        `[mock] WARNING: MOCK_FAULT_TYPES="${process.env.MOCK_FAULT_TYPES}" has no valid types. Using all.`,
       );
     }
   }
@@ -416,7 +418,7 @@ async function injectFault(
   entry: TrafficEntry,
   res: http.ServerResponse,
   method: string,
-  pathname: string
+  pathname: string,
 ): Promise<void> {
   return new Promise((resolve) => {
     faultStats.faultsInjected++;
@@ -425,7 +427,10 @@ async function injectFault(
 
     switch (faultType) {
       case '500': {
-        const body = JSON.stringify({ error: true, message: 'Internal server error (fault injection)' });
+        const body = JSON.stringify({
+          error: true,
+          message: 'Internal server error (fault injection)',
+        });
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(body);
         resolve();
@@ -521,7 +526,7 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
         res.writeHead(302, { Location: POST_LOGIN_REDIRECT });
         res.end();
         console.error(
-          `[mock] POST ${LOGIN_PATH} → 302 (session created, ${SESSION_COOKIE_NAME}=${session.primaryCookie.slice(0, 8)}...)`
+          `[mock] POST ${LOGIN_PATH} → 302 (session created, ${SESSION_COOKIE_NAME}=${session.primaryCookie.slice(0, 8)}...)`,
         );
         return;
       }
@@ -577,7 +582,7 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
           stats: faultStats,
         },
         null,
-        2
+        2,
       );
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(body);
@@ -594,7 +599,7 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
       const body = JSON.stringify(
         { activeSessions: sessionList.length, sessionTtlMs: SESSION_TTL_MS, sessions: sessionList },
         null,
-        2
+        2,
       );
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(body);
@@ -607,7 +612,9 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
       const session = findValidSession(req);
       if (!session) {
         redirectToLogin(res);
-        console.error(`[mock] AUTH: 302 → ${LOGIN_PATH} (no valid session for ${method} ${pathname})`);
+        console.error(
+          `[mock] AUTH: 302 → ${LOGIN_PATH} (no valid session for ${method} ${pathname})`,
+        );
         return;
       }
     }
@@ -629,7 +636,7 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
           similar: similar.length > 0 ? similar : undefined,
         },
         null,
-        2
+        2,
       );
       res.writeHead(404, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(body);
@@ -648,7 +655,7 @@ function createServer(entries: TrafficEntry[], index: RouteIndex): http.Server {
     }
 
     console.error(
-      `[mock] ${method} ${pathname} → matched (${matchedEntries.length} candidate(s), status=${entry.status})`
+      `[mock] ${method} ${pathname} → matched (${matchedEntries.length} candidate(s), status=${entry.status})`,
     );
 
     // ── Fault injection ───────────────────────────────────────────────────
@@ -684,7 +691,9 @@ server.listen(PORT, () => {
   console.error(`[mock] Auth: GET  http://localhost:${PORT}${REFRESH_PATH}  → extend session`);
   console.error(`[mock] Session cookie: "${SESSION_COOKIE_NAME}", TTL: ${SESSION_TTL_MS / 1000}s`);
   if (faultRate > 0) {
-    console.error(`[mock] Fault injection ENABLED: rate=${faultRate} types=${enabledTypes.join(',')}`);
+    console.error(
+      `[mock] Fault injection ENABLED: rate=${faultRate} types=${enabledTypes.join(',')}`,
+    );
   } else {
     console.error(`[mock] Fault injection disabled (set MOCK_FAULT_RATE to enable)`);
   }

@@ -1,8 +1,8 @@
 # Bridging Claude Code channels to `specify daemon`
 
-This guide wires **incoming messages from Telegram / Discord / iMessage / any
-Claude Code channel** to a running `specify daemon` so you can trigger
-verification, capture, or freeform tasks from a chat window.
+This guide wires **incoming messages from Telegram / Discord / iMessage / any Claude Code channel**
+to a running `specify daemon` so you can trigger verification, capture, or freeform tasks from a
+chat window.
 
 ## Architecture
 
@@ -45,8 +45,8 @@ Add to `~/.claude.json` (or your per-project `.mcp.json`):
 }
 ```
 
-`specify mcp` auto-reads the token from `~/.specify/daemon.token`. For
-remote daemons set `SPECIFY_INBOX_TOKEN` as well.
+`specify mcp` auto-reads the token from `~/.specify/daemon.token`. For remote daemons set
+`SPECIFY_INBOX_TOKEN` as well.
 
 ## 3. Install a channel plugin (official Anthropic plugins)
 
@@ -85,10 +85,10 @@ Claude Code will:
 
 ## Tools exposed by `specify mcp`
 
-| Tool | Purpose |
-|------|---------|
-| `daemon_verify` | Shortcut: `{ spec, url }` → `/verify` |
-| `daemon_submit` | Generic: any task → `/inbox` |
+| Tool            | Purpose                                   |
+| --------------- | ----------------------------------------- |
+| `daemon_verify` | Shortcut: `{ spec, url }` → `/verify`     |
+| `daemon_submit` | Generic: any task → `/inbox`              |
 | `daemon_status` | Poll `/inbox/:id` for state + result path |
 
 ## Direct HTTP (no MCP, no Claude Code)
@@ -113,8 +113,8 @@ curl -s -H "Authorization: Bearer $TOKEN" \
      http://127.0.0.1:4100/inbox/msg_ab12
 ```
 
-The `resultPath` field on the completed message points to the on-disk
-`verify-result.json` (same shape as `specify verify` emits).
+The `resultPath` field on the completed message points to the on-disk `verify-result.json` (same
+shape as `specify verify` emits).
 
 ## Persistent sessions (attach mode)
 
@@ -137,5 +137,5 @@ curl -H "Authorization: Bearer $TOKEN" -X POST \
      http://127.0.0.1:4100/sessions/chat-alice/close
 ```
 
-In attach mode the daemon still consumes 0 tokens while waiting between
-messages — the SDK blocks on the injector's `AsyncIterable`.
+In attach mode the daemon still consumes 0 tokens while waiting between messages — the SDK blocks on
+the injector's `AsyncIterable`.

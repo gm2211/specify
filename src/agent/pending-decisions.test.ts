@@ -36,7 +36,11 @@ const baseDecision = {
   context: 'Page shows 500 error on load',
   proposed_resolutions: [
     { scope: 'narrow' as const, label: 'Skip this behavior for now' },
-    { scope: 'medium' as const, label: 'Known issue — mark as expected', action_hint: 'Skip the login check' },
+    {
+      scope: 'medium' as const,
+      label: 'Known issue — mark as expected',
+      action_hint: 'Skip the login check',
+    },
     { scope: 'broad' as const, label: 'This is a real bug — file ticket' },
   ],
 };
@@ -116,10 +120,7 @@ test('resolveDecision: rejects on scope mismatch', async () => {
 test('resolveDecision: rejects if already resolved', async () => {
   const d = appendDecision(baseDecision);
   await resolveDecision(d.id, { resolution_index: 0, scope: 'narrow' });
-  await assert.rejects(
-    resolveDecision(d.id, { resolution_index: 0, scope: 'narrow' }),
-    /not open/,
-  );
+  await assert.rejects(resolveDecision(d.id, { resolution_index: 0, scope: 'narrow' }), /not open/);
 });
 
 test('resolveDecision: calls memoryWriter for medium/broad scope', async () => {
@@ -154,7 +155,9 @@ test('resolveDecision: broad scope uses playbook type, omits area/behavior', asy
     fakeWriter as never,
     fakeScope as never,
   );
-  const delta = (written[0].deltas as Array<{ type: string; area_id?: string; behavior_id?: string }>)[0];
+  const delta = (
+    written[0].deltas as Array<{ type: string; area_id?: string; behavior_id?: string }>
+  )[0];
   assert.equal(delta.type, 'playbook');
   assert.equal(delta.area_id, undefined);
   assert.equal(delta.behavior_id, undefined);
@@ -171,8 +174,5 @@ test('registerAwaiter: resolveDecision unblocks the awaiter', async () => {
 
 test('registerAwaiter: times out when not resolved', async () => {
   const d = appendDecision(baseDecision);
-  await assert.rejects(
-    registerAwaiter(d.id, 50),
-    /timeout/,
-  );
+  await assert.rejects(registerAwaiter(d.id, 50), /timeout/);
 });

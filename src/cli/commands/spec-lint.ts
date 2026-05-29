@@ -44,8 +44,8 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
   }
 
   if (!ctx.quiet) {
-    const errorCount = result.errors.filter(e => e.severity === 'error').length;
-    const warnCount = result.errors.filter(e => e.severity === 'warning').length;
+    const errorCount = result.errors.filter((e) => e.severity === 'error').length;
+    const warnCount = result.errors.filter((e) => e.severity === 'warning').length;
 
     if (result.valid) {
       process.stderr.write(c.boldGreen('✓ Spec is valid'));
@@ -54,14 +54,18 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
       }
       process.stderr.write('\n');
     } else {
-      process.stderr.write(c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`));
+      process.stderr.write(
+        c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`),
+      );
       if (warnCount > 0) {
         process.stderr.write(c.yellow(` and ${warnCount} warning${warnCount !== 1 ? 's' : ''}`));
       }
       process.stderr.write('\n');
       for (const err of result.errors) {
         const icon = err.severity === 'error' ? c.red('✗') : c.yellow('⚠');
-        process.stderr.write(`  ${icon} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`);
+        process.stderr.write(
+          `  ${icon} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`,
+        );
       }
     }
   }

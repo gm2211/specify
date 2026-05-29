@@ -31,6 +31,7 @@ test('attachToUserChrome: actionable error when nothing is listening', async () 
   // No Chrome on this port — connect must fail with a guidance message.
   await assert.rejects(
     () => attachToUserChrome({ port: 1 }),
-    (err: Error) => /Failed to connect to Chrome|--remote-debugging-port|CHROME_CDP_PORT/.test(err.message),
+    (err: Error) =>
+      /Failed to connect to Chrome|--remote-debugging-port|CHROME_CDP_PORT/.test(err.message),
   );
 });

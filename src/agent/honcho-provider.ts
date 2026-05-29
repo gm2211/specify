@@ -24,10 +24,7 @@
  * `fallback` option so observations stay queryable when Honcho is down.
  */
 
-import type {
-  MemoryProvider,
-  MemoryScope,
-} from './memory-provider.js';
+import type { MemoryProvider, MemoryScope } from './memory-provider.js';
 import { FileBackedMemoryProvider } from './memory-provider.js';
 import type { DeltaInput, MemoryFile, MemoryRow } from './memory.js';
 
@@ -52,7 +49,9 @@ export function honchoEnabled(env: Record<string, string | undefined> = process.
   return Boolean(env.HONCHO_URL);
 }
 
-export function honchoConfigFromEnv(env: Record<string, string | undefined> = process.env): HonchoConfig | null {
+export function honchoConfigFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): HonchoConfig | null {
   if (!env.HONCHO_URL) return null;
   return {
     url: env.HONCHO_URL,
@@ -133,7 +132,11 @@ export class HonchoMemoryProvider implements MemoryProvider {
     return '';
   }
 
-  private async postEvent(event: { type: string; content: string; metadata?: Record<string, unknown> }): Promise<void> {
+  private async postEvent(event: {
+    type: string;
+    content: string;
+    metadata?: Record<string, unknown>;
+  }): Promise<void> {
     const url = `${this.config.url.replace(/\/+$/, '')}/v1/apps/${encodeURIComponent(this.config.app ?? 'specify')}/users/${encodeURIComponent(this.config.user ?? 'default')}/events`;
     const res = await this.timedFetch(url, {
       method: 'POST',
@@ -147,7 +150,9 @@ export class HonchoMemoryProvider implements MemoryProvider {
     const ctrl = new AbortController();
     const timeout = setTimeout(() => ctrl.abort(), this.config.timeoutMs ?? 4000);
     try {
-      const headers: Record<string, string> = { ...(init.headers as Record<string, string> | undefined) };
+      const headers: Record<string, string> = {
+        ...(init.headers as Record<string, string> | undefined),
+      };
       if (this.config.token) headers['Authorization'] = `Bearer ${this.config.token}`;
       return await this.fetchImpl(url, { ...init, headers, signal: ctrl.signal });
     } finally {
@@ -160,7 +165,9 @@ export class HonchoMemoryProvider implements MemoryProvider {
  * Convenience factory: returns a HonchoMemoryProvider when env-configured,
  * otherwise null. Callers fall back to defaultMemoryProvider().
  */
-export function honchoFromEnv(env: Record<string, string | undefined> = process.env): HonchoMemoryProvider | null {
+export function honchoFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): HonchoMemoryProvider | null {
   const cfg = honchoConfigFromEnv(env);
   if (!cfg) return null;
   return new HonchoMemoryProvider(cfg);

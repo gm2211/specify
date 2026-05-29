@@ -29,7 +29,12 @@ test('observations: round-trip save/load', () => {
       version: 1,
       observations: [
         { id: 'obs-1', description: 'Always check empty state on search.', area_id: 'forms' },
-        { id: 'obs-2', description: 'Verify keyboard nav on form submit buttons.', confidence: 0.8, source: 'user_feedback' },
+        {
+          id: 'obs-2',
+          description: 'Verify keyboard nav on form submit buttons.',
+          confidence: 0.8,
+          source: 'user_feedback',
+        },
       ],
     });
     const loaded = loadObservations(filePath);
@@ -48,7 +53,10 @@ test('appendObservation: idempotent append + persist', () => {
     appendObservation(filePath, { id: 'obs-1', description: 'first' });
     appendObservation(filePath, { id: 'obs-2', description: 'second' });
     const loaded = loadObservations(filePath);
-    assert.deepEqual(loaded.map((o) => o.id), ['obs-1', 'obs-2']);
+    assert.deepEqual(
+      loaded.map((o) => o.id),
+      ['obs-1', 'obs-2'],
+    );
   } finally {
     cleanup();
   }
@@ -80,7 +88,10 @@ test('loadLayeredContext: falls back to CLAUDE.md when SPECIFY.md missing', () =
 test('renderLayeredPrompt: assembles all three sections', () => {
   const { dir, specPath, cleanup } = tmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'SPECIFY.md'), 'project: test the login flow under flaky network');
+    fs.writeFileSync(
+      path.join(dir, 'SPECIFY.md'),
+      'project: test the login flow under flaky network',
+    );
     const userPath = path.join(dir, 'user.md');
     fs.writeFileSync(userPath, 'user: prefers concise reports');
     appendObservation(defaultObservationsPath(specPath), {
@@ -116,8 +127,16 @@ test('renderLayeredPrompt: returns empty when no layers present', () => {
 test('renderLayeredPrompt: confidence floor filters low-confidence observations', () => {
   const { specPath, cleanup } = tmpDir();
   try {
-    appendObservation(defaultObservationsPath(specPath), { id: 'high', description: 'high conf', confidence: 0.9 });
-    appendObservation(defaultObservationsPath(specPath), { id: 'low', description: 'low conf', confidence: 0.2 });
+    appendObservation(defaultObservationsPath(specPath), {
+      id: 'high',
+      description: 'high conf',
+      confidence: 0.9,
+    });
+    appendObservation(defaultObservationsPath(specPath), {
+      id: 'low',
+      description: 'low conf',
+      confidence: 0.2,
+    });
     const ctx = loadLayeredContext(specPath, { userPath: '/nonexistent/user.md' });
     const prompt = renderLayeredPrompt(ctx, { observationConfidenceFloor: 0.5 });
     assert.match(prompt, /high conf/);

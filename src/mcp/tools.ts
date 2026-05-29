@@ -123,14 +123,16 @@ export function registerTools(server: McpServer): void {
     async ({ port }) => {
       const p = port ?? 3456;
       return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            sse_url: `http://localhost:${p}/api/events/stream`,
-            inject_url: `http://localhost:${p}/api/agent/inject`,
-            publish_url: `http://localhost:${p}/api/events/publish`,
-          }),
-        }],
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              sse_url: `http://localhost:${p}/api/events/stream`,
+              inject_url: `http://localhost:${p}/api/agent/inject`,
+              publish_url: `http://localhost:${p}/api/events/publish`,
+            }),
+          },
+        ],
       };
     },
   );
@@ -172,7 +174,10 @@ export function registerTools(server: McpServer): void {
         'Requires the review server to be running with an active agent session.',
       inputSchema: {
         message: z.string().describe('The message to inject'),
-        priority: z.enum(['now', 'next', 'later']).optional().describe('Message priority (default: next)'),
+        priority: z
+          .enum(['now', 'next', 'later'])
+          .optional()
+          .describe('Message priority (default: next)'),
         port: z.number().optional().describe('Review server port (default: 3456)'),
       },
     },
@@ -206,7 +211,7 @@ export function registerTools(server: McpServer): void {
     {
       title: 'Spec to YAML',
       description:
-        'Convert a spec from JSON to well-formatted YAML. Useful when you\'ve built ' +
+        "Convert a spec from JSON to well-formatted YAML. Useful when you've built " +
         'a spec programmatically and want the canonical YAML output.',
       inputSchema: {
         content: z.string().describe('The spec as a JSON string'),
@@ -350,11 +355,16 @@ async function daemonGet(path: string): Promise<unknown> {
 async function parseDaemonResponse(res: Response): Promise<unknown> {
   const text = await res.text();
   let json: unknown = null;
-  try { json = JSON.parse(text); } catch { /* non-json */ }
+  try {
+    json = JSON.parse(text);
+  } catch {
+    /* non-json */
+  }
   if (!res.ok) {
-    const err = json && typeof json === 'object' && 'error' in json
-      ? (json as { error: string }).error
-      : `HTTP ${res.status}`;
+    const err =
+      json && typeof json === 'object' && 'error' in json
+        ? (json as { error: string }).error
+        : `HTTP ${res.status}`;
     throw new Error(`daemon ${err}`);
   }
   return json ?? { ok: true };
@@ -374,6 +384,8 @@ function daemonConfig(): { url: string; token: string | null } {
     if (fs.existsSync(tokenPath)) {
       return { url, token: fs.readFileSync(tokenPath, 'utf-8').trim() };
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return { url, token: null };
 }

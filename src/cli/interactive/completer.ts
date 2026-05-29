@@ -33,7 +33,9 @@ export function completePath(partial: string): [string[], string] {
       // Include the directory itself as a completion (with trailing /)
       return [[prefix, ...entries], partial];
     }
-  } catch { /* not a directory, continue to basename matching */ }
+  } catch {
+    /* not a directory, continue to basename matching */
+  }
 
   // Complete the basename within the parent dir
   const dir = path.dirname(partial);
@@ -43,12 +45,14 @@ export function completePath(partial: string): [string[], string] {
     const dirToRead = dir === '' ? '.' : dir;
     const entries = fs.readdirSync(dirToRead);
     const matches = entries
-      .filter(e => e.startsWith(base))
-      .map(e => {
+      .filter((e) => e.startsWith(base))
+      .map((e) => {
         const full = dir === '.' || dir === '' ? e : path.join(dir, e);
         try {
           if (fs.statSync(full).isDirectory()) return full + '/';
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
         return full;
       });
     return [matches, partial];
@@ -65,12 +69,14 @@ export function completePath(partial: string): [string[], string] {
 function listDir(dir: string, prefix: string): string[] {
   try {
     const dirToRead = dir === '' ? '.' : dir;
-    return fs.readdirSync(dirToRead).map(e => {
+    return fs.readdirSync(dirToRead).map((e) => {
       const full = dir === '.' || dir === '' ? e : path.join(dir, e);
       const display = prefix + e;
       try {
         if (fs.statSync(full).isDirectory()) return display + '/';
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       return display;
     });
   } catch {
@@ -89,7 +95,7 @@ export function buildReplCompleter(commands: string[], pathCommands: Set<string>
 
     // First word: complete commands
     if (parts.length <= 1) {
-      const hits = commands.filter(c => c.startsWith(trimmed));
+      const hits = commands.filter((c) => c.startsWith(trimmed));
       return [hits.length ? hits : commands, trimmed];
     }
 
@@ -101,7 +107,7 @@ export function buildReplCompleter(commands: string[], pathCommands: Set<string>
 
       // Rebuild full line with each completion
       const prefix = parts.slice(0, -1).join(' ') + ' ';
-      const fullCompletions = completions.map(c => prefix + c);
+      const fullCompletions = completions.map((c) => prefix + c);
       return [fullCompletions, line];
     }
 
@@ -109,49 +115,48 @@ export function buildReplCompleter(commands: string[], pathCommands: Set<string>
     if (cmd === 'load') {
       const subs = ['spec', 'capture'];
       if (parts.length === 2) {
-        const hits = subs.filter(s => s.startsWith(parts[1]));
-        return [hits.map(h => `${cmd} ${h}`), line];
+        const hits = subs.filter((s) => s.startsWith(parts[1]));
+        return [hits.map((h) => `${cmd} ${h}`), line];
       }
       // Third arg is a path
       if (parts.length >= 3) {
         const lastPart = parts[parts.length - 1];
         const [completions] = completePath(lastPart);
         const prefix = parts.slice(0, -1).join(' ') + ' ';
-        return [completions.map(c => prefix + c), line];
+        return [completions.map((c) => prefix + c), line];
       }
     }
 
     if (cmd === 'save') {
       const subs = ['spec'];
       if (parts.length === 2) {
-        const hits = subs.filter(s => s.startsWith(parts[1]));
-        return [hits.map(h => `${cmd} ${h}`), line];
+        const hits = subs.filter((s) => s.startsWith(parts[1]));
+        return [hits.map((h) => `${cmd} ${h}`), line];
       }
       if (parts.length >= 3) {
         const lastPart = parts[parts.length - 1];
         const [completions] = completePath(lastPart);
         const prefix = parts.slice(0, -1).join(' ') + ' ';
-        return [completions.map(c => prefix + c), line];
+        return [completions.map((c) => prefix + c), line];
       }
     }
 
     if (cmd === 'show') {
       const subs = ['summary', 'failures', 'page'];
       if (parts.length === 2) {
-        const hits = subs.filter(s => s.startsWith(parts[1]));
-        return [hits.map(h => `${cmd} ${h}`), line];
+        const hits = subs.filter((s) => s.startsWith(parts[1]));
+        return [hits.map((h) => `${cmd} ${h}`), line];
       }
     }
 
     if (cmd === 'set') {
       const subs = ['url'];
       if (parts.length === 2) {
-        const hits = subs.filter(s => s.startsWith(parts[1]));
-        return [hits.map(h => `${cmd} ${h}`), line];
+        const hits = subs.filter((s) => s.startsWith(parts[1]));
+        return [hits.map((h) => `${cmd} ${h}`), line];
       }
     }
 
     return [[], line];
   };
 }
-

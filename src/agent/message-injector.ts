@@ -9,7 +9,10 @@
 
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
-function makeUserMessage(text: string, priority: 'now' | 'next' | 'later' = 'next'): SDKUserMessage {
+function makeUserMessage(
+  text: string,
+  priority: 'now' | 'next' | 'later' = 'next',
+): SDKUserMessage {
   return {
     type: 'user',
     message: { role: 'user', content: text },

@@ -19,23 +19,34 @@ function pickPort(): number {
   return 5000 + Math.floor(Math.random() * 4000);
 }
 
-function request(port: number, path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<{ status: number; json: unknown; text: string }> {
+function request(
+  port: number,
+  path: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+): Promise<{ status: number; json: unknown; text: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      host: '127.0.0.1',
-      port,
-      path,
-      method: init.method ?? 'GET',
-      headers: init.headers ?? {},
-    }, (res) => {
-      let buf = '';
-      res.on('data', (chunk) => (buf += chunk));
-      res.on('end', () => {
-        let json: unknown = null;
-        try { json = JSON.parse(buf); } catch { /* not json */ }
-        resolve({ status: res.statusCode ?? 0, json, text: buf });
-      });
-    });
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: init.method ?? 'GET',
+        headers: init.headers ?? {},
+      },
+      (res) => {
+        let buf = '';
+        res.on('data', (chunk) => (buf += chunk));
+        res.on('end', () => {
+          let json: unknown = null;
+          try {
+            json = JSON.parse(buf);
+          } catch {
+            /* not json */
+          }
+          resolve({ status: res.statusCode ?? 0, json, text: buf });
+        });
+      },
+    );
     req.on('error', reject);
     if (init.body) req.write(init.body);
     req.end();
@@ -48,7 +59,9 @@ async function waitForHealth(port: number, timeoutMs = 3000): Promise<void> {
     try {
       const res = await request(port, '/health');
       if (res.status === 200) return;
-    } catch { /* not ready */ }
+    } catch {
+      /* not ready */
+    }
     await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error('daemon never came up');
@@ -65,7 +78,11 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
     else process.env.SPECIFY_INBOX_TOKEN = original;
     __setRunnerForTesting(prev);
@@ -78,7 +95,11 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   assert.equal(health.status, 200);
   assert.equal((health.json as { ok: boolean }).ok, true);
 
-  const unauth = await request(port, '/inbox', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+  const unauth = await request(port, '/inbox', {
+    method: 'POST',
+    body: '{}',
+    headers: { 'content-type': 'application/json' },
+  });
   assert.equal(unauth.status, 401);
 
   const token = resolveToken();
@@ -131,7 +152,11 @@ test('daemon HTTP: /decisions endpoints require bearer and behave correctly', as
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
     else process.env.SPECIFY_INBOX_TOKEN = original;
     __setRunnerForTesting(prev);

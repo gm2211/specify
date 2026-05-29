@@ -29,7 +29,9 @@ export default function DecisionsList({ onCountChange }: DecisionsListProps) {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => { void refresh(); }, 10000);
+    const t = setInterval(() => {
+      void refresh();
+    }, 10000);
     return () => clearInterval(t);
   }, [refresh]);
 
@@ -42,7 +44,9 @@ export default function DecisionsList({ onCountChange }: DecisionsListProps) {
         if (msg.type === 'feedback:decision_filed' || msg.type === 'feedback:decision_resolved') {
           void refresh();
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
     return () => sse.close();
   }, [refresh]);

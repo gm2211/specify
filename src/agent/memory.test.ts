@@ -17,7 +17,10 @@ function tmp(): string {
 }
 
 test('targetKey derives stable keys from URLs and CLI binaries', () => {
-  assert.equal(targetKey({ type: 'web', url: 'https://staging.example.com/path' }), 'web_staging.example.com');
+  assert.equal(
+    targetKey({ type: 'web', url: 'https://staging.example.com/path' }),
+    'web_staging.example.com',
+  );
   assert.equal(targetKey({ type: 'web', url: 'http://localhost:3000' }), 'web_localhost_3000');
   assert.equal(targetKey({ type: 'cli', binary: './specify' }), 'cli_specify');
   assert.equal(targetKey({ type: 'web' }), 'unknown');
@@ -44,14 +47,28 @@ test('applyDeltas inserts new rows and dedupes similar content', () => {
   let file = loadMemory(p);
 
   file = applyDeltas(file, 'run_1', [
-    { type: 'playbook', area_id: 'auth', content: 'Fill #email then #password, click [type=submit].' },
-    { type: 'quirk', area_id: 'dashboard', content: 'Stats widget races: wait 2s after nav.', severity: 'minor', suggested_fix: 'Await XHR completion explicitly.' },
+    {
+      type: 'playbook',
+      area_id: 'auth',
+      content: 'Fill #email then #password, click [type=submit].',
+    },
+    {
+      type: 'quirk',
+      area_id: 'dashboard',
+      content: 'Stats widget races: wait 2s after nav.',
+      severity: 'minor',
+      suggested_fix: 'Await XHR completion explicitly.',
+    },
   ]);
   assert.equal(file.rows.length, 2);
 
   // Re-applying similar content updates instead of duplicating
   file = applyDeltas(file, 'run_2', [
-    { type: 'playbook', area_id: 'auth', content: 'Fill #email then #password, click the submit button.' },
+    {
+      type: 'playbook',
+      area_id: 'auth',
+      content: 'Fill #email then #password, click the submit button.',
+    },
   ]);
   assert.equal(file.rows.length, 2);
   const auth = file.rows.find((r) => r.area_id === 'auth')!;
@@ -59,10 +76,22 @@ test('applyDeltas inserts new rows and dedupes similar content', () => {
 
   // Contradictions demote via counter
   file = applyDeltas(file, 'run_3', [
-    { type: 'playbook', area_id: 'auth', content: 'Fill #email then #password, click [type=submit].', contradicts: true, id: auth.id },
+    {
+      type: 'playbook',
+      area_id: 'auth',
+      content: 'Fill #email then #password, click [type=submit].',
+      contradicts: true,
+      id: auth.id,
+    },
   ]);
   file = applyDeltas(file, 'run_4', [
-    { type: 'playbook', area_id: 'auth', content: 'Fill #email then #password, click [type=submit].', contradicts: true, id: auth.id },
+    {
+      type: 'playbook',
+      area_id: 'auth',
+      content: 'Fill #email then #password, click [type=submit].',
+      contradicts: true,
+      id: auth.id,
+    },
   ]);
   assert.equal(file.rows.find((r) => r.id === auth.id)?.contradicted_count, 2);
 
@@ -77,7 +106,13 @@ test('renderMemoryPrompt formats playbooks + quirks and skips demoted rows', () 
   let file = loadMemory(p);
   file = applyDeltas(file, 'r1', [
     { type: 'playbook', area_id: 'auth', content: 'Click Sign In, fill form, submit.' },
-    { type: 'quirk', area_id: 'dash', content: 'Stats race.', severity: 'minor', suggested_fix: 'Retry once.' },
+    {
+      type: 'quirk',
+      area_id: 'dash',
+      content: 'Stats race.',
+      severity: 'minor',
+      suggested_fix: 'Retry once.',
+    },
   ]);
   // Demote the playbook
   const pb = file.rows.find((r) => r.type === 'playbook')!;

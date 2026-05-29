@@ -62,15 +62,21 @@ function loadExamples(): AuthoringGuide['examples'] {
     return [];
   }
 
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml')).sort();
+  const files = fs
+    .readdirSync(dir)
+    .filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'))
+    .sort();
 
   const descriptions: Record<string, string> = {
-    'login-page.yaml': 'Simple single-page spec with form interactions, scenarios (success + error paths), and template variables',
-    'dashboard-api.yaml': 'Page with API request assertions, JSON Schema validation on responses, interactive scenarios with wait_for_request',
-    'multi-page-flow.yaml': 'Multi-page e-commerce flow with setup/teardown hooks, navigation steps, and cross-page assertions',
+    'login-page.yaml':
+      'Simple single-page spec with form interactions, scenarios (success + error paths), and template variables',
+    'dashboard-api.yaml':
+      'Page with API request assertions, JSON Schema validation on responses, interactive scenarios with wait_for_request',
+    'multi-page-flow.yaml':
+      'Multi-page e-commerce flow with setup/teardown hooks, navigation steps, and cross-page assertions',
   };
 
-  return files.map(f => ({
+  return files.map((f) => ({
     name: f.replace(/\.ya?ml$/, '').replace(/-/g, ' '),
     description: descriptions[f] ?? `Example spec: ${f}`,
     yaml: fs.readFileSync(path.join(dir, f), 'utf-8'),
@@ -90,12 +96,14 @@ export function getAuthoringGuide(): AuthoringGuide {
     patterns: [
       {
         name: 'Minimal spec',
-        description: 'The smallest valid spec — version, name, target, and one area with a behavior',
+        description:
+          'The smallest valid spec — version, name, target, and one area with a behavior',
         yaml_snippet: `version: "2"\nname: "My App"\ntarget:\n  type: web\n  url: "http://localhost:3000"\nareas:\n  - id: auth\n    name: Authentication\n    behaviors:\n      - id: login-valid-credentials\n        description: A user with valid credentials can log in and sees the dashboard`,
       },
       {
         name: 'Area with multiple behaviors',
-        description: 'Areas group behaviors by feature, not by page. Behaviors are plain-language claims about what should be true.',
+        description:
+          'Areas group behaviors by feature, not by page. Behaviors are plain-language claims about what should be true.',
         yaml_snippet: `areas:
   - id: shopping-cart
     name: Shopping Cart
@@ -109,7 +117,8 @@ export function getAuthoringGuide(): AuthoringGuide {
       },
       {
         name: 'Behavior with tags',
-        description: 'Use kebab-case IDs. Behaviors describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
+        description:
+          'Use kebab-case IDs. Behaviors describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
         yaml_snippet: `behaviors:
   - id: search-returns-relevant-results
     description: Searching for a product name returns items whose title contains the query
@@ -167,7 +176,8 @@ hooks:
 
     template_variables: {
       syntax: '{{variable_name}} for spec variables, ${ENV_VAR} for environment variables',
-      description: 'Variables defined in the "variables" section can be referenced anywhere in the spec using {{name}}. Environment variables use ${NAME} syntax. Hook steps with "save_as" create variables accessible as {{saved_name.field}}.',
+      description:
+        'Variables defined in the "variables" section can be referenced anywhere in the spec using {{name}}. Environment variables use ${NAME} syntax. Hook steps with "save_as" create variables accessible as {{saved_name.field}}.',
     },
 
     tips: [

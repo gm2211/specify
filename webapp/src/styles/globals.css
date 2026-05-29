@@ -23,13 +23,17 @@
 }
 
 /* ===== Reset & Base ===== */
-*, *::before, *::after {
+*,
+*::before,
+*::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   overflow: hidden;
 }
@@ -301,7 +305,9 @@ body {
   font-size: 13px;
   cursor: pointer;
   text-align: left;
-  transition: background var(--transition), color var(--transition);
+  transition:
+    background var(--transition),
+    color var(--transition);
 }
 
 .sidebar-item:hover {
@@ -548,7 +554,9 @@ body {
   background: var(--bg-primary);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
-  transition: border-color var(--transition), box-shadow var(--transition);
+  transition:
+    border-color var(--transition),
+    box-shadow var(--transition);
 }
 
 .behavior-card:hover {
@@ -809,7 +817,9 @@ body {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* ===== Loading / Error Screens ===== */
@@ -903,9 +913,18 @@ body {
   color: var(--text-primary);
 }
 
-.narrative-panel-body h1 { font-size: 20px; }
-.narrative-panel-body h2 { font-size: 17px; }
-.narrative-panel-body h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-secondary); }
+.narrative-panel-body h1 {
+  font-size: 20px;
+}
+.narrative-panel-body h2 {
+  font-size: 17px;
+}
+.narrative-panel-body h3 {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-secondary);
+}
 
 .narrative-panel-body p {
   margin: 0 0 12px;
@@ -919,7 +938,9 @@ body {
   color: var(--text-secondary);
 }
 
-.narrative-panel-body li { margin-bottom: 4px; }
+.narrative-panel-body li {
+  margin-bottom: 4px;
+}
 
 .narrative-panel-body code {
   font-family: var(--font-mono);
@@ -952,9 +973,13 @@ body {
   text-decoration: none;
 }
 
-.narrative-panel-body a:hover { text-decoration: underline; }
+.narrative-panel-body a:hover {
+  text-decoration: underline;
+}
 
-.narrative-panel-body strong { color: var(--text-primary); }
+.narrative-panel-body strong {
+  color: var(--text-primary);
+}
 
 /* ===== Activity Stream ===== */
 .activity-stream {
@@ -1005,9 +1030,15 @@ body {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(63, 185, 80, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(63, 185, 80, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(63, 185, 80, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(63, 185, 80, 0);
+  }
 }
 
 .activity-stream-title {
@@ -1078,18 +1109,36 @@ body {
   white-space: pre-wrap;
 }
 
-.activity-line--tool { border-left-color: var(--accent); }
-.activity-line--tool .activity-kind { color: var(--accent); }
+.activity-line--tool {
+  border-left-color: var(--accent);
+}
+.activity-line--tool .activity-kind {
+  color: var(--accent);
+}
 
-.activity-line--behavior { border-left-color: #3fb950; }
-.activity-line--behavior .activity-kind { color: #3fb950; }
+.activity-line--behavior {
+  border-left-color: #3fb950;
+}
+.activity-line--behavior .activity-kind {
+  color: #3fb950;
+}
 
-.activity-line--status { border-left-color: #d29922; }
-.activity-line--status .activity-kind { color: #d29922; }
+.activity-line--status {
+  border-left-color: #d29922;
+}
+.activity-line--status .activity-kind {
+  color: #d29922;
+}
 
-.activity-line--error { border-left-color: #f85149; }
-.activity-line--error .activity-kind { color: #f85149; }
-.activity-line--error .activity-text { color: #f85149; }
+.activity-line--error {
+  border-left-color: #f85149;
+}
+.activity-line--error .activity-kind {
+  color: #f85149;
+}
+.activity-line--error .activity-text {
+  color: #f85149;
+}
 
 .activity-line--text .activity-text {
   color: var(--text-secondary);
@@ -1329,7 +1378,7 @@ body {
 }
 
 .activity-line:hover .activity-flag-btn,
-.activity-flag-btn[aria-pressed="true"] {
+.activity-flag-btn[aria-pressed='true'] {
   opacity: 1;
 }
 
@@ -1340,9 +1389,11 @@ body {
 }
 
 .activity-line--flagged {
-  background: rgba(63, 185, 80, 0.10);
+  background: rgba(63, 185, 80, 0.1);
   border-left-color: #3fb950 !important;
-  transition: background 0.4s ease, border-left-color 0.4s ease;
+  transition:
+    background 0.4s ease,
+    border-left-color 0.4s ease;
 }
 
 .activity-feedback {

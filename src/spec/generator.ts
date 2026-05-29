@@ -7,11 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type {
-  Spec,
-  Area,
-  Behavior,
-} from './types.js';
+import type { Spec, Area, Behavior } from './types.js';
 import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
 import { specToYaml } from './parser.js';
 
@@ -60,12 +56,13 @@ function extractOrigin(url: string): string {
 
 /** Convert a URL path to a slug suitable for an area/behavior ID. */
 function pathToId(urlPath: string): string {
-  return urlPath
-    .replace(/^\//, '')
-    .replace(/[\/\?&#=.]/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/-$/, '')
-    || 'root';
+  return (
+    urlPath
+      .replace(/^\//, '')
+      .replace(/[\/\?&#=.]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/-$/, '') || 'root'
+  );
 }
 
 // ---------------------------------------------------------------------------

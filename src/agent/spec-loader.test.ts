@@ -45,18 +45,21 @@ test('specSourceFromEnv: url with bearer', () => {
 });
 
 test('specSourceFromEnv: git requires ref + path', () => {
-  assert.throws(() =>
-    specSourceFromEnv({ SPECIFY_SPEC_GIT_REPO: 'git@x:y/z.git' })
-  , /requires SPECIFY_SPEC_GIT_REF/);
+  assert.throws(
+    () => specSourceFromEnv({ SPECIFY_SPEC_GIT_REPO: 'git@x:y/z.git' }),
+    /requires SPECIFY_SPEC_GIT_REF/,
+  );
 });
 
 test('specSourceFromEnv: rejects multiple sources', () => {
-  assert.throws(() =>
-    specSourceFromEnv({
-      SPECIFY_SPEC_INLINE_PATH: '/a',
-      SPECIFY_SPEC_URL: 'https://x',
-    })
-  , /Multiple spec sources/);
+  assert.throws(
+    () =>
+      specSourceFromEnv({
+        SPECIFY_SPEC_INLINE_PATH: '/a',
+        SPECIFY_SPEC_URL: 'https://x',
+      }),
+    /Multiple spec sources/,
+  );
 });
 
 test('resolveSpec: inline reads file + hashes content', async () => {

@@ -17,6 +17,9 @@
     "mock:chaos": "MOCK_FAULT_RATE=0.1 npx tsx src/mock-server.ts",
     "generate-spec": "npx tsx src/spec/generator.ts",
     "typecheck": "npx tsc --noEmit",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write",
+    "quality": "bash scripts/lint-all.sh",
     "validate": "npx tsx src/validation/validate.ts",
     "agent": "npx tsx src/cli/index.ts capture",
     "test": "tsc && find dist/src -name '*.test.js' -print0 | xargs -0 node --test",
@@ -44,6 +47,7 @@
     "@types/chrome-remote-interface": "^0.33.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.4",
+    "prettier": "^3.8.3",
     "tsx": "^4.19.2",
     "typescript": "^5.4.5"
   }

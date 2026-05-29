@@ -33,8 +33,8 @@ test('feedbackSinkFromEnv: http when SPECIFY_FEEDBACK_URL is set', () => {
 
 test('severityToPriority: maps the four levels to bd priorities', () => {
   assert.equal(_internals.severityToPriority('critical'), '0');
-  assert.equal(_internals.severityToPriority('major'),    '1');
-  assert.equal(_internals.severityToPriority('minor'),    '2');
+  assert.equal(_internals.severityToPriority('major'), '1');
+  assert.equal(_internals.severityToPriority('minor'), '2');
   assert.equal(_internals.severityToPriority('cosmetic'), '3');
 });
 
@@ -57,13 +57,28 @@ test('composeDescription: appends spec + run + area + behavior', () => {
 // The createSdkMcpServer object exposes the tool list under `tools` once
 // the SDK constructs it; the test interacts with the registered tool by
 // finding it on the returned server and invoking the handler manually.
-function findHandler(server: ReturnType<typeof createFeedbackMcpServer>, name: string): (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }> {
+function findHandler(
+  server: ReturnType<typeof createFeedbackMcpServer>,
+  name: string,
+): (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }> {
   // The agent SDK stores registered tools under instance._registeredTools.
   // Internal layout — fine for tests; if it shifts, this surfaces it.
-  const anyServer = server as unknown as { instance?: { _registeredTools?: Record<string, { handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }> }> } };
+  const anyServer = server as unknown as {
+    instance?: {
+      _registeredTools?: Record<
+        string,
+        {
+          handler: (
+            args: Record<string, unknown>,
+          ) => Promise<{ content: Array<{ type: string; text: string }> }>;
+        }
+      >;
+    };
+  };
   const tools = anyServer.instance?._registeredTools ?? {};
   const t = tools[name];
-  if (!t) throw new Error(`tool ${name} not found on server (have: ${Object.keys(tools).join(', ')})`);
+  if (!t)
+    throw new Error(`tool ${name} not found on server (have: ${Object.keys(tools).join(', ')})`);
   return t.handler;
 }
 
@@ -111,7 +126,10 @@ test('file_ticket via http: posts JSON, returns echoed id', async () => {
   let captured: { url?: string; init?: RequestInit } = {};
   const fetchImpl = (async (url: string, init?: RequestInit) => {
     captured = { url, init };
-    return new Response(JSON.stringify({ id: 'TKT-42' }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ id: 'TKT-42' }), {
+      status: 201,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }) as typeof fetch;
 
   const ctx: FeedbackMcpContext = {

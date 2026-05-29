@@ -102,7 +102,13 @@ test('SdkRunnerResult structured output works for compare', () => {
       match: false,
       summary: '3 differences found',
       diffs: [
-        { page: '/dashboard', description: 'Missing chart widget', remote: 'Chart visible', local: 'Chart missing', severity: 'major' },
+        {
+          page: '/dashboard',
+          description: 'Missing chart widget',
+          remote: 'Chart visible',
+          local: 'Chart missing',
+          severity: 'major',
+        },
       ],
     },
   };

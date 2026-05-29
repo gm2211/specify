@@ -37,11 +37,15 @@ test('propagator injects when feedback:propagate_pattern fires', async () => {
 
   setActivePropagator(injector);
   try {
-    eventBus.send('feedback:propagate_pattern', {
-      text: 'always check keyboard nav on submit buttons',
-      areaId: 'forms',
-      behaviorId: 'submit',
-    }, 'ses_xx');
+    eventBus.send(
+      'feedback:propagate_pattern',
+      {
+        text: 'always check keyboard nav on submit buttons',
+        areaId: 'forms',
+        behaviorId: 'submit',
+      },
+      'ses_xx',
+    );
     // Sync emit: listener runs synchronously on emit; allow microtask flush.
     await Promise.resolve();
   } finally {

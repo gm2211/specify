@@ -103,7 +103,10 @@ export function memoryPath(specPath: string, specId: string, target: TargetDescr
 
 export function loadMemory(filePath: string): MemoryFile {
   if (!fs.existsSync(filePath)) {
-    const [, specId = 'unknown', tk = 'unknown'] = filePath.split(path.sep).slice(-3).map((s) => s.replace(/\.json$/, ''));
+    const [, specId = 'unknown', tk = 'unknown'] = filePath
+      .split(path.sep)
+      .slice(-3)
+      .map((s) => s.replace(/\.json$/, ''));
     return { version: 1, spec_id: specId, target_key: tk, rows: [] };
   }
   try {
@@ -111,7 +114,9 @@ export function loadMemory(filePath: string): MemoryFile {
     if (raw && raw.version === 1 && Array.isArray(raw.rows)) {
       return raw as MemoryFile;
     }
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   // Corrupted or wrong version — return empty rather than throw so agents
   // can still run. The user can repair the file manually.
   return { version: 1, spec_id: 'unknown', target_key: 'unknown', rows: [] };
@@ -136,14 +141,18 @@ export function renderMemoryPrompt(file: MemoryFile, budgetBytes = 2048): string
   parts.push('## Prior knowledge about this spec + target');
   parts.push('');
   parts.push('You have verified this target before. Use the following only as a');
-  parts.push("starting point — if something contradicts what you actually observe,");
+  parts.push('starting point — if something contradicts what you actually observe,');
   parts.push('trust the live system and mark the prior belief contradicted.');
   parts.push('');
 
   if (playbooks.length) {
     parts.push('### Known playbooks');
     for (const p of playbooks) {
-      const scope = p.behavior_id ? `(${p.area_id ?? '?'}/${p.behavior_id}) ` : p.area_id ? `(${p.area_id}) ` : '';
+      const scope = p.behavior_id
+        ? `(${p.area_id ?? '?'}/${p.behavior_id}) `
+        : p.area_id
+          ? `(${p.area_id}) `
+          : '';
       parts.push(`- ${scope}${p.content}`);
     }
     parts.push('');
@@ -164,7 +173,9 @@ export function renderMemoryPrompt(file: MemoryFile, budgetBytes = 2048): string
   // Trim by dropping oldest playbooks first.
   const head = parts.slice(0, parts.indexOf('### Known playbooks') + 1);
   const tail = quirks.length
-    ? parts.slice(parts.indexOf('### Known quirks / bugs (file-and-continue, do not block on these)'))
+    ? parts.slice(
+        parts.indexOf('### Known quirks / bugs (file-and-continue, do not block on these)'),
+      )
     : [];
   const trimmed = [...head, '- (older playbooks omitted for size)', '', ...tail].join('\n');
   return trimmed.slice(0, budgetBytes);

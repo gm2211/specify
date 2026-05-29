@@ -19,7 +19,12 @@ function makeFakeRunner(onCall?: (opts: SdkRunnerOptions) => void) {
     return {
       result: 'ok',
       costUsd: 0.01,
-      structuredOutput: { pass: true, summary: { total: 0, passed: 0, failed: 0, skipped: 0 }, results: [], test_files: [] },
+      structuredOutput: {
+        pass: true,
+        summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+        results: [],
+        test_files: [],
+      },
     };
   };
   return { runner, calls };
@@ -37,20 +42,23 @@ test('inbox.submit stateless: runs fake runner and persists result', async () =>
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-'));
     const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'description: Test spec.',
-      'target:',
-      '  type: web',
-      '  url: http://localhost:3000',
-      'areas:',
-      '  - id: home',
-      '    name: Home',
-      '    behaviors:',
-      '      - id: loads',
-      '        description: Page loads.',
-    ].join('\n'));
+    fs.writeFileSync(
+      specPath,
+      [
+        'version: "2"',
+        'name: Test',
+        'description: Test spec.',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - id: home',
+        '    name: Home',
+        '    behaviors:',
+        '      - id: loads',
+        '        description: Page loads.',
+      ].join('\n'),
+    );
 
     const msg = inbox.submit({
       task: 'verify',
@@ -137,20 +145,23 @@ test('inbox.submit: SPECIFY_TARGET_URL fills in url when caller omits it', async
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
     const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'target:',
-      '  type: web',
-      '  url: http://spec-default:3000',
-      'areas:',
-      '  - id: home',
-      '    name: Home',
-      '    behaviors:',
-      '      - id: loads',
-      '        description: Loads.',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      specPath,
+      [
+        'version: "2"',
+        'name: Test',
+        'target:',
+        '  type: web',
+        '  url: http://spec-default:3000',
+        'areas:',
+        '  - id: home',
+        '    name: Home',
+        '    behaviors:',
+        '      - id: loads',
+        '        description: Loads.',
+        '',
+      ].join('\n'),
+    );
     inbox.submit({
       task: 'verify',
       prompt: 'Verify after rollout.',
@@ -178,13 +189,16 @@ test('inbox.submit: explicit url wins over SPECIFY_TARGET_URL', async () => {
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
     const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'target: { type: web, url: http://spec:3000 }',
-      'areas: [{ id: home, name: Home, behaviors: [{ id: loads, description: Loads. }] }]',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      specPath,
+      [
+        'version: "2"',
+        'name: Test',
+        'target: { type: web, url: http://spec:3000 }',
+        'areas: [{ id: home, name: Home, behaviors: [{ id: loads, description: Loads. }] }]',
+        '',
+      ].join('\n'),
+    );
     inbox.submit({
       task: 'verify',
       prompt: 'Verify explicit url.',

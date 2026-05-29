@@ -55,22 +55,26 @@ export default function BehaviorCard({
             rows={3}
           />
           <div className="behavior-edit-actions">
-            <button className="btn btn--sm btn--primary" onClick={handleSave}>Save</button>
-            <button className="btn btn--sm btn--ghost" onClick={handleCancel}>Cancel</button>
+            <button className="btn btn--sm btn--primary" onClick={handleSave}>
+              Save
+            </button>
+            <button className="btn btn--sm btn--ghost" onClick={handleCancel}>
+              Cancel
+            </button>
           </div>
         </div>
       ) : (
         <p className="behavior-description">{behavior.description}</p>
       )}
 
-      {behavior.details && (
-        <p className="behavior-details">{behavior.details}</p>
-      )}
+      {behavior.details && <p className="behavior-details">{behavior.details}</p>}
 
       {behavior.tags && behavior.tags.length > 0 && (
         <div className="behavior-tags">
           {behavior.tags.map((tag) => (
-            <span key={tag} className="tag-chip tag-chip--small">{tag}</span>
+            <span key={tag} className="tag-chip tag-chip--small">
+              {tag}
+            </span>
           ))}
         </div>
       )}
@@ -81,16 +85,11 @@ export default function BehaviorCard({
         </p>
       )}
 
-      {result?.rationale && (
-        <p className="behavior-rationale">{result.rationale}</p>
-      )}
+      {result?.rationale && <p className="behavior-rationale">{result.rationale}</p>}
 
       {trace.length > 0 && (
         <div className="behavior-trace">
-          <button
-            className="evidence-toggle"
-            onClick={() => setTraceOpen(!traceOpen)}
-          >
+          <button className="evidence-toggle" onClick={() => setTraceOpen(!traceOpen)}>
             <svg
               className={`evidence-chevron ${traceOpen ? 'evidence-chevron--open' : ''}`}
               viewBox="0 0 16 16"
@@ -108,10 +107,7 @@ export default function BehaviorCard({
 
       {result?.evidence && result.evidence.length > 0 && (
         <div className="behavior-evidence">
-          <button
-            className="evidence-toggle"
-            onClick={() => setEvidenceOpen(!evidenceOpen)}
-          >
+          <button className="evidence-toggle" onClick={() => setEvidenceOpen(!evidenceOpen)}>
             <svg
               className={`evidence-chevron ${evidenceOpen ? 'evidence-chevron--open' : ''}`}
               viewBox="0 0 16 16"
@@ -140,11 +136,7 @@ export default function BehaviorCard({
       )}
 
       <div className="behavior-actions">
-        <button
-          className="btn btn--sm btn--primary"
-          onClick={onVerify}
-          disabled={verifying}
-        >
+        <button className="btn btn--sm btn--primary" onClick={onVerify} disabled={verifying}>
           {verifying ? (
             <>
               <span className="spinner" />
@@ -157,10 +149,7 @@ export default function BehaviorCard({
           )}
         </button>
         {!editing && (
-          <button
-            className="btn btn--sm btn--ghost"
-            onClick={() => setEditing(true)}
-          >
+          <button className="btn btn--sm btn--ghost" onClick={() => setEditing(true)}>
             Edit
           </button>
         )}

@@ -27,11 +27,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { eventBus } from './event-bus.js';
-import {
-  appendObservation,
-  defaultObservationsPath,
-  type Observation,
-} from './memory-layers.js';
+import { appendObservation, defaultObservationsPath, type Observation } from './memory-layers.js';
 import { defaultSessionDbPath, openSessionStore, type EventRow } from './session-store.js';
 
 export type FeedbackKind =
@@ -73,7 +69,10 @@ export interface FeedbackContext {
   contextEventCount?: number;
 }
 
-export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext): Promise<FeedbackResult> {
+export async function ingestFeedback(
+  input: FeedbackInput,
+  ctx: FeedbackContext,
+): Promise<FeedbackResult> {
   if (!input.kind) throw new Error('feedback: missing kind');
   if (!input.text || !input.text.trim()) throw new Error('feedback: missing text');
 
@@ -83,10 +82,10 @@ export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext)
   let contextBlock = '';
   if (input.sessionId) {
     try {
-      const recent = (ctx.fetchRecentEvents ?? defaultFetchRecentEvents(ctx.sessionDbPath ?? defaultSessionDbPath(ctx.specPath)))(
-        input.sessionId,
-        ctx.contextEventCount ?? 8,
-      );
+      const recent = (
+        ctx.fetchRecentEvents ??
+        defaultFetchRecentEvents(ctx.sessionDbPath ?? defaultSessionDbPath(ctx.specPath))
+      )(input.sessionId, ctx.contextEventCount ?? 8);
       if (recent.length) contextBlock = renderContextBlock(recent);
     } catch {
       // Best-effort: never block ingest on a context lookup failure.
@@ -94,9 +93,7 @@ export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext)
   }
 
   const observationId = `obs_${randomUUID().slice(0, 8)}`;
-  const description = contextBlock
-    ? `${input.text.trim()}\n\n${contextBlock}`
-    : input.text.trim();
+  const description = contextBlock ? `${input.text.trim()}\n\n${contextBlock}` : input.text.trim();
   const observation: Observation = {
     id: observationId,
     description,
@@ -117,41 +114,57 @@ export async function ingestFeedback(input: FeedbackInput, ctx: FeedbackContext)
       input.text,
       '',
       input.sessionId ? `Session: ${input.sessionId}` : '',
-      input.areaId || input.behaviorId ? `Scope: ${input.areaId ?? '?'}/${input.behaviorId ?? '?'}` : '',
+      input.areaId || input.behaviorId
+        ? `Scope: ${input.areaId ?? '?'}/${input.behaviorId ?? '?'}`
+        : '',
       input.eventId ? `Event: ${input.eventId}` : '',
       `Filed via cooperative-QA feedback (observation ${observationId}).`,
-    ].filter(Boolean).join('\n');
+    ]
+      .filter(Boolean)
+      .join('\n');
 
     const spawner = ctx.spawnBd ?? defaultSpawnBd;
     const result = await spawner([
       'create',
-      '--title', title,
-      '--description', description,
-      '--type', 'bug',
-      '--priority', '2',
+      '--title',
+      title,
+      '--description',
+      description,
+      '--type',
+      'bug',
+      '--priority',
+      '2',
     ]);
     if (result.ok && result.id) bdIssueId = result.id;
   }
 
-  eventBus.send('feedback:ingested', {
-    kind: input.kind,
-    observationId,
-    bdIssueId: bdIssueId ?? null,
-    sessionId: input.sessionId ?? null,
-    areaId: input.areaId ?? null,
-    behaviorId: input.behaviorId ?? null,
-    text: input.text,
-  }, input.sessionId);
+  eventBus.send(
+    'feedback:ingested',
+    {
+      kind: input.kind,
+      observationId,
+      bdIssueId: bdIssueId ?? null,
+      sessionId: input.sessionId ?? null,
+      areaId: input.areaId ?? null,
+      behaviorId: input.behaviorId ?? null,
+      text: input.text,
+    },
+    input.sessionId,
+  );
 
   if (input.kind === 'important_pattern') {
     // Signal for in-session sibling-check propagation. Consumers (e.g. the
     // active agent loop) decide what to do; this module just emits.
-    eventBus.send('feedback:propagate_pattern', {
-      observationId,
-      areaId: input.areaId ?? null,
-      behaviorId: input.behaviorId ?? null,
-      text: input.text,
-    }, input.sessionId);
+    eventBus.send(
+      'feedback:propagate_pattern',
+      {
+        observationId,
+        areaId: input.areaId ?? null,
+        behaviorId: input.behaviorId ?? null,
+        text: input.text,
+      },
+      input.sessionId,
+    );
   }
 
   return { ok: true, observationId, bdIssueId, observationsPath };
@@ -182,7 +195,9 @@ function truncate(s: string, n: number): string {
   return s.length <= n ? s : s.slice(0, n - 1) + '…';
 }
 
-function defaultFetchRecentEvents(dbPath: string): (sessionId: string, limit: number) => EventRow[] {
+function defaultFetchRecentEvents(
+  dbPath: string,
+): (sessionId: string, limit: number) => EventRow[] {
   return (sessionId, limit) => {
     const store = openSessionStore(dbPath);
     try {
@@ -203,7 +218,9 @@ function renderContextBlock(events: EventRow[]): string {
   return lines.join('\n');
 }
 
-async function defaultSpawnBd(args: string[]): Promise<{ id?: string; ok: boolean; stderr?: string }> {
+async function defaultSpawnBd(
+  args: string[],
+): Promise<{ id?: string; ok: boolean; stderr?: string }> {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
@@ -214,8 +231,12 @@ async function defaultSpawnBd(args: string[]): Promise<{ id?: string; ok: boolea
       resolve({ ok: false, stderr: 'bd not on PATH' });
       return;
     }
-    proc.stdout?.on('data', (d) => { stdout += d.toString(); });
-    proc.stderr?.on('data', (d) => { stderr += d.toString(); });
+    proc.stdout?.on('data', (d) => {
+      stdout += d.toString();
+    });
+    proc.stderr?.on('data', (d) => {
+      stderr += d.toString();
+    });
     proc.on('error', () => resolve({ ok: false, stderr: 'bd spawn error' }));
     proc.on('close', (code) => {
       if (code !== 0) {

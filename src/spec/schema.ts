@@ -132,7 +132,11 @@ export const specSchema = {
       required: ['id', 'name', 'behaviors'],
       additionalProperties: false,
       properties: {
-        id: { type: 'string', description: 'Kebab-case identifier.', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+        id: {
+          type: 'string',
+          description: 'Kebab-case identifier.',
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$',
+        },
         name: { type: 'string', description: 'Human-readable name.' },
         prose: { type: 'string', description: 'Essay-style narrative for this area.' },
         behaviors: {
@@ -148,7 +152,11 @@ export const specSchema = {
       required: ['id', 'description'],
       additionalProperties: false,
       properties: {
-        id: { type: 'string', description: 'Kebab-case identifier, unique within area.', pattern: '^[a-z0-9]+(-[a-z0-9]+)*$' },
+        id: {
+          type: 'string',
+          description: 'Kebab-case identifier, unique within area.',
+          pattern: '^[a-z0-9]+(-[a-z0-9]+)*$',
+        },
         description: { type: 'string', description: 'The behavioral claim — what should be true.' },
         details: { type: 'string', description: 'Additional context, edge cases.' },
         tags: {

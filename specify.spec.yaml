@@ -1,9 +1,9 @@
-version: "2"
-name: "Specify CLI"
+version: '2'
+name: 'Specify CLI'
 description: >
-  Behavioral contract for the Specify CLI. Specify is an autonomous agent-driven
-  platform for spec-first web application verification. It captures application
-  behavior, generates specifications, and verifies implementations against those specs.
+  Behavioral contract for the Specify CLI. Specify is an autonomous agent-driven platform for
+  spec-first web application verification. It captures application behavior, generates
+  specifications, and verifies implementations against those specs.
 
 target:
   type: cli
@@ -11,15 +11,15 @@ target:
 
 areas:
   - id: overview
-    name: "Overview & Help"
+    name: 'Overview & Help'
     prose: >
-      Running with no arguments returns a JSON manifest of all commands. Running
-      with --help shows human-readable text. --version shows the semver string.
+      Running with no arguments returns a JSON manifest of all commands. Running with --help shows
+      human-readable text. --version shows the semver string.
     behaviors:
       - id: no-args-returns-json-manifest
         description: >
-          Running with no arguments exits 0 and outputs JSON manifest with commands,
-          global options, exit codes, and hints
+          Running with no arguments exits 0 and outputs JSON manifest with commands, global options,
+          exit codes, and hints
       - id: help-flag-shows-text
         description: >
           --help or -h shows human-readable help to stderr and exits 0
@@ -31,10 +31,10 @@ areas:
           Unknown commands output structured error JSON and exit 10
 
   - id: spec-lint
-    name: "Spec Linting"
+    name: 'Spec Linting'
     prose: >
-      Validates spec file structure without requiring captures. Schema validation
-      plus semantic checks (duplicate IDs, empty descriptions).
+      Validates spec file structure without requiring captures. Schema validation plus semantic
+      checks (duplicate IDs, empty descriptions).
     behaviors:
       - id: lint-valid-spec-exits-zero
         description: >
@@ -53,10 +53,10 @@ areas:
           Top-level 'specify lint' delegates to 'specify spec lint'
 
   - id: spec-generate
-    name: "Spec Generation"
+    name: 'Spec Generation'
     prose: >
-      Creates a v2 spec from captured traffic data. Groups endpoints into areas
-      with behavioral descriptions.
+      Creates a v2 spec from captured traffic data. Groups endpoints into areas with behavioral
+      descriptions.
     behaviors:
       - id: generate-requires-input
         description: >
@@ -72,7 +72,7 @@ areas:
           Without --output, writes to <parent-dir>/spec.yaml
 
   - id: spec-guide
-    name: "Spec Authoring Guide"
+    name: 'Spec Authoring Guide'
     behaviors:
       - id: guide-outputs-json
         description: >
@@ -82,7 +82,7 @@ areas:
           Exits 0
 
   - id: schema
-    name: "Schema Introspection"
+    name: 'Schema Introspection'
     behaviors:
       - id: schema-spec
         description: >
@@ -95,11 +95,10 @@ areas:
           Unknown target outputs error and exits 10
 
   - id: capture
-    name: "Capture"
+    name: 'Capture'
     prose: >
-      Agent mode (default) launches an autonomous agent to explore a URL and
-      generate a spec. Human mode (--human) opens a headed browser for manual
-      recording.
+      Agent mode (default) launches an autonomous agent to explore a URL and generate a spec. Human
+      mode (--human) opens a headed browser for manual recording.
     behaviors:
       - id: capture-requires-url
         description: >
@@ -127,10 +126,10 @@ areas:
           After success, stderr shows hint about 'specify review --spec <path>'
 
   - id: verify
-    name: "Agent-Driven Verification"
+    name: 'Agent-Driven Verification'
     prose: >
-      Runs an autonomous agent that validates an implementation against a spec.
-      Reads spec, determines target type (web/api/cli), tests each behavior.
+      Runs an autonomous agent that validates an implementation against a spec. Reads spec,
+      determines target type (web/api/cli), tests each behavior.
     behaviors:
       - id: verify-requires-spec
         description: >
@@ -161,7 +160,7 @@ areas:
           After verification, stderr shows 'specify review --spec ... --agent-report ...'
 
   - id: replay
-    name: "Replay & Diff"
+    name: 'Replay & Diff'
     prose: >
       Replays captured traffic against a target URL and compares responses.
     behaviors:
@@ -176,7 +175,7 @@ areas:
           Outputs JSON with result, costUsd, and diff summary
 
   - id: compare
-    name: "Live Side-by-Side Comparison"
+    name: 'Live Side-by-Side Comparison'
     prose: >
       Opens parallel browser sessions to --remote and --local URLs and compares behavior.
     behaviors:
@@ -194,10 +193,10 @@ areas:
           Outputs JSON with result, costUsd, match flag, and structured output
 
   - id: review
-    name: "Interactive Spec Browser"
+    name: 'Interactive Spec Browser'
     prose: >
-      Generates a self-contained HTML file displaying spec with areas, behaviors,
-      prose, and optional verification results overlay.
+      Generates a self-contained HTML file displaying spec with areas, behaviors, prose, and
+      optional verification results overlay.
     behaviors:
       - id: review-requires-spec
         description: >
@@ -219,7 +218,7 @@ areas:
           Outputs JSON with output path, spec name, and hasAgentReport flag
 
   - id: create
-    name: "Interactive Spec Creation"
+    name: 'Interactive Spec Creation'
     prose: >
       Guided interview for creating a v2 spec from scratch.
     behaviors:
@@ -240,10 +239,10 @@ areas:
           Exits 0 on success or cancellation
 
   - id: interactive-mode
-    name: "Interactive Modes"
+    name: 'Interactive Modes'
     prose: >
-      'specify human' is a context-aware wizard. 'specify human shell' is a REPL.
-      'specify human watch' is a TUI dashboard.
+      'specify human' is a context-aware wizard. 'specify human shell' is a REPL. 'specify human
+      watch' is a TUI dashboard.
     behaviors:
       - id: wizard-detects-project-state
         description: >
@@ -271,7 +270,7 @@ areas:
           Watch without TTY outputs error
 
   - id: mcp-server
-    name: "MCP Server"
+    name: 'MCP Server'
     prose: >
       Exposes Specify capabilities as MCP tools for LLM clients.
     behaviors:
@@ -283,10 +282,10 @@ areas:
           --http switches to HTTP transport with --port and --host options
 
   - id: error-handling
-    name: "Error Handling & Exit Codes"
+    name: 'Error Handling & Exit Codes'
     prose: >
-      Granular exit codes distinguish error categories. Structured JSON on error
-      to stdout, human messages to stderr.
+      Granular exit codes distinguish error categories. Structured JSON on error to stdout, human
+      messages to stderr.
     behaviors:
       - id: exit-code-zero-success
         description: Exit 0 = success
@@ -306,7 +305,7 @@ areas:
           Missing required params output JSON with error: "missing_parameter"
 
   - id: auto-discovery
-    name: "Spec Auto-Discovery"
+    name: 'Spec Auto-Discovery'
     behaviors:
       - id: auto-discovery-patterns
         description: >

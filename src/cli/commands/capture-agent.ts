@@ -77,7 +77,9 @@ export async function executeCommand(
         break;
 
       case 'type':
-        await page.locator(cmd.selector).pressSequentially(cmd.text, { delay: cmd.options?.delay ?? 50 });
+        await page
+          .locator(cmd.selector)
+          .pressSequentially(cmd.text, { delay: cmd.options?.delay ?? 50 });
         break;
 
       case 'selectOption':
@@ -139,12 +141,23 @@ export async function executeCommand(
     }
 
     // Auto-screenshot after every mutating action (deterministic evidence capture)
-    const MUTATING_ACTIONS = new Set(['goto', 'click', 'fill', 'type', 'selectOption', 'check', 'uncheck', 'hover', 'press']);
+    const MUTATING_ACTIONS = new Set([
+      'goto',
+      'click',
+      'fill',
+      'type',
+      'selectOption',
+      'check',
+      'uncheck',
+      'hover',
+      'press',
+    ]);
     const urlAfter = page.url();
     if (screenshotFn && cmd.action !== 'screenshot' && MUTATING_ACTIONS.has(cmd.action)) {
-      const label = urlBefore !== urlAfter
-        ? `nav-${slugifyUrl(urlAfter)}`
-        : `${cmd.action}-${'selector' in cmd ? slugifyUrl(cmd.selector) : slugifyUrl(urlAfter)}`;
+      const label =
+        urlBefore !== urlAfter
+          ? `nav-${slugifyUrl(urlAfter)}`
+          : `${cmd.action}-${'selector' in cmd ? slugifyUrl(cmd.selector) : slugifyUrl(urlAfter)}`;
       screenshot = await screenshotFn(label);
     }
 
@@ -169,7 +182,14 @@ export async function executeCommand(
 
 function slugifyUrl(url: string): string {
   try {
-    return new URL(url).pathname.replace(/^\//, '').replace(/[/?&#=.]/g, '_').replace(/_+/g, '_').replace(/_$/, '').substring(0, 60) || 'root';
+    return (
+      new URL(url).pathname
+        .replace(/^\//, '')
+        .replace(/[/?&#=.]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/_$/, '')
+        .substring(0, 60) || 'root'
+    );
   } catch {
     return 'page';
   }

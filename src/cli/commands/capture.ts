@@ -52,13 +52,21 @@ export async function navigateWithLoadFallback(
 
 export async function capture(options: CaptureOptions, ctx: CliContext): Promise<number> {
   if (!options.url) {
-    const err = { error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' };
+    const err = {
+      error: 'missing_parameter',
+      parameter: '--url',
+      hint: 'Provide the URL to capture',
+    };
     process.stdout.write(JSON.stringify(err) + '\n');
     return ExitCode.PARSE_ERROR;
   }
 
   if (!options.output) {
-    const err = { error: 'missing_parameter', parameter: '--output', hint: 'Provide an output directory' };
+    const err = {
+      error: 'missing_parameter',
+      parameter: '--output',
+      hint: 'Provide an output directory',
+    };
     process.stdout.write(JSON.stringify(err) + '\n');
     return ExitCode.PARSE_ERROR;
   }
@@ -74,7 +82,11 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
   try {
     hostFilter = new URL(options.url).hostname;
   } catch {
-    const err = { error: 'invalid_url', url: options.url, hint: 'Provide a valid URL (e.g. https://example.com)' };
+    const err = {
+      error: 'invalid_url',
+      url: options.url,
+      hint: 'Provide a valid URL (e.g. https://example.com)',
+    };
     process.stdout.write(JSON.stringify(err) + '\n');
     return ExitCode.PARSE_ERROR;
   }
@@ -155,7 +167,7 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       log('All traffic, console logs, and interactions are being recorded.');
       log('Press Enter in this terminal when done...');
       log('');
-      await new Promise<void>(resolve => {
+      await new Promise<void>((resolve) => {
         process.stdin.resume();
         process.stdin.once('data', () => {
           process.stdin.pause();
@@ -189,7 +201,9 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       duration_ms: durationMs,
     };
 
-    log(`Capture complete: ${summary.totalRequests} requests, ${summary.totalScreenshots} screenshots in ${durationMs}ms`);
+    log(
+      `Capture complete: ${summary.totalRequests} requests, ${summary.totalScreenshots} screenshots in ${durationMs}ms`,
+    );
 
     // Auto-generate spec from captured data (unless --no-generate)
     if (!options.noGenerate) {
@@ -202,13 +216,15 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
           specName: options.specName ?? new URL(options.url).hostname,
         });
 
-        const specFile = options.specOutput
-          ?? path.join(path.dirname(outputDir), 'spec.yaml');
+        const specFile = options.specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml');
         const resolvedSpecFile = path.resolve(specFile);
         fs.mkdirSync(path.dirname(resolvedSpecFile), { recursive: true });
         fs.writeFileSync(resolvedSpecFile, specToYaml(spec), 'utf-8');
         const areaCount = spec.areas.length;
-        const behaviorCount = spec.areas.reduce((n: number, a: { behaviors: unknown[] }) => n + a.behaviors.length, 0);
+        const behaviorCount = spec.areas.reduce(
+          (n: number, a: { behaviors: unknown[] }) => n + a.behaviors.length,
+          0,
+        );
         log(`Spec generated: ${resolvedSpecFile} (${areaCount} areas, ${behaviorCount} behaviors)`);
 
         (summary as Record<string, unknown>).spec = resolvedSpecFile;
@@ -222,7 +238,6 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
 
     process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
     return ExitCode.SUCCESS;
-
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     log(`Capture failed: ${msg}`);

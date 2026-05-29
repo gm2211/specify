@@ -49,23 +49,28 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           behavior_id: z.string().optional(),
           suggested_fix: z.string().optional().describe('For quirks, the fix you would propose'),
           severity: z.enum(['cosmetic', 'minor', 'major', 'critical']).optional(),
-          contradicts_id: z.string().optional().describe('Pass an existing row id to mark it contradicted'),
+          contradicts_id: z
+            .string()
+            .optional()
+            .describe('Pass an existing row id to mark it contradicted'),
         },
         async (args) => {
           const budget = enforceBudget(ctx.runId, 'memory_record');
           if (!budget.ok) {
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'budget_exceeded',
-                  tool: 'memory_record',
-                  limit: budget.limit,
-                  used: budget.used,
-                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
-                }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'budget_exceeded',
+                    tool: 'memory_record',
+                    limit: budget.limit,
+                    used: budget.used,
+                    hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                  }),
+                },
+              ],
             };
           }
           const delta: DeltaInput = {
@@ -80,10 +85,12 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           };
           const next = await provider.write(ctx.scope, ctx.runId, [delta]);
           return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({ ok: true, rows: next.rows.length }),
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({ ok: true, rows: next.rows.length }),
+              },
+            ],
           };
         },
       ),
@@ -101,17 +108,19 @@ export function createMemoryMcpServer(ctx: MemoryMcpContext) {
           const budget = enforceBudget(ctx.runId, 'memory_list');
           if (!budget.ok) {
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'budget_exceeded',
-                  tool: 'memory_list',
-                  limit: budget.limit,
-                  used: budget.used,
-                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
-                }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'budget_exceeded',
+                    tool: 'memory_list',
+                    limit: budget.limit,
+                    used: budget.used,
+                    hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                  }),
+                },
+              ],
             };
           }
           const file = await provider.read(ctx.scope);

@@ -8,7 +8,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  McpServerConfig,
+  Options,
+  JsonSchemaOutputFormat,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
 import { defaultMemoryProvider, type MemoryProvider, type MemoryScope } from './memory-provider.js';
@@ -98,11 +103,23 @@ function classifyError(err: unknown): ErrorClass {
 
   // Transient network/connection errors
   const transientPatterns = [
-    'ebadf', 'econnreset', 'econnrefused', 'etimedout', 'epipe',
-    'socket hang up', 'network error', 'fetch failed',
-    'overloaded', '529', '500', '502', '503', '504', '429',
+    'ebadf',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'epipe',
+    'socket hang up',
+    'network error',
+    'fetch failed',
+    'overloaded',
+    '529',
+    '500',
+    '502',
+    '503',
+    '504',
+    '429',
   ];
-  if (transientPatterns.some(p => lower.includes(p))) return 'transient';
+  if (transientPatterns.some((p) => lower.includes(p))) return 'transient';
 
   // Auth errors
   if (lower.includes('401') || lower.includes('authentication') || lower.includes('unauthorized')) {
@@ -113,7 +130,7 @@ function classifyError(err: unknown): ErrorClass {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -161,7 +178,9 @@ async function launchBrowserSession(
   });
 
   const browser = await chromium.launch({ headless: !headed });
-  const context = await browser.newContext(contextOptions as Parameters<typeof browser.newContext>[0]);
+  const context = await browser.newContext(
+    contextOptions as Parameters<typeof browser.newContext>[0],
+  );
   await collector.attachToContext(context);
   const page = await context.newPage();
   collector.attachToPage(page);
@@ -181,13 +200,20 @@ async function launchBrowserSession(
 
 function browserToolNames(serverName: string): string[] {
   return [
-    `mcp__${serverName}__browser_goto`, `mcp__${serverName}__browser_click`,
-    `mcp__${serverName}__browser_fill`, `mcp__${serverName}__browser_type`,
-    `mcp__${serverName}__browser_select`, `mcp__${serverName}__browser_hover`,
-    `mcp__${serverName}__browser_press`, `mcp__${serverName}__browser_screenshot`,
-    `mcp__${serverName}__browser_content`, `mcp__${serverName}__browser_evaluate`,
-    `mcp__${serverName}__browser_url`, `mcp__${serverName}__browser_title`,
-    `mcp__${serverName}__browser_wait_for`, `mcp__${serverName}__ask_user`,
+    `mcp__${serverName}__browser_goto`,
+    `mcp__${serverName}__browser_click`,
+    `mcp__${serverName}__browser_fill`,
+    `mcp__${serverName}__browser_type`,
+    `mcp__${serverName}__browser_select`,
+    `mcp__${serverName}__browser_hover`,
+    `mcp__${serverName}__browser_press`,
+    `mcp__${serverName}__browser_screenshot`,
+    `mcp__${serverName}__browser_content`,
+    `mcp__${serverName}__browser_evaluate`,
+    `mcp__${serverName}__browser_url`,
+    `mcp__${serverName}__browser_title`,
+    `mcp__${serverName}__browser_wait_for`,
+    `mcp__${serverName}__ask_user`,
   ];
 }
 
@@ -223,7 +249,10 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                   items: {
                     type: 'object',
                     properties: {
-                      type: { type: 'string', enum: ['screenshot', 'text', 'network_log', 'command_output', 'file'] },
+                      type: {
+                        type: 'string',
+                        enum: ['screenshot', 'text', 'network_log', 'command_output', 'file'],
+                      },
                       label: { type: 'string' },
                       content: { type: 'string' },
                     },
@@ -232,13 +261,32 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                 },
                 action_trace: {
                   type: 'array',
-                  description: 'Ordered, human-readable log of the steps the agent performed to verify this behavior. Each entry describes one action (navigate, click, observe, assert, ...) and may reference a screenshot file captured during that step.',
+                  description:
+                    'Ordered, human-readable log of the steps the agent performed to verify this behavior. Each entry describes one action (navigate, click, observe, assert, ...) and may reference a screenshot file captured during that step.',
                   items: {
                     type: 'object',
                     properties: {
-                      type: { type: 'string', enum: ['navigation', 'click', 'fill', 'screenshot', 'observation', 'assertion', 'wait', 'other'] },
-                      description: { type: 'string', description: 'One-sentence plain-language description of the step' },
-                      screenshot: { type: 'string', description: 'Absolute path to a screenshot captured at this step, if any' },
+                      type: {
+                        type: 'string',
+                        enum: [
+                          'navigation',
+                          'click',
+                          'fill',
+                          'screenshot',
+                          'observation',
+                          'assertion',
+                          'wait',
+                          'other',
+                        ],
+                      },
+                      description: {
+                        type: 'string',
+                        description: 'One-sentence plain-language description of the step',
+                      },
+                      screenshot: {
+                        type: 'string',
+                        description: 'Absolute path to a screenshot captured at this step, if any',
+                      },
                       timestamp: { type: 'string', description: 'ISO timestamp, optional' },
                     },
                     required: ['type', 'description'],
@@ -320,11 +368,13 @@ async function executeQuery(
   const initTimeout = new Promise<never>((_, reject) => {
     initTimer = setTimeout(() => {
       if (!receivedFirstMessage) {
-        reject(new Error(
-          'Timed out waiting for API connection (30s). ' +
-          'This usually means authentication failed. ' +
-          'Check your ANTHROPIC_API_KEY and try again.',
-        ));
+        reject(
+          new Error(
+            'Timed out waiting for API connection (30s). ' +
+              'This usually means authentication failed. ' +
+              'Check your ANTHROPIC_API_KEY and try again.',
+          ),
+        );
       }
     }, INIT_TIMEOUT_MS);
   });
@@ -361,11 +411,18 @@ async function executeQuery(
         continue;
       }
 
-      if (message.type === 'system' && 'subtype' in message && message.subtype === 'init' && 'session_id' in message) {
+      if (
+        message.type === 'system' &&
+        'subtype' in message &&
+        message.subtype === 'init' &&
+        'session_id' in message
+      ) {
         sessionId = message.session_id as string;
         eventBus.send('agent:started', { task: opts.task }, sessionId);
       } else if (message.type === 'assistant') {
-        const textBlocks = message.message.content.filter((b: { type: string }) => b.type === 'text');
+        const textBlocks = message.message.content.filter(
+          (b: { type: string }) => b.type === 'text',
+        );
         for (const block of textBlocks) {
           const text = (block as { type: 'text'; text: string }).text;
           if (opts.debug) {
@@ -381,40 +438,58 @@ async function executeQuery(
         }
         eventBus.send('agent:tool_use', { summary }, sessionId);
       } else if (message.type === 'result') {
-      if (message.subtype === 'success') {
-        finalResult = message.result;
-        costUsd = message.total_cost_usd;
-        structuredOutput = message.structured_output;
-        eventBus.send('agent:completed', {
-          task: opts.task,
-          costUsd,
-          pass: extractBool(structuredOutput, 'pass'),
-        }, sessionId);
+        if (message.subtype === 'success') {
+          finalResult = message.result;
+          costUsd = message.total_cost_usd;
+          structuredOutput = message.structured_output;
+          eventBus.send(
+            'agent:completed',
+            {
+              task: opts.task,
+              costUsd,
+              pass: extractBool(structuredOutput, 'pass'),
+            },
+            sessionId,
+          );
 
-        // Emit per-behavior progress from structured output
-        if (structuredOutput && typeof structuredOutput === 'object' && 'results' in structuredOutput) {
-          const results = (structuredOutput as { results: Array<{ id: string; description?: string; status: string; duration_ms?: number; rationale?: string }> }).results;
-          if (Array.isArray(results)) {
-            for (const r of results) {
-              const status = r.status as BehaviorProgress['status'];
-              const progress: BehaviorProgress = {
-                id: r.id,
-                description: r.description,
-                status,
-                duration_ms: r.duration_ms,
-                rationale: r.rationale,
-              };
-              eventBus.send(`behavior:${status}`, { ...progress }, sessionId);
-              opts.onBehaviorProgress?.(progress);
+          // Emit per-behavior progress from structured output
+          if (
+            structuredOutput &&
+            typeof structuredOutput === 'object' &&
+            'results' in structuredOutput
+          ) {
+            const results = (
+              structuredOutput as {
+                results: Array<{
+                  id: string;
+                  description?: string;
+                  status: string;
+                  duration_ms?: number;
+                  rationale?: string;
+                }>;
+              }
+            ).results;
+            if (Array.isArray(results)) {
+              for (const r of results) {
+                const status = r.status as BehaviorProgress['status'];
+                const progress: BehaviorProgress = {
+                  id: r.id,
+                  description: r.description,
+                  status,
+                  duration_ms: r.duration_ms,
+                  rationale: r.rationale,
+                };
+                eventBus.send(`behavior:${status}`, { ...progress }, sessionId);
+                opts.onBehaviorProgress?.(progress);
+              }
             }
           }
+        } else {
+          costUsd = message.total_cost_usd;
+          eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
+          throw new AgentError(message.subtype, costUsd);
         }
-      } else {
-        costUsd = message.total_cost_usd;
-        eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
-        throw new AgentError(message.subtype, costUsd);
       }
-    }
     }
   } finally {
     if (initTimer) clearTimeout(initTimer);
@@ -444,7 +519,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     });
   } catch (err) {
     // Indexer is best-effort; never break the run.
-    process.stderr.write(`  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   }
 
   // Confidence store: tally per-behavior accept/override stats from feedback
@@ -455,7 +532,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       confidenceStore = new ConfidenceStore(defaultConfidencePath(opts.spec));
       confidenceStore.attachToEventBus();
     } catch (err) {
-      process.stderr.write(`  Confidence store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `  Confidence store unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
   }
 
@@ -466,9 +545,21 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         throw new Error('compare task requires both remoteUrl and localUrl');
       }
       process.stderr.write('  Launching browsers...\n');
-      const remoteSession = await launchBrowserSession(opts.remoteUrl, path.join(opts.outputDir, 'remote'), !!opts.headed, 'remote', opts.askUserHandler);
+      const remoteSession = await launchBrowserSession(
+        opts.remoteUrl,
+        path.join(opts.outputDir, 'remote'),
+        !!opts.headed,
+        'remote',
+        opts.askUserHandler,
+      );
       sessions.push(remoteSession);
-      const localSession = await launchBrowserSession(opts.localUrl, path.join(opts.outputDir, 'local'), !!opts.headed, 'local', opts.askUserHandler);
+      const localSession = await launchBrowserSession(
+        opts.localUrl,
+        path.join(opts.outputDir, 'local'),
+        !!opts.headed,
+        'local',
+        opts.askUserHandler,
+      );
       sessions.push(localSession);
       mcpServers.remote = remoteSession.mcpServer;
       mcpServers.local = localSession.mcpServer;
@@ -512,7 +603,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         const layered = renderLayeredPrompt(loadLayeredContext(opts.spec));
         if (layered) systemPrompt = layered + '\n\n' + systemPrompt;
       } catch (err) {
-        process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
 
       // Active learned skills are experimental. Keep them out of the default
@@ -522,7 +615,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           const active = renderActiveSkillsPrompt(opts.spec);
           if (active) systemPrompt = active + '\n\n' + systemPrompt;
         } catch (err) {
-          process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.stderr.write(
+            `  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+          );
         }
       }
     }
@@ -559,7 +654,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         memoryTools.push('mcp__memory__memory_record', 'mcp__memory__memory_list');
       } catch (err) {
         // Non-fatal: memory is a learning aid, not a correctness requirement.
-        process.stderr.write(`  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
 
       // Outbound ticket-filing tool. Default sink is `bd`; flip to HTTP by
@@ -576,7 +673,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         mcpServers.feedback = feedbackServer;
         feedbackTools.push('mcp__feedback__file_ticket');
       } catch (err) {
-        process.stderr.write(`  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 
@@ -607,7 +706,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         mcpServers.decisions = decisionsServer;
         decisionTools.push('mcp__decisions__file_decision');
       } catch (err) {
-        process.stderr.write(`  Decisions tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Decisions tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 
@@ -635,8 +736,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     };
 
     // Use message injector if provided, otherwise plain string prompt
-    const prompt: string | AsyncIterable<SDKUserMessage> =
-      opts.messageInjector ?? opts.userPrompt;
+    const prompt: string | AsyncIterable<SDKUserMessage> = opts.messageInjector ?? opts.userPrompt;
 
     // Wire the in-session sibling-check propagator to the injector for the
     // lifetime of this run. When user feedback fires
@@ -657,7 +757,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       try {
         if (attempt > 1) {
           const delayMs = 1000 * Math.pow(2, attempt - 1); // 2s, 4s
-          process.stderr.write(`  Retrying in ${delayMs / 1000}s (attempt ${attempt}/${maxRetries})...\n`);
+          process.stderr.write(
+            `  Retrying in ${delayMs / 1000}s (attempt ${attempt}/${maxRetries})...\n`,
+          );
           eventBus.send('agent:retry', { attempt, maxRetries, delayMs });
           await sleep(delayMs);
         }
@@ -702,10 +804,18 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     }
     if (detachStore) detachStore();
     if (sessionStore) {
-      try { sessionStore.close(); } catch { /* noop */ }
+      try {
+        sessionStore.close();
+      } catch {
+        /* noop */
+      }
     }
     if (confidenceStore) {
-      try { confidenceStore.close(); } catch { /* noop */ }
+      try {
+        confidenceStore.close();
+      } catch {
+        /* noop */
+      }
     }
     setActivePropagator(null);
   }

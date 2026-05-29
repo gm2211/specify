@@ -37,7 +37,11 @@ export function substituteVars(template: string, ctx: HookContext): string {
     const parts = expr.trim().split('.');
     let current: unknown = ctx.runtimeVars;
     for (const part of parts) {
-      if (current !== null && typeof current === 'object' && part in (current as Record<string, unknown>)) {
+      if (
+        current !== null &&
+        typeof current === 'object' &&
+        part in (current as Record<string, unknown>)
+      ) {
         current = (current as Record<string, unknown>)[part];
       } else {
         if (parts.length === 1) {

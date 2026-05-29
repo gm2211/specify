@@ -44,7 +44,7 @@ const OUTPUT_DIR = path.resolve(process.cwd(), process.env.CAPTURE_OUTPUT_DIR ??
 if (!HOST_FILTER) {
   console.warn(
     'WARNING: CAPTURE_HOST_FILTER is not set. All network traffic will be captured.\n' +
-    '  Set it to a hostname substring to narrow the capture (e.g. CAPTURE_HOST_FILTER=example.com)'
+      '  Set it to a hostname substring to narrow the capture (e.g. CAPTURE_HOST_FILTER=example.com)',
   );
 }
 
@@ -78,8 +78,17 @@ interface PendingRequest {
 // Filtering
 // ---------------------------------------------------------------------------
 const STATIC_EXTENSIONS = new Set([
-  '.css', '.js', '.png', '.jpg', '.jpeg',
-  '.gif', '.svg', '.woff', '.woff2', '.ttf', '.ico',
+  '.css',
+  '.js',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.ico',
 ]);
 
 function shouldCapture(url: string, resourceType?: string): boolean {
@@ -102,9 +111,7 @@ function shouldCapture(url: string, resourceType?: string): boolean {
 
   // Prefer API-like paths but also capture anything without an extension
   const isApiLike =
-    pathname.includes('/api/') ||
-    resourceType === 'XHR' ||
-    resourceType === 'Fetch';
+    pathname.includes('/api/') || resourceType === 'XHR' || resourceType === 'Fetch';
 
   return isApiLike || ext === '';
 }
@@ -120,9 +127,9 @@ async function main(): Promise<void> {
   } catch {
     console.error(
       `Chrome not found on ${CDP_HOST}:${CDP_PORT}. Launch it with:\n` +
-      '  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \\\n' +
-      `    --remote-debugging-port=${CDP_PORT} \\\n` +
-      '    --user-data-dir=/tmp/chrome-debug'
+        '  /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome \\\n' +
+        `    --remote-debugging-port=${CDP_PORT} \\\n` +
+        '    --user-data-dir=/tmp/chrome-debug',
     );
     process.exit(1);
   }
@@ -130,8 +137,8 @@ async function main(): Promise<void> {
   const { Network } = client;
 
   await Network.enable({
-    maxResourceBufferSize: 100 * 1024 * 1024,  // 100 MB
-    maxTotalBufferSize: 500 * 1024 * 1024,     // 500 MB
+    maxResourceBufferSize: 100 * 1024 * 1024, // 100 MB
+    maxTotalBufferSize: 500 * 1024 * 1024, // 500 MB
   });
 
   console.log(`Connected to Chrome at ${CDP_HOST}:${CDP_PORT}.`);
@@ -210,9 +217,8 @@ async function main(): Promise<void> {
     }
 
     capturedRequests.push(captured);
-    const shortUrl = captured.url.length > 80
-      ? captured.url.substring(0, 80) + '...'
-      : captured.url;
+    const shortUrl =
+      captured.url.length > 80 ? captured.url.substring(0, 80) + '...' : captured.url;
     console.log(`  [${captured.method}] ${captured.responseStatus} ${shortUrl}`);
   });
 
@@ -239,11 +245,7 @@ async function main(): Promise<void> {
 function saveAndExit(capturedRequests: CapturedRequest[]): void {
   fs.mkdirSync(OUTPUT_DIR, { recursive: true });
 
-  const timestamp = new Date()
-    .toISOString()
-    .replace(/[:.]/g, '-')
-    .replace('T', '_')
-    .slice(0, 19);
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').slice(0, 19);
 
   const jsonFile = path.join(OUTPUT_DIR, `traffic-${timestamp}.json`);
   const summaryFile = path.join(OUTPUT_DIR, `traffic-${timestamp}-summary.txt`);
@@ -312,7 +314,7 @@ function buildSummary(requests: CapturedRequest[]): string {
   for (const stat of sorted) {
     const ct = stat.contentType.split(';')[0].trim().padEnd(30);
     lines.push(
-      `${String(stat.count).padEnd(7)} ${stat.method.padEnd(8)} ${String(stat.status).padEnd(7)} ${ct} ${stat.urlPattern}`
+      `${String(stat.count).padEnd(7)} ${stat.method.padEnd(8)} ${String(stat.status).padEnd(7)} ${ct} ${stat.urlPattern}`,
     );
   }
 

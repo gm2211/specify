@@ -1,8 +1,7 @@
 # Example: gitops-spec
 
-The spec lives in its own repo; the QA pod clones it at startup. To rotate
-the spec, push to the configured ref and POST `/control/reload-spec` on
-the daemon — no rebuild required.
+The spec lives in its own repo; the QA pod clones it at startup. To rotate the spec, push to the
+configured ref and POST `/control/reload-spec` on the daemon — no rebuild required.
 
 ```sh
 # If the repo is private, store the deploy key first:
@@ -28,5 +27,5 @@ curl -X POST "${INBOX_URL%/inbox}/control/reload-spec" \
 # → { ok: true, hash: "<sha256>", name: "Renzo", source: { kind: "git", … } }
 ```
 
-The new hash is stamped onto subsequent memory rows so behaviour expectations
-from prior spec versions remain queryable.
+The new hash is stamped onto subsequent memory rows so behaviour expectations from prior spec
+versions remain queryable.

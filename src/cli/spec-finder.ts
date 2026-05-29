@@ -9,12 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SPEC_PATTERNS = [
-  /\.spec\.ya?ml$/i,
-  /\.spec\.json$/i,
-  /^spec\.ya?ml$/i,
-  /^spec\.json$/i,
-];
+const SPEC_PATTERNS = [/\.spec\.ya?ml$/i, /\.spec\.json$/i, /^spec\.ya?ml$/i, /^spec\.json$/i];
 
 /**
  * Find spec files in a directory.
@@ -24,8 +19,8 @@ export function findSpecFiles(dir: string = process.cwd()): string[] {
   try {
     const entries = fs.readdirSync(dir);
     return entries
-      .filter(f => SPEC_PATTERNS.some(p => p.test(f)))
-      .filter(f => {
+      .filter((f) => SPEC_PATTERNS.some((p) => p.test(f)))
+      .filter((f) => {
         const full = path.join(dir, f);
         return fs.statSync(full).isFile();
       })
@@ -56,7 +51,8 @@ export function resolveSpecPath(provided: string | undefined): {
 
   if (found.length === 0) {
     return {
-      error: 'No spec file found in current directory. Provide --spec <path> or create a spec file (e.g. spec.yaml).',
+      error:
+        'No spec file found in current directory. Provide --spec <path> or create a spec file (e.g. spec.yaml).',
     };
   }
 

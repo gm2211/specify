@@ -91,7 +91,13 @@ export class WorkerPool {
       };
 
       child.on('message', (raw: unknown) => {
-        const msg = raw as { kind: string; jobId?: string; event?: unknown; result?: SdkRunnerResult; message?: string };
+        const msg = raw as {
+          kind: string;
+          jobId?: string;
+          event?: unknown;
+          result?: SdkRunnerResult;
+          message?: string;
+        };
         if (msg.kind === 'event' && msg.event) {
           // Re-publish on the parent eventBus. The SSE streams filter by
           // event.sessionId === jobId.

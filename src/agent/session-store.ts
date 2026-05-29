@@ -113,28 +113,50 @@ export class SessionStore {
   }
 
   recordSession(meta: SessionMeta): void {
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO sessions (session_id, spec_id, target_key, task, started_at)
       VALUES (?, ?, ?, ?, ?)
       ON CONFLICT(session_id) DO UPDATE SET
         spec_id = COALESCE(excluded.spec_id, sessions.spec_id),
         target_key = COALESCE(excluded.target_key, sessions.target_key),
         task = COALESCE(excluded.task, sessions.task)
-    `).run(meta.sessionId, meta.specId ?? null, meta.targetKey ?? null, meta.task ?? null, meta.startedAt);
+    `,
+      )
+      .run(
+        meta.sessionId,
+        meta.specId ?? null,
+        meta.targetKey ?? null,
+        meta.task ?? null,
+        meta.startedAt,
+      );
   }
 
   endSession(sessionId: string, endedAt: string = new Date().toISOString()): void {
-    this.db.prepare(`UPDATE sessions SET ended_at = ? WHERE session_id = ?`)
+    this.db
+      .prepare(`UPDATE sessions SET ended_at = ? WHERE session_id = ?`)
       .run(endedAt, sessionId);
   }
 
-  recordEvent(input: { sessionId: string; ts?: string; role: string; kind: string; content: string; tags?: string[] }): EventRow {
+  recordEvent(input: {
+    sessionId: string;
+    ts?: string;
+    role: string;
+    kind: string;
+    content: string;
+    tags?: string[];
+  }): EventRow {
     const ts = input.ts ?? new Date().toISOString();
     const tags = input.tags && input.tags.length ? input.tags.join(' ') : null;
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       INSERT INTO events (session_id, ts, role, kind, content, tags)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(input.sessionId, ts, input.role, input.kind, input.content, tags);
+    `,
+      )
+      .run(input.sessionId, ts, input.role, input.kind, input.content, tags);
     return {
       id: Number(result.lastInsertRowid),
       sessionId: input.sessionId,
@@ -189,7 +211,10 @@ export class SessionStore {
    * Return the chronological event timeline for a single session. Powers
    * Tier-2 replay views and the context-resolver feeding feedback ingest.
    */
-  replay(sessionId: string, opts: { limit?: number; before?: string; after?: string } = {}): EventRow[] {
+  replay(
+    sessionId: string,
+    opts: { limit?: number; before?: string; after?: string } = {},
+  ): EventRow[] {
     const limit = opts.limit ?? 500;
     const conditions: string[] = ['session_id = ?'];
     const args: unknown[] = [sessionId];
@@ -202,11 +227,15 @@ export class SessionStore {
       args.push(opts.after);
     }
     args.push(limit);
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT id, session_id AS sessionId, ts, role, kind, content, tags
       FROM events WHERE ${conditions.join(' AND ')}
       ORDER BY id ASC LIMIT ?
-    `).all(...args) as EventRow[];
+    `,
+      )
+      .all(...args) as EventRow[];
     return rows;
   }
 
@@ -216,11 +245,15 @@ export class SessionStore {
    * to a flagged observation so the agent gets a fully-resolved record.
    */
   recentEvents(sessionId: string, limit = 10): EventRow[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT id, session_id AS sessionId, ts, role, kind, content, tags
       FROM events WHERE session_id = ?
       ORDER BY id DESC LIMIT ?
-    `).all(sessionId, limit) as EventRow[];
+    `,
+      )
+      .all(sessionId, limit) as EventRow[];
     return rows.reverse();
   }
 
@@ -238,12 +271,16 @@ export class SessionStore {
     }
     args.push(limit);
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : '';
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT session_id AS sessionId, spec_id AS specId, target_key AS targetKey,
              task, started_at AS startedAt
       FROM sessions ${where}
       ORDER BY started_at DESC LIMIT ?
-    `).all(...args) as SessionMeta[];
+    `,
+      )
+      .all(...args) as SessionMeta[];
     return rows;
   }
 
@@ -251,7 +288,9 @@ export class SessionStore {
    * Subscribe this store to the event bus. Every published event is recorded
    * with a derived (role, kind) tuple. Returns an unsubscribe function.
    */
-  attachToEventBus(opts: { sessionId?: string; ensureSession?: SessionMeta; defaults?: Partial<SessionMeta> } = {}): () => void {
+  attachToEventBus(
+    opts: { sessionId?: string; ensureSession?: SessionMeta; defaults?: Partial<SessionMeta> } = {},
+  ): () => void {
     if (opts.ensureSession) this.recordSession(opts.ensureSession);
     const seenSessions = new Set<string>();
     if (opts.ensureSession) seenSessions.add(opts.ensureSession.sessionId);
