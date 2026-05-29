@@ -13,7 +13,6 @@ import type {
   Behavior,
 } from './types.js';
 import type { CapturedTraffic, CapturedConsoleEntry } from '../capture/types.js';
-import { specToYaml } from './parser.js';
 
 // ---------------------------------------------------------------------------
 // Capture loading
@@ -62,7 +61,7 @@ function extractOrigin(url: string): string {
 function pathToId(urlPath: string): string {
   return urlPath
     .replace(/^\//, '')
-    .replace(/[\/\?&#=.]/g, '-')
+    .replace(/[/?&#=.]/g, '-')
     .replace(/-+/g, '-')
     .replace(/-$/, '')
     || 'root';

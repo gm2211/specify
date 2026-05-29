@@ -35,6 +35,25 @@ npm run build
 
 The wrapper script at `./specify` auto-builds on first run.
 
+## Quality Gates
+
+```bash
+npm run typecheck         # TypeScript for CLI, daemon, agent, and scripts
+npm run typecheck:webapp  # TypeScript for the React review UI
+npm run lint              # ESLint with TypeScript, SonarJS, security, Unicorn, and React rules
+npm run format            # Prettier check
+npm run quality           # Typecheck + lint
+```
+
+Local SonarQube/SonarCloud scanning is configured with
+`sonar-project.properties`. Start or point at a SonarQube server, ensure a Java
+runtime is installed for `sonar-scanner`, set `SONAR_TOKEN` when required, and
+run:
+
+```bash
+npm run sonar -- -Dsonar.host.url=http://localhost:9000
+```
+
 ## Quickstart
 
 ```bash

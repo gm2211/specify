@@ -161,6 +161,30 @@ export async function startK8sWatcher(
 }
 
 /**
+ * Returns true for errors that represent a normal apiserver-side stream close
+ * (idle timeout, proxy EPIPE, connection reset by peer). These are expected
+ * every ~5 minutes in a typical cluster and should trigger an immediate,
+ * quiet reconnect — NOT a 5-second backoff with a prominent warning.
+ *
+ * Genuine errors (auth failures, DNS failures, 5xx) return false and keep
+ * the existing backoff + loud log so real problems are visible.
+ */
+function isTransientStreamClose(err: Error): boolean {
+  const msg = err.message ?? '';
+  // Node.js HTTP parser signals an abrupt EOF as "Premature close"
+  if (msg.includes('Premature close')) return true;
+  // Broken-pipe when the apiserver closes the keep-alive connection
+  if (msg.includes('EPIPE')) return true;
+  // Connection reset by peer (proxy / NAT timeout)
+  if (msg.includes('ECONNRESET')) return true;
+  // Node undici / fetch-level socket EOF
+  if (msg.includes('UND_ERR_SOCKET') || msg.includes('socket hang up')) return true;
+  // HTTP/2 stream reset when apiserver sends RST_STREAM on idle timeout
+  if (msg.includes('ERR_HTTP2_STREAM_CANCEL') || msg.includes('ERR_HTTP2_SESSION_ERROR')) return true;
+  return false;
+}
+
+/**
  * Default watcher implementation backed by @kubernetes/client-node informers.
  *
  * Kept lazy-imported so the kubernetes client doesn't load (and try to read
@@ -224,21 +248,31 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
           let restartTimer: ReturnType<typeof setTimeout> | null = null;
           let lastEventTs = Date.now();
 
-          const scheduleRestart = (reason: string) => {
+          /**
+           * Schedule an informer restart.
+           *
+           * @param reason  Short description for logging.
+           * @param delayMs Milliseconds to wait before restarting.
+           *   0  = reconnect immediately (used for transient stream closes).
+           *   5000 (default) = back off for real errors.
+           */
+          const scheduleRestart = (reason: string, delayMs = 5_000) => {
             if (restartTimer) return; // already scheduled
             restartTimer = setTimeout(async () => {
               restartTimer = null;
               lastEventTs = Date.now(); // reset so watchdog doesn't immediately re-trigger
               try {
                 await informer.start();
-                log(`[k8s-watcher] informer restarted ns=${namespace || 'all'} resource=${resource}\n`);
+                log(`[k8s-watcher] informer reconnected ns=${namespace || 'all'} resource=${resource}\n`);
               } catch (restartErr) {
                 log(`[k8s-watcher] informer restart failed ns=${namespace || 'all'} resource=${resource}: ${(restartErr as Error).message}\n`);
                 // Back off and try again rather than going silent.
                 scheduleRestart('restart-failed');
               }
-            }, 5_000);
-            log(`[k8s-watcher] informer ${reason} (${namespace || 'all'}/${resource}) — scheduling restart in 5s\n`);
+            }, delayMs);
+            if (delayMs > 0) {
+              log(`[k8s-watcher] informer ${reason} (${namespace || 'all'}/${resource}) — scheduling restart in ${delayMs / 1000}s\n`);
+            }
           };
 
           const touchEvent = () => { lastEventTs = Date.now(); };
@@ -247,8 +281,15 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
           informer.on('update', (obj) => { touchEvent(); fire(resource, 'update', obj); });
           informer.on('error', (err: Error) => {
             touchEvent();
-            log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message} — scheduling restart in 5s\n`);
-            scheduleRestart(`error: ${err.message}`);
+            if (isTransientStreamClose(err)) {
+              // Normal apiserver stream EOF (idle timeout, EPIPE, connection reset).
+              // Reconnect immediately and quietly — no backoff, no noise.
+              log(`[k8s-watcher] informer stream closed (${namespace || 'all'}/${resource}): ${err.message} — reconnecting\n`);
+              scheduleRestart(`stream-close: ${err.message}`, 0);
+            } else {
+              log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message} — scheduling restart in 5s\n`);
+              scheduleRestart(`error: ${err.message}`);
+            }
           });
 
           try {
@@ -317,4 +358,4 @@ function toRollout(kind: string, obj: AppsResource): RolloutEvent {
 }
 
 // Exposed for tests.
-export const _internals = { isReady, toRollout };
+export const _internals = { isReady, toRollout, isTransientStreamClose };

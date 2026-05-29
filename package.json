@@ -17,6 +17,13 @@
     "mock:chaos": "MOCK_FAULT_RATE=0.1 npx tsx src/mock-server.ts",
     "generate-spec": "npx tsx src/spec/generator.ts",
     "typecheck": "npx tsc --noEmit",
+    "typecheck:webapp": "npm --prefix webapp run typecheck",
+    "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write",
+    "quality": "npm run typecheck && npm run typecheck:webapp && npm run lint",
+    "sonar": "sonar-scanner",
     "validate": "npx tsx src/validation/validate.ts",
     "agent": "npx tsx src/cli/index.ts capture",
     "test": "tsc && find dist/src -name '*.test.js' -print0 | xargs -0 node --test",
@@ -40,11 +47,23 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/chrome-remote-interface": "^0.33.0",
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.4",
+    "eslint": "^10.4.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "eslint-plugin-security": "^4.0.0",
+    "eslint-plugin-sonarjs": "^4.0.3",
+    "eslint-plugin-unicorn": "^64.0.0",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.3",
+    "sonar-scanner": "^3.1.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "typescript-eslint": "^8.59.4"
   }
 }

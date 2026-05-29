@@ -2,7 +2,7 @@ import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
 import { COMMANDS } from '../commands-manifest.js';
 
-export async function schemaCommand(target: string, ctx: CliContext): Promise<number> {
+export async function schemaCommand(target: string, _ctx: CliContext): Promise<number> {
   let output: unknown;
 
   switch (target) {

@@ -9,7 +9,7 @@ import { z } from 'zod';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 // Core imports — reuse existing Specify modules directly
-import { parseSpec, loadSpec, specToYaml } from '../spec/parser.js';
+import { parseSpec, specToYaml } from '../spec/parser.js';
 import { lintRaw } from '../spec/lint.js';
 import { getAuthoringGuide } from '../spec/guide.js';
 import { COMMANDS } from '../cli/commands-manifest.js';
@@ -366,7 +366,6 @@ function daemonConfig(): { url: string; token: string | null } {
   if (envToken) return { url, token: envToken };
   // Lazy file read so MCP startup stays synchronous-friendly.
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const fs = require('node:fs') as typeof import('node:fs');
     const os = require('node:os') as typeof import('node:os');
     const path = require('node:path') as typeof import('node:path');

@@ -144,7 +144,6 @@ export function markdownToNarrative(md: string): NarrativeDocument {
 
   let title = '';
   let specPath: string | undefined;
-  let overview = '';
   const sections: NarrativeSection[] = [];
 
   // Parse title from first H1
@@ -225,7 +224,7 @@ export function markdownToNarrative(md: string): NarrativeDocument {
     finalizeTop(stack, sections);
   }
 
-  overview = overviewLines.join('\n').trim();
+  const overview = overviewLines.join('\n').trim();
 
   return { title, overview, sections, specPath };
 }

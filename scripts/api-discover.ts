@@ -210,7 +210,7 @@ async function mineJavaScript(page: Page, context: BrowserContext): Promise<JsAn
   return analysis;
 }
 
-function extractApiPatterns(source: string, sourceFile: string, analysis: JsAnalysis): void {
+function extractApiPatterns(source: string, _sourceFile: string, analysis: JsAnalysis): void {
   const patterns: { regex: RegExp; type: string }[] = [
     { regex: /fetch\s*\(\s*["'`]([^"'`]+)["'`]/g, type: 'fetch' },
     { regex: /\$\.ajax\s*\(\s*\{[^}]*url\s*:\s*["'`]([^"'`]+)["'`]/g, type: 'jquery-ajax' },
@@ -395,7 +395,7 @@ function generateReport(
   const jsonEndpoints = successfulEndpoints.filter((r) => r.contentType.includes('json'));
   const failedEndpoints = probeResults.filter((r) => r.status >= 400 || r.status === 0);
 
-  let doc = `# API Discovery Report
+  const doc = `# API Discovery Report
 
 Generated: ${new Date().toISOString()}
 Base URL: ${BASE_URL}
@@ -457,7 +457,7 @@ ${
   jsonEndpoints.length > 0
     ? jsonEndpoints
         .map((r) => {
-          let schema = '';
+          let schema: string;
           try {
             const parsed = JSON.parse(r.bodyPreview);
             schema = generateTypeScript(parsed, getEndpointName(r.url));

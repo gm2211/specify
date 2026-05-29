@@ -26,7 +26,7 @@
  * Safety: All traffic is captured passively (no extra probing). Rate limiting applied between pages.
  */
 
-import { chromium, type BrowserContext, type Page, type Request, type Response } from 'playwright';
+import { chromium, type BrowserContext, type Request, type Response } from 'playwright';
 import * as fs from 'fs';
 import * as path from 'path';
 

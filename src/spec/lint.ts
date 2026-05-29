@@ -45,7 +45,7 @@ export interface LintResult {
  * Lint a spec from raw YAML/JSON string.
  * Combines parse errors, schema validation errors, and semantic lint rules.
  */
-export function lintRaw(content: string, sourceName = '<string>', _specPath?: string): LintResult {
+export function lintRaw(content: string, _sourceName = '<string>', _specPath?: string): LintResult {
   const errors: LintError[] = [];
 
   // 1. Parse

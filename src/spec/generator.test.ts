@@ -10,7 +10,7 @@ test('importing generateSpec does not trigger side-effect CLI execution', async 
   // If the side-effect fires, process.exit will be called — intercept it.
   const originalExit = process.exit;
   let exitCalled = false;
-  process.exit = ((code?: number) => { exitCalled = true; }) as never;
+  process.exit = (() => { exitCalled = true; }) as never;
 
   try {
     const mod = await import('./generator.js');
