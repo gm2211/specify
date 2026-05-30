@@ -3,7 +3,8 @@
 #
 # Layout:
 #   - PVC at /work for memory rows, sessions DB, skill drafts, reports.
-#   - ConfigMap for the inline spec (when spec_inline != null).
+#   - ConfigMap for the inline spec (when spec_inline != null), mounted as
+#     a single file at /work/specify.spec.yaml via subPath.
 #   - Secret for inbox bearer + spec URL bearer (auto-generated as needed).
 #   - Secret for the Slack webhook (when configured).
 #   - Service exposing :4100 to siblings.
@@ -59,6 +60,14 @@ locals {
     "app.kubernetes.io/component"  = "specify-qa"
     "app.kubernetes.io/managed-by" = "terraform"
   }
+
+  # Spec file path on the writable PVC root.
+  # Previously: /work/spec/specify.spec.yaml (ConfigMap dir mount, read-only).
+  # Now: /work/specify.spec.yaml (ConfigMap subPath mount on PVC root, writable parent).
+  # The image uses HOME=/work and WORKDIR=/work, so path.dirname(specPath) = /work,
+  # which is the PVC mount and is writable. The session indexer, confidence store,
+  # and skill synthesizer all derive their .specify/ cache dir from that path.
+  spec_inline_path = "/work/specify.spec.yaml"
 }
 
 resource "terraform_data" "preconditions" {
@@ -353,11 +362,18 @@ resource "kubernetes_deployment_v1" "this" {
           }
 
           # Spec sourcing — exactly one of these blocks is active per validation above.
+          #
+          # subPath fix: use local.spec_inline_path (/work/specify.spec.yaml) instead
+          # of /work/spec/specify.spec.yaml. The spec file is mounted via subPath
+          # directly onto the writable PVC root (/work), so path.dirname(specPath) = /work
+          # which is writable. Previously the ConfigMap was mounted as a directory at
+          # /work/spec (read-only), which caused `mkdir /work/spec/.specify` to ENOENT
+          # and cascaded into EPIPE when the worker wrote the error to stderr.
           dynamic "env" {
             for_each = var.spec_inline != null ? [1] : []
             content {
               name  = "SPECIFY_SPEC_INLINE_PATH"
-              value = "/work/spec/specify.spec.yaml"
+              value = local.spec_inline_path
             }
           }
 
@@ -515,11 +531,18 @@ resource "kubernetes_deployment_v1" "this" {
             read_only  = true
           }
 
+          # subPath fix: mount the spec ConfigMap as a single file at
+          # /work/specify.spec.yaml using subPath, instead of as a read-only
+          # directory at /work/spec/. subPath mounts do not shadow the parent
+          # directory, so /work remains the writable PVC root. The session
+          # indexer writes .specify/ next to the spec file (at /work/.specify/)
+          # which is on the PVC and is fully writable.
           dynamic "volume_mount" {
             for_each = var.spec_inline != null ? [1] : []
             content {
               name       = "spec"
-              mount_path = "/work/spec"
+              mount_path = local.spec_inline_path
+              sub_path   = "specify.spec.yaml"
               read_only  = true
             }
           }

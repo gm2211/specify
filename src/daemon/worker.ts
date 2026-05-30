@@ -20,6 +20,23 @@ import { eventBus } from '../agent/event-bus.js';
 import { runSpecifyAgent } from '../agent/sdk-runner.js';
 import type { SdkRunnerOptions } from '../agent/sdk-runner.js';
 
+// Defense-in-depth: swallow EPIPE at the process level so a stdio write fault
+// (e.g. parent exits before the worker finishes flushing IPC messages) doesn't
+// crash the worker and obscure the real job result.  Any non-EPIPE exception is
+// re-thrown on the next tick so Node's default handler still surfaces it.
+process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
+  if (err.code === 'EPIPE') {
+    // Write directly to fd 2 — process.stderr.write itself could EPIPE.
+    try {
+      process.stderr.fd !== undefined &&
+        require('fs').writeSync(process.stderr.fd, '[worker] swallowed EPIPE — continuing\n');
+    } catch (_) { /* best-effort log */ }
+    return;
+  }
+  // Re-throw on next tick so Node's unhandled-exception mechanism sees it.
+  setImmediate(() => { throw err; });
+});
+
 function send(msg: Record<string, unknown>): void {
   if (process.send) process.send(msg);
 }
