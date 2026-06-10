@@ -301,6 +301,45 @@ interface QueryResult {
   sessionId?: string;
 }
 
+// ---------------------------------------------------------------------------
+// stderr ring buffer helpers
+// ---------------------------------------------------------------------------
+
+const STDERR_CAPTURE_LIMIT = 8 * 1024; // 8 KB tail
+
+/** Append data to a ring buffer, keeping only the last STDERR_CAPTURE_LIMIT bytes. */
+function appendToRingBuffer(buf: string, data: string): string {
+  const combined = buf + data;
+  if (combined.length > STDERR_CAPTURE_LIMIT) {
+    return combined.slice(combined.length - STDERR_CAPTURE_LIMIT);
+  }
+  return combined;
+}
+
+/**
+ * Wrap an error to include captured Claude CLI stderr, if any.
+ * Returns the original error when stderr is empty or already included.
+ */
+function wrapWithStderr(err: unknown, stderrTail: string): unknown {
+  if (!stderrTail.trim()) return err;
+  // Already includes our stderr marker — don't double-append.
+  if (err instanceof Error && err.message.includes('— stderr:')) return err;
+  const tail = stderrTail.trim();
+  if (err instanceof AgentError) {
+    // Preserve AgentError subtype/cost; just enhance the message.
+    const enhanced = new AgentError(err.subtype, err.costUsd, err.cause);
+    enhanced.message = `${err.message} — stderr: ${tail}`;
+    enhanced.stack = err.stack;
+    return enhanced;
+  }
+  if (err instanceof Error) {
+    const enhanced = new Error(`${err.message} — stderr: ${tail}`);
+    enhanced.stack = err.stack;
+    return enhanced;
+  }
+  return new Error(`${String(err)} — stderr: ${tail}`);
+}
+
 async function executeQuery(
   queryOptions: Options,
   prompt: string | AsyncIterable<SDKUserMessage>,
@@ -312,7 +351,20 @@ async function executeQuery(
   let sessionId: string | undefined;
   let receivedFirstMessage = false;
 
-  const q = query({ prompt, options: queryOptions });
+  // Buffer the last STDERR_CAPTURE_LIMIT bytes from the claude CLI subprocess.
+  // When the SDK throws 'Claude Code process exited with code N' the real cause
+  // (auth error, quota, model-not-found, …) is in this buffer.
+  let stderrBuf = '';
+  const optionsWithStderr: Options = {
+    ...queryOptions,
+    stderr: (data: string) => {
+      stderrBuf = appendToRingBuffer(stderrBuf, data);
+      // Forward to caller's handler if one was provided.
+      if (queryOptions.stderr) queryOptions.stderr(data);
+    },
+  };
+
+  const q = query({ prompt, options: optionsWithStderr });
 
   // Timeout for initial connection — if no message arrives in 30s, bail
   const INIT_TIMEOUT_MS = 30_000;
@@ -320,11 +372,13 @@ async function executeQuery(
   const initTimeout = new Promise<never>((_, reject) => {
     initTimer = setTimeout(() => {
       if (!receivedFirstMessage) {
-        reject(new Error(
+        const base =
           'Timed out waiting for API connection (30s). ' +
           'This usually means authentication failed. ' +
-          'Check your ANTHROPIC_API_KEY and try again.',
-        ));
+          'Check your ANTHROPIC_API_KEY and try again.';
+        // Include any stderr captured so far (e.g. the auth error line).
+        const msg = stderrBuf.trim() ? `${base} — stderr: ${stderrBuf.trim()}` : base;
+        reject(new Error(msg));
       }
     }, INIT_TIMEOUT_MS);
   });
@@ -350,7 +404,10 @@ async function executeQuery(
       if (message.type === 'auth_status') {
         const authMsg = message as { isAuthenticating: boolean; output: string[]; error?: string };
         if (authMsg.error) {
-          throw new Error(`Authentication failed: ${authMsg.error}`);
+          throw wrapWithStderr(
+            new Error(`Authentication failed: ${authMsg.error}`),
+            stderrBuf,
+          ) as Error;
         }
         if (authMsg.isAuthenticating) {
           process.stderr.write('  Authenticating...\n');
@@ -412,10 +469,15 @@ async function executeQuery(
       } else {
         costUsd = message.total_cost_usd;
         eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
-        throw new AgentError(message.subtype, costUsd);
+        throw wrapWithStderr(new AgentError(message.subtype, costUsd), stderrBuf);
       }
     }
     }
+  } catch (err) {
+    // Wrap any error that bubbles out of the query iteration with the captured
+    // stderr tail. This covers the most common case: the SDK throws
+    // 'Claude Code process exited with code 1' and discards subprocess stderr.
+    throw wrapWithStderr(err, stderrBuf);
   } finally {
     if (initTimer) clearTimeout(initTimer);
   }
