@@ -65,9 +65,16 @@ RUN npm ci --omit=dev --ignore-scripts \
 COPY --from=build /app/dist/ dist/
 COPY assets/ assets/
 
+# Non-root user for security (required by claude CLI: --dangerously-skip-permissions
+# refuses to run as root/uid=0; running as a non-root user avoids the IS_SANDBOX=1
+# workaround that was needed to bypass the root-detection check).
+RUN groupadd --gid 1001 specify \
+ && useradd --uid 1001 --gid 1001 --no-create-home specify \
+ && chown -R specify:specify /app /app/.ms-playwright
+
 # State dir for memory rows, sessions.db, skills, reports.
 # Mount a PVC here in k8s so learning persists across pod restarts.
-RUN mkdir -p /work && chmod 777 /work
+RUN mkdir -p /work && chown specify:specify /work
 WORKDIR /work
 # HOME=/work so the auto-generated daemon token lands on the PVC,
 # along with spec-relative state dirs (.specify/memory, .specify/sessions.db, …).
@@ -79,6 +86,8 @@ ENV NODE_ENV=production \
     PLAYWRIGHT_BROWSERS_PATH=/app/.ms-playwright \
     PORT=4100 \
     HOST=0.0.0.0
+
+USER specify
 
 EXPOSE 4100
 
