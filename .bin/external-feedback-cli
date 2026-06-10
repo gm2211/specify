@@ -1,0 +1,196 @@
+#!/usr/bin/env node
+/**
+ * .bin/external-feedback-cli — Argos external-feedback-cli contract implementation for the specify repo.
+ *
+ * Backing stores (merged, deduped by id):
+ *   1. .beads/issues.jsonl        — open issues → unvetted feedback items (vetted: false)
+ *   2. .specify/feedback-items.jsonl — seeded/imported vetted items (vetted: true/false per record)
+ *
+ * Addressed tracking: .specify/ef-addressed.jsonl
+ *
+ * Implements: list, mark-addressed
+ * Exit codes: 0=ok, 1=usage/bad-args, 2=auth, 3=daemon-unreachable, 4=not-found
+ */
+
+import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, '..');
+
+const BEADS_FILE = resolve(REPO_ROOT, '.beads/issues.jsonl');
+const SPECIFY_DIR = resolve(REPO_ROOT, '.specify');
+const FEEDBACK_ITEMS_FILE = resolve(SPECIFY_DIR, 'feedback-items.jsonl');
+const EF_ADDRESSED_FILE = resolve(SPECIFY_DIR, 'ef-addressed.jsonl');
+
+// ── helpers ──────────────────────────────────────────────────────────────────
+
+function parseArgs(argv) {
+  const flags = {};
+  for (const arg of argv) {
+    if (arg.startsWith('--')) {
+      const eq = arg.indexOf('=');
+      if (eq !== -1) {
+        flags[arg.slice(2, eq)] = arg.slice(eq + 1);
+      } else {
+        flags[arg.slice(2)] = true;
+      }
+    }
+  }
+  return flags;
+}
+
+function die(msg, code = 1) {
+  process.stderr.write(msg + '\n');
+  process.exit(code);
+}
+
+function out(obj) {
+  process.stdout.write(JSON.stringify(obj) + '\n');
+}
+
+function ensureSpecifyDir() {
+  if (!existsSync(SPECIFY_DIR)) mkdirSync(SPECIFY_DIR, { recursive: true });
+}
+
+function loadBeadsItems() {
+  if (!existsSync(BEADS_FILE)) return [];
+  return readFileSync(BEADS_FILE, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(l => JSON.parse(l));
+}
+
+function loadSeedItems() {
+  if (!existsSync(FEEDBACK_ITEMS_FILE)) return [];
+  return readFileSync(FEEDBACK_ITEMS_FILE, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(l => JSON.parse(l));
+}
+
+function loadAddressed() {
+  if (!existsSync(EF_ADDRESSED_FILE)) return new Set();
+  return new Set(
+    readFileSync(EF_ADDRESSED_FILE, 'utf8')
+      .split('\n')
+      .filter(Boolean)
+      .map(l => JSON.parse(l).id)
+  );
+}
+
+function issueTypeToKind(issueType) {
+  if (issueType === 'bug') return 'bug';
+  if (issueType === 'feature') return 'feature';
+  return 'spec-drift';
+}
+
+function issueToExternalFeedbackItem(issue) {
+  return {
+    id: issue.id,
+    title: issue.title,
+    description: issue.description || '(no description)',
+    kind: issueTypeToKind(issue.issue_type),
+    priority: typeof issue.priority === 'number' ? issue.priority : 2,
+    labels: issue.labels || [],
+    externalUrl: null,
+    createdAt: issue.created_at,
+    vetted: false,
+    vettedBy: null,
+    vettingMethod: null,
+    vettingNote: null,
+  };
+}
+
+// ── subcommands ───────────────────────────────────────────────────────────────
+
+function cmdList(flags) {
+  const limit = flags.limit ? parseInt(flags.limit, 10) : 50;
+  const since = flags.since || null;
+  const vettedOnly = flags['vetted-only'] === true || flags['vetted-only'] === 'true';
+
+  const addressed = loadAddressed();
+
+  // Build merged item map (seed items override bead items if same id)
+  const itemMap = new Map();
+
+  // Load open bead items first (lower priority)
+  for (const issue of loadBeadsItems()) {
+    if (issue._type === 'issue' && issue.status === 'open') {
+      const item = issueToExternalFeedbackItem(issue);
+      itemMap.set(item.id, item);
+    }
+  }
+
+  // Load seed items (higher priority — override beads if same id)
+  for (const item of loadSeedItems()) {
+    if (item.id) itemMap.set(item.id, item);
+  }
+
+  let items = Array.from(itemMap.values())
+    .filter(i => !addressed.has(i.id));
+
+  // Apply vetted-only filter
+  if (vettedOnly) {
+    items = items.filter(i => i.vetted === true);
+  }
+
+  // Cursor-based pagination (cursor = last id seen)
+  if (since) {
+    const idx = items.findIndex(i => i.id === since);
+    if (idx !== -1) items = items.slice(idx + 1);
+  }
+
+  const page = items.slice(0, limit);
+  const cursor = page.length >= limit && items.length > limit ? page[page.length - 1].id : '';
+
+  out({ items: page, cursor });
+}
+
+function cmdMarkAddressed(flags) {
+  const id = flags.id;
+  if (!id) die('missing --id', 1);
+
+  ensureSpecifyDir();
+
+  const addressed = loadAddressed();
+  if (addressed.has(id)) {
+    process.exit(0); // idempotent
+  }
+
+  // Verify item exists in either store
+  const beadsItems = loadBeadsItems();
+  const seedItems = loadSeedItems();
+  const allIds = new Set([
+    ...beadsItems.filter(i => i._type === 'issue' && i.status === 'open').map(i => i.id),
+    ...seedItems.map(i => i.id),
+  ]);
+
+  if (!allIds.has(id)) {
+    die(`item not found: ${id}`, 4);
+  }
+
+  appendFileSync(EF_ADDRESSED_FILE, JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n');
+  process.exit(0);
+}
+
+// ── main ──────────────────────────────────────────────────────────────────────
+
+const [, , subcmd, ...rest] = process.argv;
+const flags = parseArgs(rest);
+
+switch (subcmd) {
+  case 'list':
+    cmdList(flags);
+    break;
+  case 'mark-addressed':
+    cmdMarkAddressed(flags);
+    break;
+  default:
+    die(
+      `Usage: external-feedback-cli <subcommand> [flags]\n` +
+        `Subcommands: list, mark-addressed`,
+      1
+    );
+}
