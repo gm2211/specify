@@ -25,13 +25,17 @@ RUN npx tsc --project tsconfig.json \
 # --- Runtime stage ---
 FROM node:22-bookworm-slim
 
-# Playwright system deps (Chromium only)
+# Playwright system deps (Chromium only) + native-module build tools
+# (python3 / make / g++ are needed as a fallback if better-sqlite3's
+# prebuild-install cannot find a prebuilt .node for this exact Node ABI —
+# they let node-gyp compile from source instead of aborting).
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libnss3 libatk1.0-0 libatk-bridge2.0-0 libcups2 libdrm2 \
     libxkbcommon0 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
     libgbm1 libpango-1.0-0 libcairo2 libasound2 libxshmfence1 \
     libx11-xcb1 fonts-liberation fonts-noto-color-emoji \
     ca-certificates tini \
+    python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -43,8 +47,17 @@ WORKDIR /app
 # (= /root/.cache/… at build time) but at runtime HOME is redirected to /work
 # (the PVC mount), causing browserType.launch to fail with "Executable doesn't
 # exist" because /work/.cache/ms-playwright is empty.
+#
+# better-sqlite3 native binding: npm ci uses --ignore-scripts so the postinstall
+# download/build is skipped.  We then run `npm rebuild better-sqlite3` which
+# invokes prebuild-install (prebuilt .node from GitHub releases for this exact
+# Node ABI) and falls back to node-gyp compile-from-source if no prebuilt
+# matches.  This ensures the .node binary is present and linked to the correct
+# libc/arch before the image is sealed.  Without this the session indexer and
+# confidence store both warn "unavailable" on every run.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
+ && npm rebuild better-sqlite3 \
  && PLAYWRIGHT_BROWSERS_PATH=/app/.ms-playwright npx playwright install chromium \
  && rm -rf /tmp/*
 
