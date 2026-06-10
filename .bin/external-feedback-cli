@@ -94,12 +94,8 @@ function issueToExternalFeedbackItem(issue) {
     kind: issueTypeToKind(issue.issue_type),
     priority: typeof issue.priority === 'number' ? issue.priority : 2,
     labels: issue.labels || [],
-    externalUrl: null,
     createdAt: issue.created_at,
     vetted: false,
-    vettedBy: null,
-    vettingMethod: null,
-    vettingNote: null,
   };
 }
 
