@@ -141,7 +141,8 @@ function cmdList(flags) {
   const page = items.slice(0, limit);
   const cursor = page.length >= limit && items.length > limit ? page[page.length - 1].id : '';
 
-  out({ items: page, cursor });
+  const clean = page.map((it) => Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null && v !== undefined)));
+  out({ items: clean, cursor });
 }
 
 function cmdMarkAddressed(flags) {
