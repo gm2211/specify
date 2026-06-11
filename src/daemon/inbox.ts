@@ -30,7 +30,9 @@ import {
   getComparePrompt,
   getReplayPrompt,
 } from '../agent/prompts.js';
+import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 import { loadSpec, specToYaml } from '../spec/parser.js';
+import type { Spec } from '../spec/types.js';
 import { saveMessage, loadMessages, pruneMessages } from './inbox-state.js';
 
 export type InboxMode = 'stateless' | 'attach';
@@ -244,7 +246,7 @@ export class InboxRegistry {
     this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
-      const runnerOpts = this.buildRunnerOptions(message);
+      const runnerOpts = await this.buildRunnerOptions(message);
       message.outputDir = runnerOpts.outputDir;
       const pool = getPool()!;
       const result = await pool.dispatch(message.id, runnerOpts);
@@ -267,7 +269,7 @@ export class InboxRegistry {
     this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
-      const runnerOpts = this.buildRunnerOptions(message);
+      const runnerOpts = await this.buildRunnerOptions(message);
       message.outputDir = runnerOpts.outputDir;
       const result = await runnerImpl(runnerOpts);
       message.status = 'completed';
@@ -293,7 +295,14 @@ export class InboxRegistry {
     let session = this.sessions.get(sessionKey);
 
     if (!session) {
-      session = this.startSession(sessionKey, message);
+      const injector = new MessageInjector(message.request.prompt);
+      session = {
+        id: sessionKey,
+        injector,
+        activeMessage: message.id,
+        queue: [],
+        done: this.startSession(sessionKey, message, injector),
+      };
       this.sessions.set(sessionKey, session);
       // The first message becomes the initial prompt of the session;
       // MessageInjector yields it first. We mark it running immediately.
@@ -312,53 +321,42 @@ export class InboxRegistry {
     session.injector.inject(message.request.prompt, 'next');
   }
 
-  private startSession(sessionKey: string, initial: InboxMessage): PersistentSession {
-    const injector = new MessageInjector(initial.request.prompt);
-    const runnerOpts = this.buildRunnerOptions(initial);
-    runnerOpts.messageInjector = injector;
-    initial.outputDir = runnerOpts.outputDir;
+  private async startSession(sessionKey: string, initial: InboxMessage, injector: MessageInjector): Promise<void> {
+    try {
+      const runnerOpts = await this.buildRunnerOptions(initial);
+      runnerOpts.messageInjector = injector;
+      initial.outputDir = runnerOpts.outputDir;
 
-    const done = runnerImpl(runnerOpts).then(
-      (result) => {
-        // Session ended — the agent returned a final result. In chat-style
-        // mode this normally only happens on close() or max_turns.
-        initial.status = 'completed';
-        initial.result = result;
-        initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
-        this.persist(initial);
-        eventBus.send('inbox:session_ended', {
-          session: sessionKey,
-          costUsd: result.costUsd,
-          resultPath: initial.resultPath,
-        }, initial.id);
-        this.sessions.delete(sessionKey);
-      },
-      (err) => {
-        this.fail(initial, err);
-        this.sessions.delete(sessionKey);
-      },
-    );
-
-    return {
-      id: sessionKey,
-      injector,
-      activeMessage: initial.id,
-      queue: [],
-      done,
-    };
+      const result = await runnerImpl(runnerOpts);
+      // Session ended — the agent returned a final result. In chat-style
+      // mode this normally only happens on close() or max_turns.
+      initial.status = 'completed';
+      initial.result = result;
+      initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
+      this.persist(initial);
+      eventBus.send('inbox:session_ended', {
+        session: sessionKey,
+        costUsd: result.costUsd,
+        resultPath: initial.resultPath,
+      }, initial.id);
+    } catch (err) {
+      this.fail(initial, err);
+    } finally {
+      this.sessions.delete(sessionKey);
+    }
   }
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
-  private buildRunnerOptions(message: InboxMessage): SdkRunnerOptions {
+  private async buildRunnerOptions(message: InboxMessage): Promise<SdkRunnerOptions> {
     const req = message.request;
     const outputDir = path.resolve(
       req.outputDir ?? path.join('.specify', 'inbox', message.id),
     );
 
-    const { systemPrompt, userPrompt } = buildPrompts(req, outputDir);
+    const { systemPrompt, userPrompt, specPath } = await buildPrompts(req, outputDir);
 
     // task=freeform maps to a 'verify' runner shape (single browser, Read/Write
     // tools, no structured output schema). 'verify' runner + freeform system
@@ -377,6 +375,7 @@ export class InboxRegistry {
     if (req.remoteUrl) opts.remoteUrl = req.remoteUrl;
     if (req.localUrl) opts.localUrl = req.localUrl;
     if (req.spec) opts.spec = req.spec;
+    else if (specPath) opts.spec = specPath;
     if (req.captureDir) opts.captureDir = req.captureDir;
     return opts;
   }
@@ -418,12 +417,15 @@ export class InboxRegistry {
   }
 }
 
-function buildPrompts(req: InboxRequest, outputDir: string): { systemPrompt: string; userPrompt: string } {
+interface PromptBundle {
+  systemPrompt: string;
+  userPrompt: string;
+  specPath?: string;
+}
+
+async function buildPrompts(req: InboxRequest, outputDir: string): Promise<PromptBundle> {
   if (req.task === 'verify') {
-    if (!req.spec) {
-      throw new Error('verify task requires `spec` (path to spec file)');
-    }
-    const spec = loadSpec(path.resolve(req.spec));
+    const { spec, specPath } = await resolveVerifySpec(req);
     const specYaml = specToYaml(spec);
     const targetUrl = req.url
       ?? (spec.target.type === 'web' || spec.target.type === 'api'
@@ -436,6 +438,7 @@ function buildPrompts(req: InboxRequest, outputDir: string): { systemPrompt: str
         : targetUrl
           ? `Verify ${targetUrl} against the behavioral spec.`
           : `Verify the target against the behavioral spec.`,
+      specPath,
     };
   }
 
@@ -484,6 +487,25 @@ If the instruction cannot be safely completed, respond with a short
 explanation and stop. Prefer read-only operations unless told otherwise.
 Output directory for any files you create: ${outputDir}`,
     userPrompt: req.prompt,
+  };
+}
+
+async function resolveVerifySpec(req: InboxRequest): Promise<{ spec: Spec; specPath?: string }> {
+  if (req.spec) {
+    return { spec: loadSpec(path.resolve(req.spec)) };
+  }
+
+  const source = specSourceFromEnv();
+  if (!source) {
+    throw new Error(
+      'verify task requires `spec` (path to spec file) or one configured spec source: SPECIFY_SPEC_INLINE_PATH / SPECIFY_SPEC_URL / SPECIFY_SPEC_GIT_REPO',
+    );
+  }
+
+  const resolved = await resolveSpec(source);
+  return {
+    spec: resolved.spec,
+    specPath: source.kind === 'inline' ? path.resolve(source.path) : undefined,
   };
 }
 

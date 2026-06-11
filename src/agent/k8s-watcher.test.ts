@@ -250,9 +250,12 @@ test('triggerVerifyForRollout: omits spec key entirely when specPath unset', asy
   assert.equal('spec' in body, false);
 });
 
-test('startK8sWatcher: no specPath does NOT call fetch on rollout and logs skipping verify', async () => {
-  let fetchCalled = false;
-  const fetchImpl = (async () => { fetchCalled = true; return new Response('ok', { status: 200 }); }) as typeof fetch;
+test('startK8sWatcher: no specPath posts rollout verify for inbox env fallback', async () => {
+  let capturedBody: Record<string, unknown> | undefined;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    capturedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   let logged = '';
   const watcherImpl: WatcherImpl = {
     async start(handler) {
@@ -272,6 +275,7 @@ test('startK8sWatcher: no specPath does NOT call fetch on rollout and logs skipp
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
-  assert.equal(fetchCalled, false);
-  assert.match(logged, /skipping verify/);
+  assert.equal(capturedBody?.task, 'verify');
+  assert.equal('spec' in (capturedBody ?? {}), false);
+  assert.match(logged, /inbox accepted verify/);
 });
