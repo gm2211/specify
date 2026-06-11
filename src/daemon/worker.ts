@@ -28,9 +28,10 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EPIPE') {
     // Write directly to fd 2 — process.stderr.write itself could EPIPE.
     try {
-      process.stderr.fd !== undefined &&
-        require('fs').writeSync(process.stderr.fd, '[worker] swallowed EPIPE — continuing\n');
-    } catch (_) { /* best-effort log */ }
+      if (process.stderr.fd !== undefined) {
+        (require as NodeRequire)('fs').writeSync(process.stderr.fd, '[worker] swallowed EPIPE — continuing\n');
+      }
+    } catch { /* best-effort log */ }
     return;
   }
   // Re-throw on next tick so Node's unhandled-exception mechanism sees it.
