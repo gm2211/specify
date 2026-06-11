@@ -31,6 +31,7 @@ import {
   getReplayPrompt,
 } from '../agent/prompts.js';
 import { loadSpec, specToYaml } from '../spec/parser.js';
+import { saveMessage, loadMessages, pruneMessages } from './inbox-state.js';
 
 export type InboxMode = 'stateless' | 'attach';
 
@@ -64,7 +65,7 @@ export interface InboxRequest {
 export interface InboxMessage {
   id: string;
   createdAt: string;
-  status: 'queued' | 'running' | 'completed' | 'failed';
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'interrupted';
   request: InboxRequest;
   /** Populated once the message finishes. */
   result?: SdkRunnerResult;
@@ -110,12 +111,47 @@ export class InboxRegistry {
   private statelessInFlight = false;
   private statelessQueue: InboxMessage[] = [];
 
-  /** Wipe state (tests only). */
+  /** Wipe state (tests only). Does NOT delete disk state — tests manage the
+   *  dir via SPECIFY_INBOX_STATE_DIR env var. */
   reset(): void {
     for (const key of this.sessions.keys()) this.closeSession(key);
     this.history.clear();
     this.statelessQueue.length = 0;
     this.statelessInFlight = false;
+  }
+
+  /** Persist a message to disk and prune the registry to MAX_HISTORY records.
+   *  Persistence failure must never break dispatch — errors go to stderr. */
+  private persist(message: InboxMessage): void {
+    try {
+      saveMessage(message);
+      pruneMessages(MAX_HISTORY);
+    } catch (err) {
+      process.stderr.write(`[inbox] persist failed for ${message.id}: ${(err as Error).message}\n`);
+    }
+  }
+
+  /** Restore inbox history from disk after a restart. Any record that was
+   *  'queued' or 'running' is marked 'interrupted' — those jobs will never
+   *  complete because the process that was executing them is gone.
+   *  Call this once during server startup, before k8s watcher / HTTP traffic. */
+  restoreFromDisk(): { restored: number; interrupted: number } {
+    const records = loadMessages();
+    records.sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+
+    let interrupted = 0;
+    for (const record of records) {
+      this.remember(record);
+      if (record.status === 'queued' || record.status === 'running') {
+        record.status = 'interrupted';
+        record.error = 'daemon restarted while job was in flight';
+        this.persist(record);
+        eventBus.send('inbox:interrupted', { id: record.id, error: record.error }, record.id);
+        interrupted++;
+      }
+    }
+
+    return { restored: records.length, interrupted };
   }
 
   get(id: string): InboxMessage | undefined {
@@ -151,6 +187,7 @@ export class InboxRegistry {
       session: effectiveReq.mode === 'attach' ? effectiveReq.session ?? 'default' : undefined,
     };
     this.remember(message);
+    this.persist(message);
     eventBus.send('inbox:received', {
       id,
       task: effectiveReq.task,
@@ -204,6 +241,7 @@ export class InboxRegistry {
 
   private async runStatelessViaPool(message: InboxMessage): Promise<void> {
     message.status = 'running';
+    this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
       const runnerOpts = this.buildRunnerOptions(message);
@@ -213,6 +251,7 @@ export class InboxRegistry {
       message.status = 'completed';
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
+      this.persist(message);
       eventBus.send('inbox:completed', {
         id: message.id,
         costUsd: result.costUsd,
@@ -225,6 +264,7 @@ export class InboxRegistry {
 
   private async runStatelessOne(message: InboxMessage): Promise<void> {
     message.status = 'running';
+    this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
       const runnerOpts = this.buildRunnerOptions(message);
@@ -233,6 +273,7 @@ export class InboxRegistry {
       message.status = 'completed';
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
+      this.persist(message);
       eventBus.send('inbox:completed', {
         id: message.id,
         costUsd: result.costUsd,
@@ -257,6 +298,7 @@ export class InboxRegistry {
       // The first message becomes the initial prompt of the session;
       // MessageInjector yields it first. We mark it running immediately.
       message.status = 'running';
+      this.persist(message);
       eventBus.send('inbox:running', { id: message.id, session: sessionKey }, message.id);
       session.activeMessage = message.id;
       return;
@@ -265,6 +307,7 @@ export class InboxRegistry {
     // Existing session — inject this message.
     message.status = 'running';
     session.activeMessage = message.id;
+    this.persist(message);
     eventBus.send('inbox:running', { id: message.id, session: sessionKey }, message.id);
     session.injector.inject(message.request.prompt, 'next');
   }
@@ -282,6 +325,7 @@ export class InboxRegistry {
         initial.status = 'completed';
         initial.result = result;
         initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
+        this.persist(initial);
         eventBus.send('inbox:session_ended', {
           session: sessionKey,
           costUsd: result.costUsd,
@@ -369,6 +413,7 @@ export class InboxRegistry {
     const msg = err instanceof Error ? err.message : String(err);
     message.status = 'failed';
     message.error = msg;
+    this.persist(message);
     eventBus.send('inbox:failed', { id: message.id, error: msg }, message.id);
   }
 }

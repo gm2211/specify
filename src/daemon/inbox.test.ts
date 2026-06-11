@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach, afterEach } from 'node:test';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { inbox, __setRunnerForTesting } from './inbox.js';
+import { saveMessage, loadMessages } from './inbox-state.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 
 /**
@@ -29,6 +30,26 @@ async function flush(): Promise<void> {
   // Give the microtask/timer queue a tick so dispatched runners settle.
   await new Promise((r) => setTimeout(r, 10));
 }
+
+// ---------------------------------------------------------------------------
+// Test isolation: redirect disk persistence to a fresh tmpdir so tests never
+// write into .specify/inbox/_registry in the source tree.
+// ---------------------------------------------------------------------------
+let _stateDir: string;
+
+beforeEach(() => {
+  _stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-test-'));
+  process.env.SPECIFY_INBOX_STATE_DIR = _stateDir;
+});
+
+afterEach(() => {
+  delete process.env.SPECIFY_INBOX_STATE_DIR;
+  fs.rmSync(_stateDir, { recursive: true, force: true });
+});
+
+// ---------------------------------------------------------------------------
+// Existing tests (behaviour unchanged)
+// ---------------------------------------------------------------------------
 
 test('inbox.submit stateless: runs fake runner and persists result', async () => {
   inbox.reset();
@@ -218,4 +239,126 @@ test('inbox.list returns newest first', async () => {
     __setRunnerForTesting(prev);
     inbox.reset();
   }
+});
+
+// ---------------------------------------------------------------------------
+// New persistence tests
+// ---------------------------------------------------------------------------
+
+test('inbox.submit: record is persisted to disk immediately after submit() (queued or running)', () => {
+  // submit() synchronously calls persist() with status='queued', then
+  // asynchronously dispatches. By the time loadMessages() runs synchronously
+  // here, the record is on disk — it may already have advanced to 'running'
+  // if the microtask queue ran, but it will always be present.
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const msg = inbox.submit({ task: 'freeform', prompt: 'persist-me' });
+    const records = loadMessages();
+    const found = records.find((r) => r.id === msg.id);
+    assert.ok(found, 'record should be on disk immediately after submit');
+    // Status is either 'queued' (persisted synchronously) or 'running'
+    // (dispatch started before loadMessages ran — both are acceptable).
+    assert.ok(
+      found?.status === 'queued' || found?.status === 'running',
+      `expected queued or running, got ${found?.status}`,
+    );
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit: after completion the disk record has status completed', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const msg = inbox.submit({ task: 'freeform', prompt: 'complete-me' });
+    await flush();
+
+    assert.equal(inbox.get(msg.id)?.status, 'completed');
+
+    const records = loadMessages();
+    const found = records.find((r) => r.id === msg.id);
+    assert.ok(found, 'completed record should be on disk');
+    assert.equal(found?.status, 'completed');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.restoreFromDisk: running/queued → interrupted; completed unchanged', async () => {
+  // Seed the state dir directly with JSON files (bypassing submit) to
+  // simulate records left from a previous pod lifetime, then call
+  // restoreFromDisk() on a freshly-reset registry.
+
+  inbox.reset(); // clears in-memory history
+
+  const runningMsg = {
+    id: 'msg_restore01',
+    createdAt: new Date(Date.now() - 5000).toISOString(),
+    status: 'running' as const,
+    request: { task: 'freeform' as const, prompt: 'was running' },
+  };
+  const queuedMsg = {
+    id: 'msg_restore02',
+    createdAt: new Date(Date.now() - 3000).toISOString(),
+    status: 'queued' as const,
+    request: { task: 'freeform' as const, prompt: 'was queued' },
+  };
+  const completedMsg = {
+    id: 'msg_restore03',
+    createdAt: new Date(Date.now() - 1000).toISOString(),
+    status: 'completed' as const,
+    request: { task: 'freeform' as const, prompt: 'was completed' },
+    result: { result: 'ok', costUsd: 0.01 },
+  };
+
+  saveMessage(runningMsg);
+  saveMessage(queuedMsg);
+  saveMessage(completedMsg);
+
+  // Reset in-memory state to simulate a fresh daemon start (disk is intact).
+  inbox.reset();
+
+  const { restored, interrupted } = inbox.restoreFromDisk();
+
+  assert.equal(restored, 3, 'should restore 3 records');
+  assert.equal(interrupted, 2, 'running + queued should be marked interrupted');
+
+  // running → interrupted
+  const r1 = inbox.get('msg_restore01');
+  assert.ok(r1, 'running record should be in history after restore');
+  assert.equal(r1?.status, 'interrupted');
+  assert.match(r1?.error ?? '', /restarted/i);
+
+  // queued → interrupted
+  const r2 = inbox.get('msg_restore02');
+  assert.ok(r2, 'queued record should be in history after restore');
+  assert.equal(r2?.status, 'interrupted');
+  assert.match(r2?.error ?? '', /restarted/i);
+
+  // completed → still completed, no error injected
+  const r3 = inbox.get('msg_restore03');
+  assert.ok(r3, 'completed record should be in history after restore');
+  assert.equal(r3?.status, 'completed');
+  assert.equal(r3?.error, undefined);
+
+  // disk records for interrupted jobs should also be updated
+  const diskRecords = loadMessages();
+  const diskR1 = diskRecords.find((r) => r.id === 'msg_restore01');
+  assert.equal(diskR1?.status, 'interrupted', 'disk record should be updated to interrupted');
+
+  inbox.reset();
+});
+
+test('inbox.restoreFromDisk: empty state dir returns 0/0', () => {
+  inbox.reset();
+  const { restored, interrupted } = inbox.restoreFromDisk();
+  assert.equal(restored, 0);
+  assert.equal(interrupted, 0);
+  inbox.reset();
 });

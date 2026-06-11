@@ -93,6 +93,15 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   const maxWorkers = opts.maxWorkers ?? 2;
   if (maxWorkers > 0) configurePool(maxWorkers);
 
+  // Restore inbox job history from the previous run. Any job that was still
+  // queued or running when the pod restarted is marked 'interrupted' so
+  // pollers get a terminal status instead of 404. This must run after
+  // configurePool but before startK8sWatcher (which self-POSTs to /inbox).
+  const { restored, interrupted } = inbox.restoreFromDisk();
+  if (restored > 0) {
+    process.stderr.write(`[daemon] restored ${restored} inbox record(s) from disk (${interrupted} marked interrupted)\n`);
+  }
+
   // Wire outbound report sinks (file / slack). No-op when the env vars
   // (SPECIFY_REPORT_FILE_DIR, SPECIFY_REPORT_SLACK_WEBHOOK_FILE) aren't set.
   const sinks = attachReportSinks();
@@ -252,7 +261,7 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
           } catch {
             unsub();
           }
-          if (event.type === 'inbox:completed' || event.type === 'inbox:failed') {
+          if (event.type === 'inbox:completed' || event.type === 'inbox:failed' || event.type === 'inbox:interrupted') {
             try { controller.close(); } catch { /* already closed */ }
             unsub();
           }
