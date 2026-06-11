@@ -21,8 +21,8 @@
  *   SPECIFY_K8S_RESOURCES             comma-separated; default 'deployment,statefulset'
  *   SPECIFY_K8S_LOCAL_INBOX_URL       default 'http://127.0.0.1:4100/inbox'
  *   SPECIFY_INBOX_TOKEN               daemon bearer; passed through Authorization
- *   SPECIFY_SPEC_INLINE_PATH          path to spec file forwarded as `spec` in verify
- *                                     payloads; when unset rollout verify posts are skipped
+ *   SPECIFY_SPEC_INLINE_PATH          optional path forwarded as `spec` in verify
+ *                                     payloads; when unset inbox resolves env source
  */
 
 import { eventBus } from './event-bus.js';
@@ -47,8 +47,8 @@ export interface WatcherConfig {
   inboxBearer?: string;
   /**
    * Path to the spec file forwarded as `spec` in verify payloads.
-   * Sourced from SPECIFY_SPEC_INLINE_PATH. When absent, rollout-triggered
-   * verify posts are skipped entirely to avoid guaranteed-failure inbox jobs.
+   * Sourced from SPECIFY_SPEC_INLINE_PATH. When absent, the verify payload
+   * omits `spec` so the inbox can resolve the daemon's configured source.
    */
   specPath?: string;
 }
@@ -158,10 +158,6 @@ export async function startK8sWatcher(
       image: ev.image,
       resourceVersion: ev.resourceVersion,
     });
-    if (!config.specPath) {
-      log(`[k8s-watcher] no spec configured (SPECIFY_SPEC_INLINE_PATH unset) — skipping verify post for ${ev.namespace}/${ev.name}\n`);
-      return;
-    }
     try {
       await triggerVerifyForRollout(ev, config, fetchImpl);
       log(`[k8s-watcher] inbox accepted verify for ${ev.namespace}/${ev.name}\n`);

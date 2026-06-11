@@ -7,6 +7,17 @@ import { inbox, __setRunnerForTesting } from './inbox.js';
 import { saveMessage, loadMessages } from './inbox-state.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 
+const ENV_KEYS = [
+  'SPECIFY_SPEC_INLINE_PATH',
+  'SPECIFY_SPEC_URL',
+  'SPECIFY_SPEC_URL_BEARER_FILE',
+  'SPECIFY_SPEC_GIT_REPO',
+  'SPECIFY_SPEC_GIT_REF',
+  'SPECIFY_SPEC_GIT_PATH',
+  'SPECIFY_SPEC_GIT_DEPLOY_KEY_FILE',
+  'SPECIFY_TARGET_URL',
+] as const;
+
 /**
  * Fake runner that records the options it received and returns a
  * deterministic success result. Lets us exercise the full dispatch path
@@ -36,16 +47,65 @@ async function flush(): Promise<void> {
 // write into .specify/inbox/_registry in the source tree.
 // ---------------------------------------------------------------------------
 let _stateDir: string;
+let _envSnapshot: Partial<Record<(typeof ENV_KEYS)[number], string>>;
 
 beforeEach(() => {
   _stateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-test-'));
   process.env.SPECIFY_INBOX_STATE_DIR = _stateDir;
+  _envSnapshot = {};
+  for (const key of ENV_KEYS) {
+    _envSnapshot[key] = process.env[key];
+    delete process.env[key];
+  }
 });
 
 afterEach(() => {
   delete process.env.SPECIFY_INBOX_STATE_DIR;
+  for (const key of ENV_KEYS) {
+    const value = _envSnapshot[key];
+    if (value === undefined) delete process.env[key];
+    else process.env[key] = value;
+  }
   fs.rmSync(_stateDir, { recursive: true, force: true });
 });
+
+function writeMinimalSpec(dir: string, targetUrl = 'http://localhost:3000'): string {
+  const specPath = path.join(dir, 'spec.yaml');
+  fs.writeFileSync(specPath, [
+    'version: "2"',
+    'name: Test',
+    'description: Test spec.',
+    'target:',
+    '  type: web',
+    `  url: ${targetUrl}`,
+    'areas:',
+    '  - id: home',
+    '    name: Home',
+    '    behaviors:',
+    '      - id: loads',
+    '        description: Page loads.',
+    '',
+  ].join('\n'));
+  return specPath;
+}
+
+function minimalSpecYaml(name: string, targetUrl: string): string {
+  return [
+    'version: "2"',
+    `name: ${name}`,
+    'description: Test spec.',
+    'target:',
+    '  type: web',
+    `  url: ${targetUrl}`,
+    'areas:',
+    '  - id: home',
+    '    name: Home',
+    '    behaviors:',
+    '      - id: loads',
+    '        description: Page loads.',
+    '',
+  ].join('\n');
+}
 
 // ---------------------------------------------------------------------------
 // Existing tests (behaviour unchanged)
@@ -57,21 +117,7 @@ test('inbox.submit stateless: runs fake runner and persists result', async () =>
   const prev = __setRunnerForTesting(runner);
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-'));
-    const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'description: Test spec.',
-      'target:',
-      '  type: web',
-      '  url: http://localhost:3000',
-      'areas:',
-      '  - id: home',
-      '    name: Home',
-      '    behaviors:',
-      '      - id: loads',
-      '        description: Page loads.',
-    ].join('\n'));
+    const specPath = writeMinimalSpec(tmpDir);
 
     const msg = inbox.submit({
       task: 'verify',
@@ -113,6 +159,70 @@ test('inbox.submit verify without spec fails', async () => {
     assert.equal(finished.status, 'failed');
     assert.match(finished.error ?? '', /requires `spec`/);
   } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit verify without request spec falls back to SPECIFY_SPEC_INLINE_PATH', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-spec-'));
+    const specPath = writeMinimalSpec(tmpDir, 'http://from-inline-spec:3000');
+    process.env.SPECIFY_SPEC_INLINE_PATH = specPath;
+
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: '',
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].spec, path.resolve(specPath));
+    assert.match(calls[0].systemPrompt, /from-inline-spec/);
+    assert.equal(calls[0].userPrompt, 'Verify http://from-inline-spec:3000 against the behavioral spec.');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit verify without request spec resolves SPECIFY_SPEC_URL', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  const prevFetch = globalThis.fetch;
+  try {
+    const specUrl = 'https://example.test/.well-known/specify.spec.yaml';
+    process.env.SPECIFY_SPEC_URL = specUrl;
+    let fetchedUrl = '';
+    globalThis.fetch = (async (input) => {
+      fetchedUrl = String(input);
+      return new Response(minimalSpecYaml('UrlSpec', 'http://from-url-spec:3000'));
+    }) as typeof fetch;
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-url-spec-'));
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: '',
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(fetchedUrl, specUrl);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0].spec, undefined);
+    assert.match(calls[0].systemPrompt, /UrlSpec/);
+    assert.equal(calls[0].userPrompt, 'Verify http://from-url-spec:3000 against the behavioral spec.');
+  } finally {
+    globalThis.fetch = prevFetch;
     __setRunnerForTesting(prev);
     inbox.reset();
   }
