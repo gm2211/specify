@@ -21,6 +21,8 @@
  *   SPECIFY_K8S_RESOURCES             comma-separated; default 'deployment,statefulset'
  *   SPECIFY_K8S_LOCAL_INBOX_URL       default 'http://127.0.0.1:4100/inbox'
  *   SPECIFY_INBOX_TOKEN               daemon bearer; passed through Authorization
+ *   SPECIFY_SPEC_INLINE_PATH          path to spec file forwarded as `spec` in verify
+ *                                     payloads; when unset rollout verify posts are skipped
  */
 
 import { eventBus } from './event-bus.js';
@@ -43,6 +45,12 @@ export interface WatcherConfig {
   resources: Array<'deployment' | 'statefulset'>;
   inboxUrl: string;
   inboxBearer?: string;
+  /**
+   * Path to the spec file forwarded as `spec` in verify payloads.
+   * Sourced from SPECIFY_SPEC_INLINE_PATH. When absent, rollout-triggered
+   * verify posts are skipped entirely to avoid guaranteed-failure inbox jobs.
+   */
+  specPath?: string;
 }
 
 export interface WatcherDeps {
@@ -73,7 +81,8 @@ export function watcherConfigFromEnv(env: Record<string, string | undefined> = p
     .filter((r): r is 'deployment' | 'statefulset' => r === 'deployment' || r === 'statefulset');
   const inboxUrl = env.SPECIFY_K8S_LOCAL_INBOX_URL ?? 'http://127.0.0.1:4100/inbox';
   const inboxBearer = env.SPECIFY_INBOX_TOKEN;
-  return { enabled, namespaces, labelSelector, resources, inboxUrl, inboxBearer };
+  const specPath = env.SPECIFY_SPEC_INLINE_PATH;
+  return { enabled, namespaces, labelSelector, resources, inboxUrl, inboxBearer, specPath };
 }
 
 /**
@@ -82,7 +91,7 @@ export function watcherConfigFromEnv(env: Record<string, string | undefined> = p
  */
 export async function triggerVerifyForRollout(
   ev: RolloutEvent,
-  cfg: Pick<WatcherConfig, 'inboxUrl' | 'inboxBearer'>,
+  cfg: Pick<WatcherConfig, 'inboxUrl' | 'inboxBearer' | 'specPath'>,
   fetchImpl: typeof fetch = globalThis.fetch,
 ): Promise<void> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -91,6 +100,7 @@ export async function triggerVerifyForRollout(
     task: 'verify',
     prompt: `Verify ${ev.kind}/${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}) against the active spec.`,
     sender: 'k8s-watcher',
+    ...(cfg.specPath ? { spec: cfg.specPath } : {}),
     metadata: {
       kind: ev.kind,
       namespace: ev.namespace,
@@ -128,7 +138,7 @@ export async function startK8sWatcher(
   // rnz-ukd9: surface watcher config + lifecycle so silent-failure modes
   // (RBAC missing, informer.start hanging, isReady() filtering everything
   // out) are visible in pod logs.
-  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl}\n`);
+  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl} specPath=${config.specPath ?? 'none'}\n`);
 
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
   let watcher: WatcherImpl;
@@ -148,6 +158,10 @@ export async function startK8sWatcher(
       image: ev.image,
       resourceVersion: ev.resourceVersion,
     });
+    if (!config.specPath) {
+      log(`[k8s-watcher] no spec configured (SPECIFY_SPEC_INLINE_PATH unset) — skipping verify post for ${ev.namespace}/${ev.name}\n`);
+      return;
+    }
     try {
       await triggerVerifyForRollout(ev, config, fetchImpl);
       log(`[k8s-watcher] inbox accepted verify for ${ev.namespace}/${ev.name}\n`);

@@ -147,6 +147,7 @@ test('startK8sWatcher: rollout event triggers inbox post', async () => {
       labelSelector: 'specify.dev/target=true',
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
+      specPath: '/work/specify.spec.yaml',
     },
     { fetchImpl, watcherImpl, log: () => undefined },
   );
@@ -197,10 +198,80 @@ test("startK8sWatcher: inbox failure logged but doesn't throw", async () => {
       labelSelector: '',
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
+      specPath: '/work/specify.spec.yaml',
     },
     { fetchImpl, watcherImpl, log: (line) => { logged += line; } },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
   assert.match(logged, /inbox post failed/);
+});
+
+test('watcherConfigFromEnv: picks up SPECIFY_SPEC_INLINE_PATH into specPath', () => {
+  const cfg = watcherConfigFromEnv({ SPECIFY_SPEC_INLINE_PATH: '/work/specify.spec.yaml' });
+  assert.equal(cfg.specPath, '/work/specify.spec.yaml');
+});
+
+test('triggerVerifyForRollout: includes spec in posted body when specPath set', async () => {
+  let captured: { url?: string; init?: RequestInit } = {};
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    captured = { url, init };
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+  const ev: RolloutEvent = {
+    kind: 'deployment',
+    namespace: 'staging',
+    name: 'api',
+    image: 'api:abc',
+    resourceVersion: '99',
+  };
+  await triggerVerifyForRollout(
+    ev,
+    { inboxUrl: 'http://127.0.0.1:4100/inbox', inboxBearer: 'tok', specPath: '/work/specify.spec.yaml' },
+    fetchImpl,
+  );
+  const body = JSON.parse(captured.init?.body as string);
+  assert.equal(body.spec, '/work/specify.spec.yaml');
+});
+
+test('triggerVerifyForRollout: omits spec key entirely when specPath unset', async () => {
+  let captured: { url?: string; init?: RequestInit } = {};
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    captured = { url, init };
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+  const ev: RolloutEvent = { kind: 'deployment', namespace: 'staging', name: 'api' };
+  await triggerVerifyForRollout(
+    ev,
+    { inboxUrl: 'http://127.0.0.1:4100/inbox' },
+    fetchImpl,
+  );
+  const body = JSON.parse(captured.init?.body as string);
+  assert.equal('spec' in body, false);
+});
+
+test('startK8sWatcher: no specPath does NOT call fetch on rollout and logs skipping verify', async () => {
+  let fetchCalled = false;
+  const fetchImpl = (async () => { fetchCalled = true; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  let logged = '';
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      setTimeout(() => handler({ kind: 'deployment', namespace: 'n', name: 'x' }), 5);
+      return async () => undefined;
+    },
+  };
+  const stop = await startK8sWatcher(
+    {
+      enabled: true,
+      namespaces: [],
+      labelSelector: '',
+      resources: ['deployment'],
+      inboxUrl: 'http://127.0.0.1:4100/inbox',
+    },
+    { fetchImpl, watcherImpl, log: (line) => { logged += line; } },
+  );
+  await new Promise((r) => setTimeout(r, 30));
+  await stop();
+  assert.equal(fetchCalled, false);
+  assert.match(logged, /skipping verify/);
 });
