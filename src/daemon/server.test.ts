@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { beforeEach, afterEach } from 'node:test';
 import * as http from 'node:http';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -8,6 +8,18 @@ import { startDaemonServer, resolveToken } from './server.js';
 import { inbox, __setRunnerForTesting } from './inbox.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 import { appendDecision } from '../agent/pending-decisions.js';
+
+// Redirect inbox state dir to a tmp location so server tests never write
+// into .specify/inbox/_registry in the source tree.
+let _serverStateDir: string;
+beforeEach(() => {
+  _serverStateDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-server-test-'));
+  process.env.SPECIFY_INBOX_STATE_DIR = _serverStateDir;
+});
+afterEach(() => {
+  delete process.env.SPECIFY_INBOX_STATE_DIR;
+  fs.rmSync(_serverStateDir, { recursive: true, force: true });
+});
 
 const fakeRunner = async (_opts: SdkRunnerOptions): Promise<SdkRunnerResult> => ({
   result: 'ok',
@@ -199,4 +211,42 @@ test('daemon HTTP: /decisions endpoints require bearer and behave correctly', as
     body: JSON.stringify({ resolution_index: 0, scope: 'narrow' }),
   });
   assert.equal(doubleRes.status, 409);
+});
+
+test('daemon HTTP: GET /inbox/:id for a restored interrupted record returns 200 with status interrupted', async (t) => {
+  // Seed the state dir with a fake "running" record from a prior pod lifetime
+  // before the server starts, so restoreFromDisk() picks it up on startup.
+  const { saveMessage } = await import('./inbox-state.js');
+  const fakeId = 'msg_intrupt1';
+  saveMessage({
+    id: fakeId,
+    createdAt: new Date(Date.now() - 10_000).toISOString(),
+    status: 'running',
+    request: { task: 'freeform', prompt: 'was in flight' },
+  });
+
+  inbox.reset();
+  const prev = __setRunnerForTesting(fakeRunner);
+  const port = pickPort();
+  const original = process.env.SPECIFY_INBOX_TOKEN;
+  process.env.SPECIFY_INBOX_TOKEN = 'restore-token-789';
+  const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
+  t.after(async () => {
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
+    else process.env.SPECIFY_INBOX_TOKEN = original;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  });
+
+  await waitForHealth(port);
+  const token = 'restore-token-789';
+
+  const res = await request(port, `/inbox/${fakeId}`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assert.equal(res.status, 200, 'restored interrupted record should return 200, not 404');
+  assert.equal((res.json as { status: string }).status, 'interrupted');
+  assert.match((res.json as { error: string }).error ?? '', /restarted/i);
 });
