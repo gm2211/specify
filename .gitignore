@@ -32,3 +32,4 @@ deploy/terraform/**/.terraform.lock.hcl
 deploy/terraform/**/terraform.tfstate*
 deploy/terraform/**/*.auto.tfvars
 
+.last-update-check
