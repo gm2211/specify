@@ -8,6 +8,7 @@ import {
   buildSinks,
   sinkConfigFromEnv,
 } from './report-sink.js';
+import type { ReportContext } from './report-sink.js';
 import { eventBus } from './event-bus.js';
 
 function tmp(): { dir: string; cleanup: () => void } {
@@ -161,6 +162,174 @@ test('attachReportSinks: ignores events of other types', async () => {
       eventBus.send('inbox:running', { id: 'whatever' });
       await new Promise((r) => setTimeout(r, 20));
       assert.ok(!fs.existsSync(path.join(reportsDir, 'whatever.json')));
+    } finally {
+      detach();
+    }
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Platform sink — durationMs and timestamp tests
+// ---------------------------------------------------------------------------
+
+function makePlatformSinks(fetchImpl: typeof fetch) {
+  return buildSinks(
+    {
+      platformSpecRunResultUrl: 'https://platform.test/spec-run-result',
+      platformSpecifyToken: 'test-token',
+    },
+    fetchImpl,
+  );
+}
+
+function makeVerifyBody(results: Array<{ id: string; status: string; duration_ms?: number; rationale?: string }>) {
+  return {
+    task: 'verify',
+    structuredOutput: {
+      pass: true,
+      summary: { total: results.length, passed: results.filter((r) => r.status === 'passed').length, failed: 0, skipped: 0 },
+      results,
+    },
+  };
+}
+
+test('platform sink: area with all untimed behaviors → entry has no durationMs key', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_notimed',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([
+      { id: 'home/loads', status: 'passed' },
+      { id: 'home/renders', status: 'passed' },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].area, 'home');
+  assert.equal(entries[0].passed, true);
+  assert.ok(!('durationMs' in entries[0]), 'durationMs should be absent when no behavior has timing');
+});
+
+test('platform sink: area with mixed timing → durationMs equals sum of known durations only', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_mixed',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([
+      { id: 'home/loads', status: 'passed', duration_ms: 300 },
+      { id: 'home/renders', status: 'passed' },   // no duration_ms
+      { id: 'home/nav', status: 'passed', duration_ms: 150 },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].durationMs, 450, 'durationMs should be sum of the two timed behaviors only');
+});
+
+test('platform sink: ctx with startedAt/completedAt → first entry carries them, subsequent entries do not', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_ts',
+    resultPath: '/dev/null',
+    startedAt: '2026-01-01T10:00:00.000Z',
+    completedAt: '2026-01-01T10:05:00.000Z',
+    body: makeVerifyBody([
+      { id: 'home/loads', status: 'passed', duration_ms: 100 },
+      { id: 'checkout/flow', status: 'passed', duration_ms: 200 },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 2);
+  assert.equal(entries[0].startedAt, '2026-01-01T10:00:00.000Z');
+  assert.equal(entries[0].completedAt, '2026-01-01T10:05:00.000Z');
+  assert.ok(!('startedAt' in entries[1]), 'startedAt should not appear on subsequent entries');
+  assert.ok(!('completedAt' in entries[1]), 'completedAt should not appear on subsequent entries');
+});
+
+test('platform sink: ctx without timestamps → no startedAt/completedAt keys in body', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_nots',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([
+      { id: 'home/loads', status: 'passed', duration_ms: 100 },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 1);
+  assert.ok(!('startedAt' in entries[0]), 'startedAt should be absent when ctx has no timestamps');
+  assert.ok(!('completedAt' in entries[0]), 'completedAt should be absent when ctx has no timestamps');
+});
+
+test('attachReportSinks: bus event with timestamps propagates to platform sink', async () => {
+  const { dir, cleanup } = tmp();
+  try {
+    const resultPath = path.join(dir, 'verify-result.json');
+    fs.writeFileSync(
+      resultPath,
+      JSON.stringify(makeVerifyBody([{ id: 'home/loads', status: 'passed', duration_ms: 100 }])),
+    );
+
+    let postedBody: unknown;
+    const fetchImpl = (async (_url: string, init?: RequestInit) => {
+      postedBody = JSON.parse(init?.body as string);
+      return new Response('ok', { status: 200 });
+    }) as typeof fetch;
+
+    const { detach } = attachReportSinks({
+      config: {
+        platformSpecRunResultUrl: 'https://platform.test/spec-run-result',
+        platformSpecifyToken: 'tok',
+      },
+      fetchImpl,
+    });
+    try {
+      eventBus.send('inbox:completed', {
+        id: 'msg_busTs',
+        resultPath,
+        costUsd: 0.01,
+        startedAt: '2026-06-01T09:00:00.000Z',
+        completedAt: '2026-06-01T09:03:00.000Z',
+      });
+      await new Promise((r) => setTimeout(r, 50));
+      const entries = postedBody as Array<Record<string, unknown>>;
+      assert.ok(Array.isArray(entries), 'should have posted entries');
+      assert.equal(entries[0].startedAt, '2026-06-01T09:00:00.000Z');
+      assert.equal(entries[0].completedAt, '2026-06-01T09:03:00.000Z');
     } finally {
       detach();
     }
