@@ -79,6 +79,10 @@ export interface InboxMessage {
   error?: string;
   /** Session id for attach-mode messages. */
   session?: string;
+  /** ISO timestamp when the job began executing. */
+  startedAt?: string;
+  /** ISO timestamp when the job finished. */
+  completedAt?: string;
 }
 
 interface PersistentSession {
@@ -243,6 +247,7 @@ export class InboxRegistry {
 
   private async runStatelessViaPool(message: InboxMessage): Promise<void> {
     message.status = 'running';
+    message.startedAt = new Date().toISOString();
     this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
@@ -251,6 +256,7 @@ export class InboxRegistry {
       const pool = getPool()!;
       const result = await pool.dispatch(message.id, runnerOpts);
       message.status = 'completed';
+      message.completedAt = new Date().toISOString();
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
       this.persist(message);
@@ -258,6 +264,8 @@ export class InboxRegistry {
         id: message.id,
         costUsd: result.costUsd,
         resultPath: message.resultPath,
+        startedAt: message.startedAt,
+        completedAt: message.completedAt,
       }, message.id);
     } catch (err) {
       this.fail(message, err);
@@ -266,6 +274,7 @@ export class InboxRegistry {
 
   private async runStatelessOne(message: InboxMessage): Promise<void> {
     message.status = 'running';
+    message.startedAt = new Date().toISOString();
     this.persist(message);
     eventBus.send('inbox:running', { id: message.id }, message.id);
     try {
@@ -273,6 +282,7 @@ export class InboxRegistry {
       message.outputDir = runnerOpts.outputDir;
       const result = await runnerImpl(runnerOpts);
       message.status = 'completed';
+      message.completedAt = new Date().toISOString();
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
       this.persist(message);
@@ -280,6 +290,8 @@ export class InboxRegistry {
         id: message.id,
         costUsd: result.costUsd,
         resultPath: message.resultPath,
+        startedAt: message.startedAt,
+        completedAt: message.completedAt,
       }, message.id);
     } catch (err) {
       this.fail(message, err);
@@ -307,6 +319,7 @@ export class InboxRegistry {
       // The first message becomes the initial prompt of the session;
       // MessageInjector yields it first. We mark it running immediately.
       message.status = 'running';
+      message.startedAt = new Date().toISOString();
       this.persist(message);
       eventBus.send('inbox:running', { id: message.id, session: sessionKey }, message.id);
       session.activeMessage = message.id;
@@ -315,6 +328,7 @@ export class InboxRegistry {
 
     // Existing session — inject this message.
     message.status = 'running';
+    message.startedAt = new Date().toISOString();
     session.activeMessage = message.id;
     this.persist(message);
     eventBus.send('inbox:running', { id: message.id, session: sessionKey }, message.id);
@@ -331,6 +345,7 @@ export class InboxRegistry {
       // Session ended — the agent returned a final result. In chat-style
       // mode this normally only happens on close() or max_turns.
       initial.status = 'completed';
+      initial.completedAt = new Date().toISOString();
       initial.result = result;
       initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
       this.persist(initial);

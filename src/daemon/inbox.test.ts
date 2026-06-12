@@ -6,6 +6,7 @@ import * as path from 'node:path';
 import { inbox, __setRunnerForTesting } from './inbox.js';
 import { saveMessage, loadMessages } from './inbox-state.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
+import { eventBus } from '../agent/event-bus.js';
 
 const ENV_KEYS = [
   'SPECIFY_SPEC_INLINE_PATH',
@@ -471,4 +472,56 @@ test('inbox.restoreFromDisk: empty state dir returns 0/0', () => {
   assert.equal(restored, 0);
   assert.equal(interrupted, 0);
   inbox.reset();
+});
+
+// ---------------------------------------------------------------------------
+// Timestamp tests
+// ---------------------------------------------------------------------------
+
+test('inbox:completed event carries startedAt and completedAt ISO strings', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-ts-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    let completedEvent: Record<string, unknown> | undefined;
+    const unsub = eventBus.onAny((ev) => {
+      if (ev.type === 'inbox:completed') {
+        completedEvent = ev.data as Record<string, unknown>;
+      }
+    });
+
+    const before = new Date().toISOString();
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+    const after = new Date().toISOString();
+    unsub();
+
+    assert.ok(completedEvent, 'inbox:completed event should have fired');
+    assert.equal(completedEvent!.id, msg.id);
+
+    const startedAt = completedEvent!.startedAt as string;
+    const completedAt = completedEvent!.completedAt as string;
+    assert.ok(typeof startedAt === 'string', 'startedAt should be a string');
+    assert.ok(typeof completedAt === 'string', 'completedAt should be a string');
+    // Timestamps should be valid ISO-8601 and within the test window.
+    assert.ok(startedAt >= before, `startedAt ${startedAt} should be >= ${before}`);
+    assert.ok(completedAt <= after, `completedAt ${completedAt} should be <= ${after}`);
+    assert.ok(startedAt <= completedAt, 'startedAt should be <= completedAt');
+
+    // Also verify they are stamped on the persisted message.
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.startedAt, startedAt);
+    assert.equal(finished.completedAt, completedAt);
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
 });

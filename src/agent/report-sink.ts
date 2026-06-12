@@ -21,8 +21,10 @@
  *                 PLATFORM_SPECIFY_TOKEN=<bearer>
  *                 → After each verify run completes, POSTs area-level results
  *                 array to the platform endpoint so the developer dashboard can
- *                 surface pass/fail timelines. Fire-and-forget; failure is
- *                 logged but never fatal to the verify run itself.
+ *                 surface pass/fail timelines. The first entry in the array
+ *                 carries run-level timestamps (startedAt / completedAt, ISO-8601)
+ *                 when available. Fire-and-forget; failure is logged but never
+ *                 fatal to the verify run itself.
  *
  * `attachReportSinks()` wires the subscription; the returned function
  * detaches when called (mostly for tests). Production code attaches once
@@ -43,6 +45,10 @@ export interface ReportContext {
   costUsd?: number;
   /** Loaded result body (parsed JSON). */
   body: unknown;
+  /** ISO-8601 timestamp when the job began executing (run-level). */
+  startedAt?: string;
+  /** ISO-8601 timestamp when the job finished (run-level). */
+  completedAt?: string;
 }
 
 export interface ReportSink {
@@ -189,8 +195,13 @@ interface BehaviorResult {
 interface PlatformRunEntry {
   area: string;
   passed: boolean;
-  durationMs: number;
+  /** Sum of known per-behavior durations (ms). Omitted when no behavior reported timing — receiver stores null. */
+  durationMs?: number;
   errorMessage?: string;
+  /** ISO-8601 timestamp when the run began. Only set on the first entry of the array (run-level, per receiver contract). */
+  startedAt?: string;
+  /** ISO-8601 timestamp when the run finished. Only set on the first entry of the array (run-level, per receiver contract). */
+  completedAt?: string;
 }
 
 interface VerifyStructuredOutputFull {
@@ -204,8 +215,10 @@ interface VerifyStructuredOutputFull {
  *
  * The verify output uses "area-id/behavior-id" as the behavior id. We split on
  * the first "/" to derive the area key, then roll up: an area passes iff all
- * non-skipped behaviors in it pass. Duration = sum of per-behavior durations.
- * errorMessage = first failing rationale (truncated), if any.
+ * non-skipped behaviors in it pass. Duration = sum of known per-behavior durations
+ * (omitted entirely when no behavior in the area reported timing — receiver stores
+ * null and renders "—" instead of 0ms). errorMessage = first failing rationale
+ * (truncated), if any.
  */
 function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
   const so =
@@ -216,7 +229,7 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
   const results = so?.results;
   if (!Array.isArray(results) || results.length === 0) return [];
 
-  const areaMap = new Map<string, { totalMs: number; failed: boolean; firstError?: string }>();
+  const areaMap = new Map<string, { totalMs: number; hasTiming: boolean; failed: boolean; firstError?: string }>();
 
   for (const r of results) {
     if (r.status === 'skipped') continue;
@@ -224,17 +237,22 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
     const area = slashIdx > 0 ? r.id.slice(0, slashIdx) : r.id;
 
     const existing = areaMap.get(area);
-    const durationMs = typeof r.duration_ms === 'number' ? r.duration_ms : 0;
+    const hasDuration = typeof r.duration_ms === 'number';
+    const durationMs = hasDuration ? r.duration_ms! : 0;
     const failed = r.status === 'failed';
 
     if (!existing) {
       areaMap.set(area, {
         totalMs: durationMs,
+        hasTiming: hasDuration,
         failed,
         firstError: failed && r.rationale ? r.rationale.slice(0, 500) : undefined,
       });
     } else {
-      existing.totalMs += durationMs;
+      if (hasDuration) {
+        existing.totalMs += durationMs;
+        existing.hasTiming = true;
+      }
       if (failed) {
         existing.failed = true;
         if (!existing.firstError && r.rationale) {
@@ -247,7 +265,7 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
   return Array.from(areaMap.entries()).map(([area, data]) => ({
     area,
     passed: !data.failed,
-    durationMs: Math.round(data.totalMs),
+    ...(data.hasTiming ? { durationMs: Math.round(data.totalMs) } : {}),
     ...(data.firstError ? { errorMessage: data.firstError } : {}),
   }));
 }
@@ -260,6 +278,15 @@ function platformSink(url: string, token: string, fetchImpl: typeof fetch): Repo
       if (entries.length === 0) {
         // Verify run produced no behavior results (capture, compare, etc.) — skip.
         return;
+      }
+      // Merge run-level timestamps onto the first entry (per receiver contract:
+      // devSpecRunsIngest.ts reads startedAt/completedAt from entries[0]).
+      if (ctx.startedAt || ctx.completedAt) {
+        entries[0] = {
+          ...entries[0],
+          ...(ctx.startedAt ? { startedAt: ctx.startedAt } : {}),
+          ...(ctx.completedAt ? { completedAt: ctx.completedAt } : {}),
+        };
       }
       const res = await fetchImpl(url, {
         method: 'POST',
@@ -294,7 +321,9 @@ export function attachReportSinks(opts: AttachOptions = {}): AttachResult {
     const id = String(ev.data.id ?? '');
     const resultPath = ev.data.resultPath;
     if (!id || typeof resultPath !== 'string' || !resultPath) return;
-    void dispatch({ id, resultPath, costUsd: typeof ev.data.costUsd === 'number' ? ev.data.costUsd : undefined }, sinks);
+    const startedAt = typeof ev.data.startedAt === 'string' ? ev.data.startedAt : undefined;
+    const completedAt = typeof ev.data.completedAt === 'string' ? ev.data.completedAt : undefined;
+    void dispatch({ id, resultPath, costUsd: typeof ev.data.costUsd === 'number' ? ev.data.costUsd : undefined, startedAt, completedAt }, sinks);
   };
   const detach = eventBus.onAny(handler);
   return { sinks, detach };
