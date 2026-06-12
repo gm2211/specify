@@ -23,6 +23,12 @@
  *   SPECIFY_INBOX_TOKEN               daemon bearer; passed through Authorization
  *   SPECIFY_SPEC_INLINE_PATH          optional path forwarded as `spec` in verify
  *                                     payloads; when unset inbox resolves env source
+ *   SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES
+ *                                     float; default 10. Suppress duplicate verify
+ *                                     POSTs for the same workload within this window.
+ *                                     Set to 0 to disable time-based debounce (active-
+ *                                     job dedup still applies). Explicit "0" disables;
+ *                                     unset uses the 10-minute default.
  */
 
 import { eventBus } from './event-bus.js';
@@ -38,6 +44,13 @@ export interface RolloutEvent {
   resourceVersion?: string;
 }
 
+/** Minimal shape returned by findActiveVerify — typed loosely to avoid
+ *  importing daemon types eagerly into the agent module. */
+interface ActiveVerifyResult {
+  id: string;
+  status: string;
+}
+
 export interface WatcherConfig {
   enabled: boolean;
   namespaces: string[];
@@ -51,6 +64,12 @@ export interface WatcherConfig {
    * omits `spec` so the inbox can resolve the daemon's configured source.
    */
   specPath?: string;
+  /**
+   * How long (ms) to suppress duplicate verify POSTs for the same workload
+   * after the first successful POST. 0 = disabled (active-job dedup still
+   * applies). Default 600_000 (10 minutes).
+   */
+  debounceMs: number;
 }
 
 export interface WatcherDeps {
@@ -60,6 +79,18 @@ export interface WatcherDeps {
   watcherImpl?: WatcherImpl;
   /** Override stderr writer (testing). */
   log?: (line: string) => void;
+  /**
+   * Check whether a queued/running verify already exists for the given workload.
+   * Return value shape: { id, status } when found, undefined/null when not.
+   * When omitted, the default implementation lazy-imports the inbox module and
+   * calls inbox.findActiveVerify() — which is correct in-process but cannot
+   * be used in unit tests that don't spin up the daemon.
+   */
+  findActiveVerify?: (target: { namespace: string; name: string; image?: string }) => Promise<ActiveVerifyResult | undefined | null> | ActiveVerifyResult | undefined | null;
+  /**
+   * Clock override for deterministic tests. Defaults to Date.now.
+   */
+  now?: () => number;
 }
 
 export interface WatcherImpl {
@@ -82,7 +113,17 @@ export function watcherConfigFromEnv(env: Record<string, string | undefined> = p
   const inboxUrl = env.SPECIFY_K8S_LOCAL_INBOX_URL ?? 'http://127.0.0.1:4100/inbox';
   const inboxBearer = env.SPECIFY_INBOX_TOKEN;
   const specPath = env.SPECIFY_SPEC_INLINE_PATH;
-  return { enabled, namespaces, labelSelector, resources, inboxUrl, inboxBearer, specPath };
+
+  // Debounce: unset → 10 min default; explicit "0" (or <= 0 / NaN) → 0 (disabled).
+  let debounceMs: number;
+  if (env.SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES === undefined) {
+    debounceMs = 10 * 60_000;
+  } else {
+    const parsed = parseFloat(env.SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES);
+    debounceMs = (!isNaN(parsed) && parsed > 0) ? parsed * 60_000 : 0;
+  }
+
+  return { enabled, namespaces, labelSelector, resources, inboxUrl, inboxBearer, specPath, debounceMs };
 }
 
 /**
@@ -121,6 +162,28 @@ export async function triggerVerifyForRollout(
 }
 
 /**
+ * Default findActiveVerify implementation: lazy-imports the inbox module so
+ * the kubernetes client / daemon code doesn't load when the watcher is disabled.
+ * Fail-open: if the import or call throws, log and return undefined so the
+ * watcher proceeds with the verify rather than silently dropping it.
+ */
+async function defaultFindActiveVerify(
+  target: { namespace: string; name: string; image?: string },
+  log: (line: string) => void,
+): Promise<ActiveVerifyResult | undefined> {
+  try {
+    const { inbox } = await import('../daemon/inbox.js');
+    const effectiveUrl = process.env.SPECIFY_TARGET_URL?.trim() || undefined;
+    const found = inbox.findActiveVerify(target, effectiveUrl);
+    if (!found) return undefined;
+    return { id: found.id, status: found.status };
+  } catch (err) {
+    log(`[k8s-watcher] findActiveVerify check failed (fail-open): ${(err as Error).message}\n`);
+    return undefined;
+  }
+}
+
+/**
  * Start the watcher. Returns a stop function (idempotent). When config.enabled
  * is false this is a no-op that returns an idle stop function — callers can
  * always invoke `startK8sWatcher()` and rely on env to gate behavior.
@@ -138,9 +201,13 @@ export async function startK8sWatcher(
   // rnz-ukd9: surface watcher config + lifecycle so silent-failure modes
   // (RBAC missing, informer.start hanging, isReady() filtering everything
   // out) are visible in pod logs.
-  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl} specPath=${config.specPath ?? 'none'}\n`);
+  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl} specPath=${config.specPath ?? 'none'} debounceMs=${config.debounceMs}\n`);
 
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
+  const now = deps.now ?? (() => Date.now());
+  const findActiveVerify = deps.findActiveVerify ??
+    ((target) => defaultFindActiveVerify(target, log));
+
   let watcher: WatcherImpl;
   try {
     watcher = deps.watcherImpl ?? (await defaultK8sWatcher(config, log));
@@ -149,8 +216,12 @@ export async function startK8sWatcher(
     throw err;
   }
 
+  // Per-watcher debounce map: targetKey → timestamp of last successful POST.
+  const lastPosted = new Map<string, number>();
+
   const stop = await watcher.start(async (ev) => {
-    log(`[k8s-watcher] rollout detected ${ev.namespace}/${ev.name} kind=${ev.kind} image=${ev.image ?? 'unknown'} rv=${ev.resourceVersion ?? '?'} — posting verify\n`);
+    // Log the rollout detection and emit observability event unconditionally.
+    log(`[k8s-watcher] rollout detected ${ev.namespace}/${ev.name} kind=${ev.kind} image=${ev.image ?? 'unknown'} rv=${ev.resourceVersion ?? '?'}\n`);
     eventBus.send('k8s:rollout', {
       kind: ev.kind,
       namespace: ev.namespace,
@@ -158,10 +229,50 @@ export async function startK8sWatcher(
       image: ev.image,
       resourceVersion: ev.resourceVersion,
     });
+
+    const targetKey = `${ev.namespace}/${ev.name}@${ev.image ?? 'unknown'}`;
+    const nowMs = now();
+
+    // Prune stale debounce entries before checking (bounds memory on long-running watchers).
+    if (config.debounceMs > 0) {
+      for (const [key, ts] of lastPosted) {
+        if (nowMs - ts >= config.debounceMs) lastPosted.delete(key);
+      }
+    }
+
+    // --- Debounce check (time-based) ---
+    if (config.debounceMs > 0) {
+      const lastTs = lastPosted.get(targetKey);
+      if (lastTs !== undefined) {
+        const elapsedMs = nowMs - lastTs;
+        if (elapsedMs < config.debounceMs) {
+          const elapsedSec = Math.round(elapsedMs / 1000);
+          log(`[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=debounce, last posted ${elapsedSec}s ago)\n`);
+          return;
+        }
+      }
+    }
+
+    // Record the post time BEFORE any async checks so near-simultaneous
+    // add+update events (arriving while checks are in flight) are also
+    // suppressed. We clear the entry on active-job suppression or POST failure.
+    lastPosted.set(targetKey, nowMs);
+
+    // --- Active-job check (always runs, even when debounce is disabled) ---
+    const active = await findActiveVerify({ namespace: ev.namespace, name: ev.name, image: ev.image });
+    if (active) {
+      lastPosted.delete(targetKey);
+      log(`[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=active-job ${active.id} status=${active.status})\n`);
+      return;
+    }
+
+    log(`[k8s-watcher] posting verify for ${ev.namespace}/${ev.name}\n`);
     try {
       await triggerVerifyForRollout(ev, config, fetchImpl);
       log(`[k8s-watcher] inbox accepted verify for ${ev.namespace}/${ev.name}\n`);
     } catch (err) {
+      // On failure, clear the debounce entry so the next event retries.
+      lastPosted.delete(targetKey);
       log(`[k8s-watcher] inbox post failed for ${ev.namespace}/${ev.name}: ${(err as Error).message}\n`);
     }
   });
