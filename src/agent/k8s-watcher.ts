@@ -4,8 +4,12 @@
  * Watches Kubernetes Deployments and StatefulSets in the namespaces it has
  * RBAC for, filters by label selector (default `specify.dev/target=true`),
  * and on each rollout-complete event POSTs to the local daemon inbox so a
- * verify run kicks off automatically. No GitHub Actions required, no
- * webhooks the consumer has to wire up — the QA pod sees deploys directly.
+ * verify run kicks off automatically, but only when the image or generation
+ * changed since the last fire (change-detection). On the very first sight of
+ * a ready workload (informer initial sync or process restart) the watcher
+ * seeds its state silently without firing — avoiding verify storms on pod
+ * restart and informer re-list. No GitHub Actions required, no webhooks the
+ * consumer has to wire up — the QA pod sees deploys directly.
  *
  * RBAC is opt-in via the Terraform module; this module assumes the pod has
  * the right verbs (`get/list/watch` on the chosen resources). When perms
@@ -306,6 +310,69 @@ function isTransientStreamClose(err: Error): boolean {
 }
 
 /**
+ * Factory that creates the change-detection fire gate used by defaultK8sWatcher.
+ *
+ * Returns a function that, given a rollout handler, returns a `fire` function.
+ * The gate's `lastFired` map is allocated once per factory call and survives
+ * informer restarts, which is the whole point: a re-list 'add' for an already-
+ * known workload is silently suppressed as 'no-change'.
+ *
+ * Extracted as a standalone function so tests can exercise the gate logic
+ * without spinning up a real Kubernetes client.
+ *
+ * Decision markers logged on each event:
+ *   'skip'      — workload not ready (isReady() === false)
+ *   'SEED'      — first sight, ready — state recorded, handler NOT called
+ *   'FIRE'      — ready + image or generation changed — state updated, handler called
+ *   'no-change' — ready, but image+generation identical to last fire — handler NOT called
+ */
+function makeFireGate(log: (line: string) => void) {
+  return (handler: (ev: RolloutEvent) => void) => {
+    // rnz-ukd9 + SP-w1o: log every event + isReady() result so we can see
+    // why the watcher might silently skip rollouts, and track change-detection.
+    const lastFired = new Map<string, SeenState>();
+
+    return (kind: string, event: 'add' | 'update', raw: unknown): void => {
+      const obj = raw as AppsResource;
+      const name = obj.metadata?.name ?? '?';
+      const ns = obj.metadata?.namespace ?? '?';
+      const ready = isReady(obj);
+      const desired = obj.spec?.replicas ?? 0;
+      const status = obj.status ?? {};
+      const key = `${kind}:${ns}/${name}`;
+
+      if (!ready) {
+        log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → skip\n`);
+        return;
+      }
+
+      const cur: SeenState = {
+        image: obj.spec?.template?.spec?.containers?.[0]?.image,
+        generation: obj.metadata?.generation,
+      };
+      const prev = lastFired.get(key);
+
+      let decision: 'SEED' | 'FIRE' | 'no-change';
+      if (!lastFired.has(key)) {
+        decision = 'SEED';
+        lastFired.set(key, cur);
+      } else if (rolloutChanged(prev, cur)) {
+        decision = 'FIRE';
+        lastFired.set(key, cur);
+      } else {
+        decision = 'no-change';
+      }
+
+      log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → ${decision}\n`);
+
+      if (decision === 'FIRE') {
+        handler(toRollout(kind, obj));
+      }
+    };
+  };
+}
+
+/**
  * Default watcher implementation backed by @kubernetes/client-node informers.
  *
  * Kept lazy-imported so the kubernetes client doesn't load (and try to read
@@ -326,22 +393,31 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
   return {
     async start(handler) {
       const informers: Array<{ stop: () => void }> = [];
+
       const namespaces = config.namespaces.length > 0 ? config.namespaces : [''];
       const labelSelector = config.labelSelector;
 
-      // rnz-ukd9: log every event + isReady() result so we can see why the
-      // watcher might silently skip rollouts.
-      const fire = (kind: string, event: 'add' | 'update', raw: unknown) => {
-        const obj = raw as AppsResource;
-        const name = obj.metadata?.name ?? '?';
-        const ns = obj.metadata?.namespace ?? '?';
-        const ready = isReady(obj);
-        const desired = obj.spec?.replicas ?? 0;
-        const status = obj.status ?? {};
-        log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → ${ready ? 'FIRE' : 'skip'}\n`);
-        if (!ready) return;
-        handler(toRollout(kind, obj));
-      };
+      /*
+       * SP-w1o: seed-on-first-sight + fire-on-change.
+       *
+       * makeFireGate creates the change-detection gate.  The gate holds its
+       * own lastFired map, so it persists across informer restarts (the map
+       * is NOT inside the per-namespace/per-resource loop).  Tradeoffs:
+       *
+       *   - Map is in-memory. A process restart re-seeds everything, so the
+       *     very first "ready" event after restart is always a SEED (no fire).
+       *     A rollout completing while the watcher process is down is missed;
+       *     the external deploy-script trigger covers deploy-time verifies,
+       *     so this is acceptable.
+       *   - A brand-new deployment (created after watcher start) is also
+       *     seeded on its first ready event. The first verify for a new target
+       *     comes from the deploy script or the next real rollout.
+       *   - The map is NOT cleared on informer restart (scheduleRestart path).
+       *     That is the whole point: when the informer re-lists and fires 'add'
+       *     for an already-known workload with the same image+generation, the
+       *     map entry matches and the event is suppressed as 'no-change'.
+       */
+      const fire = makeFireGate(log)(handler);
 
       // Track watchdog intervals so we can clear them on stop.
       const watchdogTimers: ReturnType<typeof setInterval>[] = [];
@@ -456,6 +532,26 @@ interface AppsResource {
   };
 }
 
+interface SeenState { image?: string; generation?: number }
+
+/**
+ * Returns true only when the deployment's observable identity changed since
+ * the previous fire: different image OR different metadata.generation.
+ *
+ * When prev is undefined (first sight of this workload) returns false —
+ * first sight seeds the map silently rather than firing.
+ *
+ * Generation (metadata.generation) is used rather than resourceVersion because
+ * resourceVersion bumps on every write including status-only updates, whereas
+ * generation only increments on spec changes. Image is tracked separately as a
+ * belt-and-braces guard (covers re-pinned-same-generation edge cases that might
+ * occur after a process restart where lastFired was seeded from a prior state).
+ */
+function rolloutChanged(prev: SeenState | undefined, cur: SeenState): boolean {
+  if (prev === undefined) return false;
+  return prev.image !== cur.image || prev.generation !== cur.generation;
+}
+
 function isReady(obj: AppsResource): boolean {
   const desired = obj.spec?.replicas ?? 0;
   if (desired === 0) return false;
@@ -479,4 +575,4 @@ function toRollout(kind: string, obj: AppsResource): RolloutEvent {
 }
 
 // Exposed for tests.
-export const _internals = { isReady, toRollout, isTransientStreamClose };
+export const _internals = { isReady, toRollout, isTransientStreamClose, rolloutChanged, makeFireGate };
