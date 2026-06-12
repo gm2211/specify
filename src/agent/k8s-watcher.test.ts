@@ -476,3 +476,103 @@ test('watcherConfigFromEnv: SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES="2.5" → 150000
   const c = watcherConfigFromEnv({ SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES: '2.5' });
   assert.equal(c.debounceMs, 150_000);
 });
+
+// ---------------------------------------------------------------------------
+// SP-w1o: rolloutChanged unit tests
+// ---------------------------------------------------------------------------
+
+test('rolloutChanged: undefined prev → false (first sight)', () => {
+  assert.equal(_internals.rolloutChanged(undefined, { image: 'web:1', generation: 5 }), false);
+});
+
+test('rolloutChanged: same image + generation → false (no change)', () => {
+  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 5 }), false);
+});
+
+test('rolloutChanged: different image → true', () => {
+  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:2', generation: 5 }), true);
+});
+
+test('rolloutChanged: different generation → true', () => {
+  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 6 }), true);
+});
+
+// ---------------------------------------------------------------------------
+// SP-w1o: makeFireGate integration-style tests
+// ---------------------------------------------------------------------------
+
+/** Build a minimal ready AppsResource object for gate tests. */
+function readyObj(ns: string, name: string, image: string, generation: number) {
+  return {
+    metadata: { namespace: ns, name, generation },
+    spec: { replicas: 1, template: { spec: { containers: [{ image }] } } },
+    status: { observedGeneration: generation, readyReplicas: 1, updatedReplicas: 1, replicas: 1 },
+  };
+}
+
+/** Build a minimal not-ready AppsResource object. */
+function notReadyObj(ns: string, name: string, image: string, generation: number) {
+  return {
+    metadata: { namespace: ns, name, generation },
+    spec: { replicas: 2, template: { spec: { containers: [{ image }] } } },
+    status: { observedGeneration: generation, readyReplicas: 1, updatedReplicas: 1, replicas: 2 },
+  };
+}
+
+test('makeFireGate: first ready add → handler NOT called, log contains SEED', () => {
+  let handlerCalled = false;
+  let logged = '';
+  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { handlerCalled = true; });
+
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+
+  assert.equal(handlerCalled, false, 'first sight should not call handler');
+  assert.match(logged, /SEED/, 'log should contain SEED marker');
+});
+
+test('makeFireGate: second event same state → handler NOT called, log contains no-change', () => {
+  let callCount = 0;
+  let logged = '';
+  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { callCount++; });
+
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+  logged = '';
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+
+  assert.equal(callCount, 0, 'same state should not call handler');
+  assert.match(logged, /no-change/, 'log should contain no-change marker');
+});
+
+test('makeFireGate: third event new image → handler called once, log contains FIRE', () => {
+  let callCount = 0;
+  let logged = '';
+  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { callCount++; });
+
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+  logged = '';
+  gate('deployment', 'update', readyObj('staging', 'api', 'api:2', 5));
+
+  assert.equal(callCount, 1, 'changed image should fire handler once');
+  assert.match(logged, /FIRE/, 'log should contain FIRE marker');
+});
+
+test('makeFireGate: not-ready event does NOT seed the map (map stays empty)', () => {
+  let handlerCalled = false;
+  let logged = '';
+  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { handlerCalled = true; });
+
+  // Send a not-ready event first — must not seed the map.
+  gate('deployment', 'add', notReadyObj('staging', 'api', 'api:1', 5));
+
+  assert.equal(handlerCalled, false, 'not-ready event must not call handler');
+  assert.match(logged, /skip/, 'log should contain skip marker');
+
+  // Now send the same workload in ready state. Since not-ready did NOT seed,
+  // this should also be a SEED (not FIRE) — i.e. handler still not called.
+  logged = '';
+  gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
+
+  assert.equal(handlerCalled, false, 'first ready event after not-ready must SEED, not FIRE');
+  assert.match(logged, /SEED/, 'log should contain SEED marker after prior not-ready');
+});
