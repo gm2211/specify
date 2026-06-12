@@ -525,3 +525,157 @@ test('inbox:completed event carries startedAt and completedAt ISO strings', asyn
     inbox.reset();
   }
 });
+
+// ---------------------------------------------------------------------------
+// SP-mn7: findActiveVerify tests
+// ---------------------------------------------------------------------------
+
+test('findActiveVerify: queued verify with matching metadata → found', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-fav-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    // Submit a verify that will sit 'queued' (runner is async, not started yet).
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify api rollout.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+      metadata: {
+        kind: 'deployment',
+        namespace: 'staging',
+        name: 'api',
+        image: 'api:1.2.3',
+      },
+    });
+
+    // Status may be 'queued' or 'running' — either is 'active'.
+    const found = inbox.findActiveVerify({ namespace: 'staging', name: 'api', image: 'api:1.2.3' });
+    assert.ok(found, 'should find the active verify');
+    assert.equal(found?.id, msg.id);
+
+    await flush();
+
+    // After completion, it should NOT be found.
+    const notFound = inbox.findActiveVerify({ namespace: 'staging', name: 'api', image: 'api:1.2.3' });
+    assert.equal(notFound, undefined, 'completed verify should not be returned');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('findActiveVerify: image mismatch on both sides → not found', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-fav2-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+      metadata: { kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:1' },
+    });
+
+    // Different image on both sides — should not match.
+    const found = inbox.findActiveVerify({ namespace: 'staging', name: 'api', image: 'api:2' });
+    assert.equal(found, undefined, 'different images should not match');
+
+    await flush();
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('findActiveVerify: image missing on one side → found (partial match)', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-fav3-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    // Message has an image in metadata.
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+      metadata: { kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:1' },
+    });
+
+    // Target has NO image — should still match on namespace+name.
+    const found = inbox.findActiveVerify({ namespace: 'staging', name: 'api' });
+    assert.ok(found, 'should match when target has no image');
+
+    // Conversely: message has no image, target has one → also match.
+    inbox.reset();
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out2'),
+      metadata: { kind: 'deployment', namespace: 'staging', name: 'api' },
+    });
+    const found2 = inbox.findActiveVerify({ namespace: 'staging', name: 'api', image: 'api:1' });
+    assert.ok(found2, 'should match when message metadata has no image');
+
+    await flush();
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('findActiveVerify: url-based match (no metadata) → found; non-verify → not found', async () => {
+  inbox.reset();
+  const { runner } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-fav4-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    // A deploy-script style verify: has url, no metadata.
+    inbox.submit({
+      task: 'verify',
+      prompt: 'Verify after deploy.',
+      spec: specPath,
+      url: 'http://myapp.svc.cluster.local:8080',
+      outputDir: path.join(tmpDir, 'out'),
+    });
+
+    // Should be found by effectiveUrl.
+    const found = inbox.findActiveVerify(
+      { namespace: 'prod', name: 'myapp' },
+      'http://myapp.svc.cluster.local:8080',
+    );
+    assert.ok(found, 'should find by effectiveUrl');
+
+    // Non-verify task should NOT match.
+    inbox.reset();
+    inbox.submit({
+      task: 'capture',
+      prompt: 'Capture.',
+      url: 'http://myapp.svc.cluster.local:8080',
+      outputDir: path.join(tmpDir, 'out2'),
+    });
+    const notFound = inbox.findActiveVerify(
+      { namespace: 'prod', name: 'myapp' },
+      'http://myapp.svc.cluster.local:8080',
+    );
+    assert.equal(notFound, undefined, 'non-verify task should not match');
+
+    await flush();
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});

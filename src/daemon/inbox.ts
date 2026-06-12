@@ -62,6 +62,17 @@ export interface InboxRequest {
   session?: string;
   /** Sender identifier for audit/logging. */
   sender?: string;
+  /**
+   * Workload metadata forwarded by the k8s-watcher. Typed here so callers
+   * (watcher debounce check) can inspect it without unsafe casts.
+   */
+  metadata?: {
+    kind?: string;
+    namespace?: string;
+    name?: string;
+    image?: string;
+    resourceVersion?: string;
+  };
 }
 
 export interface InboxMessage {
@@ -168,6 +179,39 @@ export class InboxRegistry {
     return Array.from(this.history.values()).sort((a, b) =>
       a.createdAt < b.createdAt ? 1 : -1,
     );
+  }
+
+  /**
+   * Returns the first queued/running verify message that targets the same
+   * workload — by watcher metadata (namespace+name, and image when both
+   * sides have one) or by effective url (covers url-based verify posts
+   * from deploy scripts, since submit() defaults url from
+   * SPECIFY_TARGET_URL for watcher posts too).
+   */
+  findActiveVerify(
+    target: { namespace: string; name: string; image?: string },
+    effectiveUrl?: string,
+  ): InboxMessage | undefined {
+    for (const msg of this.history.values()) {
+      if (msg.status !== 'queued' && msg.status !== 'running') continue;
+      if (msg.request.task !== 'verify') continue;
+      const meta = msg.request.metadata;
+      // Match by workload metadata (namespace + name, image optional).
+      if (
+        meta?.namespace === target.namespace &&
+        meta?.name === target.name &&
+        (!target.image || !meta.image || meta.image === target.image)
+      ) {
+        return msg;
+      }
+      // Match by effective url (deploy-script posts have no metadata but
+      // share the same url as watcher posts once submit() fills in
+      // SPECIFY_TARGET_URL).
+      if (effectiveUrl != null && msg.request.url === effectiveUrl) {
+        return msg;
+      }
+    }
+    return undefined;
   }
 
   sessionIds(): string[] {

@@ -126,6 +126,7 @@ test('startK8sWatcher: disabled config returns no-op stop', async () => {
     labelSelector: '',
     resources: [],
     inboxUrl: 'http://x/inbox',
+    debounceMs: 0,
   });
   await stop();
 });
@@ -148,8 +149,9 @@ test('startK8sWatcher: rollout event triggers inbox post', async () => {
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
       specPath: '/work/specify.spec.yaml',
+      debounceMs: 0,
     },
-    { fetchImpl, watcherImpl, log: () => undefined },
+    { fetchImpl, watcherImpl, log: () => undefined, findActiveVerify: async () => undefined },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
@@ -199,8 +201,9 @@ test("startK8sWatcher: inbox failure logged but doesn't throw", async () => {
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
       specPath: '/work/specify.spec.yaml',
+      debounceMs: 0,
     },
-    { fetchImpl, watcherImpl, log: (line) => { logged += line; } },
+    { fetchImpl, watcherImpl, log: (line) => { logged += line; }, findActiveVerify: async () => undefined },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
@@ -270,12 +273,206 @@ test('startK8sWatcher: no specPath posts rollout verify for inbox env fallback',
       labelSelector: '',
       resources: ['deployment'],
       inboxUrl: 'http://127.0.0.1:4100/inbox',
+      debounceMs: 0,
     },
-    { fetchImpl, watcherImpl, log: (line) => { logged += line; } },
+    { fetchImpl, watcherImpl, log: (line) => { logged += line; }, findActiveVerify: async () => undefined },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
   assert.equal(capturedBody?.task, 'verify');
   assert.equal('spec' in (capturedBody ?? {}), false);
   assert.match(logged, /inbox accepted verify/);
+});
+
+// ---------------------------------------------------------------------------
+// SP-mn7: debounce + active-job suppression tests
+// ---------------------------------------------------------------------------
+
+/** Helper: build a minimal enabled WatcherConfig. */
+function cfg(overrides: Partial<{ debounceMs: number }> = {}): Parameters<typeof startK8sWatcher>[0] {
+  return {
+    enabled: true,
+    namespaces: [],
+    labelSelector: '',
+    resources: ['deployment'],
+    inboxUrl: 'http://127.0.0.1:4100/inbox',
+    debounceMs: overrides.debounceMs ?? 600_000,
+  } as Parameters<typeof startK8sWatcher>[0];
+}
+
+test('debounce: two back-to-back events for same workload → exactly one POST, suppression logged', async () => {
+  let postCount = 0;
+  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  let logged = '';
+  let fireHandler: ((ev: RolloutEvent) => void) | undefined;
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      fireHandler = handler;
+      return async () => undefined;
+    },
+  };
+  let fakeNow = 1_000_000;
+  const stop = await startK8sWatcher(cfg({ debounceMs: 60_000 }), {
+    fetchImpl,
+    watcherImpl,
+    log: (line) => { logged += line; },
+    now: () => fakeNow,
+    findActiveVerify: async () => undefined,
+  });
+
+  const ev: RolloutEvent = { kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:1' };
+  fireHandler!(ev);
+  // Second event arrives 5 seconds later — well within debounce window.
+  fakeNow += 5_000;
+  fireHandler!(ev);
+
+  await new Promise((r) => setTimeout(r, 30));
+  await stop();
+
+  assert.equal(postCount, 1, 'exactly one POST');
+  assert.match(logged, /duplicate verify suppressed/);
+  assert.match(logged, /reason=debounce/);
+});
+
+test('debounce: second event after window elapsed → second POST allowed', async () => {
+  let postCount = 0;
+  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  let fireHandler: ((ev: RolloutEvent) => void) | undefined;
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      fireHandler = handler;
+      return async () => undefined;
+    },
+  };
+  let fakeNow = 1_000_000;
+  const stop = await startK8sWatcher(cfg({ debounceMs: 60_000 }), {
+    fetchImpl,
+    watcherImpl,
+    log: () => undefined,
+    now: () => fakeNow,
+    findActiveVerify: async () => undefined,
+  });
+
+  const ev: RolloutEvent = { kind: 'deployment', namespace: 'prod', name: 'svc', image: 'svc:2' };
+  fireHandler!(ev);
+  await new Promise((r) => setTimeout(r, 10));
+
+  // Advance clock past the window.
+  fakeNow += 61_000;
+  fireHandler!(ev);
+  await new Promise((r) => setTimeout(r, 10));
+  await stop();
+
+  assert.equal(postCount, 2, 'second POST after window elapsed');
+});
+
+test('debounce: different image → both events POST (no suppression)', async () => {
+  let postCount = 0;
+  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  let fireHandler: ((ev: RolloutEvent) => void) | undefined;
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      fireHandler = handler;
+      return async () => undefined;
+    },
+  };
+  let fakeNow = 1_000_000;
+  const stop = await startK8sWatcher(cfg({ debounceMs: 60_000 }), {
+    fetchImpl,
+    watcherImpl,
+    log: () => undefined,
+    now: () => fakeNow,
+    findActiveVerify: async () => undefined,
+  });
+
+  fireHandler!({ kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:1' });
+  fakeNow += 1_000;
+  fireHandler!({ kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:2' });
+
+  await new Promise((r) => setTimeout(r, 30));
+  await stop();
+
+  assert.equal(postCount, 2, 'different images must not debounce each other');
+});
+
+test('active-job: findActiveVerify returns active job → no POST, suppression logged', async () => {
+  let postCount = 0;
+  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  let logged = '';
+  let fireHandler: ((ev: RolloutEvent) => void) | undefined;
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      fireHandler = handler;
+      return async () => undefined;
+    },
+  };
+  const stop = await startK8sWatcher(cfg({ debounceMs: 0 }), {
+    fetchImpl,
+    watcherImpl,
+    log: (line) => { logged += line; },
+    findActiveVerify: async () => ({ id: 'msg_abc123', status: 'running' }),
+  });
+
+  fireHandler!({ kind: 'deployment', namespace: 'qa', name: 'frontend', image: 'fe:3' });
+  await new Promise((r) => setTimeout(r, 20));
+  await stop();
+
+  assert.equal(postCount, 0, 'no POST when active job present');
+  assert.match(logged, /duplicate verify suppressed/);
+  assert.match(logged, /reason=active-job msg_abc123 status=running/);
+});
+
+test('debounce cleared on POST failure: failed event → retry on next event', async () => {
+  let callCount = 0;
+  let failFirst = true;
+  const fetchImpl = (async () => {
+    callCount++;
+    if (failFirst) {
+      failFirst = false;
+      return new Response('err', { status: 503 });
+    }
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+  let fireHandler: ((ev: RolloutEvent) => void) | undefined;
+  const watcherImpl: WatcherImpl = {
+    async start(handler) {
+      fireHandler = handler;
+      return async () => undefined;
+    },
+  };
+  let fakeNow = 1_000_000;
+  const stop = await startK8sWatcher(cfg({ debounceMs: 60_000 }), {
+    fetchImpl,
+    watcherImpl,
+    log: () => undefined,
+    now: () => fakeNow,
+    findActiveVerify: async () => undefined,
+  });
+
+  const ev: RolloutEvent = { kind: 'deployment', namespace: 'test', name: 'app', image: 'app:1' };
+  fireHandler!(ev);
+  await new Promise((r) => setTimeout(r, 20));
+  // First call failed; debounce entry should be cleared.
+  // Second event (still within window) should also be attempted.
+  fakeNow += 5_000;
+  fireHandler!(ev);
+  await new Promise((r) => setTimeout(r, 20));
+  await stop();
+
+  assert.equal(callCount, 2, 'failed POST clears debounce; retry on next event');
+});
+
+test('watcherConfigFromEnv: SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES unset → 600000ms', () => {
+  const c = watcherConfigFromEnv({});
+  assert.equal(c.debounceMs, 600_000);
+});
+
+test('watcherConfigFromEnv: SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES="0" → 0', () => {
+  const c = watcherConfigFromEnv({ SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES: '0' });
+  assert.equal(c.debounceMs, 0);
+});
+
+test('watcherConfigFromEnv: SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES="2.5" → 150000ms', () => {
+  const c = watcherConfigFromEnv({ SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES: '2.5' });
+  assert.equal(c.debounceMs, 150_000);
 });
