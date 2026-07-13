@@ -44,6 +44,6 @@ module "qa" {
   anthropic_api_key_secret = "anthropic-api-key"
 }
 
-output "inbox_url"      { value = module.qa.inbox_url }
-output "service_dns"    { value = module.qa.service_dns }
+output "inbox_url" { value = module.qa.inbox_url }
+output "service_dns" { value = module.qa.service_dns }
 output "service_account" { value = module.qa.service_account_name }

@@ -47,11 +47,11 @@ locals {
   # callers can opt into other resources without code edits.
   watch_resources_rbac = [
     for r in local.watch_resources : (
-      r == "deployment"  ? "deployments" :
+      r == "deployment" ? "deployments" :
       r == "statefulset" ? "statefulsets" :
-      r == "daemonset"   ? "daemonsets" :
-      r == "replicaset"  ? "replicasets" :
-      endswith(r, "s")   ? r : "${r}s"
+      r == "daemonset" ? "daemonsets" :
+      r == "replicaset" ? "replicasets" :
+      endswith(r, "s") ? r : "${r}s"
     )
   ]
 
