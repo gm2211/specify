@@ -24,6 +24,19 @@ import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
 import { learnedSkillsEnabled } from './feature-flags.js';
 import { randomUUID } from 'node:crypto';
 
+/**
+ * Numeric override from the environment for per-run agent caps
+ * (SPECIFY_MAX_BUDGET_USD, SPECIFY_MAX_TURNS) so deployments like the
+ * in-cluster QA pod can raise them without an image rebuild. Invalid or
+ * non-positive values fall back to the default.
+ */
+function envNumber(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw === undefined || raw.trim() === '') return fallback;
+  const parsed = Number(raw);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export interface BehaviorProgress {
   id: string;
   description?: string;
@@ -690,8 +703,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       cwd: opts.cwd ?? process.cwd(),
-      maxTurns: 200,
-      maxBudgetUsd: 5,
+      maxTurns: envNumber('SPECIFY_MAX_TURNS', 200),
+      maxBudgetUsd: envNumber('SPECIFY_MAX_BUDGET_USD', 5),
       persistSession: false,
       ...(outputFormat ? { outputFormat } : {}),
     };
@@ -772,3 +785,5 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     setActivePropagator(null);
   }
 }
+
+export const _internals = { envNumber };

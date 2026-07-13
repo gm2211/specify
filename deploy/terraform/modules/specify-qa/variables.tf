@@ -195,4 +195,14 @@ variable "platform_spec_run_result_url" {
   default     = ""
 }
 
+# ----------------------------------------------------------------------------
+# Extra environment.
+# ----------------------------------------------------------------------------
+
+variable "extra_env" {
+  type        = map(string)
+  description = "Additional plain-value environment variables for the daemon container (e.g. SPECIFY_MAX_BUDGET_USD = \"25\" to raise the per-run agent budget). Secrets should use dedicated variables instead."
+  default     = {}
+}
+
 # Cross-field validation lives in main.tf, in a `terraform_data` precondition.

@@ -487,6 +487,15 @@ resource "kubernetes_deployment_v1" "this" {
             }
           }
 
+          # Caller-supplied extra env (plain values only — secrets get dedicated vars).
+          dynamic "env" {
+            for_each = var.extra_env
+            content {
+              name  = env.key
+              value = env.value
+            }
+          }
+
           port {
             name           = "http"
             container_port = 4100
