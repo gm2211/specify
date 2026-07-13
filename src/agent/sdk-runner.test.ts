@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { extractBool } from './sdk-runner.js';
+import { extractBool, _internals } from './sdk-runner.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from './sdk-runner.js';
 
 test('SdkRunnerOptions interface accepts valid capture options', () => {
@@ -124,4 +124,31 @@ test('extractBool returns null for missing, non-object, or non-boolean', () => {
   assert.equal(extractBool({}, 'pass'), null);
   assert.equal(extractBool({ pass: 'yes' }, 'pass'), null);
   assert.equal(extractBool({ pass: 1 }, 'pass'), null);
+});
+
+test('envNumber returns fallback when the env var is unset', () => {
+  delete process.env.SPECIFY_TEST_ENV_NUMBER;
+  assert.equal(_internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5), 5);
+});
+
+test('envNumber parses integer and decimal overrides', () => {
+  try {
+    process.env.SPECIFY_TEST_ENV_NUMBER = '25';
+    assert.equal(_internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5), 25);
+    process.env.SPECIFY_TEST_ENV_NUMBER = '12.5';
+    assert.equal(_internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5), 12.5);
+  } finally {
+    delete process.env.SPECIFY_TEST_ENV_NUMBER;
+  }
+});
+
+test('envNumber falls back on garbage, empty, zero, and negative values', () => {
+  try {
+    for (const bad of ['abc', '', '  ', '0', '-3', 'NaN', 'Infinity']) {
+      process.env.SPECIFY_TEST_ENV_NUMBER = bad;
+      assert.equal(_internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5), 5, `expected fallback for ${JSON.stringify(bad)}`);
+    }
+  } finally {
+    delete process.env.SPECIFY_TEST_ENV_NUMBER;
+  }
 });

@@ -47,11 +47,11 @@ locals {
   # callers can opt into other resources without code edits.
   watch_resources_rbac = [
     for r in local.watch_resources : (
-      r == "deployment"  ? "deployments" :
+      r == "deployment" ? "deployments" :
       r == "statefulset" ? "statefulsets" :
-      r == "daemonset"   ? "daemonsets" :
-      r == "replicaset"  ? "replicasets" :
-      endswith(r, "s")   ? r : "${r}s"
+      r == "daemonset" ? "daemonsets" :
+      r == "replicaset" ? "replicasets" :
+      endswith(r, "s") ? r : "${r}s"
     )
   ]
 
@@ -484,6 +484,15 @@ resource "kubernetes_deployment_v1" "this" {
                   key  = "platform-specify-token"
                 }
               }
+            }
+          }
+
+          # Caller-supplied extra env (plain values only — secrets get dedicated vars).
+          dynamic "env" {
+            for_each = var.extra_env
+            content {
+              name  = env.key
+              value = env.value
             }
           }
 
