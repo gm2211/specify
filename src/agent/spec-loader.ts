@@ -6,8 +6,8 @@
  *
  * Three sources, mutually exclusive, picked from env:
  *
- *   1. inline — the spec is mounted as a file (typically from a ConfigMap or
- *      a sibling volume). Plain `fs.readFile`.
+ *   1. inline — the spec is mounted as a file or directory (typically from a
+ *      ConfigMap or a sibling volume). Directory specs are composed first.
  *
  *   2. url — the app under test publishes its own spec at e.g.
  *      `/.well-known/specify.spec.yaml`. The QA pod fetches with a bearer
@@ -26,7 +26,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { parseSpec } from '../spec/parser.js';
+import { loadSpecWithProvenance, parseSpec, specToYaml } from '../spec/parser.js';
 import type { Spec } from '../spec/types.js';
 
 export type SpecSource =
@@ -79,7 +79,14 @@ function describeSource(s: SpecSource): string {
 }
 
 async function readInline(p: string): Promise<string> {
-  if (!fs.existsSync(p)) throw new Error(`Spec file not found: ${p}`);
+  return readSpecPath(p, `Spec file not found: ${p}`);
+}
+
+function readSpecPath(p: string, missingMessage: string): string {
+  if (!fs.existsSync(p)) throw new Error(missingMessage);
+  if (fs.statSync(p).isDirectory()) {
+    return specToYaml(loadSpecWithProvenance(p).spec);
+  }
   return fs.readFileSync(p, 'utf-8');
 }
 
@@ -137,10 +144,7 @@ async function cloneAndRead(src: { repo: string; ref: string; path: string; depl
   try {
     await exec({ repo: src.repo, ref: src.ref, destDir: dest, deployKeyFile: src.deployKeyFile });
     const target = path.join(dest, src.path);
-    if (!fs.existsSync(target)) {
-      throw new Error(`Spec path not found in repo ${src.repo}@${src.ref}: ${src.path}`);
-    }
-    return fs.readFileSync(target, 'utf-8');
+    return readSpecPath(target, `Spec path not found in repo ${src.repo}@${src.ref}: ${src.path}`);
   } finally {
     fs.rmSync(dest, { recursive: true, force: true });
   }

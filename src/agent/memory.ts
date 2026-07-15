@@ -30,6 +30,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { specRootDir } from '../spec/paths.js';
 
 export type MemoryRowType = 'observation' | 'playbook' | 'quirk';
 
@@ -97,8 +98,7 @@ function safe(s: string): string {
  * Default root: `<spec_dir>/.specify/memory/<spec_id>/<target_key>.json`.
  */
 export function memoryPath(specPath: string, specId: string, target: TargetDescriptor): string {
-  const specDir = path.dirname(path.resolve(specPath));
-  return path.join(specDir, '.specify', 'memory', safe(specId), targetKey(target) + '.json');
+  return path.join(specRootDir(specPath), '.specify', 'memory', safe(specId), targetKey(target) + '.json');
 }
 
 export function loadMemory(filePath: string): MemoryFile {

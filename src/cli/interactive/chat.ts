@@ -366,15 +366,14 @@ async function handleLint(state: ChatState): Promise<void> {
     process.stderr.write(`  No spec loaded.\n`);
     return;
   }
-  const { lintRaw } = await import('../../spec/lint.js');
-  const content = fs.readFileSync(path.resolve(state.specPath), 'utf-8');
-  const result = lintRaw(content);
+  const { lintPath } = await import('../../spec/lint.js');
+  const result = lintPath(path.resolve(state.specPath));
   if (result.valid) {
     process.stderr.write(`  ${c.green('✓')} Spec is valid\n`);
   } else {
     process.stderr.write(`  ${c.red('✗')} Spec has issues:\n`);
     for (const err of result.errors ?? []) {
-      process.stderr.write(`    ${c.red('•')} ${err}\n`);
+      process.stderr.write(`    ${c.red('•')} ${err.path}: ${err.message}\n`);
     }
   }
 }

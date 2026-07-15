@@ -30,6 +30,16 @@ test('memoryPath is scoped per spec_id and target_key', () => {
   assert.ok(p.endsWith('web_x.test.json'));
 });
 
+test('memoryPath is rooted inside directory specs', () => {
+  const dir = tmp();
+  try {
+    const p = memoryPath(dir, 'My App', { type: 'web', url: 'https://x.test' });
+    assert.equal(p, path.join(dir, '.specify', 'memory', 'My_App', 'web_x.test.json'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('loadMemory on missing file returns empty store', () => {
   const dir = tmp();
   const p = path.join(dir, 'mem.json');

@@ -18,6 +18,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { eventBus, type SpecifyEvent } from './event-bus.js';
+import { specRootDir } from '../spec/paths.js';
 
 export interface SessionMeta {
   sessionId: string;
@@ -310,7 +311,7 @@ function renderContent(e: SpecifyEvent): string {
  */
 export function defaultSessionDbPath(specPath?: string): string {
   if (specPath) {
-    return path.join(path.dirname(path.resolve(specPath)), '.specify', 'sessions.db');
+    return path.join(specRootDir(specPath), '.specify', 'sessions.db');
   }
   const home = process.env.HOME ?? process.env.USERPROFILE ?? '.';
   return path.join(home, '.specify', 'sessions.db');

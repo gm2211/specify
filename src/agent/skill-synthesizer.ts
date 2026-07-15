@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { CandidatePattern } from './pattern-miner.js';
+import { specRootDir } from '../spec/paths.js';
 
 export interface SynthOptions {
   /** Spec path (used to resolve the drafts directory). */
@@ -50,7 +51,7 @@ export interface DraftRecord {
 }
 
 export function defaultDraftsDir(specPath: string): string {
-  return path.join(path.dirname(path.resolve(specPath)), '.specify', 'skill-drafts');
+  return path.join(specRootDir(specPath), '.specify', 'skill-drafts');
 }
 
 export async function synthesizeDraft(pattern: CandidatePattern, opts: SynthOptions): Promise<DraftRecord> {
@@ -114,7 +115,7 @@ export interface PromoteResult {
  * subsequent runs (SP-5i3).
  */
 export function defaultSkillsDir(specPath: string): string {
-  return path.join(path.dirname(path.resolve(specPath)), '.specify', 'skills');
+  return path.join(specRootDir(specPath), '.specify', 'skills');
 }
 
 /**

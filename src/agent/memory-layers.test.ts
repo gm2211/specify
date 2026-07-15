@@ -149,3 +149,16 @@ test('default paths resolve to expected locations', () => {
   // No file exists yet so project resolves null
   assert.equal(defaultProjectMemoryPath('/tmp/nonexistent/specify.spec.yaml'), null);
 });
+
+test('default paths root inside directory specs', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    fs.mkdirSync(path.join(dir, 'spec'));
+    fs.writeFileSync(path.join(dir, 'spec', 'SPECIFY.md'), 'project context');
+
+    assert.equal(defaultObservationsPath(path.join(dir, 'spec')), path.join(dir, 'spec', 'specify.observations.yaml'));
+    assert.equal(defaultProjectMemoryPath(path.join(dir, 'spec')), path.join(dir, 'spec', 'SPECIFY.md'));
+  } finally {
+    cleanup();
+  }
+});

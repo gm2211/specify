@@ -73,6 +73,35 @@ test('resolveSpec: inline reads file + hashes content', async () => {
   }
 });
 
+test('resolveSpec: inline composes directory spec', async () => {
+  const { dir, cleanup } = tmp();
+  try {
+    const specDir = path.join(dir, 'spec');
+    fs.mkdirSync(path.join(specDir, 'areas'), { recursive: true });
+    fs.writeFileSync(path.join(specDir, 'spec.yaml'), `version: "2"
+name: SplitSpec
+target:
+  type: web
+  url: https://example.test
+areas:
+  - areas/home.yaml
+`);
+    fs.writeFileSync(path.join(specDir, 'areas', 'home.yaml'), `id: home
+name: Home
+behaviors:
+  - id: loads
+    description: Home page renders
+`);
+    const r = await resolveSpec({ kind: 'inline', path: specDir });
+    assert.equal(r.spec.name, 'SplitSpec');
+    assert.equal(r.spec.areas[0]?.id, 'home');
+    assert.match(r.content, /id: home/);
+    assert.match(r.hash, /^[a-f0-9]{64}$/);
+  } finally {
+    cleanup();
+  }
+});
+
 test('resolveSpec: inline missing path → clear error', async () => {
   await assert.rejects(
     resolveSpec({ kind: 'inline', path: '/nope/missing.yaml' }),
@@ -124,6 +153,39 @@ test('resolveSpec: git invokes injected clone, reads path', async () => {
     );
     assert.equal(r.spec.name, 'TestSpec');
     assert.equal(r.source.kind, 'git');
+  } finally {
+    cleanup();
+  }
+});
+
+test('resolveSpec: git path may point at a directory spec', async () => {
+  const { dir: tmpRoot, cleanup } = tmp();
+  try {
+    const execImpl: RunGitClone = async ({ destDir }) => {
+      const specDir = path.join(destDir, 'spec');
+      fs.mkdirSync(path.join(specDir, 'areas'), { recursive: true });
+      fs.writeFileSync(path.join(specDir, 'spec.yaml'), `version: "2"
+name: GitSplitSpec
+target:
+  type: web
+  url: https://example.test
+areas:
+  - areas/home.yaml
+`);
+      fs.writeFileSync(path.join(specDir, 'areas', 'home.yaml'), `id: home
+name: Home
+behaviors:
+  - id: loads
+    description: Home page renders
+`);
+    };
+    const r = await resolveSpec(
+      { kind: 'git', repo: 'git@x:y/z.git', ref: 'main', path: 'spec' },
+      { execImpl, tmpRoot },
+    );
+    assert.equal(r.spec.name, 'GitSplitSpec');
+    assert.equal(r.spec.areas[0]?.id, 'home');
+    assert.match(r.content, /id: home/);
   } finally {
     cleanup();
   }

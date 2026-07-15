@@ -144,3 +144,14 @@ test('defaultSessionDbPath: spec-relative when given, user-level fallback otherw
   const fb = defaultSessionDbPath();
   assert.match(fb, /\.specify\/sessions\.db$/);
 });
+
+test('defaultSessionDbPath: directory specs root state inside the directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-session-dir-'));
+  try {
+    const specDir = path.join(dir, 'spec');
+    fs.mkdirSync(specDir);
+    assert.equal(defaultSessionDbPath(specDir), path.join(specDir, '.specify', 'sessions.db'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

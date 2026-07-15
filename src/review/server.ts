@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { eventBus } from '../agent/event-bus.js';
 import { learnedSkillsEnabled } from '../agent/feature-flags.js';
 import type { MessageInjector } from '../agent/message-injector.js';
+import { specRootDir } from '../spec/paths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -154,7 +155,7 @@ export interface ServeOptions {
 export async function startReviewServer(options: ServeOptions): Promise<void> {
   const { specPath, port, open: shouldOpen, agentReport } = options;
   const resolvedSpec = path.resolve(specPath);
-  const specDir = path.dirname(resolvedSpec);
+  const specDir = specRootDir(resolvedSpec);
   const resultsPath = path.join(specDir, '.specify', 'verify', 'verify-result.json');
   const resultsDir = path.join(specDir, '.specify', 'verify');
 
@@ -227,10 +228,14 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   });
 
   app.get('/api/narrative', async (c) => {
-    // Auto-discover narrative file next to spec
-    const baseName = path.basename(resolvedSpec).replace(/\.(ya?ml|json)$/, '.narrative.md');
-    const narrativePath = path.resolve(specDir, baseName);
     try {
+      const { loadSpec } = await import('../spec/parser.js');
+      const spec = loadSpec(resolvedSpec);
+      const isDirectorySpec = fs.existsSync(resolvedSpec) && fs.statSync(resolvedSpec).isDirectory();
+      const baseName = isDirectorySpec
+        ? 'spec.narrative.md'
+        : path.basename(resolvedSpec).replace(/\.(ya?ml|json)$/, '.narrative.md');
+      const narrativePath = path.resolve(specDir, spec.narrative_path ?? baseName);
       if (!fs.existsSync(narrativePath)) {
         return c.json({ content: '' });
       }
@@ -250,6 +255,12 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       // Validate before writing
       const { parseSpec } = await import('../spec/parser.js');
       parseSpec(body.yaml, resolvedSpec);
+      if (fs.existsSync(resolvedSpec) && fs.statSync(resolvedSpec).isDirectory()) {
+        return c.json({
+          error: 'unsupported_write',
+          message: 'Directory specs cannot be overwritten with a flattened YAML document.',
+        }, 409);
+      }
       // Write to disk
       fs.writeFileSync(resolvedSpec, body.yaml, 'utf-8');
       return c.json({ ok: true });

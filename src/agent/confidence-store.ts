@@ -21,6 +21,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { eventBus, type SpecifyEvent } from './event-bus.js';
+import { specRootDir } from '../spec/paths.js';
 
 export type ConfidenceOutcome = 'accept' | 'override';
 
@@ -126,7 +127,7 @@ export function autonomyDecision(row: ConfidenceRow, preset: AutonomyPreset): 'a
 }
 
 export function defaultConfidencePath(specPath: string): string {
-  return path.join(path.dirname(path.resolve(specPath)), '.specify', 'confidence.json');
+  return path.join(specRootDir(specPath), '.specify', 'confidence.json');
 }
 
 function loadFile(filePath: string): ConfidenceFile {

@@ -70,6 +70,53 @@ specify review --spec app.spec.yaml
 `specify review` opens the webapp shown above. Click any timeline event to flag
 it; flags become observations the agent reads as preamble next run.
 
+## Large Specs
+
+For larger products, `--spec` may point at a directory instead of one YAML file.
+Specify composes the directory into one logical behavioral contract before
+linting, review, verify, daemon runs, and agent memory:
+
+```text
+spec/
+  spec.yaml
+  areas/
+    auth.yaml
+    billing.yaml
+```
+
+`spec/spec.yaml` holds top-level metadata and may declare area order:
+
+```yaml
+version: "2"
+name: "My App"
+target:
+  type: web
+  url: "http://localhost:3000"
+areas:
+  - areas/auth.yaml
+  - areas/billing.yaml
+```
+
+Each area file contains one normal area object:
+
+```yaml
+id: auth
+name: Authentication
+behaviors:
+  - id: login-valid-credentials
+    description: A user with valid credentials can log in and sees the dashboard
+```
+
+When `areas` is omitted from the manifest, `areas/**/*.yaml`, `areas/**/*.yml`,
+and `areas/**/*.json` are composed in sorted path order. Existing commands keep
+the same one-value form:
+
+```bash
+specify spec lint --spec spec/
+specify verify --spec spec/ --url http://localhost:3000
+specify review --spec spec/
+```
+
 ## Commands
 
 | Command | What |

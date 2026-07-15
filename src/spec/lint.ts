@@ -11,6 +11,12 @@ import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import { specSchema } from './schema.js';
 import type { Spec } from './types.js';
+import {
+  loadSpecWithProvenance,
+  SpecCompositionError,
+  SpecValidationError,
+  type SpecSourceIssue,
+} from './parser.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -100,6 +106,56 @@ export function lintRaw(content: string, _sourceName = '<string>', _specPath?: s
 
   const hasErrors = errors.some(e => e.severity === 'error');
   return { valid: !hasErrors, errors };
+}
+
+/**
+ * Lint a spec source path. The source may be one file or a composed spec
+ * directory. Use lintRaw for stdin/string input.
+ */
+export function lintPath(specPath: string): LintResult {
+  try {
+    const { spec } = loadSpecWithProvenance(specPath);
+    const errors = lintSpec(spec, specPath);
+    const hasErrors = errors.some(e => e.severity === 'error');
+    return { valid: !hasErrors, errors };
+  } catch (err) {
+    if (err instanceof SpecCompositionError) {
+      const errors = err.errors.map((issue) => sourceIssueToLintError(issue));
+      return { valid: false, errors };
+    }
+    if (err instanceof SpecValidationError) {
+      return {
+        valid: false,
+        errors: err.errors.map((message) => ({
+          path: '/',
+          severity: 'error',
+          message,
+          rule: 'schema',
+        })),
+      };
+    }
+    return {
+      valid: false,
+      errors: [
+        {
+          path: '/',
+          severity: 'error',
+          message: err instanceof Error ? err.message : String(err),
+          rule: 'load-error',
+        },
+      ],
+    };
+  }
+}
+
+function sourceIssueToLintError(issue: SpecSourceIssue): LintError {
+  const related = issue.relatedSourcePath ? ` (first defined in ${issue.relatedSourcePath})` : '';
+  return {
+    path: issue.path,
+    severity: 'error',
+    message: `${issue.sourcePath}: ${issue.message}${related}`,
+    rule: 'composition',
+  };
 }
 
 // ---------------------------------------------------------------------------

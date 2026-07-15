@@ -81,3 +81,14 @@ test('listActiveSkills + renderActiveSkillsPrompt: surface promoted skills', asy
 test('defaultSkillsDir resolves next to spec', () => {
   assert.equal(defaultSkillsDir('/tmp/p/specify.spec.yaml'), '/tmp/p/.specify/skills');
 });
+
+test('defaultSkillsDir resolves inside directory specs', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-skills-dir-'));
+  try {
+    const specDir = path.join(dir, 'spec');
+    fs.mkdirSync(specDir);
+    assert.equal(defaultSkillsDir(specDir), path.join(specDir, '.specify', 'skills'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

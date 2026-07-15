@@ -104,3 +104,14 @@ test('defaultConfidencePath resolves next to spec', () => {
   const p = defaultConfidencePath('/tmp/proj/specify.spec.yaml');
   assert.equal(p, '/tmp/proj/.specify/confidence.json');
 });
+
+test('defaultConfidencePath resolves inside directory specs', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-confidence-dir-'));
+  try {
+    const specDir = path.join(dir, 'spec');
+    fs.mkdirSync(specDir);
+    assert.equal(defaultConfidencePath(specDir), path.join(specDir, '.specify', 'confidence.json'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

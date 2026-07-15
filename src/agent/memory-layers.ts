@@ -36,6 +36,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as yaml from 'js-yaml';
+import { specRootDir } from '../spec/paths.js';
 
 export type ObservationSource = 'user_feedback' | 'mined_pattern' | 'reflection' | string;
 
@@ -76,7 +77,7 @@ export function defaultUserMemoryPath(): string {
 }
 
 export function defaultProjectMemoryPath(specPath: string): string | null {
-  const specDir = path.dirname(path.resolve(specPath));
+  const specDir = specRootDir(specPath);
   const candidates = [
     path.join(specDir, 'SPECIFY.md'),
     path.join(specDir, 'CLAUDE.md'),
@@ -88,8 +89,7 @@ export function defaultProjectMemoryPath(specPath: string): string | null {
 }
 
 export function defaultObservationsPath(specPath: string): string {
-  const specDir = path.dirname(path.resolve(specPath));
-  return path.join(specDir, 'specify.observations.yaml');
+  return path.join(specRootDir(specPath), 'specify.observations.yaml');
 }
 
 export function loadObservations(filePath: string): Observation[] {

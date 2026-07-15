@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { lintRaw } from '../../spec/lint.js';
+import { lintPath, lintRaw } from '../../spec/lint.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { c } from '../colors.js';
@@ -18,25 +18,23 @@ export interface SpecLintOptions {
 }
 
 export async function specLint(options: SpecLintOptions, ctx: CliContext): Promise<number> {
-  // Load spec content
-  let content: string;
+  let result;
   try {
     if (options.spec === '-') {
-      content = await readStdin();
+      const content = await readStdin();
+      result = lintRaw(content, options.spec);
     } else {
       const resolved = path.resolve(options.spec);
       if (!fs.existsSync(resolved)) {
-        process.stderr.write(`Spec file not found: ${resolved}\n`);
+        process.stderr.write(`Spec source not found: ${resolved}\n`);
         return ExitCode.PARSE_ERROR;
       }
-      content = fs.readFileSync(resolved, 'utf-8');
+      result = lintPath(resolved);
     }
   } catch (err) {
     process.stderr.write(`Failed to read spec: ${(err as Error).message}\n`);
     return ExitCode.PARSE_ERROR;
   }
-
-  const result = lintRaw(content, options.spec, options.spec !== '-' ? options.spec : undefined);
 
   // Output — JSON to stdout only in structured output modes (matches other commands)
   if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {

@@ -16,6 +16,23 @@ const SPEC_PATTERNS = [
   /^spec\.json$/i,
 ];
 
+const SPEC_DIRECTORY_PATTERNS = [
+  /^specs?$/i,
+  /\.spec$/i,
+];
+
+const SPEC_DIRECTORY_MANIFESTS = [
+  'spec.yaml',
+  'spec.yml',
+  'spec.json',
+  'specify.spec.yaml',
+  'specify.spec.yml',
+  'specify.spec.json',
+  'manifest.yaml',
+  'manifest.yml',
+  'manifest.json',
+];
+
 /**
  * Find spec files in a directory.
  * Returns an array of relative paths to matching files.
@@ -24,10 +41,16 @@ export function findSpecFiles(dir: string = process.cwd()): string[] {
   try {
     const entries = fs.readdirSync(dir);
     return entries
-      .filter(f => SPEC_PATTERNS.some(p => p.test(f)))
       .filter(f => {
         const full = path.join(dir, f);
-        return fs.statSync(full).isFile();
+        const stat = fs.statSync(full);
+        if (stat.isFile()) {
+          return SPEC_PATTERNS.some(p => p.test(f));
+        }
+        if (!stat.isDirectory() || !SPEC_DIRECTORY_PATTERNS.some(p => p.test(f))) {
+          return false;
+        }
+        return SPEC_DIRECTORY_MANIFESTS.some(manifest => fs.existsSync(path.join(full, manifest)));
       })
       .sort();
   } catch {
