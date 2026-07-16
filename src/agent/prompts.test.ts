@@ -57,6 +57,13 @@ test('getCapturePrompt includes assumptions format', () => {
   assert.ok(prompt.includes('assumptions:'), 'should show assumptions YAML');
 });
 
+test('getCapturePrompt tells the agent to split oversized specs', () => {
+  const prompt = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml');
+  assert.ok(prompt.includes('Spec Size Guard'));
+  assert.ok(prompt.includes('directory spec'));
+  assert.ok(prompt.includes('40 KiB'));
+});
+
 test('getReplayPrompt returns non-empty string with capture dir and URL', () => {
   const prompt = getReplayPrompt('./captures/baseline', 'http://localhost:3000');
   assert.ok(prompt.length > 0);

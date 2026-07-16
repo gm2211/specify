@@ -3,6 +3,7 @@ import test from 'node:test';
 
 import type { Spec } from './types.js';
 import { lintPath, lintSpec } from './lint.js';
+import { specToYaml } from './parser.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -149,6 +150,74 @@ test('lintPath reports composed directory duplicate sources', () => {
       error.message.includes('a.yaml') &&
       error.message.includes('b.yaml'),
     ));
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath warns when a single-file spec is large enough to split', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'app.spec.yaml');
+    const spec: Spec = {
+      version: '2',
+      name: 'Large Single File',
+      target: { type: 'web', url: 'http://localhost:3000' },
+      areas: [
+        {
+          id: 'huge',
+          name: 'Huge',
+          behaviors: Array.from({ length: 121 }, (_, i) => ({
+            id: `behavior-${i}`,
+            description: `Behavior ${i} works`,
+          })),
+        },
+      ],
+    };
+    writeFile(specPath, specToYaml(spec));
+
+    const result = lintPath(specPath);
+
+    assert.equal(result.valid, true);
+    assert.ok(result.errors.some((error) =>
+      error.rule === 'oversized-single-file-spec' &&
+      error.severity === 'warning' &&
+      error.message.includes('specify spec split'),
+    ));
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath does not warn about aggregate size for directory specs', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    writeFile(path.join(dir, 'spec.yaml'), [
+      'version: "2"',
+      'name: Directory Spec',
+      'target:',
+      '  type: web',
+      '  url: http://localhost:3000',
+      'areas:',
+      '  - areas/huge.yaml',
+      '',
+    ].join('\n'));
+    const behaviors = Array.from({ length: 121 }, (_, i) => [
+      `  - id: behavior-${i}`,
+      `    description: Behavior ${i} works`,
+    ].join('\n')).join('\n');
+    writeFile(path.join(dir, 'areas', 'huge.yaml'), [
+      'id: huge',
+      'name: Huge',
+      'behaviors:',
+      behaviors,
+      '',
+    ].join('\n'));
+
+    const result = lintPath(dir);
+
+    assert.equal(result.valid, true);
+    assert.ok(!result.errors.some((error) => error.rule === 'oversized-single-file-spec'));
   } finally {
     cleanup();
   }

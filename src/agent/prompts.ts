@@ -59,6 +59,15 @@ Visit remaining sections. Screenshot initial state, try primary interaction.
 ## When You're Done
 Write a v2 spec YAML file to: ${specOutputPath}
 
+## Spec Size Guard
+If the contract is getting large (roughly more than 40 KiB, 800 lines, 12 areas,
+or 120 behaviors), do not keep growing one giant YAML file. Instead, create a
+directory spec: write top-level metadata to \`spec.yaml\` and one area object per
+file under \`areas/\`, with manifest \`areas\` entries pointing at those files.
+If ${specOutputPath} names a YAML file and the spec crosses that threshold,
+write the directory next to it using the extensionless path and report that
+directory as the spec path.
+
 The spec must follow this format:
 \`\`\`yaml
 version: "2"

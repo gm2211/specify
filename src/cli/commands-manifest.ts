@@ -102,6 +102,19 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'spec split',
+    description: 'Convert a large single-file spec into a directory spec with one file per area',
+    parameters: [
+      { name: '--spec', type: 'string', required: true, description: 'Path to the single-file spec to split' },
+      { name: '--output', type: 'string', required: false, description: 'Output spec directory (default: extensionless spec path)' },
+      { name: '--force', type: 'boolean', required: false, description: 'Allow writing into an existing non-empty output directory' },
+    ],
+    examples: [
+      'specify spec split --spec spec.yaml --output spec/',
+      'specify spec split --spec argos.spec.yaml',
+    ],
+  },
+  {
     name: 'spec guide',
     description: 'Output authoring guide (schema, examples, patterns) for LLM spec writers',
     parameters: [],

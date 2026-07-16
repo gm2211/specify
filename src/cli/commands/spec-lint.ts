@@ -51,6 +51,9 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
         process.stderr.write(c.yellow(` (${warnCount} warning${warnCount !== 1 ? 's' : ''})`));
       }
       process.stderr.write('\n');
+      for (const err of result.errors.filter(e => e.severity === 'warning')) {
+        process.stderr.write(`  ${c.yellow('⚠')} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`);
+      }
     } else {
       process.stderr.write(c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`));
       if (warnCount > 0) {

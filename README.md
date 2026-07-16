@@ -117,6 +117,17 @@ specify verify --spec spec/ --url http://localhost:3000
 specify review --spec spec/
 ```
 
+`specify spec lint` warns when a single YAML/JSON spec starts getting unwieldy
+(more than about 40 KiB, 800 lines, 12 areas, or 120 behaviors). Split it
+mechanically with:
+
+```bash
+specify spec split --spec spec.yaml --output spec/
+```
+
+The split command writes `spec/spec.yaml` plus one file per area under
+`spec/areas/`. Directory specs do not trigger the single-file size warning.
+
 ## Commands
 
 | Command | What |

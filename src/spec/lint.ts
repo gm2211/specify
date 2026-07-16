@@ -9,6 +9,7 @@
 
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
+import * as fs from 'fs';
 import { specSchema } from './schema.js';
 import type { Spec } from './types.js';
 import {
@@ -17,6 +18,7 @@ import {
   SpecValidationError,
   type SpecSourceIssue,
 } from './parser.js';
+import { assessSpecSize, splitSuggestion } from './size-guard.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -103,6 +105,8 @@ export function lintRaw(content: string, _sourceName = '<string>', _specPath?: s
   // 3. Semantic lint
   const spec = data as Spec;
   errors.push(...lintSpec(spec));
+  const sourcePath = _sourceName !== '-' && _sourceName !== '<string>' ? _sourceName : undefined;
+  errors.push(...lintSingleFileSize(content, spec, sourcePath));
 
   const hasErrors = errors.some(e => e.severity === 'error');
   return { valid: !hasErrors, errors };
@@ -114,8 +118,12 @@ export function lintRaw(content: string, _sourceName = '<string>', _specPath?: s
  */
 export function lintPath(specPath: string): LintResult {
   try {
-    const { spec } = loadSpecWithProvenance(specPath);
+    const { spec, provenance } = loadSpecWithProvenance(specPath);
     const errors = lintSpec(spec, specPath);
+    if (provenance.kind === 'file') {
+      const content = fs.readFileSync(specPath, 'utf-8');
+      errors.push(...lintSingleFileSize(content, spec, specPath));
+    }
     const hasErrors = errors.some(e => e.severity === 'error');
     return { valid: !hasErrors, errors };
   } catch (err) {
@@ -233,4 +241,21 @@ export function lintSpec(spec: Spec, _specPath?: string): LintError[] {
   }
 
   return errors;
+}
+
+function lintSingleFileSize(content: string, spec: Spec, specPath?: string): LintError[] {
+  const assessment = assessSpecSize(content, spec);
+  if (!assessment.overLimit) return [];
+
+  const suggestion = specPath
+    ? ` ${splitSuggestion(specPath)}`
+    : ' Split this into a directory spec with one area file per feature.';
+  return [
+    {
+      path: '/',
+      severity: 'warning',
+      message: `Single-file spec is getting large (${assessment.reasons.join('; ')}). ${suggestion}`,
+      rule: 'oversized-single-file-spec',
+    },
+  ];
 }

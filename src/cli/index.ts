@@ -16,6 +16,7 @@
  * Command structure:
  *   specify spec generate   --input <dir> --output <path>
  *   specify spec lint       --spec <path|->
+ *   specify spec split      --spec <path> --output <dir>
  *   specify spec guide
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
@@ -205,6 +206,7 @@ ${c.bold('Primary Flows:')}
 
 ${c.bold('Advanced:')}
   ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec split')}        Break a large spec file into a directory spec
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec generate')}    Generate a spec from capture data
 
@@ -357,6 +359,14 @@ async function main(): Promise<void> {
       const { specLint } = await import('./commands/spec-lint.js');
       exitCode = await specLint({
         spec: resolveSpecArg(rest, ctx),
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'split') {
+      const { specSplit } = await import('./commands/spec-split.js');
+      exitCode = await specSplit({
+        spec: resolveSpecArg(rest, ctx),
+        output: getArg(rest, '--output'),
+        force: hasFlag(rest, '--force'),
       }, ctx);
 
     } else if (noun === 'spec' && verb === 'guide') {
