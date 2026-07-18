@@ -95,6 +95,20 @@ test('bodyContainsMarker finds a marker at any nesting', () => {
   assert.equal(bodyContainsMarker(null, M1), false);
 });
 
+test('bodyContainsMarker is boundary-aware: a marker embedded in a larger token does not count', () => {
+  resetIds();
+  // Marker followed/preceded by alphanumeric characters is part of a larger value.
+  assert.equal(bodyContainsMarker({ name: `${M1}123` }, M1), false);
+  assert.equal(bodyContainsMarker({ name: `abc${M1}` }, M1), false);
+  assert.equal(bodyContainsMarker({ name: `abc${M1}123` }, M1), false);
+  // Non-alphanumeric neighbors are boundaries: quotes (JSON), punctuation, whitespace.
+  assert.equal(bodyContainsMarker({ name: M1 }, M1), true); // "specify-...-1111" in JSON quotes
+  assert.equal(bodyContainsMarker(`prefix: ${M1}.`, M1), true);
+  assert.equal(bodyContainsMarker({ name: `${M1}-suffix` }, M1), true); // hyphen is a boundary
+  // A later whole-token occurrence still matches after an embedded one.
+  assert.equal(bodyContainsMarker([{ name: `${M1}123` }, { name: M1 }], M1), true);
+});
+
 // ---------------------------------------------------------------------------
 // read-your-writes
 // ---------------------------------------------------------------------------
@@ -195,6 +209,26 @@ test('monotonic-reads violated: a marker observed then lost by a later ok read',
   assert.equal(report.anomalies.length, 1);
   assert.equal(report.anomalies[0].guarantee, 'monotonic-reads');
   assert.match(report.anomalies[0].detail, /regression/);
+});
+
+test('monotonic-reads violated: observed marker lost by a list WITHIN the tolerance window', () => {
+  resetIds();
+  // The eventual-consistency window only excuses a FRESH write not yet
+  // propagated. Once the marker has been observed present, a later list losing
+  // it is a monotonic regression regardless of the window.
+  const create = op('create', 'ok', { marker: M1, body: entityBody(M1) });
+  const read = op('read', 'ok', { marker: M1, body: entityBody(M1) }); // observed
+  const list = op('list', 'ok', { marker: M1, body: listBody('other') }); // lost — within window
+  const report = checkSessionGuarantees([create, read, list], { toleranceMs: 60_000 });
+
+  assert.equal(report.summary.holds, 1);
+  assert.equal(report.anomalies.length, 1);
+  assert.equal(report.anomalies[0].guarantee, 'monotonic-reads');
+  assert.match(report.anomalies[0].detail, /regression/);
+  assert.deepEqual(
+    report.anomalies[0].witness.map((w) => w.opId),
+    [create.opId, list.opId],
+  );
 });
 
 test('monotonic inconclusive: an intervening indeterminate write makes a later read undecidable', () => {
