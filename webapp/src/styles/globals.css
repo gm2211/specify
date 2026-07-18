@@ -271,6 +271,28 @@ body {
   color: var(--text-muted);
 }
 
+/* ===== Repro Badge (SP-y2b: deterministic failure confirmation) ===== */
+.repro-badge {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  cursor: help;
+}
+
+.repro-badge--confirmed {
+  background: rgba(63, 185, 80, 0.12);
+  color: var(--green);
+}
+
+.repro-badge--unconfirmed {
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
 /* ===== Sidebar ===== */
 .sidebar {
   padding: 12px 0;

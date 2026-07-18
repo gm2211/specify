@@ -184,7 +184,15 @@ function makePlatformSinks(fetchImpl: typeof fetch) {
   );
 }
 
-function makeVerifyBody(results: Array<{ id: string; status: string; duration_ms?: number; rationale?: string }>) {
+function makeVerifyBody(
+  results: Array<{
+    id: string;
+    status: string;
+    duration_ms?: number;
+    rationale?: string;
+    repro?: { test?: string; confirmed: boolean; output: string };
+  }>,
+) {
   return {
     task: 'verify',
     structuredOutput: {
@@ -242,6 +250,101 @@ test('platform sink: area with mixed timing → durationMs equals sum of known d
   const entries = postedBody as Array<Record<string, unknown>>;
   assert.equal(entries.length, 1);
   assert.equal(entries[0].durationMs, 450, 'durationMs should be sum of the two timed behaviors only');
+});
+
+test('platform sink: failed area with all failures confirmed → reproduced: true', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_confirmed',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([
+      { id: 'checkout/apply-coupon', status: 'passed' },
+      {
+        id: 'checkout/free-shipping',
+        status: 'failed',
+        rationale: 'shipping was charged',
+        repro: { test: 'checkout/free-shipping: ships free over $50', confirmed: true, output: 'generated test failed as expected' },
+      },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].passed, false);
+  assert.equal(entries[0].reproduced, true);
+});
+
+test('platform sink: failed area with an unconfirmed failure → reproduced: false (never flips to passed)', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_unconfirmed',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([
+      {
+        id: 'checkout/free-shipping',
+        status: 'failed',
+        rationale: 'shipping was charged',
+        repro: { test: 'checkout/free-shipping: ships free over $50', confirmed: false, output: 'generated test passed, but the behavior was reported as failed' },
+      },
+    ]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].passed, false, 'repro never flips status even when unconfirmed');
+  assert.equal(entries[0].reproduced, false);
+});
+
+test('platform sink: failed area with no repro info at all → reproduced: false, not omitted', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_norepro',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([{ id: 'checkout/free-shipping', status: 'failed', rationale: 'shipping was charged' }]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.equal(entries[0].reproduced, false);
+});
+
+test('platform sink: passing area → no reproduced key', async () => {
+  let postedBody: unknown;
+  const fetchImpl = (async (_url: string, init?: RequestInit) => {
+    postedBody = JSON.parse(init?.body as string);
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
+
+  const sinks = makePlatformSinks(fetchImpl);
+  const ctx: ReportContext = {
+    id: 'msg_pass',
+    resultPath: '/dev/null',
+    body: makeVerifyBody([{ id: 'home/loads', status: 'passed' }]),
+  };
+  await sinks[0].send(ctx);
+
+  const entries = postedBody as Array<Record<string, unknown>>;
+  assert.ok(!('reproduced' in entries[0]), 'reproduced should not appear on a passing area');
 });
 
 test('platform sink: ctx with startedAt/completedAt → first entry carries them, subsequent entries do not', async () => {

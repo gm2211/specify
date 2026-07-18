@@ -44,6 +44,14 @@ export default function BehaviorCard({
         <span className={`status-dot status-dot--${status}`} />
         <span className="behavior-id">{behavior.id}</span>
         <span className={`status-badge status-badge--${status}`}>{status}</span>
+        {status === 'failed' && result?.repro && (
+          <span
+            className={`repro-badge repro-badge--${result.repro.confirmed ? 'confirmed' : 'unconfirmed'}`}
+            title={result.repro.output}
+          >
+            {result.repro.confirmed ? 'reproduced' : 'unconfirmed'}
+          </span>
+        )}
       </div>
 
       {editing ? (

@@ -47,6 +47,16 @@ export interface BehaviorResult {
   evidence?: Evidence[];
   action_trace?: ActionTraceEntry[];
   rationale?: string;
+  /**
+   * Post-hoc confirmation added by the CLI after running the behavior's
+   * generated Playwright test (SP-y2b). `confirmed: false` renders as
+   * "unconfirmed" — it never means the behavior actually passed.
+   */
+  repro?: {
+    test?: string;
+    confirmed: boolean;
+    output: string;
+  };
 }
 
 export interface VerifyResults {

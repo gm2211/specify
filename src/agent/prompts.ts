@@ -221,11 +221,17 @@ After verifying all behaviors, write Playwright test files to the output directo
 - Each behavior becomes a \`test()\` block
 
 ### Test format:
+Every \`test()\` title MUST start with the behavior's fully-qualified id,
+exactly as reported in \`results[].id\`, formatted as
+\`<area-id>/<behavior-id>: <description>\`. This is a hard contract — the
+reporter output is matched back to behaviors by parsing this prefix off the
+title, so free-form titles will break that mapping.
+
 \`\`\`typescript
 import { test, expect } from '@playwright/test';
 
 test.describe('<Area Name>', () => {
-  test('<behavior description>', async ({ page }) => {
+  test('<area-id>/<behavior-id>: <behavior description>', async ({ page }) => {
     // The actual steps you used to verify this behavior
     await page.goto('/path');
     await expect(page.locator('...')).toBeVisible();
@@ -247,6 +253,7 @@ export default defineConfig({
 
 ### Rules:
 - Only generate tests for behaviors with status "passed" or "failed" (not skipped)
+- Every test title MUST start with "<area-id>/<behavior-id>: " (see Test format above) — this is required, not optional
 - Use the ACTUAL selectors and steps you used during verification
 - Prefer user-visible text selectors (getByText, getByRole) over CSS selectors
 - Include meaningful expect() assertions that map to the behavioral claim
