@@ -673,6 +673,37 @@ async function main(): Promise<void> {
             });
             const { extractBool } = await import('../agent/sdk-runner.js');
             const pass = extractBool(structuredOutput, 'pass');
+
+            // Deterministic failure confirmation: for every behavior the
+            // agent reported as "failed", run its generated Playwright test
+            // (if any) and record whether it independently reproduces the
+            // failure. This is added post-hoc — the agent never sees or
+            // produces this field — so it can't be fabricated by the LLM.
+            const resultsForConfirmation =
+              structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
+                ? ((structuredOutput as { results: Array<Record<string, unknown>> }).results)
+                : [];
+            const failedResults = resultsForConfirmation.filter((r) => r.status === 'failed' && typeof r.id === 'string');
+            if (failedResults.length > 0) {
+              process.stderr.write(`${c.dim(`Confirming ${failedResults.length} failed behavior(s) against generated tests...`)}\n`);
+              const { confirmBehavior } = await import('../agent/test-runner.js');
+              for (const r of failedResults) {
+                const behaviorId = r.id as string;
+                try {
+                  const confirmTimeoutMs = Number(process.env.SPECIFY_CONFIRM_TIMEOUT_MS) || 60_000;
+                  const repro = await confirmBehavior(behaviorId, { cwd: outputDir, timeoutMs: confirmTimeoutMs });
+                  if (repro) {
+                    r.repro = repro;
+                    process.stderr.write(`  ${behaviorId}: ${repro.confirmed ? c.green('confirmed') : c.yellow('unconfirmed')}\n`);
+                  }
+                } catch (err) {
+                  const msg = err instanceof Error ? err.message : String(err);
+                  r.repro = { confirmed: false, output: `unconfirmable: confirmation run threw: ${msg}` };
+                  process.stderr.write(`  ${behaviorId}: ${c.yellow('unconfirmed')} (${msg})\n`);
+                }
+              }
+            }
+
             process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
             process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
             exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;

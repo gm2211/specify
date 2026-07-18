@@ -189,6 +189,8 @@ interface BehaviorResult {
   status: 'passed' | 'failed' | 'skipped';
   duration_ms?: number;
   rationale?: string;
+  /** Post-hoc, CLI-added confirmation (SP-y2b). Never produced by the agent. */
+  repro?: { test?: string; confirmed: boolean; output: string };
 }
 
 /** Shape the platform POST body expects. */
@@ -202,6 +204,14 @@ interface PlatformRunEntry {
   startedAt?: string;
   /** ISO-8601 timestamp when the run finished. Only set on the first entry of the array (run-level, per receiver contract). */
   completedAt?: string;
+  /**
+   * Only present when the area failed. True iff every failing behavior in
+   * the area was independently confirmed by its generated test
+   * (repro.confirmed === true). False covers "no repro info at all" just
+   * as much as "repro ran and disagreed" — reproduced is never inferred as
+   * true by default.
+   */
+  reproduced?: boolean;
 }
 
 interface VerifyStructuredOutputFull {
@@ -229,7 +239,10 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
   const results = so?.results;
   if (!Array.isArray(results) || results.length === 0) return [];
 
-  const areaMap = new Map<string, { totalMs: number; hasTiming: boolean; failed: boolean; firstError?: string }>();
+  const areaMap = new Map<
+    string,
+    { totalMs: number; hasTiming: boolean; failed: boolean; firstError?: string; failedCount: number; confirmedCount: number }
+  >();
 
   for (const r of results) {
     if (r.status === 'skipped') continue;
@@ -240,6 +253,8 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
     const hasDuration = typeof r.duration_ms === 'number';
     const durationMs = hasDuration ? r.duration_ms! : 0;
     const failed = r.status === 'failed';
+    const hasRepro = failed && typeof r.repro?.confirmed === 'boolean';
+    const confirmed = hasRepro && r.repro!.confirmed === true;
 
     if (!existing) {
       areaMap.set(area, {
@@ -247,6 +262,8 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
         hasTiming: hasDuration,
         failed,
         firstError: failed && r.rationale ? r.rationale.slice(0, 500) : undefined,
+        failedCount: failed ? 1 : 0,
+        confirmedCount: confirmed ? 1 : 0,
       });
     } else {
       if (hasDuration) {
@@ -255,6 +272,8 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
       }
       if (failed) {
         existing.failed = true;
+        existing.failedCount += 1;
+        if (confirmed) existing.confirmedCount += 1;
         if (!existing.firstError && r.rationale) {
           existing.firstError = r.rationale.slice(0, 500);
         }
@@ -267,6 +286,9 @@ function aggregateToAreaEntries(body: unknown): PlatformRunEntry[] {
     passed: !data.failed,
     ...(data.hasTiming ? { durationMs: Math.round(data.totalMs) } : {}),
     ...(data.firstError ? { errorMessage: data.firstError } : {}),
+    ...(data.failed && data.failedCount > 0
+      ? { reproduced: data.confirmedCount === data.failedCount }
+      : {}),
   }));
 }
 

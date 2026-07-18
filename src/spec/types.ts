@@ -138,6 +138,25 @@ export interface BehaviorResult {
   action_trace?: ActionTraceEntry[];
   rationale?: string;
   duration_ms?: number;
+  /**
+   * Deterministic confirmation, added POST-HOC by the CLI after the agent
+   * finishes — NEVER produced by the agent itself (it is not part of the
+   * SDK output schema). For a "failed" behavior, the CLI runs the matching
+   * generated Playwright test and records whether it independently
+   * reproduces the failure.
+   *
+   * `confirmed: false` means "unconfirmed" — it must never be read as, or
+   * used to flip, a passing status. The generated test itself can be wrong
+   * (bad selector, missing setup), so this is metadata, not a verdict
+   * override.
+   */
+  repro?: {
+    /** Title of the matched generated test, if any (absent when no matching test was found). */
+    test?: string;
+    confirmed: boolean;
+    /** Human-readable summary of the confirmation run. */
+    output: string;
+  };
 }
 
 export interface Evidence {
