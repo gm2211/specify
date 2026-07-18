@@ -108,6 +108,53 @@ test('classifyEndpoint: create defaults id field to "id"', () => {
   assert.deepEqual(c.idLocation, { kind: 'body', field: 'id' });
 });
 
+test('classifyEndpoint: id-field fallback when no id-like field exists', () => {
+  // Response body has fields, but none of them look like an id.
+  const c = classifyEndpoint('POST', '/users', {
+    responseBody: JSON.stringify({ name: 'Alice', email: 'a@x.com' }),
+  });
+  assert.deepEqual(c.idLocation, { kind: 'body', field: 'id' });
+  // No id-like field means no corroborating hint either.
+  assert.equal(c.confidence, 'medium');
+});
+
+test('classifyEndpoint: POST-to-collection without a hint is medium confidence', () => {
+  const bare = classifyEndpoint('POST', '/users');
+  assert.equal(bare.operation, 'create');
+  assert.equal(bare.confidence, 'medium');
+
+  const status200NoId = classifyEndpoint('POST', '/users', { status: 200, responseBody: '{}' });
+  assert.equal(status200NoId.confidence, 'medium');
+});
+
+test('classifyEndpoint: POST-to-collection hints boost confidence to high', () => {
+  // A 201 status corroborates create even with no response body.
+  const created = classifyEndpoint('POST', '/users', { status: 201 });
+  assert.equal(created.operation, 'create');
+  assert.equal(created.confidence, 'high');
+
+  // An id-like response field corroborates create even on a 200.
+  const idInBody = classifyEndpoint('POST', '/users', {
+    status: 200,
+    responseBody: JSON.stringify({ id: 7 }),
+  });
+  assert.equal(idInBody.confidence, 'high');
+  assert.deepEqual(idInBody.idLocation, { kind: 'body', field: 'id' });
+});
+
+test('deriveEndpointMap: unhinted POST create is flagged needs_review', () => {
+  const map = deriveEndpointMap([
+    req('POST', 'https://api.example.com/things', {
+      postData: JSON.stringify({ name: 'x' }),
+      status: 200,
+    }),
+  ]);
+  const create = findEndpoint(map, 'POST', '/things')!;
+  assert.equal(create.operation, 'create');
+  assert.equal(create.confidence, 'medium');
+  assert.equal(create.needs_review, true);
+});
+
 test('classifyEndpoint: HEAD is a read, unknown method is other', () => {
   assert.equal(classifyEndpoint('HEAD', '/users/:id').operation, 'read');
   assert.equal(classifyEndpoint('OPTIONS', '/users').operation, 'other');
@@ -341,6 +388,51 @@ test('save/load round-trips and preserves classification', () => {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('save canonicalizes endpoint order: load, modify, save without merge', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'endpoint-map-'));
+  try {
+    const p = endpointMapPath(dir);
+    const map = deriveEndpointMap(fixtureTraffic());
+    // Scramble the in-memory order (simulating a hand-edit or ad-hoc
+    // mutation) and flip a status without any merge pass.
+    const scrambled = { ...map, endpoints: [...map.endpoints].reverse() };
+    const modified = setEndpointStatus(scrambled, scrambled.endpoints[0].id, 'approved');
+    saveEndpointMap(p, modified);
+
+    const loaded = loadEndpointMap(p)!;
+    const keys = loaded.endpoints.map((e) => `${e.template} ${e.method}`);
+    assert.deepEqual(keys, [...keys].sort((a, b) => a.localeCompare(b)), 'serialized in canonical order');
+    // The status change itself round-trips.
+    assert.equal(loaded.endpoints.filter((e) => e.status === 'approved').length, 1);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('mergeEndpointMap: templates baseline is pruned, not unioned unboundedly', () => {
+  const first = deriveEndpointMap([
+    req('GET', 'https://api.example.com/legacy-items/1'),
+    req('GET', 'https://api.example.com/legacy-items/2'),
+  ]);
+  const fresh = deriveEndpointMap([
+    req('GET', 'https://api.example.com/items/1'),
+    req('GET', 'https://api.example.com/items/2'),
+  ]);
+  const { file: merged } = mergeEndpointMap(first, fresh);
+  // The legacy template survives ONLY because a retained (stale) endpoint
+  // still references it — the baseline is fresh templates + endpoint anchors.
+  assert.deepEqual(merged.templates, ['/items/:id', '/legacy-items/:id']);
+
+  // Drop the legacy endpoint entirely (reviewer deleted it by hand): the next
+  // merge no longer carries its template forward.
+  const withoutLegacy = {
+    ...merged,
+    endpoints: merged.endpoints.filter((e) => e.template !== '/legacy-items/:id'),
+  };
+  const again = mergeEndpointMap(withoutLegacy, fresh);
+  assert.deepEqual(again.file.templates, ['/items/:id']);
 });
 
 test('loadEndpointMap returns null when file absent', () => {
