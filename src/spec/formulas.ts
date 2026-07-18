@@ -60,6 +60,15 @@ export interface FormulaEntry {
   predicates_used: string[];
   status: FormulaStatus;
   provenance: FormulaProvenance;
+  /**
+   * Optional decomposition marker: ids of the leaf formulas this entry is
+   * claimed to decompose into. When present, lint runs a bounded, advisory,
+   * refutation-only entailment check — does AND(children) imply this
+   * parent? — and warns with a plain-English counterexample when it provably
+   * does not (see src/monitor/entailment.ts). Absent on most entries;
+   * fully backward compatible.
+   */
+  parent_of?: string[];
 }
 
 export interface FormulasFile {
@@ -168,6 +177,20 @@ function validateEntry(raw: unknown, index: number, filePath: string): FormulaEn
     ...(typeof provenanceObj.session_id === 'string' ? { session_id: provenanceObj.session_id } : {}),
   };
 
+  let parentOf: string[] | undefined;
+  if (entry.parent_of !== undefined) {
+    if (
+      !Array.isArray(entry.parent_of) ||
+      entry.parent_of.some((p) => typeof p !== 'string' || p.length === 0)
+    ) {
+      throw new FormulasLoadError(
+        `Formula "${id}" has an invalid "parent_of" (expected an array of non-empty formula-id strings)`,
+        filePath,
+      );
+    }
+    parentOf = entry.parent_of as string[];
+  }
+
   return {
     id,
     behavior,
@@ -176,6 +199,7 @@ function validateEntry(raw: unknown, index: number, filePath: string): FormulaEn
     predicates_used: predicatesUsed,
     status: status as FormulaStatus,
     provenance,
+    ...(parentOf !== undefined ? { parent_of: parentOf } : {}),
   };
 }
 
@@ -250,6 +274,7 @@ function orderEntry(entry: FormulaEntry): Record<string, unknown> {
     formula: entry.formula,
     predicates_used: entry.predicates_used,
     status: entry.status,
+    ...(entry.parent_of !== undefined ? { parent_of: entry.parent_of } : {}),
     provenance: {
       compiled_by: entry.provenance.compiled_by,
       ...(entry.provenance.model !== undefined ? { model: entry.provenance.model } : {}),
