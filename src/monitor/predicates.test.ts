@@ -10,6 +10,7 @@ import { evaluate } from './evaluate.js';
 import { and, eventually, globally, not, or, pred } from './formula.js';
 import type { Trace, TraceState } from './trace.js';
 import {
+  canonicalProbeKey,
   consoleTraceEvent,
   createRegistryEvaluator,
   escapeRegExp,
@@ -402,6 +403,114 @@ test('integration: and(step predicate, event predicate) unevaluable propagates p
   // page.url is unevaluable (no step); http.no_request is a definite `true` (nothing matched).
   // AND precedence: violated > unevaluable > inconclusive > satisfied -> unevaluable wins.
   assert.equal(result.verdict, 'unevaluable');
+});
+
+// ================================================================================
+// dom.* — live-sampled probes (SP-efp)
+// ================================================================================
+
+test('dom.exists: present true — probe recorded true', () => {
+  const key = canonicalProbeKey('dom.exists', ['#toast']);
+  const st = state({ step: stepObservation({ probes: { [key]: true } }) });
+  assert.equal(evalOne('dom.exists', ['#toast'], st), true);
+});
+
+test('dom.exists: present false — probe recorded false', () => {
+  const key = canonicalProbeKey('dom.exists', ['#toast']);
+  const st = state({ step: stepObservation({ probes: { [key]: false } }) });
+  assert.equal(evalOne('dom.exists', ['#toast'], st), false);
+});
+
+test('dom.exists: unevaluable — probe key absent from step.probes', () => {
+  const st = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.exists', ['#toast'], st), 'unevaluable');
+});
+
+test('dom.exists: unevaluable — step has no probes map at all', () => {
+  const st = state({ step: stepObservation({ probes: undefined }) });
+  assert.equal(evalOne('dom.exists', ['#toast'], st), 'unevaluable');
+});
+
+test('dom.exists: unevaluable — no step observation at this position', () => {
+  const st = state({ step: undefined });
+  assert.equal(evalOne('dom.exists', ['#toast'], st), 'unevaluable');
+});
+
+test('dom.exists: unevaluable — missing selector arg', () => {
+  const st = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.exists', [], st), 'unevaluable');
+});
+
+test('dom.visible: present true/false, absent -> unevaluable', () => {
+  const key = canonicalProbeKey('dom.visible', ['[role="alert"]']);
+  const visible = state({ step: stepObservation({ probes: { [key]: true } }) });
+  const hidden = state({ step: stepObservation({ probes: { [key]: false } }) });
+  const absent = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.visible', ['[role="alert"]'], visible), true);
+  assert.equal(evalOne('dom.visible', ['[role="alert"]'], hidden), false);
+  assert.equal(evalOne('dom.visible', ['[role="alert"]'], absent), 'unevaluable');
+});
+
+test('dom.visible: different selector args produce distinct keys (no false positive lookup)', () => {
+  const key = canonicalProbeKey('dom.visible', ['#toast']);
+  const st = state({ step: stepObservation({ probes: { [key]: true } }) });
+  assert.equal(evalOne('dom.visible', ['#other'], st), 'unevaluable');
+});
+
+test('dom.text: present true/false, absent -> unevaluable', () => {
+  const key = canonicalProbeKey('dom.text', ['#status', 'Order placed']);
+  const matched = state({ step: stepObservation({ probes: { [key]: true } }) });
+  const notMatched = state({ step: stepObservation({ probes: { [key]: false } }) });
+  const absent = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.text', ['#status', 'Order placed'], matched), true);
+  assert.equal(evalOne('dom.text', ['#status', 'Order placed'], notMatched), false);
+  assert.equal(evalOne('dom.text', ['#status', 'Order placed'], absent), 'unevaluable');
+});
+
+test('dom.text: unevaluable — malformed regex arg (checked independent of sampling)', () => {
+  const st = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.text', ['#status', '('], st), 'unevaluable');
+});
+
+test('dom.count: present true/false, absent -> unevaluable', () => {
+  const key = canonicalProbeKey('dom.count', ['.cart-item', 'gte', '1']);
+  const satisfied = state({ step: stepObservation({ probes: { [key]: true } }) });
+  const notSatisfied = state({ step: stepObservation({ probes: { [key]: false } }) });
+  const absent = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.count', ['.cart-item', 'gte', '1'], satisfied), true);
+  assert.equal(evalOne('dom.count', ['.cart-item', 'gte', '1'], notSatisfied), false);
+  assert.equal(evalOne('dom.count', ['.cart-item', 'gte', '1'], absent), 'unevaluable');
+});
+
+test('dom.count: unevaluable — unknown comparator op', () => {
+  const st = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.count', ['.cart-item', 'between', '1'], st), 'unevaluable');
+});
+
+test('dom.count: unevaluable — non-numeric n', () => {
+  const st = state({ step: stepObservation({ probes: {} }) });
+  assert.equal(evalOne('dom.count', ['.cart-item', 'gte', 'not-a-number'], st), 'unevaluable');
+});
+
+test('integration: G(dom.visible(#toast)) satisfied over a synthetic trace with recorded probes', () => {
+  const key = canonicalProbeKey('dom.visible', ['#toast']);
+  const s0 = state({ index: 0, step: stepObservation({ step: 0, probes: { [key]: true } }) });
+  const s1 = state({ index: 1, step: stepObservation({ step: 1, probes: { [key]: true } }) });
+  const trace: Trace = [s0, s1];
+  const evaluator = createRegistryEvaluator(trace);
+  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, { traceComplete: true });
+  assert.equal(result.verdict, 'satisfied');
+});
+
+test('integration: G(dom.visible(#toast)) violated when a step recorded false', () => {
+  const key = canonicalProbeKey('dom.visible', ['#toast']);
+  const s0 = state({ index: 0, step: stepObservation({ step: 0, probes: { [key]: true } }) });
+  const s1 = state({ index: 1, step: stepObservation({ step: 1, probes: { [key]: false } }) });
+  const trace: Trace = [s0, s1];
+  const evaluator = createRegistryEvaluator(trace);
+  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, { traceComplete: true });
+  assert.equal(result.verdict, 'violated');
+  assert.equal(result.witnessStep, 1);
 });
 
 // ================================================================================

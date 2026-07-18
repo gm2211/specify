@@ -13,6 +13,7 @@ import type { StepObservation } from '../agent/observation.js';
 import type { BehaviorResult } from '../spec/types.js';
 import type { FormulaEntry, FormulasFile, FormulaStatus } from '../spec/formulas.js';
 import { eventually, globally, not, pred, type Formula } from './formula.js';
+import { canonicalProbeKey } from './predicates.js';
 import {
   buildVerifyTrace,
   isMonitorOnlyFailure,
@@ -372,4 +373,71 @@ test('mergeMonitorVerdictsForRun: builds the trace from in-memory run data and m
   assert.equal(out.results[0].verdict_source, 'monitor');
   assert.equal(out.results[0].monitor?.[0].witness_step, 1);
   assert.equal(sink.events[0]?.type, 'monitor:violation');
+});
+
+// --- Live dom.* probes end-to-end (SP-efp) -----------------------------------
+//
+// dom.* predicates never touch traffic/console/AX data — they read booleans
+// recorded onto StepObservation.probes by live sampling (capture-agent.ts).
+// These fixtures exercise the full pipeline the other way round from
+// probe-plan.test.ts / predicates.test.ts: given a synthetic trace whose
+// steps already carry recorded probe values, G(dom.visible(...)) merges into
+// a deterministic verdict via the same asymmetric policy as every other
+// predicate family.
+
+test('SP-efp: F(dom.visible(#toast)) satisfied end-to-end via verdict-merge over recorded probes', () => {
+  // F (not G) so the witnessed `true` at step 1 pins down 'satisfied' even
+  // under prefix semantics (mergeMonitorVerdicts always evaluates with
+  // traceComplete:false — see verdict-merge.ts's module docstring); a G over
+  // a truncated prefix with no failing step is 'inconclusive', not
+  // 'satisfied', since the run could still continue.
+  const key = canonicalProbeKey('dom.visible', ['#toast']);
+  const steps = [
+    step(0, { action: 'goto', probes: { [key]: false } }),
+    step(1, { probes: { [key]: true } }),
+  ];
+  const trace = buildVerifyTrace(steps, [], []);
+
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const file = formulasFile(formulaEntry(BEHAVIOR, eventually(pred('dom.visible', ['#toast'])), 'approved'));
+  const merged = mergeMonitorVerdicts(output, file, trace);
+
+  const out = merged.output as VerifyOut;
+  assert.equal(out.results[0].status, 'passed');
+  assert.equal(out.results[0].verdict_source, 'monitor+llm');
+  assert.equal(out.results[0].monitor?.[0].verdict, 'satisfied');
+  assert.equal(out.results[0].monitor?.[0].witness_step, 1);
+});
+
+test('SP-efp: G(dom.visible(#toast)) violated end-to-end forces the behavior to failed', () => {
+  const key = canonicalProbeKey('dom.visible', ['#toast']);
+  const steps = [
+    step(0, { action: 'goto', probes: { [key]: true } }),
+    step(1, { probes: { [key]: false } }), // toast disappeared — G violated at step 1
+  ];
+  const trace = buildVerifyTrace(steps, [], []);
+
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const file = formulasFile(formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'));
+  const merged = mergeMonitorVerdicts(output, file, trace);
+
+  const out = merged.output as VerifyOut;
+  assert.equal(out.results[0].status, 'failed');
+  assert.equal(out.results[0].verdict_source, 'monitor');
+  assert.equal(out.results[0].monitor?.[0].verdict, 'violated');
+  assert.equal(out.results[0].monitor?.[0].witness_step, 1);
+  assert.deepEqual(merged.monitorForcedFailures, [BEHAVIOR]);
+});
+
+test('SP-efp: dom.* probe never sampled (no probes map on any step) is unevaluable, never affects status', () => {
+  const steps = [step(0, { action: 'goto' }), step(1)]; // no `probes` field at all
+  const trace = buildVerifyTrace(steps, [], []);
+
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const file = formulasFile(formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'));
+  const merged = mergeMonitorVerdicts(output, file, trace);
+
+  const out = merged.output as VerifyOut;
+  assert.equal(out.results[0].status, 'passed');
+  assert.equal(out.results[0].monitor?.[0].verdict, 'unevaluable');
 });

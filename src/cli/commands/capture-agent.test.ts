@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { executeCommand, type AgentCommand } from './capture-agent.js';
+import { canonicalProbeKey } from '../../monitor/predicates.js';
+import type { ProbePlan } from '../../agent/probe-plan.js';
 
 // Helper: minimal mock page
 function mockPage(overrides: Record<string, (...args: any[]) => any> = {}) {
@@ -183,4 +185,125 @@ test('executeCommand does not invoke the recorder for the done action', async ()
 
   assert.equal(recorder.calls.begin.length, 0);
   assert.equal(recorder.calls.end.length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Live dom.* probe sampling (SP-efp)
+// ---------------------------------------------------------------------------
+
+function mockRecorderWithEnd() {
+  const ends: Array<{ success: boolean; error?: string; screenshot?: string; probes?: Record<string, boolean>; probesTruncated?: boolean }> = [];
+  return {
+    ends,
+    beginStep: async () => {},
+    endStep: async (result: any) => { ends.push(result); },
+  } as any;
+}
+
+/** Builds a page whose `locator(selector)` returns a stubbed locator for a fixed selector -> behavior map. */
+function mockPageWithLocators(
+  behaviors: Record<string, { count?: number; visible?: boolean; text?: string | null; delayMs?: number; throws?: boolean }>,
+) {
+  return mockPage({
+    locator: (selector: string) => {
+      const b = behaviors[selector] ?? {};
+      const maybeDelay = async <T>(value: T): Promise<T> => {
+        if (b.throws) throw new Error(`probe failure for ${selector}`);
+        if (b.delayMs) await new Promise((resolve) => setTimeout(resolve, b.delayMs));
+        return value;
+      };
+      const locatorObj: any = {
+        count: async () => maybeDelay(b.count ?? 0),
+        isVisible: async () => maybeDelay(b.visible ?? false),
+        textContent: async () => maybeDelay(b.text ?? null),
+        first: () => locatorObj,
+      };
+      return locatorObj;
+    },
+  });
+}
+
+test('executeCommand samples dom.exists/dom.visible/dom.text/dom.count probes and records them on the step', async () => {
+  const page = mockPageWithLocators({
+    '#toast': { count: 1, visible: true, text: 'Order placed' },
+    '.cart-item': { count: 3 },
+  });
+  const recorder = mockRecorderWithEnd();
+  const probePlan: ProbePlan = [
+    { key: canonicalProbeKey('dom.exists', ['#toast']), predicate: 'dom.exists', args: ['#toast'] },
+    { key: canonicalProbeKey('dom.visible', ['#toast']), predicate: 'dom.visible', args: ['#toast'] },
+    { key: canonicalProbeKey('dom.text', ['#toast', 'placed']), predicate: 'dom.text', args: ['#toast', 'placed'] },
+    { key: canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2']), predicate: 'dom.count', args: ['.cart-item', 'gte', '2'] },
+  ];
+
+  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+
+  assert.equal(recorder.ends.length, 1);
+  const probes = recorder.ends[0].probes;
+  assert.ok(probes);
+  assert.equal(probes![canonicalProbeKey('dom.exists', ['#toast'])], true);
+  assert.equal(probes![canonicalProbeKey('dom.visible', ['#toast'])], true);
+  assert.equal(probes![canonicalProbeKey('dom.text', ['#toast', 'placed'])], true);
+  assert.equal(probes![canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2'])], true);
+  assert.equal(recorder.ends[0].probesTruncated, false);
+});
+
+test('executeCommand omits a probe key on error instead of recording false', async () => {
+  const page = mockPageWithLocators({ '#missing': { throws: true } });
+  const recorder = mockRecorderWithEnd();
+  const probePlan: ProbePlan = [
+    { key: canonicalProbeKey('dom.exists', ['#missing']), predicate: 'dom.exists', args: ['#missing'] },
+  ];
+
+  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+
+  const probes = recorder.ends[0].probes;
+  assert.deepEqual(probes, {});
+});
+
+test('executeCommand omits a probe key on timeout instead of recording false', async () => {
+  const page = mockPageWithLocators({ '#slow': { count: 1, delayMs: 800 } });
+  const recorder = mockRecorderWithEnd();
+  const probePlan: ProbePlan = [
+    { key: canonicalProbeKey('dom.exists', ['#slow']), predicate: 'dom.exists', args: ['#slow'] },
+  ];
+
+  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+
+  const probes = recorder.ends[0].probes;
+  assert.deepEqual(probes, {});
+});
+
+test('executeCommand does not sample probes when no probePlan is given (zero behavior change)', async () => {
+  const page = mockPageWithLocators({});
+  const recorder = mockRecorderWithEnd();
+
+  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder);
+
+  assert.equal(recorder.ends.length, 1);
+  assert.equal(recorder.ends[0].probes, undefined);
+});
+
+test('executeCommand does not sample probes when probePlan is empty', async () => {
+  const page = mockPageWithLocators({});
+  const recorder = mockRecorderWithEnd();
+
+  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, []);
+
+  assert.equal(recorder.ends[0].probes, undefined);
+});
+
+test('executeCommand samples probes on the failure path too', async () => {
+  const page = mockPageWithLocators({ '#toast': { count: 1 } });
+  page.click = async () => { throw new Error('boom'); };
+  const recorder = mockRecorderWithEnd();
+  const probePlan: ProbePlan = [
+    { key: canonicalProbeKey('dom.exists', ['#toast']), predicate: 'dom.exists', args: ['#toast'] },
+  ];
+
+  const result = await executeCommand(page, { action: 'click', selector: '#nope' }, undefined, recorder, probePlan);
+
+  assert.equal(result.success, false);
+  assert.equal(recorder.ends[0].success, false);
+  assert.equal(recorder.ends[0].probes?.[canonicalProbeKey('dom.exists', ['#toast'])], true);
 });

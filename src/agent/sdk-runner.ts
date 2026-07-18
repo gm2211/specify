@@ -286,6 +286,7 @@ async function launchBrowserSession(
   serverName: string,
   askUserHandler?: (question: string) => Promise<string>,
   faultPlan?: import('./fault-injector.js').FaultPlan,
+  probePlan?: import('./probe-plan.js').ProbePlan,
 ): Promise<BrowserSession> {
   const { chromium } = await import('playwright');
   const { CaptureCollector } = await import('./capture.js');
@@ -347,6 +348,7 @@ async function launchBrowserSession(
     askUserHandler,
     observationRecorder,
     faultInjector,
+    probePlan,
   );
 
   return { browser, collector, observationRecorder, page, mcpServer, faultInjector };
@@ -811,11 +813,20 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // monitorVerdictsEnabled flag: flag off => the file is ignored entirely
     // and the run is byte-identical to a build without the monitor tier.
     let formulasForMerge: import('../spec/formulas.js').FormulasFile | null = null;
+    // Live dom.* probe plan (SP-efp): extracted from the same formulas file,
+    // right after it loads, so it can be threaded into the browser session
+    // below. Stays empty (=> zero behavior change) whenever formulasForMerge
+    // is null — same flag/task gating as the monitor merge itself.
+    let probePlan: import('./probe-plan.js').ProbePlan = [];
     if (opts.task === 'verify' && opts.spec && monitorVerdictsEnabled()) {
       const { loadFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
       formulasForMerge = loadFormulas(defaultFormulasPath(path.resolve(opts.spec)));
       if (formulasForMerge && formulasForMerge.formulas.length > 0) {
         process.stderr.write(`  Monitor: loaded ${formulasForMerge.formulas.length} compiled formula(s).\n`);
+      }
+      if (formulasForMerge) {
+        const { buildProbePlanWithLog } = await import('./probe-plan.js');
+        probePlan = buildProbePlanWithLog(formulasForMerge);
       }
     }
     // --- end monitor formulas load ---------------------------------------
@@ -846,6 +857,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         'browser',
         opts.askUserHandler,
         opts.faultPlan,
+        probePlan,
       );
       sessions.push(session);
       mcpServers.browser = session.mcpServer;

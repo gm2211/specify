@@ -60,8 +60,18 @@ export interface StepObservation {
   trafficRange: [number, number];
   /** [start, end) index slice into CaptureCollector.getConsoleLogs(). */
   consoleRange: [number, number];
-  /** Live predicate probes. Left unpopulated — future bead. */
+  /**
+   * Live dom.* predicate probes sampled at this step, keyed by
+   * `canonicalProbeKey(predicate, args)` (src/monitor/predicates.ts). Present
+   * only when a ProbePlan was threaded into executeCommand (src/cli/commands/
+   * capture-agent.ts) for this run — i.e. a verify run with the monitor flag
+   * on and dom.* predicates in specify.formulas.yaml. A key absent from this
+   * map (rather than `false`) is what the dom.* predicate evalFns read as
+   * 'unevaluable' — see predicates.ts's module notes on the dom.* predicates.
+   */
   probes?: Record<string, boolean>;
+  /** True iff the per-step probe time budget (see capture-agent.ts) was exceeded and one or more planned probes were skipped this step. */
+  probesTruncated?: boolean;
 }
 
 export interface ObservationRecorderOptions {
@@ -146,7 +156,15 @@ export class ObservationRecorder {
    * pushes the completed StepObservation. The traffic/console range's end
    * index is left open until the next beginStep() or save() call.
    */
-  async endStep(result: { success: boolean; error?: string; screenshot?: string }): Promise<void> {
+  async endStep(result: {
+    success: boolean;
+    error?: string;
+    screenshot?: string;
+    /** Live dom.* probe values sampled by the caller (see capture-agent.ts's executeCommand). */
+    probes?: Record<string, boolean>;
+    /** True iff the caller's per-step probe time budget was exceeded. */
+    probesTruncated?: boolean;
+  }): Promise<void> {
     if (!this.pending) return;
     const pending = this.pending;
     this.pending = null;
@@ -174,6 +192,8 @@ export class ObservationRecorder {
       tsEnd: Date.now(),
       ax,
       ...(result.screenshot ? { screenshot: result.screenshot } : {}),
+      ...(result.probes && Object.keys(result.probes).length > 0 ? { probes: result.probes } : {}),
+      ...(result.probesTruncated ? { probesTruncated: true } : {}),
       trafficRange: [pending.trafficStart, pending.trafficStart],
       consoleRange: [pending.consoleStart, pending.consoleStart],
     };
