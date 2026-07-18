@@ -70,7 +70,14 @@ export interface StepObservation {
    * 'unevaluable' — see predicates.ts's module notes on the dom.* predicates.
    */
   probes?: Record<string, boolean>;
-  /** True iff the per-step probe time budget (see capture-agent.ts) was exceeded and one or more planned probes were skipped this step. */
+  /**
+   * True iff the per-step probe time budget (see capture-agent.ts) was
+   * exceeded and one or more planned probes were skipped this step.
+   * Semantics: ABSENT means either "not truncated" or "probes were never
+   * sampled at all this run" (disambiguate via `probes` presence); `true`
+   * alongside an empty/absent `probes` map means every probe either errored
+   * or was skipped by the budget.
+   */
   probesTruncated?: boolean;
 }
 

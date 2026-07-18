@@ -1,8 +1,23 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { executeCommand, type AgentCommand } from './capture-agent.js';
 import { canonicalProbeKey } from '../../monitor/predicates.js';
-import type { ProbePlan } from '../../agent/probe-plan.js';
+import { buildProbePlan, type ProbePlan } from '../../agent/probe-plan.js';
+import { ObservationRecorder } from '../../agent/observation.js';
+import { buildVerifyTrace, mergeMonitorVerdicts } from '../../monitor/verdict-merge.js';
+import { eventually, globally, pred } from '../../monitor/formula.js';
+import {
+  addDraft,
+  emptyFormulasFile,
+  hashDescription,
+  loadFormulas,
+  saveFormulas,
+  setStatus,
+  type FormulasFile,
+} from '../../spec/formulas.js';
 
 // Helper: minimal mock page
 function mockPage(overrides: Record<string, (...args: any[]) => any> = {}) {
@@ -306,4 +321,129 @@ test('executeCommand samples probes on the failure path too', async () => {
   assert.equal(result.success, false);
   assert.equal(recorder.ends[0].success, false);
   assert.equal(recorder.ends[0].probes?.[canonicalProbeKey('dom.exists', ['#toast'])], true);
+});
+
+// ---------------------------------------------------------------------------
+// End-to-end key consistency (SP-efp)
+// ---------------------------------------------------------------------------
+//
+// The linchpin of the whole probe mechanism is that canonicalProbeKey is
+// computed identically on BOTH sides of the pipeline: the extraction side
+// (probe-plan.ts keys the ProbePlan from formula AST nodes) and the lookup
+// side (predicates.ts's dom.* evalFns re-derive the key from the formula's
+// predicate name + args at evaluation time). The component tests above and
+// in probe-plan.test.ts / predicates.test.ts each pin one side; this test
+// pins the SEAM by driving the full pipeline from an actual on-disk formulas
+// file: loadFormulas -> buildProbePlan -> executeCommand's live sampling
+// (stubbed page, real ObservationRecorder) -> buildVerifyTrace ->
+// mergeMonitorVerdicts, asserting the deterministic verdicts come out the
+// other end. If either side's keying ever silently diverged, every probe
+// would evaluate 'unevaluable' and these satisfied/violated assertions
+// would fail.
+
+const E2E_PROVENANCE = { compiled_by: 'test', compiled_at: '2026-01-01T00:00:00Z' };
+
+function e2eAddFormula(
+  file: FormulasFile,
+  behavior: string,
+  formula: Parameters<typeof addDraft>[1]['formula'],
+  status: 'draft' | 'approved',
+): FormulasFile {
+  const { file: withDraft, entry } = addDraft(file, {
+    behavior,
+    formula,
+    description_hash: hashDescription(behavior),
+    predicates_used: [],
+    provenance: E2E_PROVENANCE,
+  });
+  return status === 'draft' ? withDraft : setStatus(withDraft, entry.id, status);
+}
+
+test('SP-efp end-to-end: formulas file -> probe plan -> live sampling -> recorded steps -> deterministic monitor verdicts', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'probe-e2e-'));
+  try {
+    // 1. An ACTUAL formulas file on disk, round-tripped through save/load.
+    //    Covers: single-arg predicate (dom.visible — the arg list is shorter
+    //    than dom.count's, exercising canonicalProbeKey's skip-undefined-args
+    //    path), a numeric-arg predicate (dom.count), and a draft entry
+    //    (dom.exists) to prove drafts are sampled for shadow mode.
+    let file = emptyFormulasFile();
+    file = e2eAddFormula(file, 'ui/toast-appears', eventually(pred('dom.visible', ['#toast'])), 'approved');
+    file = e2eAddFormula(file, 'ui/cart-filled', globally(pred('dom.count', ['.cart-item', 'gte', '2'])), 'approved');
+    file = e2eAddFormula(file, 'ui/banner-shown', eventually(pred('dom.exists', ['#banner'])), 'draft');
+    const formulasPath = path.join(dir, 'specify.formulas.yaml');
+    saveFormulas(formulasPath, file);
+    const loaded = loadFormulas(formulasPath);
+    assert.ok(loaded);
+
+    // 2. Extraction side: plan from the loaded file.
+    const plan = buildProbePlan(loaded!);
+    assert.equal(plan.length, 3); // dedupe fine, drafts included
+
+    // 3. Live sampling side: stubbed page, REAL ObservationRecorder (the
+    //    exact recorder executeCommand drives in production).
+    const page = mockPageWithLocators({
+      '#toast': { visible: true },
+      '.cart-item': { count: 1 }, // fails gte 2 -> violated
+      '#banner': { count: 1 },
+      body: {},
+    });
+    // ObservationRecorder.captureAx uses locator('body').ariaSnapshot.
+    const baseLocator = page.locator;
+    page.locator = (selector: string) => {
+      const loc = baseLocator(selector);
+      loc.ariaSnapshot = async () => '- generic';
+      return loc;
+    };
+    const recorder = new ObservationRecorder({
+      outputDir: dir,
+      page,
+      collector: { getTraffic: () => [], getConsoleLogs: () => [] },
+    });
+
+    await executeCommand(page, { action: 'goto', url: 'https://x.test/' }, undefined, recorder, plan);
+    await executeCommand(page, { action: 'click', selector: '#add-to-cart' }, undefined, recorder, plan);
+
+    const steps = recorder.getSteps();
+    assert.equal(steps.length, 2);
+    // Sanity: probes actually landed on the recorded steps under plan keys.
+    assert.equal(steps[0].probes?.[canonicalProbeKey('dom.visible', ['#toast'])], true);
+    assert.equal(steps[0].probes?.[canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2'])], false);
+
+    // 4. Lookup side: trace + merge, verdicts re-derive the keys from the
+    //    formula ASTs independently of the plan.
+    const trace = buildVerifyTrace(steps, [], []);
+    const output = {
+      pass: true,
+      summary: { total: 3, passed: 3, failed: 0, skipped: 0 },
+      results: [
+        { id: 'ui/toast-appears', description: 'toast', status: 'passed' as const },
+        { id: 'ui/cart-filled', description: 'cart', status: 'passed' as const },
+        { id: 'ui/banner-shown', description: 'banner', status: 'passed' as const },
+      ],
+    };
+    const merged = mergeMonitorVerdicts(output, loaded!, trace);
+    const results = (merged.output as typeof output).results as Array<
+      (typeof output)['results'][number] & { verdict_source?: string; monitor?: Array<{ verdict: string; status: string }> }
+    >;
+    const byId = new Map(results.map((r) => [r.id, r]));
+
+    // F(dom.visible(#toast)) approved, probe true -> satisfied, corroborates the pass.
+    assert.equal(byId.get('ui/toast-appears')?.monitor?.[0].verdict, 'satisfied');
+    assert.equal(byId.get('ui/toast-appears')?.status, 'passed');
+    assert.equal(byId.get('ui/toast-appears')?.verdict_source, 'monitor+llm');
+
+    // G(dom.count(.cart-item, gte, 2)) approved, probe false -> violated, monitor forces failed.
+    assert.equal(byId.get('ui/cart-filled')?.monitor?.[0].verdict, 'violated');
+    assert.equal(byId.get('ui/cart-filled')?.status, 'failed');
+    assert.equal(byId.get('ui/cart-filled')?.verdict_source, 'monitor');
+    assert.deepEqual(merged.monitorForcedFailures, ['ui/cart-filled']);
+
+    // F(dom.exists(#banner)) draft, probe true -> satisfied, advisory only (shadow mode).
+    assert.equal(byId.get('ui/banner-shown')?.monitor?.[0].verdict, 'satisfied');
+    assert.equal(byId.get('ui/banner-shown')?.monitor?.[0].status, 'draft');
+    assert.equal(byId.get('ui/banner-shown')?.status, 'passed');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

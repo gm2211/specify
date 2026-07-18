@@ -224,7 +224,18 @@ const PROBE_TIMEOUT_MS = 500;
 /** Total probe budget per step (ms). Once exceeded, remaining planned probes are skipped for this step. */
 const PROBE_BUDGET_MS = 2000;
 
-/** Race `promise` against a timeout; rejects if `ms` elapses first. */
+/**
+ * Race `promise` against a timeout; rejects if `ms` elapses first.
+ *
+ * NOTE: this races but does NOT cancel the underlying Playwright call — a
+ * locator query that has already started keeps running in the background
+ * after the race rejects (its eventual settlement is absorbed by the
+ * already-settled promise). That's acceptable here because (a) the caller
+ * only omits the probe's key, it never awaits the loser again, (b) the 2s
+ * per-step budget (PROBE_BUDGET_MS) is the secondary guard bounding how much
+ * background work can pile up per step, and (c) Playwright's own default
+ * operation timeouts are the hard stop for any individual straggler.
+ */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`probe timed out after ${ms}ms`)), ms);
