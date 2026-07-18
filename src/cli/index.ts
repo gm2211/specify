@@ -36,6 +36,7 @@ import { fileURLToPath } from 'url';
 import { detectOutputFormat } from './output.js';
 import { ExitCode } from './exit-codes.js';
 import type { CliContext, OutputFormat } from './types.js';
+import type { BehaviorResult } from '../spec/types.js';
 import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
@@ -666,119 +667,272 @@ async function main(): Promise<void> {
       const specPath = resolveSpecArg(verifyArgs, ctx);
       const url = getArg(verifyArgs, '--url');
       const withContextPath = getArg(verifyArgs, '--with-context');
+      const verifyMode = getArg(verifyArgs, '--mode') ?? 'agent';
+      const crossCheck = hasFlag(verifyArgs, '--cross-check');
 
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
+      } else if (verifyMode !== 'agent' && verifyMode !== 'scripted' && verifyMode !== 'auto') {
+        process.stdout.write(JSON.stringify({ error: 'invalid_parameter', parameter: '--mode', hint: 'Expected one of: agent, scripted, auto' }) + '\n');
         exitCode = ExitCode.PARSE_ERROR;
       } else {
         const { loadSpec, specToYaml } = await import('../spec/parser.js');
         try {
           const spec = loadSpec(path.resolve(specPath));
-          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-          const { getVerifyPrompt } = await import('../agent/prompts.js');
           const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
-          const prompt = getVerifyPrompt(specToYaml(spec));
           // Determine target URL: explicit --url, or from spec target
           const targetUrl = url
             ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
 
-          // --with-context <path/to/run-context.json>: "as-of-that-run"
-          // re-verify. Loads a bundle recorded by a prior run and injects
-          // its memory/layered-context/skills text verbatim instead of
-          // fetching live state, so the rendered system prompt reproduces
-          // that run's byte-identically.
-          type ContextOverride = { memoryPreamble?: string; layeredContext?: string; skillsText?: string };
-          let contextOverride: ContextOverride | undefined;
-          if (withContextPath) {
-            try {
-              const raw = fs.readFileSync(path.resolve(withContextPath), 'utf-8');
-              const bundle = JSON.parse(raw) as {
-                memoryPreamble?: string | null;
-                layeredContext?: string | null;
-                skillsText?: string | null;
+          if (verifyMode === 'scripted') {
+            // ---------------------------------------------------------------
+            // Scripted tier (SP-bjr): no agent, no LLM cost. Executes
+            // whatever generated suite already exists in `outputDir` (from
+            // a previous run) and builds verify-result.json entirely from
+            // the replay. Behaviors with no matching test are `skipped`
+            // with an "untested:" rationale.
+            // ---------------------------------------------------------------
+            const { runScriptedForSpec, scriptedModeExitCode } = await import('../agent/scripted-runner.js');
+            process.stderr.write(`${c.bold('Verifying (scripted)')} against ${c.cyan(spec.name)}\n`);
+            const scripted = await runScriptedForSpec(spec, outputDir);
+
+            if (!scripted.ok) {
+              const message = scripted.reason === 'no_tests' ? 'no generated tests found in output dir' : scripted.message;
+              process.stderr.write(`Scripted verification failed: ${message}\n`);
+              process.stdout.write(JSON.stringify({ error: 'scripted_error', reason: scripted.reason, message }) + '\n');
+              exitCode = scripted.reason === 'no_tests' ? ExitCode.ALL_UNTESTED : ExitCode.BROWSER_ERROR;
+            } else {
+              const failed = scripted.results.filter((r) => r.status === 'failed').length;
+              const passedCount = scripted.results.filter((r) => r.status === 'passed').length;
+              const skippedCount = scripted.results.filter((r) => r.status === 'skipped').length;
+              const pass = scripted.matched > 0 && failed === 0;
+              const structuredOutput = {
+                spec: { name: spec.name, version: spec.version },
+                timestamp: new Date().toISOString(),
+                pass,
+                summary: { total: scripted.results.length, passed: passedCount, failed, skipped: skippedCount },
+                results: scripted.results,
               };
-              contextOverride = {
-                memoryPreamble: bundle.memoryPreamble ?? undefined,
-                layeredContext: bundle.layeredContext ?? undefined,
-                skillsText: bundle.skillsText ?? undefined,
-              };
-              process.stderr.write(`${c.dim(`Replaying recorded prompt context from ${withContextPath}`)}\n`);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              process.stderr.write(`Failed to load --with-context bundle: ${msg}\n`);
+
+              exitCode = scriptedModeExitCode(scripted.matched, scripted.results);
+
+              process.stderr.write(`Scripted verification complete: ${passedCount} passed, ${failed} failed, ${skippedCount} untested/skipped\n`);
+              process.stdout.write(JSON.stringify({ outputDir, pass, structuredOutput }) + '\n');
+
+              const verifyResultPath = path.join(outputDir, 'verify-result.json');
+              fs.mkdirSync(outputDir, { recursive: true });
+              fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
             }
-          }
+          } else {
+            // ---------------------------------------------------------------
+            // agent / auto tiers — both invoke the LLM verify agent. In auto
+            // mode a scripted pass runs first; behaviors whose test already
+            // passes are kept without agent attention, and only
+            // failed/untested behaviors are scoped into the agent's spec. A
+            // scripted failure never terminally fails a behavior in auto
+            // mode — it escalates to the agent, since stale tests after app
+            // changes are expected and the agent can re-verify/regenerate.
+            // ---------------------------------------------------------------
+            let promptSpec = spec;
+            let scriptedPassed: BehaviorResult[] = [];
+            let scriptedFullResults: BehaviorResult[] | undefined;
+            let autoSkippedAgent = false;
 
-          try {
-            const { writeBehaviorProgress } = await import('./output.js');
-            const areas = spec.areas?.length ?? 0;
-            const behaviors = spec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
-            process.stderr.write(`${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`);
-            process.stderr.write(`${c.dim('Launching agent...')}\n`);
-            const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-              task: 'verify',
-              systemPrompt: prompt,
-              userPrompt: targetUrl
-                ? `Verify ${targetUrl} against the behavioral spec.`
-                : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the behavioral spec.`,
-              ...(targetUrl ? { url: targetUrl } : {}),
-              spec: path.resolve(specPath),
-              outputDir,
-              headed: hasFlag(verifyArgs, '--headed'),
-              debug,
-              onBehaviorProgress: writeBehaviorProgress,
-              ...(contextOverride ? { contextOverride } : {}),
-            });
-            const { extractBool } = await import('../agent/sdk-runner.js');
-            const pass = extractBool(structuredOutput, 'pass');
-
-            // Deterministic failure confirmation: for every behavior the
-            // agent reported as "failed", run its generated Playwright test
-            // (if any) and record whether it independently reproduces the
-            // failure. This is added post-hoc — the agent never sees or
-            // produces this field — so it can't be fabricated by the LLM.
-            const resultsForConfirmation =
-              structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
-                ? ((structuredOutput as { results: Array<Record<string, unknown>> }).results)
-                : [];
-            const failedResults = resultsForConfirmation.filter((r) => r.status === 'failed' && typeof r.id === 'string');
-            if (failedResults.length > 0) {
-              process.stderr.write(`${c.dim(`Confirming ${failedResults.length} failed behavior(s) against generated tests...`)}\n`);
-              const { confirmBehavior } = await import('../agent/test-runner.js');
-              for (const r of failedResults) {
-                const behaviorId = r.id as string;
-                try {
-                  const confirmTimeoutMs = Number(process.env.SPECIFY_CONFIRM_TIMEOUT_MS) || 60_000;
-                  const repro = await confirmBehavior(behaviorId, { cwd: outputDir, timeoutMs: confirmTimeoutMs });
-                  if (repro) {
-                    r.repro = repro;
-                    process.stderr.write(`  ${behaviorId}: ${repro.confirmed ? c.green('confirmed') : c.yellow('unconfirmed')}\n`);
-                  }
-                } catch (err) {
-                  const msg = err instanceof Error ? err.message : String(err);
-                  r.repro = { confirmed: false, output: `unconfirmable: confirmation run threw: ${msg}` };
-                  process.stderr.write(`  ${behaviorId}: ${c.yellow('unconfirmed')} (${msg})\n`);
+            if (verifyMode === 'auto') {
+              const { runScriptedForSpec, partitionScriptedResults } = await import('../agent/scripted-runner.js');
+              process.stderr.write(`${c.dim('Running scripted pass first (--mode auto)...')}\n`);
+              const scripted = await runScriptedForSpec(spec, outputDir);
+              if (scripted.ok) {
+                scriptedFullResults = scripted.results;
+                const { passed, escalate } = partitionScriptedResults(scripted.results);
+                scriptedPassed = passed;
+                process.stderr.write(`${c.dim(`Scripted: ${passed.length} passed (kept), ${escalate.length} escalated to agent`)}\n`);
+                if (escalate.length > 0) {
+                  const { scopedSpec } = await import('../spec/scope.js');
+                  promptSpec = scopedSpec(spec, escalate.map((r) => r.id));
+                } else {
+                  autoSkippedAgent = true;
                 }
+              } else {
+                process.stderr.write(`${c.dim(`Scripted pass skipped (${scripted.reason}) — running agent on full spec`)}\n`);
               }
             }
 
-            process.stderr.write(`Verification complete (cost: $${costUsd.toFixed(4)})\n`);
-            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
-            exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+            const { runSpecifyAgent, extractBool } = await import('../agent/sdk-runner.js');
+            const { getVerifyPrompt } = await import('../agent/prompts.js');
+            const prompt = getVerifyPrompt(specToYaml(promptSpec));
 
-            const verifyResultPath = path.join(outputDir, 'verify-result.json');
-            fs.mkdirSync(outputDir, { recursive: true });
-            fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+            // --with-context <path/to/run-context.json>: "as-of-that-run"
+            // re-verify. Loads a bundle recorded by a prior run and injects
+            // its memory/layered-context/skills text verbatim instead of
+            // fetching live state, so the rendered system prompt reproduces
+            // that run's byte-identically.
+            type ContextOverride = { memoryPreamble?: string; layeredContext?: string; skillsText?: string };
+            let contextOverride: ContextOverride | undefined;
+            if (withContextPath) {
+              try {
+                const raw = fs.readFileSync(path.resolve(withContextPath), 'utf-8');
+                const bundle = JSON.parse(raw) as {
+                  memoryPreamble?: string | null;
+                  layeredContext?: string | null;
+                  skillsText?: string | null;
+                };
+                contextOverride = {
+                  memoryPreamble: bundle.memoryPreamble ?? undefined,
+                  layeredContext: bundle.layeredContext ?? undefined,
+                  skillsText: bundle.skillsText ?? undefined,
+                };
+                process.stderr.write(`${c.dim(`Replaying recorded prompt context from ${withContextPath}`)}\n`);
+              } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                process.stderr.write(`Failed to load --with-context bundle: ${msg}\n`);
+              }
+            }
 
-            process.stderr.write(`\n  To review interactively:\n`);
-            process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
-            process.stderr.write(`  To run generated e2e tests:\n`);
-            process.stderr.write(`  $ cd ${outputDir} && npx playwright test\n\n`);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            process.stderr.write(`Verification failed: ${msg}\n`);
-            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-            exitCode = agentExitCode(err);
+            try {
+              let structuredOutput: unknown;
+              let costUsd = 0;
+              let result: unknown;
+
+              if (autoSkippedAgent) {
+                process.stderr.write(`${c.dim('All behaviors passed scripted replay — agent not invoked.')}\n`);
+                structuredOutput = {
+                  spec: { name: spec.name, version: spec.version },
+                  timestamp: new Date().toISOString(),
+                  pass: true,
+                  summary: { total: scriptedPassed.length, passed: scriptedPassed.length, failed: 0, skipped: 0 },
+                  results: scriptedPassed,
+                };
+              } else {
+                const { writeBehaviorProgress } = await import('./output.js');
+                const areas = promptSpec.areas?.length ?? 0;
+                const behaviors = promptSpec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
+                process.stderr.write(`${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`);
+                process.stderr.write(`${c.dim('Launching agent...')}\n`);
+                const agentRun = await runSpecifyAgent({
+                  task: 'verify',
+                  systemPrompt: prompt,
+                  userPrompt: targetUrl
+                    ? `Verify ${targetUrl} against the behavioral spec.`
+                    : `Verify the CLI at "${spec.target.type === 'cli' ? spec.target.binary : '.'}" against the behavioral spec.`,
+                  ...(targetUrl ? { url: targetUrl } : {}),
+                  spec: path.resolve(specPath),
+                  outputDir,
+                  headed: hasFlag(verifyArgs, '--headed'),
+                  debug,
+                  onBehaviorProgress: writeBehaviorProgress,
+                  ...(contextOverride ? { contextOverride } : {}),
+                });
+                result = agentRun.result;
+                costUsd = agentRun.costUsd;
+                structuredOutput = agentRun.structuredOutput;
+
+                if (verifyMode === 'auto' && scriptedPassed.length > 0) {
+                  const { mergeResultsById } = await import('../spec/scope.js');
+                  const agentResults = structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
+                    ? (structuredOutput as { results: BehaviorResult[] }).results
+                    : [];
+                  const merged = mergeResultsById(scriptedPassed, agentResults);
+                  const mergedFailed = merged.filter((r) => r.status === 'failed').length;
+                  const mergedPassed = merged.filter((r) => r.status === 'passed').length;
+                  const mergedSkipped = merged.filter((r) => r.status === 'skipped').length;
+                  structuredOutput = {
+                    ...(structuredOutput as Record<string, unknown>),
+                    results: merged,
+                    summary: { total: merged.length, passed: mergedPassed, failed: mergedFailed, skipped: mergedSkipped },
+                    pass: mergedFailed === 0,
+                  };
+                }
+              }
+
+              const pass = extractBool(structuredOutput, 'pass');
+
+              // Deterministic failure confirmation: for every AGENT-reported
+              // failure (not scripted-replay results, which already carry
+              // direct evidence from the run that produced them), run its
+              // generated Playwright test (if any) and record whether it
+              // independently reproduces the failure. This is added
+              // post-hoc — the agent never sees or produces this field —
+              // so it can't be fabricated by the LLM.
+              const resultsForConfirmation =
+                structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
+                  ? ((structuredOutput as { results: Array<Record<string, unknown>> }).results)
+                  : [];
+              const { SCRIPTED_METHOD } = await import('../agent/scripted-runner.js');
+              const failedResults = resultsForConfirmation.filter(
+                (r) => r.status === 'failed' && typeof r.id === 'string' && r.method !== SCRIPTED_METHOD,
+              );
+              if (failedResults.length > 0) {
+                process.stderr.write(`${c.dim(`Confirming ${failedResults.length} failed behavior(s) against generated tests...`)}\n`);
+                const { confirmBehavior } = await import('../agent/test-runner.js');
+                for (const r of failedResults) {
+                  const behaviorId = r.id as string;
+                  try {
+                    const confirmTimeoutMs = Number(process.env.SPECIFY_CONFIRM_TIMEOUT_MS) || 60_000;
+                    const repro = await confirmBehavior(behaviorId, { cwd: outputDir, timeoutMs: confirmTimeoutMs });
+                    if (repro) {
+                      r.repro = repro;
+                      process.stderr.write(`  ${behaviorId}: ${repro.confirmed ? c.green('confirmed') : c.yellow('unconfirmed')}\n`);
+                    }
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    r.repro = { confirmed: false, output: `unconfirmable: confirmation run threw: ${msg}` };
+                    process.stderr.write(`  ${behaviorId}: ${c.yellow('unconfirmed')} (${msg})\n`);
+                  }
+                }
+              }
+
+              // --cross-check: independently replay the FULL generated
+              // suite and diff its outcomes against the agent's verdicts.
+              // Report-only — never touches `pass` or `exitCode`. Reuses
+              // the scripted pass already run above in auto mode instead
+              // of re-running the suite.
+              if (crossCheck) {
+                process.stderr.write(`${c.dim('Cross-checking agent verdicts against the generated suite...')}\n`);
+                let diffResults = scriptedFullResults;
+                if (!diffResults) {
+                  const { runScriptedForSpec } = await import('../agent/scripted-runner.js');
+                  const fresh = await runScriptedForSpec(spec, outputDir);
+                  diffResults = fresh.ok ? fresh.results : undefined;
+                  if (!fresh.ok) {
+                    process.stderr.write(`${c.dim(`Cross-check skipped (${fresh.reason})`)}\n`);
+                  }
+                }
+                if (diffResults) {
+                  const { diffCrossCheck } = await import('../agent/scripted-runner.js');
+                  const agentResults = resultsForConfirmation as unknown as BehaviorResult[];
+                  const crossCheckEntries = diffCrossCheck(agentResults, diffResults);
+                  (structuredOutput as Record<string, unknown>).cross_check = crossCheckEntries;
+                  const { eventBus } = await import('../agent/event-bus.js');
+                  for (const entry of crossCheckEntries) {
+                    eventBus.send('crosscheck:result', { ...entry });
+                    if (!entry.agreement) {
+                      eventBus.send('crosscheck:mismatch', { ...entry });
+                      process.stderr.write(`  ${c.yellow('mismatch')} ${entry.id}: agent=${entry.agentStatus} test=${entry.testStatus}\n`);
+                    }
+                  }
+                }
+              }
+
+              process.stderr.write(`Verification complete${costUsd ? ` (cost: $${costUsd.toFixed(4)})` : ''}\n`);
+              process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+              exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+
+              const verifyResultPath = path.join(outputDir, 'verify-result.json');
+              fs.mkdirSync(outputDir, { recursive: true });
+              fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+
+              process.stderr.write(`\n  To review interactively:\n`);
+              process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+              process.stderr.write(`  To run generated e2e tests:\n`);
+              process.stderr.write(`  $ cd ${outputDir} && npx playwright test\n\n`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(`Verification failed: ${msg}\n`);
+              process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+              exitCode = agentExitCode(err);
+            }
           }
         } catch (err) {
           process.stderr.write(`Failed to load spec: ${(err as Error).message}\n`);
