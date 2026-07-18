@@ -692,6 +692,10 @@ async function main(): Promise<void> {
       const withContextPath = getArg(verifyArgs, '--with-context');
       const verifyMode = getArg(verifyArgs, '--mode') ?? 'agent';
       const crossCheck = hasFlag(verifyArgs, '--cross-check');
+      // SP-9kp escape hatch: restore the pre-routing auto behavior (run the
+      // FULL scripted suite first, escalate failures) instead of the
+      // confidence-driven partition. Cheap A/B lever.
+      const routeAllScripted = hasFlag(verifyArgs, '--route-all-scripted');
 
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
@@ -762,9 +766,12 @@ async function main(): Promise<void> {
             let scriptedFullResults: BehaviorResult[] | undefined;
             let autoSkippedAgent = false;
 
-            if (verifyMode === 'auto') {
+            if (verifyMode === 'auto' && routeAllScripted) {
+              // Legacy auto behavior (--route-all-scripted): full scripted
+              // suite first, escalate failures/untested. Kept as an A/B
+              // lever against the confidence-driven routing below.
               const { runScriptedForSpec, partitionScriptedResults } = await import('../agent/scripted-runner.js');
-              process.stderr.write(`${c.dim('Running scripted pass first (--mode auto)...')}\n`);
+              process.stderr.write(`${c.dim('Running scripted pass first (--mode auto, --route-all-scripted)...')}\n`);
               const scripted = await runScriptedForSpec(spec, outputDir);
               if (scripted.ok) {
                 scriptedFullResults = scripted.results;
@@ -779,6 +786,51 @@ async function main(): Promise<void> {
                 }
               } else {
                 process.stderr.write(`${c.dim(`Scripted pass skipped (${scripted.reason}) — running agent on full spec`)}\n`);
+              }
+            } else if (verifyMode === 'auto') {
+              // Confidence-driven routing (SP-9kp): partition behaviors up
+              // front via selectTechnique, run the scripted suite scoped
+              // (--grep) to just the scripted set, and hand everything else
+              // — agent-routed behaviors, scripted failures, and behaviors
+              // whose matched test never actually ran — to the agent tier.
+              // Every behavior gets SOME technique; routing never drops one.
+              const { routeBehaviors, buildScopedGrep } = await import('../agent/technique-selector.js');
+              const { ConfidenceStore, defaultConfidencePath } = await import('../agent/confidence-store.js');
+              const { runScopedScriptedSuite, testsToBehaviorResults } = await import('../agent/scripted-runner.js');
+
+              const store = new ConfidenceStore(defaultConfidencePath(path.resolve(specPath)));
+              const partition = routeBehaviors(spec, (id) => store.get(id), outputDir);
+              process.stderr.write(`${c.dim(`Routing (--mode auto): ${partition.scripted.length} scripted, ${partition.agent.length} agent`)}\n`);
+
+              const agentIds = new Set(partition.agent);
+              if (partition.scripted.length > 0) {
+                const grep = buildScopedGrep(partition.scripted)!;
+                const suite = await runScopedScriptedSuite(grep, { cwd: outputDir });
+                if (suite.ok) {
+                  const byId = new Map(testsToBehaviorResults(suite.tests).map((r) => [r.id, r]));
+                  for (const id of partition.scripted) {
+                    const r = byId.get(id);
+                    if (r && r.status === 'passed') {
+                      scriptedPassed.push(r);
+                    } else {
+                      // Failed, or the scoped run produced no result for
+                      // this id (missing/renamed test) — escalate. A
+                      // scripted failure is never terminal in auto mode.
+                      agentIds.add(id);
+                    }
+                  }
+                } else {
+                  process.stderr.write(`${c.dim(`Scoped scripted run skipped (${suite.reason}) — escalating scripted-routed behaviors to agent`)}\n`);
+                  for (const id of partition.scripted) agentIds.add(id);
+                }
+              }
+
+              if (agentIds.size > 0) {
+                const { scopedSpec } = await import('../spec/scope.js');
+                promptSpec = scopedSpec(spec, [...agentIds]);
+                process.stderr.write(`${c.dim(`Scripted: ${scriptedPassed.length} passed (kept), ${agentIds.size} behavior(s) to agent`)}\n`);
+              } else {
+                autoSkippedAgent = true;
               }
             }
 
