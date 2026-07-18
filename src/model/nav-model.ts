@@ -133,7 +133,8 @@ export interface AbstractionConfig {
 }
 
 export interface NavModel {
-  version: 1;
+  /** Schema version. v2: delimited hash inputs/signature keys, predicateKeys, orphanedStatesPruned. */
+  version: 2;
   specId: string;
   targetKey: string;
   abstractionConfig: AbstractionConfig;
@@ -143,6 +144,20 @@ export interface NavModel {
   sessions: string[];
   /** The URL template set used for abstraction (serialized). */
   templates: ReturnType<TemplateSet['toJSON']>;
+  /**
+   * Fingerprint of the predicate extractor the model was built with: the
+   * sorted set of predicate keys it produced. mergeSessions() refuses to fold
+   * with a different extractor — mixed extractors would silently mint
+   * incompatible state ids.
+   */
+  predicateKeys: string[];
+  /**
+   * Cumulative count of states dropped because template re-inference during
+   * an incremental merge re-mapped their URLs (their urlTemplate is no longer
+   * produced by any source URL). Their visit data is discarded, not migrated;
+   * use `learn()` for a clean rebuild when this grows.
+   */
+  orphanedStatesPruned: number;
   /** Set when the cap forced states (and their edges) to be dropped. */
   truncated: boolean;
   /** Set when predicate bits were dropped to fit under the cap. */
@@ -161,8 +176,11 @@ export interface SessionTrace {
 /**
  * Opt-in coarse predicate extractor. Given a page context, returns a small
  * set of stable boolean affordance bits (e.g. {hasForm:true, isList:false}).
- * MUST be deterministic and should be derivable primarily from the URL — `ax`
- * and `title` may be absent (e.g. at a fresh entry point). Default: none.
+ * MUST be deterministic, MUST return the same fixed key set on every call
+ * (only the boolean values may vary — the sorted key set is persisted as the
+ * model's extractor fingerprint), and should be derivable primarily from the
+ * URL — `ax` and `title` may be absent (e.g. at a fresh entry point).
+ * Default: none.
  */
 export type PredicateExtractor = (ctx: PredicateContext) => Record<string, boolean>;
 
@@ -204,22 +222,22 @@ function shortHash(input: string): string {
   return createHash('sha256').update(input, 'utf-8').digest('hex').slice(0, 12);
 }
 
-/** sortedPredicateBits: `key=1|0` pairs, keys sorted, ` `-joined. */
+/** sortedPredicateBits: `key=1|0` pairs, keys sorted, ` `-joined. */
 function encodePredicates(predicates: Record<string, boolean>): string {
   return Object.keys(predicates)
     .sort()
     .map((k) => `${k}=${predicates[k] ? '1' : '0'}`)
-    .join(' ');
+    .join(' ');
 }
 
 /** State id = hash(urlTemplate + sortedPredicateBits). */
 export function stateId(urlTemplate: string, predicates: Record<string, boolean>): string {
-  return shortHash(`${urlTemplate}${encodePredicates(predicates)}`);
+  return shortHash(`${urlTemplate}|${encodePredicates(predicates)}`);
 }
 
 /** Action key = hash(actionType + normalizedSelector). */
 export function actionKey(action: string, normalizedSelector: string): string {
-  return shortHash(`${action}${normalizedSelector}`);
+  return shortHash(`${action}|${normalizedSelector}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -310,7 +328,7 @@ export function learn(
   }
 
   const model: NavModel = {
-    version: 1,
+    version: 2,
     specId,
     targetKey,
     abstractionConfig: config,
@@ -318,6 +336,8 @@ export function learn(
     transitions: builder.transitions(),
     sessions: [...byRef.keys()].sort(),
     templates: templateSet.toJSON(),
+    predicateKeys: builder.observedPredicateKeys(),
+    orphanedStatesPruned: 0,
     truncated: false,
     coarsened: false,
   };
@@ -330,11 +350,16 @@ export function learn(
  * ref: sessions already present in `model.sessions` are skipped, so
  * `mergeSessions(learn(S), S)` === `learn(S)`.
  *
- * NOTE: this reuses the model's existing template set (extended only by adding
- * new source URLs and re-inferring), keeping existing state ids stable. When a
- * brand-new session shifts template inference (e.g. crossing the distinct-value
- * threshold), the incremental result may differ from a full `learn()` over the
- * union. Call `learn()` for a clean rebuild when that matters.
+ * NOTE: templates are re-inferred over the prior corpus plus the new URLs.
+ * When a brand-new session shifts template inference (e.g. crossing the
+ * distinct-value threshold), previously-learned states whose urlTemplate is no
+ * longer produced by any source URL become unreachable orphans — they are
+ * pruned and counted in `orphanedStatesPruned` rather than silently kept.
+ * Call `learn()` for a clean rebuild when that matters.
+ *
+ * Throws if the predicate extractor's key set does not match the fingerprint
+ * the model was built with (`model.predicateKeys`) — folding with a different
+ * extractor would mint incompatible state ids.
  */
 export function mergeSessions(
   model: NavModel,
@@ -366,15 +391,65 @@ export function mergeSessions(
     builder.foldSession(s);
   }
 
+  // Extractor-fingerprint check: the keys the extractor produced while folding
+  // the fresh sessions must match the keys the model was built with. A
+  // mismatch means state ids are being minted under a different abstraction —
+  // refuse loudly instead of silently corrupting the model. (The builder is
+  // local, so throwing here leaves the input model untouched.)
+  const observedKeys = builder.observedPredicateKeys();
+  const storedKeys = model.predicateKeys ?? [];
+  if (observedKeys.join(',') !== storedKeys.join(',')) {
+    throw new Error(
+      `mergeSessions: predicate extractor mismatch — model was built with predicate keys ` +
+        `[${storedKeys.join(', ')}] but the supplied extractor produced [${observedKeys.join(', ')}]. ` +
+        `Pass the same extractor the model was learned with, or rebuild via learn().`,
+    );
+  }
+
+  // Orphan sweep: template re-inference can re-map URLs that previously
+  // backed a state (e.g. literals collapsing into a `:id` param once the
+  // distinct-value threshold is crossed). States whose urlTemplate no source
+  // URL produces any more can never be generated again — prune them and any
+  // edge that references them, and count the drops.
+  const swept = pruneOrphanedStates(builder.states(), builder.transitions(), newTemplates);
+
   const merged: NavModel = {
     ...model,
-    states: builder.states(),
-    transitions: builder.transitions(),
+    states: swept.states,
+    transitions: swept.transitions,
     sessions: [...model.sessions, ...fresh.map((s) => s.ref)].sort(),
     templates: newTemplates.toJSON(),
+    orphanedStatesPruned: (model.orphanedStatesPruned ?? 0) + swept.pruned,
   };
 
   return enforceCap(merged, config);
+}
+
+/**
+ * Drop states whose urlTemplate is no longer produced by any source URL under
+ * the current template set, along with any transition arc touching them.
+ */
+function pruneOrphanedStates(
+  states: ModelState[],
+  transitions: ModelTransition[],
+  templateSet: TemplateSet,
+): { states: ModelState[]; transitions: ModelTransition[]; pruned: number } {
+  const liveTemplates = new Set<string>();
+  for (const url of templateSet.toJSON().sourceUrls) {
+    liveTemplates.add(templateSet.match(url)?.template ?? fallbackTemplate(url));
+  }
+
+  const kept = states.filter((s) => liveTemplates.has(s.urlTemplate));
+  const pruned = states.length - kept.length;
+  if (pruned === 0) return { states, transitions, pruned: 0 };
+
+  const keptIds = new Set(kept.map((s) => s.id));
+  const keptTransitions = transitions
+    .filter((tr) => keptIds.has(tr.from))
+    .map((tr) => ({ ...tr, targets: tr.targets.filter((t) => keptIds.has(t.to)) }))
+    .filter((tr) => tr.targets.length > 0);
+
+  return { states: kept, transitions: keptTransitions, pruned };
 }
 
 // ---------------------------------------------------------------------------
@@ -384,7 +459,9 @@ export function mergeSessions(
 class ModelBuilder {
   private stateMap = new Map<string, ModelState>();
   private exampleSets = new Map<string, Set<string>>();
-  /** Transitions keyed by `${from}${actionKey}`. */
+  /** Union of predicate keys the extractor produced during THIS builder's folds. */
+  private predicateKeySet = new Set<string>();
+  /** Transitions keyed by `${from}|${actionKey}`. */
   private edgeMap = new Map<string, ModelTransition>();
 
   constructor(
@@ -486,6 +563,9 @@ class ModelBuilder {
   /** Ensure a state exists for this context; returns its id. */
   private ensureState(ctx: PredicateContext): string {
     const predicates = this.extractor(ctx);
+    for (const key of Object.keys(predicates)) {
+      this.predicateKeySet.add(key);
+    }
     const id = stateId(ctx.urlTemplate, predicates);
     if (!this.stateMap.has(id)) {
       this.stateMap.set(id, {
@@ -566,6 +646,11 @@ class ModelBuilder {
     return mergeSignatures([], entries);
   }
 
+  /** Sorted union of predicate keys observed during this builder's folds. */
+  observedPredicateKeys(): string[] {
+    return [...this.predicateKeySet].sort();
+  }
+
   states(): ModelState[] {
     // Flush example sets back into the state objects, sorted for stability.
     const out: ModelState[] = [];
@@ -593,7 +678,7 @@ class ModelBuilder {
 }
 
 function edgeKey(from: string, action: string): string {
-  return `${from}${action}`;
+  return `${from}|${action}`;
 }
 
 /** Union two network signatures, dedup by (method,urlTemplate,statusClass), sorted. */
@@ -602,8 +687,10 @@ function mergeSignatures(
   b: NetworkSignatureEntry[],
 ): NetworkSignatureEntry[] {
   const map = new Map<string, NetworkSignatureEntry>();
+  // Explicit delimiter in the dedup key: bare concatenation would let
+  // distinct triples collide (e.g. "GET"+"/api2xx" vs "GE"+"T/api2xx").
   for (const e of [...a, ...b]) {
-    map.set(`${e.method}${e.urlTemplate}${e.statusClass}`, e);
+    map.set(`${e.method}|${e.urlTemplate}|${e.statusClass}`, e);
   }
   return [...map.values()].sort(
     (x, y) =>
@@ -758,7 +845,7 @@ export function loadModel(filePath: string): NavModel | null {
   if (!fs.existsSync(filePath)) return null;
   try {
     const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (raw && raw.version === 1 && Array.isArray(raw.states) && Array.isArray(raw.transitions)) {
+    if (raw && raw.version === 2 && Array.isArray(raw.states) && Array.isArray(raw.transitions)) {
       return raw as NavModel;
     }
   } catch {
@@ -767,10 +854,17 @@ export function loadModel(filePath: string): NavModel | null {
   return null;
 }
 
-/** Persist a model as a compact, git-diffable JSON artifact. */
+/**
+ * Persist a model as a compact, git-diffable JSON artifact. The write is
+ * atomic: content goes to `<file>.tmp` first, then renames over the target
+ * (same pattern as src/daemon/inbox-state.ts), so a crash mid-write never
+ * leaves a truncated model behind.
+ */
 export function saveModel(filePath: string, model: NavModel): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(model, null, 2) + '\n', 'utf-8');
+  const tmp = filePath + '.tmp';
+  fs.writeFileSync(tmp, JSON.stringify(model, null, 2) + '\n', 'utf-8');
+  fs.renameSync(tmp, filePath);
 }
 
 export interface ModelStoreOptions {
