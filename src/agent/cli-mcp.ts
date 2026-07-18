@@ -8,14 +8,16 @@
  * a CliObservationRecorder trace, so 'command_output' evidence stops being
  * agent-pasted text and becomes a runner-recorded fact.
  *
- * Binary policy: by default argv[0] must equal the spec's target.binary —
- * the agent can pass whatever flags/args it wants, but cannot pivot to an
- * arbitrary binary through this channel. Set
- * SPECIFY_CLI_ALLOW_ANY_BINARY=1 to lift that restriction (e.g. for specs
- * that legitimately need to shell out to helper tools).
+ * Binary policy: by default argv[0] must resolve to the spec's target.binary
+ * (see binaryAllowed for the normalized-path semantics) — the agent can pass
+ * whatever flags/args it wants, but cannot pivot to an arbitrary binary
+ * through this channel. Set SPECIFY_CLI_ALLOW_ANY_BINARY=1 to lift that
+ * restriction (e.g. for specs that legitimately need to shell out to helper
+ * tools).
  */
 
 import { spawn } from 'node:child_process';
+import * as path from 'node:path';
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { CliObservationRecorder } from './observation.js';
@@ -49,18 +51,59 @@ interface RunResult {
   error?: string;
 }
 
-/** Spawn argv via child_process.spawn (no shell), collecting stdout/stderr/exit up to a timeout. */
+/**
+ * Bounded accumulator for a child process stream: appends only up to
+ * `capBytes`, then flips `truncated` and drops everything past the cap so a
+ * chatty process cannot balloon memory before its timeout fires. Exit-code
+ * collection is unaffected — the stream keeps flowing, we just stop storing.
+ */
+class BoundedSink {
+  text = '';
+  truncated = false;
+  constructor(private readonly capBytes: number) {}
+
+  append(chunk: Buffer | string): void {
+    if (this.truncated) return;
+    const s = chunk.toString();
+    const remaining = this.capBytes - this.text.length;
+    if (s.length <= remaining) {
+      this.text += s;
+    } else {
+      this.text += s.slice(0, remaining);
+      this.truncated = true;
+    }
+  }
+}
+
+interface StreamedRunResult extends RunResult {
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+}
+
+/**
+ * Spawn argv via child_process.spawn (no shell), collecting stdout/stderr/exit
+ * up to a timeout. Output is capped DURING streaming (per-stream, `capBytes`):
+ * once a stream crosses the cap, further chunks are discarded rather than
+ * buffered, so stored memory stays bounded no matter how chatty the process is.
+ */
 function runProcess(
   argv: string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; stdin?: string },
-): Promise<RunResult> {
+  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; stdin?: string; capBytes: number },
+): Promise<StreamedRunResult> {
   return new Promise((resolve) => {
-    let stdout = '';
-    let stderr = '';
+    const stdout = new BoundedSink(options.capBytes);
+    const stderr = new BoundedSink(options.capBytes);
     let settled = false;
     let child: ReturnType<typeof spawn>;
 
-    const finish = (result: RunResult) => {
+    const snapshot = (): Pick<StreamedRunResult, 'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'> => ({
+      stdout: stdout.text,
+      stderr: stderr.text,
+      stdoutTruncated: stdout.truncated,
+      stderrTruncated: stderr.truncated,
+    });
+
+    const finish = (result: StreamedRunResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
@@ -74,7 +117,7 @@ function runProcess(
       } catch {
         // best-effort
       }
-      finish({ stdout, stderr, exitCode: null, signal: 'SIGKILL', error: `timed out after ${options.timeoutMs}ms` });
+      finish({ ...snapshot(), exitCode: null, signal: 'SIGKILL', error: `timed out after ${options.timeoutMs}ms` });
     }, options.timeoutMs);
 
     try {
@@ -85,19 +128,19 @@ function runProcess(
       });
     } catch (err) {
       clearTimeout(timer);
-      resolve({ stdout: '', stderr: '', exitCode: null, error: err instanceof Error ? err.message : String(err) });
+      resolve({ stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false, exitCode: null, error: err instanceof Error ? err.message : String(err) });
       return;
     }
 
-    child.stdout?.on('data', (d) => { stdout += d.toString(); });
-    child.stderr?.on('data', (d) => { stderr += d.toString(); });
+    child.stdout?.on('data', (d) => { stdout.append(d); });
+    child.stderr?.on('data', (d) => { stderr.append(d); });
 
     child.on('error', (err) => {
-      finish({ stdout, stderr, exitCode: null, error: err.message });
+      finish({ ...snapshot(), exitCode: null, error: err.message });
     });
 
     child.on('close', (code, signal) => {
-      finish({ stdout, stderr, exitCode: code, ...(signal ? { signal } : {}) });
+      finish({ ...snapshot(), exitCode: code, ...(signal ? { signal } : {}) });
     });
 
     if (options.stdin !== undefined) {
@@ -107,10 +150,28 @@ function runProcess(
   });
 }
 
-/** True if the binary policy allows running `requested` given the spec's declared `binary`. */
-export function binaryAllowed(requested: string, specBinary: string): boolean {
-  if (requested === specBinary) return true;
-  return process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === '1' || process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === 'true';
+/**
+ * True if the binary policy allows running `requested` given the spec's
+ * declared `binary`.
+ *
+ * Semantics (path-normalized, not exact string comparison):
+ * 1. `path.resolve(cwd, requested) === path.resolve(cwd, specBinary)` —
+ *    so "./mycli", "mycli", and "/abs/path/to/cwd/mycli" all match a spec
+ *    binary of "./mycli" when they point at the same file.
+ * 2. When the spec binary is a bare name (no path separator, e.g. "git"),
+ *    it means "this program" rather than a specific path: any argv[0] whose
+ *    basename equals the bare name is allowed ("git", "./git",
+ *    "/usr/bin/git").
+ * 3. SPECIFY_CLI_ALLOW_ANY_BINARY=1|true lifts the restriction entirely.
+ */
+export function binaryAllowed(requested: string, specBinary: string, cwd: string = process.cwd()): boolean {
+  if (process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === '1' || process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === 'true') {
+    return true;
+  }
+  if (path.resolve(cwd, requested) === path.resolve(cwd, specBinary)) return true;
+  const specIsBareName = !specBinary.includes('/') && !specBinary.includes(path.sep);
+  if (specIsBareName && path.basename(requested) === specBinary) return true;
+  return false;
 }
 
 export function createCliMcpServer(options: CliMcpServerOptions) {
@@ -125,6 +186,10 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
         'cli_run',
         `Execute a command against the CLI target. argv[0] must be "${options.binary}" ` +
           `(the spec's declared binary) unless the operator has explicitly relaxed that policy. ` +
+          `Path forms are normalized: argv[0] matches if it resolves to the same file as the ` +
+          `declared binary (so "./x", "x", and an absolute path to it are equivalent), and when ` +
+          `the declared binary is a bare program name (e.g. "git"), any path whose basename ` +
+          `equals it is accepted. ` +
           `Every invocation is recorded — stdout, stderr, exit code, and timing — into the ` +
           `runner's ground-truth observation trace. This is the ONLY way to execute commands ` +
           `in this session; Bash is unavailable.`,
@@ -140,7 +205,7 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
           const cwd = args.cwd ?? defaultCwd;
           const timeoutMs = args.timeoutMs ?? defaultTimeout;
 
-          if (!binaryAllowed(argv[0], options.binary)) {
+          if (!binaryAllowed(argv[0], options.binary, cwd)) {
             const tsEnd = Date.now();
             const errorMsg = `argv[0] "${argv[0]}" does not match the spec's target binary "${options.binary}". ` +
               `Set SPECIFY_CLI_ALLOW_ANY_BINARY=1 to allow other binaries.`;
@@ -162,19 +227,18 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
           }
 
           const env = { ...process.env, ...options.env };
-          const result = await runProcess(argv, { cwd, env, timeoutMs, stdin: args.stdin });
+          // Output is capped inside runProcess DURING streaming — chunks past
+          // the per-stream cap are dropped as they arrive, never buffered.
+          const result = await runProcess(argv, { cwd, env, timeoutMs, stdin: args.stdin, capBytes: OUTPUT_CAP_BYTES });
           const tsEnd = Date.now();
-
-          const cappedStdout = capOutput(result.stdout, OUTPUT_CAP_BYTES);
-          const cappedStderr = capOutput(result.stderr, OUTPUT_CAP_BYTES);
 
           const observation = options.recorder.record({
             argv,
             ...(args.stdin !== undefined ? capStdin(args.stdin) : {}),
-            stdout: cappedStdout.text,
-            stdoutTruncated: cappedStdout.truncated,
-            stderr: cappedStderr.text,
-            stderrTruncated: cappedStderr.truncated,
+            stdout: result.stdout,
+            stdoutTruncated: result.stdoutTruncated,
+            stderr: result.stderr,
+            stderrTruncated: result.stderrTruncated,
             exitCode: result.exitCode,
             ...(result.signal ? { signal: result.signal } : {}),
             cwd,

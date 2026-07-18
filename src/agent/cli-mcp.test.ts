@@ -28,15 +28,41 @@ test('cliToolNames returns the namespaced cli_run tool', () => {
 });
 
 test('binaryAllowed: exact match is always allowed', () => {
-  assert.equal(binaryAllowed('mycli', 'mycli'), true);
+  assert.equal(binaryAllowed('mycli', 'mycli', '/work'), true);
 });
 
 test('binaryAllowed: mismatch is rejected unless SPECIFY_CLI_ALLOW_ANY_BINARY is set', () => {
   delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
-  assert.equal(binaryAllowed('other', 'mycli'), false);
+  assert.equal(binaryAllowed('other', 'mycli', '/work'), false);
   process.env.SPECIFY_CLI_ALLOW_ANY_BINARY = '1';
-  assert.equal(binaryAllowed('other', 'mycli'), true);
+  assert.equal(binaryAllowed('other', 'mycli', '/work'), true);
   delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
+});
+
+test('binaryAllowed: ./variant and absolute path resolve to the same file as the spec binary', () => {
+  delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
+  // Spec declares "./mycli", agent passes equivalent path forms.
+  assert.equal(binaryAllowed('./mycli', './mycli', '/work'), true);
+  assert.equal(binaryAllowed('mycli', './mycli', '/work'), true, 'bare relative form resolves to the same file');
+  assert.equal(binaryAllowed('/work/mycli', './mycli', '/work'), true, 'absolute path to the same file matches');
+  // Spec declares an absolute path, agent passes relative forms.
+  assert.equal(binaryAllowed('./mycli', '/work/mycli', '/work'), true);
+  assert.equal(binaryAllowed('/work/mycli', '/work/mycli', '/work'), true);
+});
+
+test('binaryAllowed: bare spec name means "this program" — basename match from any path', () => {
+  delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
+  assert.equal(binaryAllowed('git', 'git', '/work'), true);
+  assert.equal(binaryAllowed('./git', 'git', '/work'), true);
+  assert.equal(binaryAllowed('/usr/bin/git', 'git', '/work'), true);
+});
+
+test('binaryAllowed: genuinely different binaries are still rejected under normalization', () => {
+  delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
+  assert.equal(binaryAllowed('/usr/bin/rm', 'git', '/work'), false);
+  assert.equal(binaryAllowed('./othercli', './mycli', '/work'), false);
+  assert.equal(binaryAllowed('/elsewhere/mycli', './mycli', '/work'), false, 'basename fallback does not apply when the spec binary is a path');
+  assert.equal(binaryAllowed('gitx', 'git', '/work'), false);
 });
 
 test('cli_run: executes argv[0] === binary via node, records exit code and output', async () => {
@@ -122,21 +148,58 @@ test('cli_run: SPECIFY_CLI_ALLOW_ANY_BINARY=1 lifts the binary restriction', asy
   }
 });
 
-test('cli_run: output beyond the cap is truncated with a flag', async () => {
+test('cli_run: output beyond the cap is truncated during streaming, stored size stays bounded', async () => {
   const dir = tmpDir();
   const recorder = new CliObservationRecorder({ outputDir: dir });
   const server = createCliMcpServer({ binary: process.execPath, recorder });
   const handler = findHandler(server, 'cli_run');
 
-  // Print well beyond the 256 KiB cap.
-  const script = 'process.stdout.write("x".repeat(300 * 1024));';
+  // Emit ~4 MiB across many chunks — far beyond the 256 KiB cap. The cap is
+  // enforced as chunks arrive (BoundedSink), so the stored size must be
+  // exactly the cap regardless of how much the process printed, and the exit
+  // code must still be collected normally after truncation kicks in.
+  const script = 'for (let i = 0; i < 64; i++) process.stdout.write("x".repeat(64 * 1024)); process.exitCode = 3;';
   const res = await handler({ argv: [process.execPath, '-e', script] });
   const parsed = JSON.parse(res.content[0].text);
   assert.equal(parsed.stdoutTruncated, true);
-  assert.ok(parsed.stdout.length <= 256 * 1024);
+  assert.equal(parsed.stdout.length, 256 * 1024, 'stored stdout is capped at exactly 256 KiB');
+  assert.equal(parsed.exitCode, 3, 'exit code is still collected after truncation');
 
   const steps = recorder.getSteps();
   assert.equal(steps[0].stdoutTruncated, true);
+  assert.equal(steps[0].stdout.length, 256 * 1024);
+  assert.equal(steps[0].exitCode, 3);
+});
+
+test('cli_run: stderr is capped during streaming independently of stdout', async () => {
+  const dir = tmpDir();
+  const recorder = new CliObservationRecorder({ outputDir: dir });
+  const server = createCliMcpServer({ binary: process.execPath, recorder });
+  const handler = findHandler(server, 'cli_run');
+
+  const script = 'process.stdout.write("small"); for (let i = 0; i < 8; i++) process.stderr.write("e".repeat(64 * 1024));';
+  const res = await handler({ argv: [process.execPath, '-e', script] });
+  const parsed = JSON.parse(res.content[0].text);
+  assert.equal(parsed.stdoutTruncated, false);
+  assert.equal(parsed.stdout, 'small');
+  assert.equal(parsed.stderrTruncated, true);
+  assert.equal(parsed.stderr.length, 256 * 1024);
+});
+
+test('cli_run: accepts ./variant and absolute-path forms of the spec binary', async () => {
+  const dir = tmpDir();
+  const recorder = new CliObservationRecorder({ outputDir: dir });
+  delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
+  // Spec declares the absolute node path; invoke via a relative path from the
+  // session cwd that resolves to the same file.
+  const relative = path.relative(process.cwd(), process.execPath);
+  const server = createCliMcpServer({ binary: process.execPath, recorder });
+  const handler = findHandler(server, 'cli_run');
+
+  const res = await handler({ argv: [relative, '-e', 'process.exitCode = 0;'] });
+  assert.equal(res.isError, undefined);
+  const parsed = JSON.parse(res.content[0].text);
+  assert.equal(parsed.exitCode, 0);
 });
 
 test('cli_run: timeout kills the process and is recorded', async () => {
