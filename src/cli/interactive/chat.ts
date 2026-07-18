@@ -222,8 +222,18 @@ async function handleVerify(args: string[], state: ChatState): Promise<void> {
     const { runSpecifyAgent, extractBool } = await import('../../agent/sdk-runner.js');
     const { getVerifyPrompt } = await import('../../agent/prompts.js');
     const { specToYaml } = await import('../../spec/parser.js');
+    const { loadExplorationHints } = await import('../../model/runner-hooks.js');
     const resolvedSpec = path.resolve(state.specPath);
-    const prompt = getVerifyPrompt(specToYaml(state.spec));
+    const explorationHints = loadExplorationHints({
+      specPath: resolvedSpec,
+      specId: state.spec.name,
+      target: {
+        type: state.spec.target.type,
+        url: (state.spec.target as { url?: string }).url,
+        binary: (state.spec.target as { binary?: string }).binary,
+      },
+    });
+    const prompt = getVerifyPrompt(specToYaml(state.spec), undefined, explorationHints);
 
     const { costUsd, structuredOutput } = await runSpecifyAgent({
       task: 'verify',
@@ -271,9 +281,11 @@ async function handleCapture(args: string[], state: ChatState): Promise<void> {
   try {
     const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
     const { getCapturePrompt } = await import('../../agent/prompts.js');
+    const { loadExplorationHintsForSpecFile } = await import('../../model/runner-hooks.js');
     const outputDir = path.resolve('.specify/capture');
     const specOutputPath = path.resolve('.specify/spec.yaml');
-    const prompt = getCapturePrompt(url, specOutputPath);
+    const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
+    const prompt = getCapturePrompt(url, specOutputPath, explorationHints);
 
     const { costUsd } = await runSpecifyAgent({
       task: 'capture',

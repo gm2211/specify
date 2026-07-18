@@ -66,3 +66,17 @@ export function faultInjectionEnabled(): boolean {
 export function monitorAutoDemoteEnabled(): boolean {
   return envFlag('SPECIFY_ENABLE_MONITOR_AUTO_DEMOTE');
 }
+
+/**
+ * Gate for navigation-map coverage wiring (src/model/runner-hooks.ts): when
+ * off (default), the runner never loads or writes a per-target NavModel, verify
+ * results carry no `navMapCoverage` field, and the capture/verify prompts get
+ * no exploration hints — a run is byte-identical to a build with no navigation
+ * map at all. When on, each run folds its observation trace into the persisted
+ * per-target model (.specify/model/<spec_id>/<target_key>.json), embeds a
+ * coverage summary (this run vs the map learned so far) in verify-result.json,
+ * and injects coverage-directed exploration hints into the live prompts.
+ */
+export function navMapCoverageEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_NAV_MAP_COVERAGE');
+}

@@ -454,7 +454,9 @@ async function main(): Promise<void> {
               const specOutput = getArg(captureArgs, '--spec-output');
               const specName = getArg(captureArgs, '--spec-name');
               const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
-              const prompt = getCapturePrompt(url, specOutputPath);
+              const { loadExplorationHintsForSpecFile } = await import('../model/runner-hooks.js');
+              const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
+              const prompt = getCapturePrompt(url, specOutputPath, explorationHints);
               try {
                 const { result, costUsd } = await runSpecifyAgent({
                   task: 'capture',
@@ -869,7 +871,17 @@ async function main(): Promise<void> {
 
             const { runSpecifyAgent, extractBool } = await import('../agent/sdk-runner.js');
             const { getVerifyPrompt } = await import('../agent/prompts.js');
-            const prompt = getVerifyPrompt(specToYaml(promptSpec), faultPlan);
+            const { loadExplorationHints } = await import('../model/runner-hooks.js');
+            const explorationHints = loadExplorationHints({
+              specPath: path.resolve(specPath),
+              specId: spec.name,
+              target: {
+                type: spec.target.type,
+                url: (spec.target as { url?: string }).url,
+                binary: (spec.target as { binary?: string }).binary,
+              },
+            });
+            const prompt = getVerifyPrompt(specToYaml(promptSpec), faultPlan, explorationHints);
 
             // --with-context <path/to/run-context.json>: "as-of-that-run"
             // re-verify. Loads a bundle recorded by a prior run and injects

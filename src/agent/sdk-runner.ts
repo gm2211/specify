@@ -26,6 +26,7 @@ import {
   monitorVerdictsEnabled,
   monitorAutoDemoteEnabled,
   faultInjectionEnabled,
+  navMapCoverageEnabled,
 } from './feature-flags.js';
 import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
@@ -1234,6 +1235,58 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           }
         }
         // --- end monitor verdict merge ---------------------------------
+
+        // --- Navigation-map coverage (SP-ehr). Gated on
+        // SPECIFY_ENABLE_NAV_MAP_COVERAGE. Like the monitor merge above, this
+        // runs HERE — before the finally block persists evidence — because it
+        // folds the IN-MEMORY step/traffic records into the persisted per-target
+        // navigation map. For a verify run it also embeds a coverage summary
+        // (this run vs the map learned so far) into the structured output, so it
+        // lands in verify-result.json and the webapp for free via every caller.
+        // Web targets only: the navigation map is keyed on URL states, so a CLI
+        // run (no browser session) has nothing to fold.
+        if (navMapCoverageEnabled() && opts.spec && (opts.task === 'verify' || opts.task === 'capture')) {
+          try {
+            const session = sessions[0];
+            if (session) {
+              const { loadSpec } = await import('../spec/parser.js');
+              const { foldRunAndSummarizeCoverage } = await import('../model/runner-hooks.js');
+              const spec = loadSpec(opts.spec);
+              const covTarget = {
+                type: spec.target.type as 'web' | 'api' | 'cli',
+                url: (spec.target as { url?: string }).url,
+                binary: (spec.target as { binary?: string }).binary,
+                // Fault runs write to a separate model file, exactly like the
+                // memory store — synthetic injected failures must not poison the
+                // healthy target's learned map.
+                faultsActive: faultsEverActive(),
+              };
+              const navMapCoverage = foldRunAndSummarizeCoverage({
+                specPath: opts.spec,
+                specId: spec.name,
+                target: covTarget,
+                ref: runId,
+                steps: session.observationRecorder.getSteps(),
+                traffic: session.collector.getTraffic(),
+              });
+              if (
+                opts.task === 'verify' &&
+                result.structuredOutput &&
+                typeof result.structuredOutput === 'object'
+              ) {
+                (result.structuredOutput as Record<string, unknown>).navMapCoverage = navMapCoverage;
+              }
+              process.stderr.write(`  ${navMapCoverage.summary}\n`);
+            }
+          } catch (err) {
+            // A learning aid, never a correctness requirement — never break a
+            // completed run over it.
+            process.stderr.write(
+              `  Navigation-map coverage failed: ${err instanceof Error ? err.message : String(err)}\n`,
+            );
+          }
+        }
+        // --- end navigation-map coverage -------------------------------
 
         return result;
       } catch (err) {
