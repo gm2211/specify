@@ -206,10 +206,15 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--url', type: 'string', required: false, description: 'Target URL (for web/api specs)' },
       { name: '--output', type: 'string', required: false, description: 'Output directory for report files' },
       { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly' },
+      { name: '--mode', type: 'string', required: false, description: 'Verification tier: agent (default), scripted (replay generated tests only, no LLM), or auto (scripted pass first, agent escalation for failed/untested behaviors)' },
+      { name: '--cross-check', type: 'boolean', required: false, description: 'After the agent run, replay the generated suite and report agent/test agreement as cross_check in verify-result.json (report-only, never changes pass/fail)' },
     ],
     examples: [
       'specify verify --spec spec.yaml --url http://localhost:3000',
       'specify verify --spec spec.yaml',
+      'specify verify --spec spec.yaml --mode scripted',
+      'specify verify --spec spec.yaml --mode auto',
+      'specify verify --spec spec.yaml --cross-check',
     ],
   },
 ];

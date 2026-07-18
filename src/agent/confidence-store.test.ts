@@ -172,6 +172,79 @@ test('rename: no-op when no row matches the old id', () => {
   }
 });
 
+test('recordFromCrossCheck: a single mismatch does not count as an override', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    const row = store.get('checkout/free-shipping');
+    assert.equal(row.overrides, 0);
+    assert.equal(row.consecutiveMismatches, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test('recordFromCrossCheck: 2 consecutive mismatches count as one override', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    const row = store.get('checkout/free-shipping');
+    assert.equal(row.overrides, 1);
+    assert.equal(row.consecutiveMismatches, 2);
+  } finally {
+    cleanup();
+  }
+});
+
+test('recordFromCrossCheck: 3 consecutive mismatches count as two overrides (once the streak crosses 2 each time)', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    const row = store.get('checkout/free-shipping');
+    assert.equal(row.overrides, 2);
+  } finally {
+    cleanup();
+  }
+});
+
+test('recordFromCrossCheck: an agreement resets the mismatch streak', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.recordFromCrossCheck('checkout/free-shipping', false);
+    store.recordFromCrossCheck('checkout/free-shipping', true);
+    const row = store.get('checkout/free-shipping');
+    assert.equal(row.overrides, 0);
+    assert.equal(row.consecutiveMismatches, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test('attachToEventBus: crosscheck:result events feed recordFromCrossCheck', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    const detach = store.attachToEventBus();
+    try {
+      eventBus.send('crosscheck:result', { id: 'checkout/free-shipping', agentStatus: 'passed', testStatus: 'failed', agreement: false });
+      eventBus.send('crosscheck:result', { id: 'checkout/free-shipping', agentStatus: 'passed', testStatus: 'failed', agreement: false });
+    } finally {
+      detach();
+    }
+    const row = store.get('checkout/free-shipping');
+    assert.equal(row.overrides, 1);
+  } finally {
+    cleanup();
+  }
+});
+
 test('defaultConfidencePath resolves inside directory specs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-confidence-dir-'));
   try {

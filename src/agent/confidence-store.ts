@@ -30,6 +30,13 @@ export interface ConfidenceRow {
   accepts: number;
   overrides: number;
   lastUpdatedAt: string;
+  /**
+   * Running count of consecutive scripted/agent cross-check disagreements
+   * for this behavior (SP-bjr). Reset to 0 on any agreement. Not persisted
+   * as part of the accept/override tally by itself — see
+   * `recordFromCrossCheck`.
+   */
+  consecutiveMismatches?: number;
 }
 
 export interface ConfidenceFile {
@@ -113,9 +120,48 @@ export class ConfidenceStore {
     return { migrated: true, from: matchedKey, to: newKey };
   }
 
-  /** Subscribe this store to feedback:ingested events. Returns unsubscribe. */
+  /**
+   * Records a scripted/agent cross-check outcome for a behavior (SP-bjr). A
+   * single mismatch is expected noise — regenerated or stale tests disagree
+   * with the agent routinely during normal development. Only REPEATED (2+
+   * consecutive) mismatches are treated as an override-equivalent signal:
+   * a test that keeps disagreeing with the agent is more likely pointing at
+   * something real than at agent flakiness. Any agreement resets the streak.
+   */
+  recordFromCrossCheck(behaviorId: string, agreement: boolean): ConfidenceRow {
+    const existing = this.file.rows[behaviorId] ?? {
+      accepts: 0,
+      overrides: 0,
+      lastUpdatedAt: new Date().toISOString(),
+      consecutiveMismatches: 0,
+    };
+    if (agreement) {
+      existing.consecutiveMismatches = 0;
+    } else {
+      const streak = (existing.consecutiveMismatches ?? 0) + 1;
+      existing.consecutiveMismatches = streak;
+      if (streak >= 2) existing.overrides += 1;
+    }
+    existing.lastUpdatedAt = new Date().toISOString();
+    this.file.rows[behaviorId] = existing;
+    saveFile(this.path, this.file);
+    return { behaviorId, ...existing };
+  }
+
+  /** Subscribe this store to feedback:ingested / crosscheck:result events. Returns unsubscribe. */
   attachToEventBus(): () => void {
     const listener = (e: SpecifyEvent): void => {
+      if (e.type === 'crosscheck:result') {
+        const behaviorId = (e.data?.id as string | null | undefined) ?? null;
+        const agreement = e.data?.agreement;
+        if (!behaviorId || typeof agreement !== 'boolean') return;
+        try {
+          this.recordFromCrossCheck(behaviorId, agreement);
+        } catch {
+          // Persisting confidence is best-effort.
+        }
+        return;
+      }
       if (e.type !== 'feedback:ingested') return;
       const behaviorId = (e.data?.behaviorId as string | null | undefined) ?? null;
       if (!behaviorId) return;
