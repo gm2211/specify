@@ -20,7 +20,14 @@
  *
  * Configuration (via .env or environment variables):
  *   TARGET_BASE_URL        — URL to open on launch (required)
- *   CAPTURE_HOST_FILTER    — hostname substring to filter traffic (default: derived from TARGET_BASE_URL)
+ *   CAPTURE_HOST_FILTER    — target hostname for traffic filtering; matched by
+ *                            registrable domain, so api.example.com is captured
+ *                            when the filter is www.example.com
+ *                            (default: derived from TARGET_BASE_URL)
+ *   SPECIFY_CAPTURE_HOST_FILTER — comma-separated extra registrable domains or
+ *                            exact hostnames to also capture (for targets that
+ *                            call genuinely cross-origin APIs), or "*" to
+ *                            disable host filtering entirely
  *   CAPTURE_OUTPUT_DIR     — base directory for captures (default: captures)
  *   CAPTURE_SCREENSHOT_DELAY_MS — debounce ms for API screenshots (default: 800)
  *
@@ -103,10 +110,68 @@ let pendingScreenshot = null; // debounce timer for API-triggered screenshots
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+// Host matching is by registrable domain ("eTLD+1"), not substring — a naive
+// hostname.includes(hostFilter) silently drops same-site, different-subdomain
+// traffic (www.example.com page calling api.example.com), which makes any
+// "no request occurred" reasoning over the capture unsound. Mirrors
+// registrableDomain() in src/agent/capture.ts; this script is plain JS and
+// must run without a build, so the helper is ported rather than imported.
+
+// Common two-level public suffixes where the registrable domain needs three
+// labels instead of two (e.g. "example.co.uk", not "co.uk"). Pragmatic
+// heuristic, not a full Public Suffix List. Widen this list (or use
+// SPECIFY_CAPTURE_HOST_FILTER) if a target domain isn't matched correctly.
+const TWO_LEVEL_PUBLIC_SUFFIXES = new Set([
+  "co.uk", "org.uk", "gov.uk", "ac.uk", "me.uk", "net.uk",
+  "com.au", "net.au", "org.au", "gov.au",
+  "co.nz", "co.jp", "co.in", "co.za", "co.kr",
+  "com.br", "com.mx", "com.cn", "com.sg", "com.hk",
+]);
+
+function registrableDomain(hostname) {
+  const host = hostname.toLowerCase();
+  // Leave IPv4/IPv6-ish and single-label hosts (e.g. "localhost") untouched.
+  if (/^[\d.]+$/.test(host) || !host.includes(".")) return host;
+
+  const labels = host.split(".");
+  if (labels.length < 2) return host;
+
+  const lastTwo = labels.slice(-2).join(".");
+  if (TWO_LEVEL_PUBLIC_SUFFIXES.has(lastTwo) && labels.length >= 3) {
+    return labels.slice(-3).join(".");
+  }
+  return lastTwo;
+}
+
+const extraHostFilters = (process.env.SPECIFY_CAPTURE_HOST_FILTER ?? "")
+  .split(",")
+  .map((h) => h.trim().toLowerCase())
+  .filter(Boolean);
+const captureAllHosts = extraHostFilters.includes("*");
+
+function hostMatchesFilter(hostname) {
+  if (!hostFilter || captureAllHosts) return true;
+  const host = hostname.toLowerCase();
+  const requestDomain = registrableDomain(host);
+  if (requestDomain === registrableDomain(hostFilter)) return true;
+  return extraHostFilters.some(
+    (h) => requestDomain === registrableDomain(h) || host === h
+  );
+}
+
+function urlMatchesFilter(url) {
+  try {
+    return hostMatchesFilter(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 function shouldCapture(url) {
   try {
     const u = new URL(url);
-    if (hostFilter && !u.hostname.includes(hostFilter)) return false;
+    if (!hostMatchesFilter(u.hostname)) return false;
     const ext = extname(u.pathname).toLowerCase();
     if (STATIC_EXT.has(ext)) return false;
     return true;
@@ -313,7 +378,7 @@ async function main() {
     }
 
     // Track script sources matching the host filter
-    if (hostFilter && url.includes(hostFilter) && (url.endsWith(".js") || url.includes("bundle"))) {
+    if (hostFilter && urlMatchesFilter(url) && (url.endsWith(".js") || url.includes("bundle"))) {
       scriptSources.add(url);
     }
   });
@@ -324,7 +389,7 @@ async function main() {
   page.on("load", async () => {
     const currentUrl = page.url();
     if (currentUrl === lastUrl) return;
-    if (hostFilter && !currentUrl.includes(hostFilter)) return;
+    if (hostFilter && !urlMatchesFilter(currentUrl)) return;
 
     lastUrl = currentUrl;
     pageUrls.add(currentUrl);
@@ -346,7 +411,7 @@ async function main() {
   const urlCheckInterval = setInterval(async () => {
     try {
       const currentUrl = page.url();
-      if (currentUrl !== lastUrl && (!hostFilter || currentUrl.includes(hostFilter))) {
+      if (currentUrl !== lastUrl && (!hostFilter || urlMatchesFilter(currentUrl))) {
         lastUrl = currentUrl;
         pageUrls.add(currentUrl);
         await new Promise((r) => setTimeout(r, 1000));
