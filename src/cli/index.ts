@@ -18,6 +18,7 @@
  *   specify spec lint       --spec <path|->
  *   specify spec split      --spec <path> --output <dir>
  *   specify spec guide
+ *   specify spec migrate-id  <old-fq-id> <new-fq-id> [--spec <path>]
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
@@ -106,6 +107,23 @@ function getArg(args: string[], flag: string): string | undefined {
   const value = args[idx + 1];
   if (value.length > 1 && value.startsWith('-')) return '';
   return value;
+}
+
+/**
+ * Extract positional (non-flag) arguments, skipping any of `valueFlags` and
+ * the value that follows them (e.g. `--spec path.yaml`).
+ */
+function collectPositionals(args: string[], valueFlags: string[]): string[] {
+  const positionals: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (valueFlags.includes(args[i])) {
+      i++; // skip the flag's value
+      continue;
+    }
+    if (args[i].startsWith('-')) continue;
+    positionals.push(args[i]);
+  }
+  return positionals;
 }
 
 /**
@@ -209,6 +227,7 @@ ${c.bold('Advanced:')}
   ${c.cyan('spec split')}        Break a large spec file into a directory spec
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec generate')}    Generate a spec from capture data
+  ${c.cyan('spec migrate-id')}  Rewrite learned-state keys after a behavior/area id rename
 
 ${c.bold('Infrastructure:')}
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
@@ -372,6 +391,15 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'guide') {
       const { specGuide } = await import('./commands/spec-guide.js');
       exitCode = await specGuide(ctx);
+
+    } else if (noun === 'spec' && verb === 'migrate-id') {
+      const { specMigrateId } = await import('./commands/spec-migrate-id.js');
+      const positionals = collectPositionals(rest, ['--spec']);
+      exitCode = await specMigrateId({
+        spec: resolveSpecArg(rest, ctx),
+        oldId: positionals[0] ?? '',
+        newId: positionals[1] ?? '',
+      }, ctx);
 
     } else if (noun === 'capture') {
       // capture is a standalone command (no verb) — recombine args

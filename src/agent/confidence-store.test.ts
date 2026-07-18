@@ -105,6 +105,73 @@ test('defaultConfidencePath resolves next to spec', () => {
   assert.equal(p, '/tmp/proj/.specify/confidence.json');
 });
 
+test('rename: migrates a bare-keyed row to the new bare id, preserving tallies', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.record('login', 'accept');
+    store.record('login', 'accept');
+    store.record('login', 'override');
+
+    const result = store.rename('auth/login', 'auth/signin');
+    assert.equal(result.migrated, true);
+    assert.equal(result.from, 'login');
+    assert.equal(result.to, 'signin');
+
+    const migrated = store.get('signin');
+    assert.equal(migrated.accepts, 2);
+    assert.equal(migrated.overrides, 1);
+    assert.equal(store.get('login').accepts, 0, 'old key should no longer hold the row');
+  } finally {
+    cleanup();
+  }
+});
+
+test('rename: migrates an exact fully-qualified key verbatim', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.record('auth/login', 'accept');
+
+    const result = store.rename('auth/login', 'auth/signin');
+    assert.equal(result.migrated, true);
+    assert.equal(result.from, 'auth/login');
+    assert.equal(result.to, 'auth/signin');
+    assert.equal(store.get('auth/signin').accepts, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test('rename: survives a reopened store (persists to disk)', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    new ConfidenceStore(filePath).record('login', 'accept');
+    const store = new ConfidenceStore(filePath);
+    store.rename('auth/login', 'auth/signin');
+
+    const reopened = new ConfidenceStore(filePath);
+    assert.equal(reopened.get('signin').accepts, 1);
+    assert.equal(reopened.get('login').accepts, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test('rename: no-op when no row matches the old id', () => {
+  const { filePath, cleanup } = tmpFile();
+  try {
+    const store = new ConfidenceStore(filePath);
+    store.record('signup', 'accept');
+
+    const result = store.rename('auth/login', 'auth/signin');
+    assert.equal(result.migrated, false);
+    assert.equal(store.get('signup').accepts, 1, 'unrelated rows are untouched');
+  } finally {
+    cleanup();
+  }
+});
+
 test('defaultConfidencePath resolves inside directory specs', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-confidence-dir-'));
   try {

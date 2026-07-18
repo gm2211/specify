@@ -10,6 +10,7 @@
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import * as fs from 'fs';
+import * as path from 'path';
 import { specSchema } from './schema.js';
 import type { Spec } from './types.js';
 import {
@@ -19,6 +20,7 @@ import {
   type SpecSourceIssue,
 } from './parser.js';
 import { assessSpecSize, splitSuggestion } from './size-guard.js';
+import { specRootDir } from './paths.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -240,7 +242,152 @@ export function lintSpec(spec: Spec, _specPath?: string): LintError[] {
     }
   }
 
+  if (_specPath) {
+    errors.push(...lintDanglingLearnedState(spec, _specPath));
+  }
+
   return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Rule: dangling-learned-state
+// ---------------------------------------------------------------------------
+
+/**
+ * Warn when learned state (confidence.json, specify.observations.yaml,
+ * .specify/memory/**) references an area/behavior id that no longer exists
+ * in the spec. Renaming a behavior orphans its accumulated confidence,
+ * observations, and playbooks — this rule surfaces that drift so it can be
+ * fixed with `specify spec migrate-id <old-fq-id> <new-fq-id>`.
+ *
+ * WARNING severity only (learned state is advisory, not structural), and
+ * skipped entirely when the spec has no `.specify` dir yet, so a fresh spec
+ * or CI checkout without any learned state stays lint-clean and deterministic.
+ */
+function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
+  const errors: LintError[] = [];
+  const rootDir = specRootDir(specPath);
+  const specifyDir = path.join(rootDir, '.specify');
+  if (!fs.existsSync(specifyDir)) return errors;
+
+  const areaIds = new Set<string>();
+  const fqIds = new Set<string>(); // "area/behavior"
+  const bareBehaviorIds = new Set<string>(); // behavior id regardless of area
+  for (const area of spec.areas) {
+    areaIds.add(area.id);
+    for (const behavior of area.behaviors) {
+      fqIds.add(`${area.id}/${behavior.id}`);
+      bareBehaviorIds.add(behavior.id);
+    }
+  }
+
+  const isKnownScope = (areaId?: string, behaviorId?: string): boolean => {
+    if (areaId && behaviorId) return fqIds.has(`${areaId}/${behaviorId}`);
+    if (areaId) return areaIds.has(areaId);
+    if (behaviorId) return bareBehaviorIds.has(behaviorId);
+    return true; // nothing scoped to check
+  };
+
+  const danglingWarning = (message: string): LintError => ({
+    path: '/',
+    severity: 'warning',
+    message: `${message} It may be orphaned by a rename; see "specify spec migrate-id".`,
+    rule: 'dangling-learned-state',
+  });
+
+  // 1. confidence.json — rows keyed by bare behavior id or "area/behavior".
+  const confidencePath = path.join(specifyDir, 'confidence.json');
+  if (fs.existsSync(confidencePath)) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(confidencePath, 'utf-8')) as { rows?: unknown } | null;
+      const rows = raw && typeof raw === 'object' ? raw.rows : undefined;
+      if (rows && typeof rows === 'object') {
+        for (const key of Object.keys(rows as Record<string, unknown>)) {
+          const known = key.includes('/') ? fqIds.has(key) : bareBehaviorIds.has(key);
+          if (!known) {
+            errors.push(danglingWarning(
+              `confidence.json has a row for unknown behavior "${key}" — no matching behavior in the current spec.`,
+            ));
+          }
+        }
+      }
+    } catch {
+      // Corrupt confidence.json isn't this rule's concern.
+    }
+  }
+
+  // 2. specify.observations.yaml — area_id/behavior_id per observation.
+  const observationsPath = path.join(rootDir, 'specify.observations.yaml');
+  if (fs.existsSync(observationsPath)) {
+    try {
+      const raw = yaml.load(fs.readFileSync(observationsPath, 'utf-8')) as { observations?: unknown } | null;
+      const observations = raw && Array.isArray(raw.observations) ? raw.observations : [];
+      for (const o of observations) {
+        if (!o || typeof o !== 'object') continue;
+        const areaId = (o as Record<string, unknown>).area_id as string | undefined;
+        const behaviorId = (o as Record<string, unknown>).behavior_id as string | undefined;
+        if (!areaId && !behaviorId) continue;
+        if (!isKnownScope(areaId, behaviorId)) {
+          const id = (o as Record<string, unknown>).id ?? '?';
+          errors.push(danglingWarning(
+            `Observation "${id}" references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
+          ));
+        }
+      }
+    } catch {
+      // Corrupt observations file isn't this rule's concern.
+    }
+  }
+
+  // 3. .specify/memory/<spec_id>/<target>.json — area_id/behavior_id per row.
+  const memoryRoot = path.join(specifyDir, 'memory');
+  if (fs.existsSync(memoryRoot)) {
+    for (const specIdDir of safeReaddir(memoryRoot)) {
+      const specIdPath = path.join(memoryRoot, specIdDir);
+      if (!safeIsDirectory(specIdPath)) continue;
+      for (const file of safeReaddir(specIdPath)) {
+        if (!file.endsWith('.json')) continue;
+        const filePath = path.join(specIdPath, file);
+        try {
+          const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as { rows?: unknown } | null;
+          const rows = raw && Array.isArray(raw.rows) ? raw.rows : [];
+          for (const row of rows) {
+            if (!row || typeof row !== 'object') continue;
+            const areaId = (row as Record<string, unknown>).area_id as string | undefined;
+            const behaviorId = (row as Record<string, unknown>).behavior_id as string | undefined;
+            if (!areaId && !behaviorId) continue;
+            if (!isKnownScope(areaId, behaviorId)) {
+              const id = (row as Record<string, unknown>).id ?? '?';
+              const rel = path.relative(rootDir, filePath);
+              errors.push(danglingWarning(
+                `Memory row "${id}" in ${rel} references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
+              ));
+            }
+          }
+        } catch {
+          // Corrupt memory file isn't this rule's concern.
+        }
+      }
+    }
+  }
+
+  return errors;
+}
+
+function safeReaddir(dir: string): string[] {
+  try {
+    return fs.readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
+
+function safeIsDirectory(p: string): boolean {
+  try {
+    return fs.statSync(p).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function lintSingleFileSize(content: string, spec: Spec, specPath?: string): LintError[] {
