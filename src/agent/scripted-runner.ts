@@ -43,6 +43,23 @@ export async function runScriptedSuite(
   return { ok: false, reason: 'runner_error', message: result.message ?? result.reason };
 }
 
+/**
+ * Runs a GREP-SCOPED subset of the generated suite (SP-9kp) — the
+ * counterpart to `runScriptedSuite`'s full-suite run. Used by `--mode auto`'s
+ * confidence-driven routing to execute only the behaviors the technique
+ * selector routed to 'scripted', instead of paying for the whole suite.
+ * Never throws — same never-throw contract as `runScriptedSuite`.
+ */
+export async function runScopedScriptedSuite(
+  grep: string,
+  opts: Omit<RunPlaywrightTestsOptions, 'grep'>,
+): Promise<ScriptedSuiteResult> {
+  const result = await runPlaywrightTests({ ...opts, grep });
+  if (result.ok) return { ok: true, tests: result.tests };
+  if (result.reason === 'no_tests') return { ok: false, reason: 'no_tests' };
+  return { ok: false, reason: 'runner_error', message: result.message ?? result.reason };
+}
+
 /** Strips the "<area>/<behavior>: " prefix off a generated test title, leaving the description. */
 function stripBehaviorPrefix(title: string): string {
   return title.replace(/^[^\s/]+\/[^\s:]+:\s*/, '').trim();

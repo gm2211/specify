@@ -46,6 +46,15 @@ export interface ConfidenceFile {
 
 export type AutonomyPreset = 'ask_everything' | 'ask_uncertain' | 'autonomous';
 
+/**
+ * Confidence cutoff used by the `ask_uncertain` autonomy preset (below this,
+ * the agent asks before acting) and, identically, by the technique selector
+ * (src/agent/technique-selector.ts) as the minimum confidence required to
+ * route a behavior to the cheap scripted tier. Shared rather than duplicated
+ * so the two policies can't silently drift apart.
+ */
+export const ASK_UNCERTAIN_CONFIDENCE_THRESHOLD = 0.7;
+
 const FEEDBACK_TO_OUTCOME: Record<string, ConfidenceOutcome | null> = {
   note: null,
   important_pattern: 'accept',
@@ -199,7 +208,7 @@ export function autonomyDecision(row: ConfidenceRow, preset: AutonomyPreset): 'a
     case 'ask_everything':
       return 'ask';
     case 'ask_uncertain':
-      return c < 0.7 ? 'ask' : 'silent';
+      return c < ASK_UNCERTAIN_CONFIDENCE_THRESHOLD ? 'ask' : 'silent';
     case 'autonomous':
       return 'silent';
     default:
