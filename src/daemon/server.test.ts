@@ -113,6 +113,15 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   });
   assert.equal(invalidTask.status, 400);
 
+  const invalidAreas = await request(port, '/inbox', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+    body: JSON.stringify({ task: 'verify', prompt: 'hi', areas: 'not-an-array' }),
+  });
+  assert.equal(invalidAreas.status, 400);
+  assert.equal((invalidAreas.json as { error: string; field: string }).error, 'invalid_field');
+  assert.equal((invalidAreas.json as { error: string; field: string }).field, 'areas');
+
   const accepted = await request(port, '/inbox', {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
