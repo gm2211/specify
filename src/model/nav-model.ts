@@ -900,18 +900,33 @@ function safeSegment(s: string): string {
   return s.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 80);
 }
 
-/** Load a model from disk, or null if absent/unreadable/wrong version. */
-export function loadModel(filePath: string): NavModel | null {
-  if (!fs.existsSync(filePath)) return null;
+/** Raw file content, or null when absent. Concurrency-guard comparison key. */
+function readRawOrNull(filePath: string): string | null {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null;
+}
+
+/** Parse raw model JSON, or null if unreadable/wrong version. */
+function parseModel(raw: string | null): NavModel | null {
+  if (raw === null) return null;
   try {
-    const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    if (raw && raw.version === 2 && Array.isArray(raw.states) && Array.isArray(raw.transitions)) {
-      return raw as NavModel;
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      parsed.version === 2 &&
+      Array.isArray(parsed.states) &&
+      Array.isArray(parsed.transitions)
+    ) {
+      return parsed as NavModel;
     }
   } catch {
     // Corrupt file: treat as absent so a rebuild can overwrite it cleanly.
   }
   return null;
+}
+
+/** Load a model from disk, or null if absent/unreadable/wrong version. */
+export function loadModel(filePath: string): NavModel | null {
+  return parseModel(readRawOrNull(filePath));
 }
 
 /**
@@ -960,12 +975,46 @@ export class ModelStore {
    * Fold `sessions` into the existing artifact (or start fresh if none),
    * idempotent by session ref, and persist. Use `rebuild` when a clean
    * re-template is desired.
+   *
+   * Concurrency guard (same lightweight pattern as the formulas file — see
+   * setFormulaStatus in src/review/server.ts): a load-modify-save with no
+   * check would let two concurrent folds on the same target silently drop
+   * one run's data. The raw file content is re-read immediately before the
+   * write; if a concurrent writer landed in the window, the fresh on-disk
+   * model is reloaded and THIS fold is re-applied onto it via mergeSessions
+   * — safe because merging is idempotent by session ref, so both writers'
+   * sessions survive. One bounded retry: the re-applied write goes through
+   * unconditionally, narrowing the race to the gap between re-read and
+   * rename rather than the whole fold.
+   *
+   * `onLoadedForTest` is a test-only seam invoked right after the initial
+   * load, before the pre-write recheck, so tests can simulate a concurrent
+   * writer landing in that window. Never passed in production.
    */
-  update(sessions: SessionTrace[], opts: LearnOptions = {}): NavModel {
-    const existing = this.load();
-    const model = existing
+  update(
+    sessions: SessionTrace[],
+    opts: LearnOptions = {},
+    onLoadedForTest?: () => void,
+  ): NavModel {
+    const rawAtLoad = readRawOrNull(this.filePath);
+    const existing = parseModel(rawAtLoad);
+    let model = existing
       ? mergeSessions(existing, sessions, { predicates: opts.predicates })
       : learn(this.options.specId, this.options.targetKey, sessions, opts);
+
+    onLoadedForTest?.();
+
+    const rawBeforeWrite = readRawOrNull(this.filePath);
+    if (rawBeforeWrite !== rawAtLoad) {
+      // A concurrent writer moved the file under us: fold onto ITS model
+      // instead of clobbering it with our now-stale copy. If the file was
+      // deleted/corrupted in the window, fall back to our computed model.
+      const fresh = parseModel(rawBeforeWrite);
+      if (fresh) {
+        model = mergeSessions(fresh, sessions, { predicates: opts.predicates });
+      }
+    }
+
     saveModel(this.filePath, model);
     return model;
   }

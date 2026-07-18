@@ -837,3 +837,68 @@ test('inbox.submit verify: no areas field runs the full spec (backward compatibl
     inbox.reset();
   }
 });
+
+// ---------------------------------------------------------------------------
+// Navigation-map exploration hints (SP-ehr): a verify request that carries a
+// spec path must load hints from the persisted per-target model when the
+// coverage flag is on — the same (specPath, specId, target) derivation the
+// runner keys the model under.
+// ---------------------------------------------------------------------------
+
+test('inbox.submit verify with request spec loads exploration hints from a persisted model', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  const prevFlag = process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE;
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-hints-'));
+    const specPath = writeMinimalSpec(tmpDir);
+
+    // Seed a model under the exact key the runner would fold to for this
+    // spec: specRoot = dirname(specPath), specId = 'Test' (spec name),
+    // targetKey = 'web_' + safe host of http://localhost:3000.
+    const { ModelStore } = await import('../model/nav-model.js');
+    const store = new ModelStore({ specRootDir: tmpDir, specId: 'Test', targetKey: 'web_localhost_3000' });
+    const mkStep = (i: number, action: string, urlBefore: string, urlAfter: string, args: Record<string, unknown>) => ({
+      step: i,
+      action,
+      args,
+      success: true,
+      urlBefore,
+      urlAfter,
+      tsStart: 1000 + i * 10,
+      tsEnd: 1005 + i * 10,
+      ax: { unchanged: true as const, digest: 'd0' },
+      trafficRange: [0, 0] as [number, number],
+      consoleRange: [0, 0] as [number, number],
+    });
+    store.update([
+      {
+        ref: 'seed-run',
+        steps: [
+          mkStep(0, 'browser_goto', '', 'http://localhost:3000/', { url: 'http://localhost:3000/' }),
+          mkStep(1, 'browser_click', 'http://localhost:3000/', 'http://localhost:3000/about', { selector: '#about' }),
+        ],
+      },
+    ]);
+
+    process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE = '1';
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify this.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].systemPrompt, /Coverage-directed exploration hints/);
+  } finally {
+    if (prevFlag === undefined) delete process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE;
+    else process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE = prevFlag;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});

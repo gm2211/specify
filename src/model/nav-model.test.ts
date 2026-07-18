@@ -564,6 +564,52 @@ test('ModelStore.update is idempotent across re-runs', () => {
   }
 });
 
+test('ModelStore.update re-applies its fold when a concurrent writer lands mid-window', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'navmodel-'));
+  try {
+    const options = { specRootDir: dir, specId: 's', targetKey: 'web_app.test' } as const;
+    const storeA = new ModelStore(options);
+    storeA.update([loginSession('run-1')]);
+
+    // Simulate a concurrent fold on the same target landing between this
+    // update's load and its pre-write recheck (the onLoadedForTest seam).
+    // Without the guard, run-3 would be silently clobbered by run-2's write.
+    const storeB = new ModelStore(options);
+    const result = storeB.update([loginSession('run-2')], {}, () => {
+      new ModelStore(options).update([loginSession('run-3')]);
+    });
+
+    // Both writers' sessions survive: the interrupted update folded run-2
+    // onto the fresh on-disk model that already contained run-1 and run-3.
+    assert.deepEqual(result.sessions, ['run-1', 'run-2', 'run-3']);
+    const onDisk = loadModel(storeB.filePath) as NavModel;
+    assert.deepEqual(onDisk.sessions, ['run-1', 'run-2', 'run-3']);
+    assert.deepEqual(JSON.stringify(onDisk), JSON.stringify(result));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('ModelStore.update falls back to its own model when the file vanishes mid-window', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'navmodel-'));
+  try {
+    const options = { specRootDir: dir, specId: 's', targetKey: 'web_app.test' } as const;
+    const store = new ModelStore(options);
+    store.update([loginSession('run-1')]);
+
+    const result = store.update([loginSession('run-2')], {}, () => {
+      fs.rmSync(store.filePath);
+    });
+
+    // The computed fold (run-1 + run-2) still wins over an empty disk.
+    assert.deepEqual(result.sessions, ['run-1', 'run-2']);
+    const onDisk = loadModel(store.filePath) as NavModel;
+    assert.deepEqual(onDisk.sessions, ['run-1', 'run-2']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('actionKey inputs are delimited (no cross-boundary collisions)', () => {
   // Without a delimiter between action and selector these two would hash the
   // same ("click" + "k#a" vs "clic" + "#a" style shifts).

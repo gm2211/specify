@@ -516,6 +516,12 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
       ?? (spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
         : undefined);
+    // Exploration hints need a local spec path: the navigation map lives under
+    // <spec_root>/.specify/model/, so without one there is no store to read.
+    // specPath is set for request-supplied specs (req.spec) and the inline env
+    // source; it is genuinely underivable for url/git-sourced specs — those
+    // runs also never fold a model (the runner gets no opts.spec), so there
+    // are no hints to miss. Deliberate gap, not an accident.
     const { loadExplorationHints } = await import('../model/runner-hooks.js');
     const explorationHints = specPath
       ? loadExplorationHints({
@@ -591,7 +597,13 @@ Output directory for any files you create: ${outputDir}`,
 
 async function resolveVerifySpec(req: InboxRequest): Promise<{ spec: Spec; specPath?: string }> {
   if (req.spec) {
-    return { spec: loadSpec(path.resolve(req.spec)) };
+    // Return the resolved path alongside the spec: buildPrompts derives the
+    // navigation-map exploration hints from it (same (specPath, specId,
+    // target) derivation foldRunAndSummarizeCoverage keys the model under),
+    // and buildRunnerOptions passes it to the runner as opts.spec. Dropping
+    // it here would silently skip hints for request-supplied specs.
+    const resolved = path.resolve(req.spec);
+    return { spec: loadSpec(resolved), specPath: resolved };
   }
 
   const source = specSourceFromEnv();
