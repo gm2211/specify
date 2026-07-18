@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import { ObservationRecorder, extractRecordableArgs } from './observation.js';
+import { ObservationRecorder, extractRecordableArgs, CliObservationRecorder, capOutput } from './observation.js';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'observation-test-'));
@@ -189,4 +189,93 @@ test('endStep records error and success:false for a failed action', async () => 
   const step = recorder.getSteps()[0];
   assert.equal(step.success, false);
   assert.equal(step.error, 'Element not found');
+});
+
+// ---------------------------------------------------------------------------
+// capOutput
+// ---------------------------------------------------------------------------
+
+test('capOutput passes short strings through untruncated', () => {
+  const result = capOutput('hello', 100);
+  assert.deepEqual(result, { text: 'hello', truncated: false });
+});
+
+test('capOutput truncates strings past the byte bound', () => {
+  const result = capOutput('0123456789', 4);
+  assert.deepEqual(result, { text: '0123', truncated: true });
+});
+
+// ---------------------------------------------------------------------------
+// CliObservationRecorder
+// ---------------------------------------------------------------------------
+
+test('CliObservationRecorder assigns incrementing step indices', () => {
+  const dir = tmpDir();
+  const recorder = new CliObservationRecorder({ outputDir: dir });
+
+  const first = recorder.record({
+    argv: ['mycli', '--version'],
+    stdout: '1.0.0',
+    stdoutTruncated: false,
+    stderr: '',
+    stderrTruncated: false,
+    exitCode: 0,
+    cwd: dir,
+    tsStart: 1,
+    tsEnd: 2,
+    durationMs: 1,
+  });
+  const second = recorder.record({
+    argv: ['mycli', 'status'],
+    stdout: 'ok',
+    stdoutTruncated: false,
+    stderr: '',
+    stderrTruncated: false,
+    exitCode: 0,
+    cwd: dir,
+    tsStart: 3,
+    tsEnd: 4,
+    durationMs: 1,
+  });
+
+  assert.equal(first.step, 0);
+  assert.equal(second.step, 1);
+  assert.deepEqual(recorder.getSteps().map((s) => s.step), [0, 1]);
+});
+
+test('CliObservationRecorder.save() writes observations.json with every recorded step', () => {
+  const dir = tmpDir();
+  const recorder = new CliObservationRecorder({ outputDir: dir });
+
+  recorder.record({
+    argv: ['mycli', 'run'],
+    stdout: 'done',
+    stdoutTruncated: false,
+    stderr: '',
+    stderrTruncated: false,
+    exitCode: 0,
+    cwd: dir,
+    tsStart: 10,
+    tsEnd: 20,
+    durationMs: 10,
+  });
+
+  const result = recorder.save();
+  assert.equal(result.steps, 1);
+  assert.equal(result.observationsFile, 'observations.json');
+
+  const written = JSON.parse(fs.readFileSync(path.join(dir, 'observations.json'), 'utf-8'));
+  assert.equal(written.length, 1);
+  assert.equal(written[0].argv[0], 'mycli');
+  assert.equal(written[0].exitCode, 0);
+});
+
+test('CliObservationRecorder.save() writes an empty array with zero steps', () => {
+  const dir = tmpDir();
+  const recorder = new CliObservationRecorder({ outputDir: dir });
+
+  const result = recorder.save();
+  assert.equal(result.steps, 0);
+  const written = JSON.parse(fs.readFileSync(path.join(dir, 'observations.json'), 'utf-8'));
+  assert.deepEqual(written, []);
 });

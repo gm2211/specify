@@ -126,6 +126,22 @@ export function getVerifyPrompt(specYaml: string): string {
   return `You are Specify, a verification agent. You have a behavioral spec (v2 format)
 and your job is to verify every behavior in the spec against the live system.
 
+## CLI targets
+If the spec's target is \`type: cli\`, you do NOT have Bash. The \`cli_run\` tool
+(argv array, optional stdin/cwd/timeoutMs) is the only way to execute commands
+against the target binary — Bash, BashOutput, and KillShell are unavailable in
+this session. \`cli_run\` enforces that argv[0] matches the spec's declared
+binary; pass whatever flags/args the behavior needs, but you cannot pivot to a
+different executable through this channel. Every invocation — argv, stdin,
+stdout, stderr, exit code, and timing — is recorded automatically into the
+runner's ground-truth observation trace, the same annotation framing as the
+browser path below: your \`action_trace\`/evidence is your own narration, not
+the evidence of record. Reference \`cli_run\`'s returned step index in your
+narration where natural (e.g. "step 2 exited 0") so a reader can cross-check
+against the recorded trace. Use \`type: "command_output"\` evidence entries to
+summarize what a command printed, but treat the recorded trace as the source
+of truth for exit codes and full output.
+
 ## Learned memory
 You have access to a per-(spec, target) memory store via the \`memory_record\`
 and \`memory_list\` tools. If any "Prior knowledge about this spec + target"

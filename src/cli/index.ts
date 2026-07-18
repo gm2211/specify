@@ -944,7 +944,20 @@ async function main(): Promise<void> {
 
               const verifyResultPath = path.join(outputDir, 'verify-result.json');
               fs.mkdirSync(outputDir, { recursive: true });
-              fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+              // cli-target runs have no CaptureCollector, so the runner-recorded
+              // trace (cli_run invocations) is saved standalone under
+              // <outputDir>/cli/observations.json by CliObservationRecorder.
+              // Surface its path in the manifest when present so review tooling
+              // can find it the same way it finds the browser-path trace.
+              const cliObservationsPath = path.join(outputDir, 'cli', 'observations.json');
+              const cliObservationsFile = fs.existsSync(cliObservationsPath)
+                ? path.join('cli', 'observations.json')
+                : undefined;
+              fs.writeFileSync(
+                verifyResultPath,
+                JSON.stringify({ structuredOutput, ...(cliObservationsFile ? { observationsFile: cliObservationsFile } : {}) }, null, 2),
+                'utf-8',
+              );
 
               process.stderr.write(`\n  To review interactively:\n`);
               process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);

@@ -24,6 +24,7 @@ import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
 import { learnedSkillsEnabled } from './feature-flags.js';
 import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
+import { cliToolNames } from './cli-mcp.js';
 
 /**
  * Numeric override from the environment for per-run agent caps
@@ -344,6 +345,42 @@ function browserToolNames(serverName: string): string[] {
     `mcp__${serverName}__browser_url`, `mcp__${serverName}__browser_title`,
     `mcp__${serverName}__browser_wait_for`, `mcp__${serverName}__ask_user`,
   ];
+}
+
+// ---------------------------------------------------------------------------
+// CLI session management (SP-efd)
+// ---------------------------------------------------------------------------
+
+interface CliSession {
+  mcpServer: McpServerConfig;
+  recorder: import('./observation.js').CliObservationRecorder;
+}
+
+/**
+ * Launch the recorded command channel for a cli-target run: a CliMcpServer
+ * exposing `cli_run`, backed by a CliObservationRecorder that writes
+ * observations.json into `outputDir` on save(). Mirrors launchBrowserSession
+ * above, but there's no Page/browser process to manage — just the recorder.
+ */
+async function launchCliSession(
+  target: { binary: string; env?: Record<string, string>; timeout_ms?: number },
+  outputDir: string,
+  cwd?: string,
+): Promise<CliSession> {
+  const { CliObservationRecorder } = await import('./observation.js');
+  const { createCliMcpServer } = await import('./cli-mcp.js');
+
+  const recorder = new CliObservationRecorder({ outputDir });
+  const mcpServer = createCliMcpServer({
+    binary: target.binary,
+    env: target.env,
+    timeoutMs: target.timeout_ms,
+    cwd,
+    recorder,
+    serverName: 'cli',
+  });
+
+  return { mcpServer, recorder };
 }
 
 function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
@@ -693,6 +730,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   const sessions: BrowserSession[] = [];
   const mcpServers: Record<string, McpServerConfig> = {};
   const allowedBrowserTools: string[] = [];
+  const allowedCliTools: string[] = [];
+  let cliRecorder: import('./observation.js').CliObservationRecorder | undefined;
 
   // Single run id shared by every MCP server this run spins up (memory,
   // feedback, decisions) and recorded in run-context.json, so all events
@@ -756,18 +795,43 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       mcpServers.browser = session.mcpServer;
       allowedBrowserTools.push(...browserToolNames('browser'));
       process.stderr.write('  Browser ready.\n');
+    } else if (opts.spec && opts.task !== 'compile') {
+      // No web/remote+local URL set — this may be a cli-target run. Launch
+      // the recorded command channel (cli_run) so command execution is
+      // deterministically captured instead of relying on agent-pasted
+      // 'command_output' evidence. Compile tasks are excluded: they are pure
+      // spec analysis with no execution surface, and are expected to stay
+      // browserless AND channel-less regardless of target type.
+      try {
+        const { loadSpec } = await import('../spec/parser.js');
+        const spec = loadSpec(opts.spec);
+        if (spec.target.type === 'cli') {
+          process.stderr.write('  Launching CLI command channel...\n');
+          const cliSession = await launchCliSession(spec.target, path.join(opts.outputDir, 'cli'), opts.cwd);
+          mcpServers.cli = cliSession.mcpServer;
+          allowedCliTools.push(...cliToolNames('cli'));
+          cliRecorder = cliSession.recorder;
+          process.stderr.write('  CLI channel ready.\n');
+        }
+      } catch (err) {
+        process.stderr.write(`  CLI channel unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
+
+    const fileTools: string[] = ['Read'];
+    if (opts.task === 'capture' || opts.task === 'compare' || opts.task === 'verify') {
+      fileTools.push('Write');
     }
 
     // Sandbox: web-target sessions must be restricted to the browser MCP
     // channel (plus the file I/O they need for evidence). Any action taken
     // outside that channel is invisible to the CaptureCollector, so
     // deterministic verdicts are only sound if the channel is exclusive —
-    // not merely the one we expect the model to prefer.
-    const fileTools: string[] = ['Read'];
-    if (opts.task === 'capture' || opts.task === 'compare' || opts.task === 'verify') {
-      fileTools.push('Write');
-    }
-
+    // not merely the one we expect the model to prefer. cli-target sessions
+    // get the same treatment (SP-efd): cli_run is the only command-execution
+    // channel, so Bash/BashOutput/KillShell must be unavailable or the agent
+    // could bypass the recorder entirely.
+    //
     // `allowedTools` (below) only auto-approves listed tools for the
     // permission prompt — it does NOT restrict which tools are available to
     // the model (see node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts:
@@ -778,13 +842,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // etc.) available regardless of `allowedTools`. `disallowedTools`
     // removes tools from the model's context outright, even if otherwise
     // allowed, so it's the mechanism that actually restricts the channel.
-    //
-    // Scoped to web-target sessions only (a browser session was launched,
-    // i.e. opts.url/opts.remoteUrl+opts.localUrl set). Browserless
-    // ("compile"-style) and future cli-target runs may legitimately need
-    // Bash to drive the target; that restriction is left for SP-efd.
     const hasBrowserSession = sessions.length > 0;
-    const disallowedTools: string[] = hasBrowserSession
+    const hasCliSession = cliRecorder !== undefined;
+    const disallowedTools: string[] = (hasBrowserSession || hasCliSession)
       ? ['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch']
       : [];
 
@@ -933,6 +993,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       allowedTools: [
         ...fileTools,
         ...allowedBrowserTools,
+        ...allowedCliTools,
         ...memoryTools,
         ...feedbackTools,
         ...decisionTools,
@@ -1039,6 +1100,13 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       }
       session.collector.save();
       await session.browser.close().catch(() => {});
+    }
+    if (cliRecorder) {
+      try {
+        cliRecorder.save();
+      } catch {
+        // Observation trace is best-effort; never break run teardown.
+      }
     }
     if (detachStore) detachStore();
     if (sessionStore) {

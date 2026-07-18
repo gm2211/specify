@@ -246,3 +246,83 @@ export class ObservationRecorder {
 function sha256(input: string): string {
   return crypto.createHash('sha256').update(input, 'utf-8').digest('hex');
 }
+
+// ---------------------------------------------------------------------------
+// CLI observations (SP-efd)
+// ---------------------------------------------------------------------------
+//
+// CLI targets have no Page/CaptureCollector — ObservationRecorder above is
+// bound to both (page.title()/page.url() for urlBefore/urlAfter, the
+// collector for traffic/console index ranges). Rather than force those
+// dependencies to be optional throughout ObservationRecorder, cli_run
+// executions get a parallel, self-contained representation: a
+// CliStepObservation per invocation and a small CliObservationRecorder that
+// only knows how to accumulate and save() them. Both recorders write the
+// same `observations.json` filename into their respective outputDir, so
+// downstream tooling (e.g. the verify-result manifest) can point at either
+// one without caring which target type produced it.
+
+export interface CliStepObservation {
+  /** Step index, 0-based. */
+  step: number;
+  /** Full argv, argv[0] is the binary actually invoked. */
+  argv: string[];
+  /** stdin sent to the process, length-capped. Omitted if no stdin was sent. */
+  stdin?: string;
+  stdinTruncated?: boolean;
+  stdout: string;
+  stdoutTruncated: boolean;
+  stderr: string;
+  stderrTruncated: boolean;
+  /** Process exit code. Null if killed by signal or the process never started. */
+  exitCode: number | null;
+  /** Signal that terminated the process, if any (e.g. timeout kill). */
+  signal?: string;
+  cwd: string;
+  tsStart: number;
+  tsEnd: number;
+  durationMs: number;
+  /** Set when the process could not be spawned at all, or was rejected by policy. */
+  error?: string;
+}
+
+export interface CliObservationRecorderOptions {
+  /** Output directory (observations.json lives here directly — no ax/ subdir for CLI). */
+  outputDir: string;
+}
+
+/** Runner-recorded per-step trace for CLI targets. See module notes above. */
+export class CliObservationRecorder {
+  private outputDir: string;
+  private steps: CliStepObservation[] = [];
+  private stepCounter = 0;
+
+  constructor(options: CliObservationRecorderOptions) {
+    this.outputDir = path.resolve(options.outputDir);
+  }
+
+  /** Record one completed cli_run invocation. */
+  record(observation: Omit<CliStepObservation, 'step'>): CliStepObservation {
+    const full: CliStepObservation = { step: this.stepCounter++, ...observation };
+    this.steps.push(full);
+    return full;
+  }
+
+  /** Write observations.json to outputDir. */
+  save(): { observationsFile: string; steps: number } {
+    fs.mkdirSync(this.outputDir, { recursive: true });
+    const observationsPath = path.join(this.outputDir, 'observations.json');
+    fs.writeFileSync(observationsPath, JSON.stringify(this.steps, null, 2), 'utf-8');
+    return { observationsFile: 'observations.json', steps: this.steps.length };
+  }
+
+  getSteps(): readonly CliStepObservation[] {
+    return this.steps;
+  }
+}
+
+/** Truncate a string to `maxBytes` (approximated via UTF-16 length), reporting whether it was cut. */
+export function capOutput(input: string, maxBytes: number): { text: string; truncated: boolean } {
+  if (input.length <= maxBytes) return { text: input, truncated: false };
+  return { text: input.slice(0, maxBytes), truncated: true };
+}
