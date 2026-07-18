@@ -78,6 +78,41 @@ export class ConfidenceStore {
     return Object.entries(this.file.rows).map(([behaviorId, row]) => ({ behaviorId, ...row }));
   }
 
+  /**
+   * Rewrite a row's key after a behavior id rename, preserving accepts/overrides.
+   *
+   * Rows are keyed by whatever string was passed to record() at write time,
+   * which in practice is either the bare behavior id or the fully-qualified
+   * "area/behavior" id. To match either convention, this looks for an exact
+   * match on `oldId` first, then falls back to matching the bare behavior id
+   * (the segment after the last "/", or `oldId` itself if it has no "/").
+   * The replacement key mirrors whichever convention was found: a bare match
+   * is renamed to the bare segment of `newId`, an exact match is renamed to
+   * `newId` verbatim.
+   *
+   * No-op (returns migrated: false) when no matching row exists.
+   */
+  rename(oldId: string, newId: string): { migrated: boolean; from: string; to: string } {
+    const oldBare = oldId.includes('/') ? oldId.slice(oldId.lastIndexOf('/') + 1) : oldId;
+    const newBare = newId.includes('/') ? newId.slice(newId.lastIndexOf('/') + 1) : newId;
+
+    let matchedKey: string | null = null;
+    if (Object.prototype.hasOwnProperty.call(this.file.rows, oldId)) {
+      matchedKey = oldId;
+    } else if (Object.prototype.hasOwnProperty.call(this.file.rows, oldBare)) {
+      matchedKey = oldBare;
+    }
+
+    if (!matchedKey) return { migrated: false, from: oldId, to: newId };
+
+    const newKey = matchedKey === oldId ? newId : newBare;
+    const row = this.file.rows[matchedKey];
+    delete this.file.rows[matchedKey];
+    this.file.rows[newKey] = row;
+    saveFile(this.path, this.file);
+    return { migrated: true, from: matchedKey, to: newKey };
+  }
+
   /** Subscribe this store to feedback:ingested events. Returns unsubscribe. */
   attachToEventBus(): () => void {
     const listener = (e: SpecifyEvent): void => {

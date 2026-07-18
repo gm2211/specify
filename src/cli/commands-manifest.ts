@@ -115,6 +115,18 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'spec migrate-id',
+    description: 'Rewrite learned-state keys (confidence.json, observations, memory) after a behavior/area id rename',
+    parameters: [
+      { name: 'old-fq-id', type: 'string', required: true, description: 'Current fully-qualified id being renamed, "area/behavior"' },
+      { name: 'new-fq-id', type: 'string', required: true, description: 'New fully-qualified id, "area/behavior"' },
+      { name: '--spec', type: 'string', required: false, description: 'Path to spec file (auto-discovered if omitted)' },
+    ],
+    examples: [
+      'specify spec migrate-id auth/login auth/signin',
+    ],
+  },
+  {
     name: 'spec guide',
     description: 'Output authoring guide (schema, examples, patterns) for LLM spec writers',
     parameters: [],
