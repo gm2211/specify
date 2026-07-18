@@ -157,6 +157,48 @@ test('setFormulaStatus does not clobber a concurrent write that lands between lo
   }
 });
 
+test('setFormulaStatus returns conflict (no throw, no clobber) when a concurrent write corrupts the file', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    const formulasPath = defaultFormulasPath(specPath);
+    const { id } = writeFormulasFile(formulasPath);
+
+    const corruptedYaml = 'version: 1\npredicates_version: 1\nformulas: [ {{ not yaml\n';
+    const result = setFormulaStatus(specPath, id, 'approved', () => {
+      fs.writeFileSync(formulasPath, corruptedYaml, 'utf-8');
+    });
+
+    assert.ok('error' in result && result.error === 'conflict', 'expected a conflict error result');
+    assert.match((result as { error: 'conflict'; message: string }).message, /could not be reloaded/);
+    // The corrupted on-disk content must be left untouched, not overwritten
+    // with the handler's stale in-memory copy.
+    assert.equal(fs.readFileSync(formulasPath, 'utf-8'), corruptedYaml);
+  } finally {
+    cleanup();
+  }
+});
+
+test('setFormulaStatus reports not_found (no throw) when a concurrent write deletes the file', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    const formulasPath = defaultFormulasPath(specPath);
+    const { id } = writeFormulasFile(formulasPath);
+
+    const result = setFormulaStatus(specPath, id, 'approved', () => {
+      fs.rmSync(formulasPath);
+    });
+
+    assert.deepEqual(result, { error: 'not_found' });
+    assert.equal(fs.existsSync(formulasPath), false, 'the deleted file must not be resurrected');
+  } finally {
+    cleanup();
+  }
+});
+
 test('setFormulaStatus reports not_found for an unknown id', () => {
   const { dir, cleanup } = tmpDir();
   try {

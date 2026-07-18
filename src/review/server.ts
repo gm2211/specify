@@ -108,7 +108,10 @@ export function setFormulaStatus(
    * namespace object isn't reassignable). Never passed in production.
    */
   onLoadedForTest?: () => void,
-): { ok: true; id: string; status: 'approved' | 'rejected' } | { error: 'not_found' } {
+):
+  | { ok: true; id: string; status: 'approved' | 'rejected' }
+  | { error: 'not_found' }
+  | { error: 'conflict'; message: string } {
   const filePath = defaultFormulasPath(resolvedSpec);
   const rawAtLoad = readRawOrNull(filePath);
   const file = loadFormulas(filePath);
@@ -124,7 +127,20 @@ export function setFormulaStatus(
   // back the now-stale in-memory copy. This narrows the race window to the
   // gap between the re-read and the write, rather than the whole handler.
   const rawBeforeWrite = readRawOrNull(filePath);
-  const base = rawBeforeWrite === rawAtLoad ? file : loadFormulas(filePath);
+  let base: ReturnType<typeof loadFormulas>;
+  if (rawBeforeWrite === rawAtLoad) {
+    base = file;
+  } else {
+    // The concurrent writer may have deleted or corrupted the file; a
+    // reload failure here must surface as a handler error response, not
+    // an uncaught throw — and must not clobber whatever is on disk.
+    try {
+      base = loadFormulas(filePath);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return { error: 'conflict', message: `Formulas file changed concurrently and could not be reloaded: ${msg}` };
+    }
+  }
   if (!base || !base.formulas.some((f) => f.id === id)) return { error: 'not_found' };
 
   const updated = setStatus(base, id, status);
@@ -520,7 +536,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     if (!formulaReviewEnabled()) return c.json({ error: 'formula_review_disabled' }, 404);
     try {
       const result = setFormulaStatus(resolvedSpec, c.req.param('id'), 'approved');
-      if ('error' in result) return c.json(result, 404);
+      if ('error' in result) return c.json(result, result.error === 'conflict' ? 409 : 404);
       return c.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -532,7 +548,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     if (!formulaReviewEnabled()) return c.json({ error: 'formula_review_disabled' }, 404);
     try {
       const result = setFormulaStatus(resolvedSpec, c.req.param('id'), 'rejected');
-      if ('error' in result) return c.json(result, 404);
+      if ('error' in result) return c.json(result, result.error === 'conflict' ? 409 : 404);
       return c.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
