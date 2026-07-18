@@ -93,15 +93,41 @@ export async function listFormulas(resolvedSpec: string): Promise<{ formulas: Fo
   return { formulas };
 }
 
+function readRawOrNull(filePath: string): string | null {
+  return fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null;
+}
+
 export function setFormulaStatus(
   resolvedSpec: string,
   id: string,
   status: 'approved' | 'rejected',
+  /**
+   * Test-only seam: invoked right after the initial load, before the
+   * pre-write recheck below, so tests can simulate a concurrent writer
+   * landing on disk in that window without monkeypatching fs (whose ESM
+   * namespace object isn't reassignable). Never passed in production.
+   */
+  onLoadedForTest?: () => void,
 ): { ok: true; id: string; status: 'approved' | 'rejected' } | { error: 'not_found' } {
   const filePath = defaultFormulasPath(resolvedSpec);
+  const rawAtLoad = readRawOrNull(filePath);
   const file = loadFormulas(filePath);
   if (!file || !file.formulas.some((f) => f.id === id)) return { error: 'not_found' };
-  const updated = setStatus(file, id, status);
+
+  onLoadedForTest?.();
+
+  // Guard against a concurrent writer (e.g. a spec-compile run appending a
+  // draft via addDraft) clobbering unrelated changes between our load and
+  // our write: re-read the raw file immediately before writing and compare
+  // it against what we loaded. If it moved, reload fresh content and
+  // reapply just this single status mutation onto it instead of writing
+  // back the now-stale in-memory copy. This narrows the race window to the
+  // gap between the re-read and the write, rather than the whole handler.
+  const rawBeforeWrite = readRawOrNull(filePath);
+  const base = rawBeforeWrite === rawAtLoad ? file : loadFormulas(filePath);
+  if (!base || !base.formulas.some((f) => f.id === id)) return { error: 'not_found' };
+
+  const updated = setStatus(base, id, status);
   saveFormulas(filePath, updated);
   eventBus.send(status === 'approved' ? 'formula:approved' : 'formula:rejected', { id });
   return { ok: true, id, status };
