@@ -118,4 +118,11 @@ export interface CaptureManifest {
 
   /** Path to js-sources.json relative to the capture directory. */
   jsSourcesFile?: string;
+
+  /**
+   * Path to observations.json relative to the capture directory, if a
+   * runner-recorded per-step trace (ObservationRecorder) was written for
+   * this session. See src/agent/observation.ts.
+   */
+  observationsFile?: string;
 }

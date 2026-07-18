@@ -137,3 +137,50 @@ test('executeCommand proxies explicit screenshot via screenshotFn', async () => 
   assert.deepEqual(screenshots, ['after-login']);
   assert.ok(result.screenshot);
 });
+
+function mockRecorder() {
+  const calls: { begin: Array<{ action: string; args?: Record<string, unknown> }>; end: Array<{ success: boolean; error?: string; screenshot?: string }> } = { begin: [], end: [] };
+  return {
+    calls,
+    beginStep: async (action: string, args?: Record<string, unknown>) => { calls.begin.push({ action, args }); },
+    endStep: async (result: { success: boolean; error?: string; screenshot?: string }) => { calls.end.push(result); },
+  } as any;
+}
+
+test('executeCommand records a step via the recorder on success', async () => {
+  const page = mockPage();
+  const recorder = mockRecorder();
+
+  const result = await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder);
+
+  assert.equal(result.success, true);
+  assert.equal(recorder.calls.begin.length, 1);
+  assert.deepEqual(recorder.calls.begin[0], { action: 'click', args: { selector: '#submit' } });
+  assert.equal(recorder.calls.end.length, 1);
+  assert.equal(recorder.calls.end[0].success, true);
+});
+
+test('executeCommand records a step via the recorder on failure, never a fill value', async () => {
+  const page = mockPage({ fill: async () => { throw new Error('boom'); } });
+  const recorder = mockRecorder();
+
+  const result = await executeCommand(page, { action: 'fill', selector: '#password', value: 'super-secret' }, undefined, recorder);
+
+  assert.equal(result.success, false);
+  assert.equal(recorder.calls.begin.length, 1);
+  // Only selector is recordable — the fill value must never reach the recorder.
+  assert.deepEqual(recorder.calls.begin[0].args, { selector: '#password' });
+  assert.equal(recorder.calls.end.length, 1);
+  assert.equal(recorder.calls.end[0].success, false);
+  assert.match(recorder.calls.end[0].error ?? '', /boom/);
+});
+
+test('executeCommand does not invoke the recorder for the done action', async () => {
+  const page = mockPage();
+  const recorder = mockRecorder();
+
+  await executeCommand(page, { action: 'done' }, undefined, recorder);
+
+  assert.equal(recorder.calls.begin.length, 0);
+  assert.equal(recorder.calls.end.length, 0);
+});
