@@ -1629,3 +1629,217 @@ body {
 .skill-active-desc {
   color: var(--text-secondary, #888);
 }
+
+/* ----- Formula review (drafts + witnesses) ----- */
+
+.formula-review {
+  margin: 12px 0;
+  border: 1px solid var(--bg-tertiary, #2a2a2a);
+  border-radius: 6px;
+  background: var(--bg-secondary, #161616);
+}
+
+.formula-review-header {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--text-primary, #eee);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.formula-review-title {
+  font-weight: 600;
+}
+
+.formula-review-count {
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+  margin-left: auto;
+}
+
+.formula-review-toggle {
+  font-family: monospace;
+  font-size: 1.1rem;
+}
+
+.formula-review-body {
+  padding: 8px 12px 12px 12px;
+  border-top: 1px solid var(--bg-tertiary, #2a2a2a);
+}
+
+.formula-review-risk-note {
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+  margin: 4px 0 10px 0;
+  line-height: 1.4;
+}
+
+.formula-review-error {
+  color: #f85149;
+  font-size: 0.85rem;
+  margin-bottom: 6px;
+}
+
+.formula-entry {
+  padding: 6px 8px;
+  border: 1px solid var(--bg-tertiary, #2a2a2a);
+  border-radius: 4px;
+  margin-bottom: 6px;
+}
+
+.formula-entry-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.formula-entry-toggle {
+  background: transparent;
+  border: 0;
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  font-size: 0.85rem;
+  width: 18px;
+}
+
+.formula-entry-behavior {
+  font-weight: 600;
+  font-family: monospace;
+  font-size: 0.9rem;
+}
+
+.formula-status-chip {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--bg-tertiary, #333);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.formula-status-chip--draft {
+  color: var(--text-secondary, #888);
+}
+
+.formula-status-chip--approved {
+  color: #3fb950;
+  border-color: #3fb950;
+}
+
+.formula-status-chip--rejected {
+  color: #f85149;
+  border-color: #f85149;
+}
+
+.formula-vacuity-badge {
+  font-size: 0.75rem;
+  padding: 1px 8px;
+  border-radius: 10px;
+  color: #d29922;
+  border: 1px solid #d29922;
+}
+
+.formula-entry-approve,
+.formula-entry-reject {
+  margin-left: auto;
+  background: var(--bg-tertiary, #222);
+  border: 1px solid var(--bg-tertiary, #333);
+  border-radius: 4px;
+  color: var(--text-primary, #eee);
+  padding: 3px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.formula-entry-approve:hover {
+  border-color: #3fb950;
+  color: #3fb950;
+}
+
+.formula-entry-reject:hover {
+  border-color: #f85149;
+  color: #f85149;
+}
+
+.formula-entry-approve:disabled,
+.formula-entry-reject:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.formula-entry-desc {
+  color: var(--text-secondary, #888);
+  font-size: 0.85rem;
+  margin-top: 4px;
+  margin-left: 26px;
+}
+
+.formula-entry-body {
+  margin-top: 8px;
+  margin-left: 26px;
+  font-size: 0.85rem;
+}
+
+.formula-entry-formula {
+  margin-bottom: 10px;
+}
+
+.formula-entry-formula code {
+  background: var(--bg-tertiary, #1a1a1a);
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  display: inline-block;
+}
+
+.formula-witnesses {
+  margin-bottom: 10px;
+}
+
+.formula-witnesses-title {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary, #888);
+  margin: 0 0 4px 0;
+}
+
+.formula-witness {
+  white-space: pre-wrap;
+  font-size: 0.8rem;
+  padding: 6px 8px;
+  border-radius: 4px;
+  margin: 0 0 6px 0;
+}
+
+.formula-witnesses--accepting .formula-witness {
+  background: rgba(63, 185, 80, 0.1);
+  border: 1px solid rgba(63, 185, 80, 0.35);
+  color: #3fb950;
+}
+
+.formula-witnesses--rejecting .formula-witness {
+  background: rgba(248, 81, 73, 0.1);
+  border: 1px solid rgba(248, 81, 73, 0.35);
+  color: #f85149;
+}
+
+.formula-witnesses-vacuous {
+  background: rgba(210, 153, 34, 0.1);
+  border: 1px solid rgba(210, 153, 34, 0.35);
+  color: #d29922;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.82rem;
+}
+
+.formula-entry-coverage {
+  color: var(--text-secondary, #888);
+  font-size: 0.78rem;
+  font-style: italic;
+}

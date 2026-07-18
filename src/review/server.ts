@@ -9,11 +9,21 @@
 import type { Server } from 'node:http';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'node:crypto';
 import { fileURLToPath } from 'url';
 import { eventBus } from '../agent/event-bus.js';
-import { learnedSkillsEnabled } from '../agent/feature-flags.js';
+import { formulaReviewEnabled, learnedSkillsEnabled } from '../agent/feature-flags.js';
 import type { MessageInjector } from '../agent/message-injector.js';
 import { specRootDir } from '../spec/paths.js';
+import { render } from '../monitor/formula.js';
+import { generateWitnesses, type WitnessResult } from '../monitor/witness.js';
+import {
+  defaultFormulasPath,
+  loadFormulas,
+  saveFormulas,
+  setStatus,
+  type FormulaEntry,
+} from '../spec/formulas.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,6 +33,78 @@ let activeInjector: MessageInjector | null = null;
 
 export function setActiveInjector(injector: MessageInjector | null): void {
   activeInjector = injector;
+}
+
+// ---------------------------------------------------------------------------
+// Formula review: witness generation is deterministic but not free (a
+// bounded search over the formula's atom alphabet), so results are cached
+// in-memory keyed by "formula id + content hash" — the id alone is already
+// content-derived (see spec/formulas.ts's formulaId), but hashing the AST
+// too means a cache hit can never mask a formula whose content changed
+// underneath an unchanged id (e.g. a hand-edited formulas.yaml).
+// ---------------------------------------------------------------------------
+const witnessCache = new Map<string, WitnessResult>();
+
+function witnessCacheKey(entry: FormulaEntry): string {
+  const contentHash = crypto.createHash('sha256').update(JSON.stringify(entry.formula)).digest('hex').slice(0, 16);
+  return `${entry.id}:${contentHash}`;
+}
+
+function witnessesFor(entry: FormulaEntry): WitnessResult {
+  const key = witnessCacheKey(entry);
+  const cached = witnessCache.get(key);
+  if (cached) return cached;
+  const result = generateWitnesses(entry.formula);
+  witnessCache.set(key, result);
+  return result;
+}
+
+export type FormulaListEntry = FormulaEntry & {
+  behaviorDescription: string | null;
+  prettyFormula: string;
+  witnesses: WitnessResult;
+};
+
+/**
+ * Handler bodies for GET/POST /api/formulas*, extracted as plain functions
+ * (rather than inlined in the Hono routes below) so they're directly unit
+ * testable without spinning up the HTTP server. The routes are thin
+ * adapters over these.
+ */
+export async function listFormulas(resolvedSpec: string): Promise<{ formulas: FormulaListEntry[] }> {
+  const { loadSpec } = await import('../spec/parser.js');
+  const spec = loadSpec(resolvedSpec);
+  const descriptionByBehavior = new Map<string, string>();
+  for (const area of spec.areas) {
+    for (const behavior of area.behaviors) {
+      descriptionByBehavior.set(`${area.id}/${behavior.id}`, behavior.description);
+    }
+  }
+
+  const file = loadFormulas(defaultFormulasPath(resolvedSpec));
+  if (!file) return { formulas: [] };
+
+  const formulas = file.formulas.map((entry) => ({
+    ...entry,
+    behaviorDescription: descriptionByBehavior.get(entry.behavior) ?? null,
+    prettyFormula: render(entry.formula),
+    witnesses: witnessesFor(entry),
+  }));
+  return { formulas };
+}
+
+export function setFormulaStatus(
+  resolvedSpec: string,
+  id: string,
+  status: 'approved' | 'rejected',
+): { ok: true; id: string; status: 'approved' | 'rejected' } | { error: 'not_found' } {
+  const filePath = defaultFormulasPath(resolvedSpec);
+  const file = loadFormulas(filePath);
+  if (!file || !file.formulas.some((f) => f.id === id)) return { error: 'not_found' };
+  const updated = setStatus(file, id, status);
+  saveFormulas(filePath, updated);
+  eventBus.send(status === 'approved' ? 'formula:approved' : 'formula:rejected', { id });
+  return { ok: true, id, status };
 }
 
 /** Guard so we don't run two verify agents at once from the server. */
@@ -391,6 +473,44 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return c.json({ error: 'list_failed', message: msg }, 500);
+    }
+  });
+
+  // Formula review: list / approve / reject compiled LTLf formulas
+  // (src/spec/formulas.ts) with witness examples attached, so review turns
+  // into "read these example runs" rather than "read this logic AST"
+  // (see src/monitor/witness.ts). Hidden unless SPECIFY_ENABLE_FORMULA_REVIEW=true.
+  app.get('/api/formulas', async (c) => {
+    if (!formulaReviewEnabled()) return c.json({ formulas: [] });
+    try {
+      return c.json(await listFormulas(resolvedSpec));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'list_failed', message: msg }, 500);
+    }
+  });
+
+  app.post('/api/formulas/:id/approve', async (c) => {
+    if (!formulaReviewEnabled()) return c.json({ error: 'formula_review_disabled' }, 404);
+    try {
+      const result = setFormulaStatus(resolvedSpec, c.req.param('id'), 'approved');
+      if ('error' in result) return c.json(result, 404);
+      return c.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'approve_failed', message: msg }, 500);
+    }
+  });
+
+  app.post('/api/formulas/:id/reject', async (c) => {
+    if (!formulaReviewEnabled()) return c.json({ error: 'formula_review_disabled' }, 404);
+    try {
+      const result = setFormulaStatus(resolvedSpec, c.req.param('id'), 'rejected');
+      if ('error' in result) return c.json(result, 404);
+      return c.json(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: 'reject_failed', message: msg }, 500);
     }
   });
 

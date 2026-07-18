@@ -30,6 +30,19 @@ export function monitorVerdictsEnabled(): boolean {
 }
 
 /**
+ * Gate for the formula review UX (src/review/server.ts's /api/formulas
+ * endpoints, webapp/src/components/FormulaPanel.tsx): when off, the review
+ * server never lists, approves, or rejects compiled formulas. Deliberately
+ * separate from `monitorVerdictsEnabled` — you can review and approve
+ * formulas well before turning on verdict-gating in verify runs (or run
+ * review indefinitely without ever gating), so the two lifecycles get
+ * independent flags rather than one flag doing double duty.
+ */
+export function formulaReviewEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_FORMULA_REVIEW');
+}
+
+/**
  * Seeded fault-scenario injection (src/agent/fault-injector.ts) is
  * off by default: it's a resilience-regression tool, not something every
  * verify run should carry. Opt in with SPECIFY_ENABLE_FAULT_INJECTION.

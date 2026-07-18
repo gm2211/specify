@@ -13,6 +13,7 @@ import AreaCard from './components/AreaCard';
 import NarrativePanel from './components/NarrativePanel';
 import ActivityStream from './components/ActivityStream';
 import SkillDraftsPanel from './components/SkillDraftsPanel';
+import FormulaPanel from './components/FormulaPanel';
 import DecisionsList from './components/DecisionsList';
 
 export default function App() {
@@ -192,6 +193,7 @@ export default function App() {
           <NarrativePanel description={spec.description} narrative={narrative} />
           <ActivityStream active={verifying.size > 0} />
           <SkillDraftsPanel />
+          <FormulaPanel />
           {verifyError && (
             <div className="verify-error" role="alert">
               <strong>Verify error:</strong> {verifyError}

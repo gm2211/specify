@@ -71,3 +71,49 @@ export interface VerifyResults {
 }
 
 export type StatusFilter = 'all' | 'passed' | 'failed' | 'skipped' | 'untested';
+
+// ---------------------------------------------------------------------------
+// Formula review (SP-7lv) — compiled LTLf formulas, rendered with witness
+// examples so review is "read these example runs", not "read this AST".
+// See src/monitor/witness.ts / src/spec/formulas.ts on the server side.
+// ---------------------------------------------------------------------------
+
+export type FormulaStatus = 'draft' | 'approved' | 'rejected';
+
+/** One accepting or rejecting example trace, already rendered in plain English. */
+export interface FormulaWitness {
+  length: number;
+  trace: string;
+  narrative: string;
+}
+
+export interface FormulaWitnessSet {
+  accepting: FormulaWitness[];
+  rejecting: FormulaWitness[];
+  /** True iff the formula can never be violated (a tautology) — a vacuity red flag. */
+  vacuousRejecting: boolean;
+  /** True iff the formula can never be satisfied (a contradiction). */
+  vacuousAccepting: boolean;
+  coverage: 'exhaustive-to-k' | 'sampled';
+}
+
+export interface FormulaProvenance {
+  compiled_by: string;
+  model?: string;
+  session_id?: string;
+  compiled_at: string;
+}
+
+/** A compiled formula entry joined with review context by GET /api/formulas. */
+export interface FormulaReviewEntry {
+  id: string;
+  behavior: string;
+  behaviorDescription: string | null;
+  description_hash: string;
+  prettyFormula: string;
+  predicates_used: string[];
+  status: FormulaStatus;
+  provenance: FormulaProvenance;
+  witnesses: FormulaWitnessSet;
+  parent_of?: string[];
+}

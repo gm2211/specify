@@ -1,4 +1,4 @@
-import type { Spec, VerifyResults } from './types';
+import type { FormulaReviewEntry, Spec, VerifyResults } from './types';
 
 const BASE = '';
 
@@ -117,6 +117,31 @@ export async function fetchActiveSkills(): Promise<Array<{ name: string; filePat
   if (!res.ok) return [];
   const body = await res.json();
   return Array.isArray(body?.skills) ? body.skills : [];
+}
+
+export async function fetchFormulas(): Promise<FormulaReviewEntry[]> {
+  const res = await fetch(`${BASE}/api/formulas`);
+  if (!res.ok) throw new Error(`Failed to fetch formulas: ${res.status}`);
+  const body = await res.json();
+  return Array.isArray(body?.formulas) ? body.formulas : [];
+}
+
+export async function approveFormula(id: string): Promise<{ ok: true; id: string; status: 'approved' }> {
+  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `approve failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function rejectFormula(id: string): Promise<{ ok: true; id: string; status: 'rejected' }> {
+  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.message ?? `reject failed: ${res.status}`);
+  }
+  return res.json();
 }
 
 export async function postFeedback(input: FeedbackInput): Promise<FeedbackResult> {
