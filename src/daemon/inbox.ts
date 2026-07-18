@@ -516,8 +516,20 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
       ?? (spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
         : undefined);
+    const { loadExplorationHints } = await import('../model/runner-hooks.js');
+    const explorationHints = specPath
+      ? loadExplorationHints({
+          specPath,
+          specId: spec.name,
+          target: {
+            type: spec.target.type,
+            url: (spec.target as { url?: string }).url,
+            binary: (spec.target as { binary?: string }).binary,
+          },
+        })
+      : '';
     return {
-      systemPrompt: getVerifyPrompt(specYaml),
+      systemPrompt: getVerifyPrompt(specYaml, undefined, explorationHints),
       userPrompt: req.prompt?.trim()
         ? req.prompt
         : targetUrl
@@ -532,8 +544,10 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
     const specOutputPath = path.resolve(
       req.spec ?? path.join(path.dirname(outputDir), 'spec.yaml'),
     );
+    const { loadExplorationHintsForSpecFile } = await import('../model/runner-hooks.js');
+    const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
     return {
-      systemPrompt: getCapturePrompt(req.url, specOutputPath),
+      systemPrompt: getCapturePrompt(req.url, specOutputPath, explorationHints),
       userPrompt: req.prompt?.trim()
         ? req.prompt
         : `Explore ${req.url} and generate a comprehensive behavioral spec.`,

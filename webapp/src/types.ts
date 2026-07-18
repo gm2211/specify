@@ -59,6 +59,28 @@ export interface BehaviorResult {
   };
 }
 
+/** One axis of the navigation-map coverage summary (states or transitions). */
+export interface NavMapAxisCoverage {
+  known: number;
+  visited: number;
+  ratio: number;
+}
+
+/**
+ * Navigation-map coverage of a verify run, embedded by the runner under
+ * `navMapCoverage` when SPECIFY_ENABLE_NAV_MAP_COVERAGE is on (see
+ * src/model/runner-hooks.ts). Measures how much of the map learned from prior
+ * runs this run exercised — `empty` when there was no prior model to compare
+ * against (the first run of a target).
+ */
+export interface NavMapCoverage {
+  summary: string;
+  states: NavMapAxisCoverage;
+  transitions: NavMapAxisCoverage;
+  empty: boolean;
+  predicateMismatch: boolean;
+}
+
 export interface VerifyResults {
   pass: boolean;
   summary: {
@@ -68,6 +90,8 @@ export interface VerifyResults {
     skipped: number;
   };
   results: BehaviorResult[];
+  /** Present only when the navigation-map coverage flag was on for the run. */
+  navMapCoverage?: NavMapCoverage;
 }
 
 export type StatusFilter = 'all' | 'passed' | 'failed' | 'skipped' | 'untested';

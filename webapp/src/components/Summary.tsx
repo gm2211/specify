@@ -13,6 +13,9 @@ export default function Summary({ spec, results }: SummaryProps) {
   const untested = total - passed - failed - skipped;
   const coverage = total > 0 ? Math.round(((passed + failed) / total) * 100) : 0;
 
+  const navMap = results?.navMapCoverage;
+  const pct = (ratio: number) => `${Math.round(ratio * 100)}%`;
+
   return (
     <div className="summary">
       <div className="summary-badges">
@@ -26,6 +29,29 @@ export default function Summary({ spec, results }: SummaryProps) {
         <span className="summary-coverage-label">Coverage</span>
         <span className="summary-coverage-value">{coverage}%</span>
       </div>
+      {navMap && (
+        <div
+          className="summary-navmap"
+          title={
+            navMap.empty
+              ? 'No prior navigation map to measure this run against yet.'
+              : navMap.summary +
+                (navMap.predicateMismatch ? ' (predicate-extractor mismatch — advisory)' : '')
+          }
+        >
+          <span className="summary-navmap-label">Nav map</span>
+          {navMap.empty ? (
+            <span className="summary-navmap-value summary-navmap-value--empty">no model yet</span>
+          ) : (
+            <span className="summary-navmap-value">
+              states {navMap.states.visited}/{navMap.states.known} ({pct(navMap.states.ratio)}) ·
+              transitions {navMap.transitions.visited}/{navMap.transitions.known} (
+              {pct(navMap.transitions.ratio)})
+              {navMap.predicateMismatch && <span className="summary-navmap-warn"> advisory</span>}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

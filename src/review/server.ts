@@ -208,7 +208,17 @@ async function runVerifyInBackground(
         })()
       : spec;
 
-    const prompt = getVerifyPrompt(specToYaml(scopedSpec));
+    const { loadExplorationHints } = await import('../model/runner-hooks.js');
+    const explorationHints = loadExplorationHints({
+      specPath,
+      specId: spec.name,
+      target: {
+        type: spec.target.type,
+        url: (spec.target as { url?: string }).url,
+        binary: (spec.target as { binary?: string }).binary,
+      },
+    });
+    const prompt = getVerifyPrompt(specToYaml(scopedSpec), undefined, explorationHints);
     const targetUrl =
       spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
