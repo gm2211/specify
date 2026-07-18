@@ -275,6 +275,49 @@ test('default budget is applied when unspecified', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Obligation honesty — bogus/infeasible obligations must be reported, never
+// silently dropped, and key-collision hazards must fail loudly.
+// ---------------------------------------------------------------------------
+
+test('pairKey rejects arc keys containing the pair delimiter', () => {
+  assert.throws(() => pairKey('a>>b', 'c'), /pair delimiter/);
+  assert.throws(() => pairKey('a', 'c>>d'), /pair delimiter/);
+  // Clean keys pass.
+  assert.equal(pairKey('a', 'b'), 'a>>b');
+});
+
+test('a model whose keys would collide pair keys fails loudly, not silently', () => {
+  // A hand-built (bogus) model with the pair delimiter inside an actionKey.
+  // Real nav-model keys are hex hashes and can never contain it; the generator
+  // must surface the hazard as an error rather than emit a suite whose pair
+  // coverage counts silently conflate distinct obligations.
+  const m = baseModel();
+  m.transitions = [
+    edge('A', 'browser_click', 'div >> #users', ['B']),
+    edge('B', 'browser_click', '.row', ['C']),
+  ];
+  assert.throws(
+    () => generateTraceSuite(m, { seed: 1, criteria: ['all-transition-pairs'] }),
+    /pair delimiter/,
+  );
+});
+
+test('infeasible obligations are reported as truncated + uncovered, not dropped', () => {
+  // Under a zero-length walk bound every arc obligation is infeasible. The
+  // honest outcome: the suite is truncated and every arc appears in the
+  // uncovered list — never a clean 100% report with obligations quietly gone.
+  const model = baseModel();
+  const suite = generateTraceSuite(model, {
+    seed: 1,
+    criteria: ['all-transitions'],
+    maxWalkLength: 0,
+  });
+  assert.equal(suite.truncated, true);
+  assert.equal(suite.coverage.transitions.covered, 0);
+  assert.equal(suite.coverage.transitions.uncovered.length, suite.coverage.transitions.known);
+});
+
+// ---------------------------------------------------------------------------
 // Empty model.
 // ---------------------------------------------------------------------------
 
