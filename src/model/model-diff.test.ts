@@ -155,6 +155,10 @@ test('isStableEdge requires min observations and session fraction', () => {
   assert.equal(isStableEdge(e, 100), false); // 5/100 = 0.05 < 0.6
 });
 
+test('recurringTargets returns empty for an edge with no targets (defensive)', () => {
+  assert.deepEqual(recurringTargets(edge('a', 'x', [])), []);
+});
+
 test('recurringTargets drops below-floor noise but keeps a primary', () => {
   const e = edge('a', 'x', [target('b', 9), target('c', 1)]); // c is 10% < 20% floor
   const rec = recurringTargets(e);
@@ -318,13 +322,28 @@ test('confirmRegression matches expected target by URL template', () => {
   assert.equal(c.confirmed, false);
 });
 
-test('confirmRegression: replay error ⇒ confirmed disappeared', () => {
+test('confirmRegression: replay error without a destination ⇒ inconclusive, NOT confirmed', () => {
   const reg = fakeRegression();
   const obs: ReplayObservation = { reached: false, error: 'selector not found' };
   const c = confirmRegression(reg, obs);
-  assert.equal(c.confirmed, true);
-  assert.equal(c.kind, 'edge_disappeared');
+  assert.equal(c.confirmed, false);
   assert.match(c.reason, /selector not found/);
+  assert.match(c.reason, /inconclusive/i);
+});
+
+test('confirmRegression: reached expected target with a non-fatal error ⇒ NOT confirmed', () => {
+  const reg = fakeRegression();
+  const obs: ReplayObservation = { reached: true, toState: 'b', error: 'console error observed' };
+  const c = confirmRegression(reg, obs);
+  assert.equal(c.confirmed, false);
+});
+
+test('confirmRegression: reached a different state with a non-fatal error ⇒ confirmed changed', () => {
+  const reg = fakeRegression();
+  const obs: ReplayObservation = { reached: true, toState: 'x', error: 'console error observed' };
+  const c = confirmRegression(reg, obs);
+  assert.equal(c.confirmed, true);
+  assert.equal(c.kind, 'edge_target_changed');
 });
 
 // ---------------------------------------------------------------------------
@@ -423,6 +442,41 @@ test('replay reclassifies a disappearance into a target change', async () => {
   assert.equal(alarms.length, 1);
   assert.equal(alarms[0].kind, 'edge_target_changed');
   assert.equal(alarms[0].evidence.replay?.toUrlTemplate, '/x');
+});
+
+test('replayer error yields no alarm (inconclusive)', async () => {
+  const base = model({
+    states: [state('a', '/'), state('b', '/b')],
+    transitions: [edge('a', 'click', [target('b', 8)])],
+    sessions: sessions(8),
+  });
+  const cand = model({
+    states: [state('a', '/')],
+    transitions: [],
+    sessions: sessions(1),
+  });
+  const replayer = replayerFrom({ 'a|a:click': { reached: false, error: 'replay timeout' } });
+  const alarms = await detectRegressionAlarms(base, cand, { replayer });
+  assert.equal(alarms.length, 0);
+});
+
+test('zero-session baseline (fresh model) yields zero alarms', async () => {
+  // A baseline with no folded sessions has no evidence — no edge can be
+  // stable, so nothing alarms even if edges disappear.
+  const base = model({
+    states: [state('a', '/'), state('b', '/b')],
+    transitions: [edge('a', 'click', [target('b', 8)])],
+    sessions: [],
+  });
+  const cand = model({
+    states: [state('a', '/')],
+    transitions: [],
+    sessions: sessions(1),
+  });
+  assert.equal(detectRegressions(base, cand).length, 0);
+  const replayer = replayerFrom({ 'a|a:click': { reached: false } });
+  const alarms = await detectRegressionAlarms(base, cand, { replayer });
+  assert.equal(alarms.length, 0);
 });
 
 test('without a replayer, candidate regressions are returned unconfirmed', async () => {

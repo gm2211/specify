@@ -259,6 +259,9 @@ export function recurringTargets(
   edge: ModelTransition,
   cfg: StabilityConfig = DEFAULT_STABILITY_CONFIG,
 ): TransitionTarget[] {
+  // Schema forbids empty target lists, but defensive code must not crash on
+  // one (maxByCount below would reduce over an empty array).
+  if (edge.targets.length === 0) return [];
   const total = edgeObservationCount(edge);
   if (total === 0) return [];
   const kept = edge.targets.filter((t) => t.count / total >= cfg.nondeterministicFloor);
@@ -359,6 +362,13 @@ export interface CandidateRegression {
  *   - Edge present, deterministic, and its recurring baseline target is not
  *     among the candidate's targets       → `edge_target_changed`.
  *   - Edge present and nondeterministic    → exempt from target-change alarms.
+ *
+ * Accepted conservatism: a nondeterministic edge that loses ONE of its
+ * recurring targets does not alarm — only its full disappearance does. A
+ * variant vanishing is indistinguishable from the A/B split simply not being
+ * sampled this run, so alarming on it would reintroduce exactly the flakiness
+ * noise this policy exists to suppress. This is an intentional trade-off:
+ * partial-variant regressions are deferred until the whole edge breaks.
  *
  * A baseline edge whose from-state is not in the candidate's states is skipped:
  * the candidate simply never exercised that area, so absence proves nothing.
@@ -492,10 +502,24 @@ function replayRequestFor(reg: CandidateRegression): ReplayRequest {
 /**
  * Decide whether a replay observation confirms a candidate regression.
  *
- *   - Replay still reaches an expected baseline target  → NOT confirmed. The
- *     model was stale; the app is fine. (This is the false-alarm guard.)
- *   - Replay reaches nothing (or errors)                → confirmed, disappeared.
- *   - Replay reaches a different state                  → confirmed, changed.
+ * Destination-first rule: when the replay REACHED a destination, that
+ * destination decides the verdict — a non-fatal `error` string alongside
+ * `reached: true` (e.g. a console error noted mid-replay) never overrides
+ * where the transition actually landed:
+ *
+ *   - Reached an expected baseline target   → NOT confirmed. The model was
+ *     stale; the app is fine. (This is the false-alarm guard.)
+ *   - Reached a different destination       → confirmed, changed.
+ *
+ * When the replay did NOT reach a destination, the `error` field decides:
+ *
+ *   - No error (the recipe ran but produced no transition)
+ *                                           → confirmed, disappeared.
+ *   - Error set (replayer failure: from-state unreachable, timeout, stale
+ *     recipe infrastructure) → INCONCLUSIVE, NOT confirmed. A broken replay
+ *     proves nothing about the app — treating it as confirmation would turn
+ *     every replayer outage into an alarm storm, exactly the noise this
+ *     module exists to prevent.
  *
  * `expectedTemplates` lets the caller match on URL template when the replayer
  * could not resolve a concrete state id.
@@ -507,30 +531,34 @@ export function confirmRegression(
 ): ReplayConfirmation {
   const expectedIds = new Set(reg.baselineRecurringTargets.map((t) => t.to));
 
-  const reachedExpected =
-    obs.reached &&
-    !obs.error &&
-    ((obs.toState !== undefined && expectedIds.has(obs.toState)) ||
-      (obs.toUrlTemplate !== undefined && expectedTemplates.has(obs.toUrlTemplate)));
-
-  if (reachedExpected) {
+  if (obs.reached) {
+    const reachedExpected =
+      (obs.toState !== undefined && expectedIds.has(obs.toState)) ||
+      (obs.toUrlTemplate !== undefined && expectedTemplates.has(obs.toUrlTemplate));
+    if (reachedExpected) {
+      return {
+        confirmed: false,
+        kind: reg.kind,
+        observed: obs,
+        reason:
+          'Live replay still reached the expected target — the navigation map was stale, not the app. No alarm.',
+      };
+    }
+    // Fall through to the changed-destination verdict below.
+  } else if (obs.error) {
+    // Replay infrastructure failed — inconclusive, never a confirmation.
     return {
       confirmed: false,
       kind: reg.kind,
       observed: obs,
-      reason:
-        'Live replay still reached the expected target — the navigation map was stale, not the app. No alarm.',
+      reason: `Live replay could not run (${obs.error}) — inconclusive, no alarm.`,
     };
-  }
-
-  if (!obs.reached || obs.error) {
+  } else {
     return {
       confirmed: true,
       kind: 'edge_disappeared',
       observed: obs,
-      reason: obs.error
-        ? `Live replay could not take the recorded transition (${obs.error}).`
-        : 'Live replay of the recorded transition reached no state — the transition is gone.',
+      reason: 'Live replay of the recorded transition reached no state — the transition is gone.',
     };
   }
 
