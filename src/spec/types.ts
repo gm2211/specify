@@ -38,8 +38,11 @@ export interface ApiTarget {
   };
   /**
    * Marks this target as a production system. Probes mutate state and must
-   * NEVER touch production, so a truthy value here hard-blocks probing even
-   * when `probes.enabled` and the runtime flag are both set.
+   * NEVER touch production: `true` hard-blocks probing even when
+   * `probes.enabled` and the runtime flag are both set. The gate is
+   * FAIL-CLOSED — when probes are enabled, this field must be EXPLICITLY set
+   * to `false` for probes to run; leaving it absent also refuses, so an
+   * unmarked production target can never be probed by omission.
    */
   production?: boolean;
 }
