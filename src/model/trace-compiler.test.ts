@@ -308,3 +308,51 @@ test('param placeholders in URLs are expanded deterministically and overridable'
   const concrete = compileMutatedTrace(variant, model, { paramValues: { id: '77' } });
   assert.equal(concrete.entry.value, '/items/77');
 });
+
+test('a stale landsOn hint (state absent from model) skips destination assertions with a note', () => {
+  const model = wrapModel([state('A', '/a')], []);
+  const variant: MutatedTrace = {
+    id: 't0~revisit-after-terminal~0',
+    operator: 'revisit-after-terminal',
+    seed: 1,
+    source: { traceId: 't0', modelHash: 'h', specId: 'spec', targetKey: 'target' },
+    startState: 'A',
+    startUrlTemplate: '/a',
+    steps: [
+      {
+        kind: 'synthetic',
+        action: 'browser_goto',
+        urlTemplate: '/gone',
+        landsOn: 'GONE', // not a state in the model
+        note: 'revisit a state the model no longer knows',
+      },
+    ],
+    contract: {
+      class: 'terminal-state-not-reprocessable',
+      outcome: 'tolerate',
+      description: 'x',
+      check: { kind: 'expect-safe-revisit', target: 'GONE' },
+    },
+    wellFormed: true,
+  };
+  const script = compileMutatedTrace(variant, model);
+  assert.equal(script.assertions.length, 0, 'no destination assertion for an unknown state');
+  assert.equal(script.notes.length, 1);
+  assert.ok(script.notes[0].includes('GONE'));
+  assert.ok(script.playwright.includes('// note:'), 'the note surfaces in the rendered artifact');
+});
+
+test('rendered Playwright source is byte-identical across independent compiles', () => {
+  const model = flowModel();
+  const mutation = buildSuite(model);
+  const a = compileMutationSuite(mutation, model);
+  const b = compileMutationSuite(mutation, model);
+  assert.equal(a.length, b.length);
+  for (let i = 0; i < a.length; i++) {
+    assert.equal(
+      a[i].playwright,
+      b[i].playwright,
+      `variant ${a[i].variantId} render must be byte-identical`,
+    );
+  }
+});

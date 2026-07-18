@@ -5,6 +5,10 @@ import type { Contract } from '../model/mutators.js';
 import type { CompiledScript, CompiledStep, ContractRefs } from '../model/trace-compiler.js';
 import {
   evaluateContract,
+  evaluateContractComplete,
+  contractRequiredStepIndices,
+  missingCaptureIndices,
+  signalCompletenessOf,
   executeVariant,
   executeCompiledSuite,
   summarizeExecution,
@@ -63,6 +67,7 @@ function script(
     contract,
     contractRefs: refs,
     wellFormed: contract.outcome === 'tolerate',
+    notes: [],
     playwright: '',
   };
 }
@@ -433,4 +438,224 @@ test('executeCompiledSuite preserves order', async () => {
     results.map((r) => r.variantId),
     ['a', 'b'],
   );
+});
+
+// ---------------------------------------------------------------------------
+// Evidence completeness — never pass on absent evidence
+// ---------------------------------------------------------------------------
+
+test('partial fallback capture: grounded=true with missing contract step → inconclusive, not pass', async () => {
+  const s = script(dsContract(), { urlTemplates: {} }, [compiledStep(0), compiledStep(1)]);
+  const driver = replayDriver(
+    cap(-1, { action: 'browser_goto' }),
+    new Map([
+      [0, cap(0)],
+      [1, cap(1, { outcome: 'grounding-failure', reason: 'selector gone' })],
+    ]),
+  );
+  // The agent claims it grounded the trace but its capture is TRUNCATED: step 1
+  // (the contract's re-fire step) has no record. Judging the survivors would be
+  // a false pass ("no matching write" on absent evidence).
+  const fallback: AgentFallback = {
+    async runTrace(): Promise<AgentFallbackOutcome> {
+      return { grounded: true, captured: capturedTrace([cap(0)]) };
+    },
+  };
+  const r = await executeVariant(s, driver, fallback);
+  assert.equal(r.category, 'assertion');
+  assert.equal(r.verdict, 'inconclusive');
+  assert.ok(r.evidence.some((e) => e.includes('incomplete-capture')));
+});
+
+test('contractRequiredStepIndices covers all four check kinds', () => {
+  const ds = script(dsContract(), { urlTemplates: {} }, [compiledStep(0), compiledStep(1)]);
+  assert.deepEqual(contractRequiredStepIndices(ds.contract, ds), [1]);
+
+  const auth = script(authContract(), authRefs, [
+    compiledStep(0),
+    compiledStep(1, { intendedLandsOn: 'DASH' }),
+    compiledStep(2, { intendedLandsOn: 'DASH' }),
+  ]);
+  assert.deepEqual(contractRequiredStepIndices(auth.contract, auth), [1, 2]);
+
+  const reject = script(rejectContract(), rejectRefs, []);
+  assert.deepEqual(contractRequiredStepIndices(reject.contract, reject), [-1]);
+
+  const revisit = script(revisitContract(), { urlTemplates: {} }, [
+    compiledStep(0, { intendedLandsOn: 'DONE' }),
+    compiledStep(1, { intendedLandsOn: 'DONE' }),
+  ]);
+  assert.deepEqual(contractRequiredStepIndices(revisit.contract, revisit), [1]);
+});
+
+test('failure at step N with later contract-referenced steps → incomplete-capture inconclusive', () => {
+  // Auth contract references steps 1 and 2; the capture stops after step 1
+  // (e.g. a scripted run truncated at a failure, or a partial agent capture).
+  const s = script(authContract(), authRefs, [
+    compiledStep(0),
+    compiledStep(1, { intendedLandsOn: 'DASH' }),
+    compiledStep(2, { intendedLandsOn: 'DASH' }),
+  ]);
+  const truncated = capturedTrace([
+    cap(0),
+    cap(1, { intendedLandsOn: 'DASH', network: [sig('GET', '/dashboard', '3xx')] }),
+  ]);
+  assert.deepEqual(missingCaptureIndices(s.contract, s, truncated), [2]);
+  const e = evaluateContractComplete(s, truncated);
+  assert.equal(e.verdict, 'inconclusive');
+  assert.ok(e.evidence[0].includes('incomplete-capture'));
+});
+
+// ---------------------------------------------------------------------------
+// no-repeated-write: mid-request vs pre-issue grounding failure
+// ---------------------------------------------------------------------------
+
+test('no-repeated-write: pre-issue failure (no traffic recorded) → inconclusive', () => {
+  const ct = capturedTrace([
+    cap(0),
+    cap(1, { outcome: 'grounding-failure', reason: 'timeout before submit' }),
+  ]);
+  const e = evaluateContract(dsContract(), ct, { urlTemplates: {} });
+  assert.equal(e.verdict, 'inconclusive');
+  assert.ok(e.evidence[0].includes('before any request was issued'));
+});
+
+test('no-repeated-write: mid-request failure with rejected write recorded → evaluated (pass)', () => {
+  // The step "failed" (e.g. timed out waiting for navigation) but the re-fired
+  // request WAS issued and rejected — that recorded traffic is decisive.
+  const ct = capturedTrace([
+    cap(0),
+    cap(1, {
+      outcome: 'grounding-failure',
+      reason: 'timeout mid-request',
+      network: [sig('POST', '/pay', '4xx')],
+    }),
+  ]);
+  const e = evaluateContract(dsContract(), ct, { urlTemplates: {} });
+  assert.equal(e.verdict, 'pass');
+  assert.ok(e.evidence.some((l) => l.includes('failed AFTER traffic was recorded')));
+});
+
+test('no-repeated-write: mid-request failure with corroborated 2xx write → violation', () => {
+  const ct = capturedTrace(
+    [
+      cap(0),
+      cap(1, {
+        outcome: 'grounding-failure',
+        reason: 'timeout mid-request',
+        network: [sig('POST', '/pay', '2xx')],
+      }),
+    ],
+    { duplicationCorroborated: true },
+  );
+  assert.equal(evaluateContract(dsContract(), ct, { urlTemplates: {} }).verdict, 'violation');
+});
+
+test('no-repeated-write: mid-request failure with no MATCHING write recorded → inconclusive', () => {
+  const ct = capturedTrace([
+    cap(0),
+    cap(1, {
+      outcome: 'grounding-failure',
+      reason: 'timeout mid-request',
+      network: [sig('GET', '/other', '2xx')],
+    }),
+  ]);
+  const e = evaluateContract(dsContract(), ct, { urlTemplates: {} });
+  assert.equal(e.verdict, 'inconclusive');
+  assert.ok(e.evidence.some((l) => l.includes('cannot rule out')));
+});
+
+test('no-repeated-write: 3xx on the repeated write → inconclusive (not decisive)', () => {
+  const ct = capturedTrace([cap(0), cap(1, { network: [sig('POST', '/pay', '3xx')] })]);
+  const e = evaluateContract(dsContract(), ct, { urlTemplates: {} });
+  assert.equal(e.verdict, 'inconclusive');
+  assert.ok(e.evidence[0].includes('3xx'));
+});
+
+// ---------------------------------------------------------------------------
+// expect-auth-redirect: malformed capture degrades loudly
+// ---------------------------------------------------------------------------
+
+test('expect-auth-redirect: excluded step (missing intendedLandsOn) caps pass at inconclusive', () => {
+  const ct = capturedTrace([
+    cap(0),
+    // A decisive redirect on the attributable step...
+    cap(1, { intendedLandsOn: 'DASH', network: [sig('GET', '/dashboard', '3xx')] }),
+    // ...but this in-window step cannot be attributed — it might have been an
+    // auth page that re-rendered. The check must not pass on the survivors.
+    cap(2, {}),
+  ]);
+  const e = evaluateContract(authContract(), ct, authRefs);
+  assert.equal(e.verdict, 'inconclusive');
+  assert.ok(e.evidence.some((l) => l.includes('malformed capture')));
+});
+
+test('expect-auth-redirect: violation on real evidence stands despite excluded steps', () => {
+  const ct = capturedTrace([
+    cap(0),
+    cap(1, { intendedLandsOn: 'DASH', predicates: { authenticated: true } }),
+    cap(2, {}),
+  ]);
+  assert.equal(evaluateContract(authContract(), ct, authRefs).verdict, 'violation');
+});
+
+// ---------------------------------------------------------------------------
+// Signal completeness — capture-channel visibility
+// ---------------------------------------------------------------------------
+
+test('signalCompletenessOf reports which channels executed steps carried', () => {
+  const ct = capturedTrace([
+    cap(0, { network: [sig('GET', '/a', '2xx')] }),
+    cap(1, { url: 'http://x/a' }),
+  ]);
+  assert.deepEqual(signalCompletenessOf(ct), { network: true, predicates: false, url: true });
+});
+
+test('signalCompletenessOf ignores channels only present on failed steps', () => {
+  const ct = capturedTrace([
+    cap(0, { outcome: 'grounding-failure', reason: 'x', predicates: { authenticated: true } }),
+  ]);
+  assert.equal(signalCompletenessOf(ct).predicates, false);
+});
+
+test('executeVariant attaches signalCompleteness on both tiers', async () => {
+  const s = script(dsContract(), { urlTemplates: {} }, [compiledStep(0), compiledStep(1)]);
+  const scriptedDriver = replayDriver(
+    cap(-1, { action: 'browser_goto' }),
+    new Map([
+      [0, cap(0)],
+      [1, cap(1, { network: [sig('POST', '/pay', '4xx')] })],
+    ]),
+  );
+  const scriptedResult = await executeVariant(s, scriptedDriver, noFallback);
+  assert.deepEqual(scriptedResult.signalCompleteness, {
+    network: true,
+    predicates: false,
+    url: false,
+  });
+
+  const driftDriver = replayDriver(
+    cap(-1, { action: 'browser_goto' }),
+    new Map([
+      [0, cap(0)],
+      [1, cap(1, { outcome: 'grounding-failure', reason: 'gone' })],
+    ]),
+  );
+  const fallback: AgentFallback = {
+    async runTrace(): Promise<AgentFallbackOutcome> {
+      return {
+        grounded: true,
+        captured: capturedTrace([
+          cap(0, { predicates: { authenticated: false } }),
+          cap(1, { network: [sig('POST', '/pay', '4xx')] }),
+        ]),
+      };
+    },
+  };
+  const fallbackResult = await executeVariant(s, driftDriver, fallback);
+  assert.deepEqual(fallbackResult.signalCompleteness, {
+    network: true,
+    predicates: true,
+    url: false,
+  });
 });

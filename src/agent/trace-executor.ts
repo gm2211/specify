@@ -162,21 +162,55 @@ function stepAt(captured: CapturedTrace, index: number): CapturedStep | undefine
   return captured.steps.find((s) => s.index === index);
 }
 
+/**
+ * Grounding-failure rule for the re-fire step: a failure is only inconclusive
+ * when it happened BEFORE the request was issued (no network signature was
+ * recorded for the step). A failure AFTER issue (e.g. a timeout mid-request,
+ * with traffic recorded) could hide a real second write, so the recorded
+ * traffic IS evaluated — the request left the browser regardless of whether the
+ * step "completed".
+ */
 function evalNoRepeatedWrite(
   check: Extract<ContractCheck, { kind: 'no-repeated-write' }>,
   captured: CapturedTrace,
 ): ContractEvaluation {
   const step = stepAt(captured, check.injectedStepIndex);
-  if (!step || step.outcome !== 'ok') {
+  if (!step) {
     return {
       verdict: 'inconclusive',
       evidence: [
-        `re-fire step ${check.injectedStepIndex} did not execute cleanly — cannot judge a second side effect`,
+        `re-fire step ${check.injectedStepIndex} has no captured record — cannot judge a second side effect`,
       ],
     };
   }
+  const requestIssued = (step.network?.length ?? 0) > 0;
+  if (step.outcome !== 'ok' && !requestIssued) {
+    return {
+      verdict: 'inconclusive',
+      evidence: [
+        `re-fire step ${check.injectedStepIndex} failed before any request was issued (no traffic recorded) — cannot judge a second side effect`,
+      ],
+    };
+  }
+  const failedMidRequest = step.outcome !== 'ok' && requestIssued;
+  const midRequestNote = failedMidRequest
+    ? [
+        `re-fire step ${check.injectedStepIndex} failed AFTER traffic was recorded (${step.reason ?? 'mid-request failure'}) — evaluating the recorded traffic, since the request left the browser`,
+      ]
+    : [];
   const observed = matchWrite(step.network, check.write);
   if (!observed) {
+    // A mid-request failure with traffic recorded but no MATCHING write still
+    // cannot rule out the write having fired unrecorded — stay inconclusive.
+    if (failedMidRequest) {
+      return {
+        verdict: 'inconclusive',
+        evidence: [
+          ...midRequestNote,
+          `no matching write appears in the recorded traffic, but the step failed mid-flight — cannot rule out a second side effect`,
+        ],
+      };
+    }
     return {
       verdict: 'pass',
       evidence: [`re-fire produced no matching write request — no second side effect fired`],
@@ -187,6 +221,7 @@ function evalNoRepeatedWrite(
     return {
       verdict: 'pass',
       evidence: [
+        ...midRequestNote,
         `second ${observed.method} ${observed.urlTemplate} rejected/absorbed (${status}) — server-side dedup visible`,
       ],
     };
@@ -196,6 +231,7 @@ function evalNoRepeatedWrite(
       return {
         verdict: 'violation',
         evidence: [
+          ...midRequestNote,
           `second ${observed.method} ${observed.urlTemplate} returned 2xx AND duplication was corroborated — a real second side effect`,
         ],
       };
@@ -203,6 +239,7 @@ function evalNoRepeatedWrite(
     return {
       verdict: 'inconclusive',
       evidence: [
+        ...midRequestNote,
         `second ${observed.method} ${observed.urlTemplate} returned 2xx with no corroboration — idempotent retry vs duplicate is indistinguishable from status alone`,
       ],
     };
@@ -210,6 +247,7 @@ function evalNoRepeatedWrite(
   return {
     verdict: 'inconclusive',
     evidence: [
+      ...midRequestNote,
       `second ${observed.method} ${observed.urlTemplate} returned ${status} — not a decisive signal`,
     ],
   };
@@ -222,16 +260,27 @@ function evalAuthRedirect(
 ): ContractEvaluation {
   const authSet = new Set(check.authStates);
   const authTemplates = new Set(check.authStates.map((s) => refs.urlTemplates[s]).filter(Boolean));
-  const relevant = captured.steps.filter(
-    (s) =>
-      s.index >= check.fromStepIndex &&
-      s.intendedLandsOn !== undefined &&
-      authSet.has(s.intendedLandsOn),
+  // Malformed capture must degrade LOUDLY, not silently: a step in the checked
+  // window whose intendedLandsOn is missing might have been an auth-targeting
+  // step we can no longer attribute. Count them; if any exist, the check can
+  // never PASS on the surviving steps alone (a violation found on real
+  // evidence still stands).
+  const inWindow = captured.steps.filter((s) => s.index >= check.fromStepIndex);
+  const excluded = inWindow.filter((s) => s.intendedLandsOn === undefined);
+  const relevant = inWindow.filter(
+    (s) => s.intendedLandsOn !== undefined && authSet.has(s.intendedLandsOn),
   );
+  const excludedNote =
+    excluded.length > 0
+      ? [
+          `${excluded.length} captured step(s) in the checked window lack intendedLandsOn (malformed capture) — cannot confirm they avoided authenticated content; capping at inconclusive`,
+        ]
+      : [];
   if (relevant.length === 0) {
     return {
       verdict: 'inconclusive',
       evidence: [
+        ...excludedNote,
         `no executed step from index ${check.fromStepIndex} targeted an authenticated state — nothing to judge`,
       ],
     };
@@ -278,12 +327,16 @@ function evalAuthRedirect(
     }
     evidence.push(`step ${step.index} produced no decisive auth signal`);
   }
-  return anyDeterminate
-    ? { verdict: 'pass', evidence }
-    : {
-        verdict: 'inconclusive',
-        evidence: evidence.length ? evidence : ['no decisive auth signal captured'],
-      };
+  if (anyDeterminate && excluded.length === 0) {
+    return { verdict: 'pass', evidence };
+  }
+  return {
+    verdict: 'inconclusive',
+    evidence: [
+      ...excludedNote,
+      ...(evidence.length ? evidence : ['no decisive auth signal captured']),
+    ],
+  };
 }
 
 function evalRejectOrRedirect(
@@ -416,6 +469,113 @@ export function evaluateContract(
 }
 
 // ---------------------------------------------------------------------------
+// Evidence completeness — never pass on absent evidence
+// ---------------------------------------------------------------------------
+
+/**
+ * The captured-step indices a contract's check NEEDS a record for, derived from
+ * the compiled script (whose steps carry `intendedLandsOn`). The entry
+ * navigation is index -1.
+ */
+export function contractRequiredStepIndices(contract: Contract, script: CompiledScript): number[] {
+  const c = contract.check;
+  switch (c.kind) {
+    case 'no-repeated-write':
+      return [c.injectedStepIndex];
+    case 'expect-auth-redirect': {
+      const authSet = new Set(c.authStates);
+      return script.steps
+        .filter(
+          (s) =>
+            s.index >= c.fromStepIndex &&
+            s.intendedLandsOn !== undefined &&
+            authSet.has(s.intendedLandsOn),
+        )
+        .map((s) => s.index);
+    }
+    case 'expect-reject-or-redirect':
+      return [-1];
+    case 'expect-safe-revisit': {
+      // The revisit is the LAST script step landing on the terminal target
+      // (mirrors evalSafeRevisit's selection).
+      for (let i = script.steps.length - 1; i >= 0; i--) {
+        if (script.steps[i].intendedLandsOn === c.target) return [script.steps[i].index];
+      }
+      return [];
+    }
+  }
+}
+
+/**
+ * Required-step indices with no captured record at all. A fallback that returns
+ * `grounded: true` with a PARTIAL capture must not let evaluators judge on the
+ * truncated evidence — a missing record here forces inconclusive
+ * ('incomplete-capture') before any contract logic runs.
+ */
+export function missingCaptureIndices(
+  contract: Contract,
+  script: CompiledScript,
+  captured: CapturedTrace,
+): number[] {
+  return contractRequiredStepIndices(contract, script).filter(
+    (i) => stepAt(captured, i) === undefined,
+  );
+}
+
+/**
+ * Completeness-guarded contract evaluation: verify every step the contract
+ * references has a captured record BEFORE evaluating; anything missing makes
+ * the check inconclusive with reason 'incomplete-capture'. Never pass on
+ * absent evidence.
+ */
+export function evaluateContractComplete(
+  script: CompiledScript,
+  captured: CapturedTrace,
+): ContractEvaluation {
+  const missing = missingCaptureIndices(script.contract, script, captured);
+  if (missing.length > 0) {
+    return {
+      verdict: 'inconclusive',
+      evidence: [
+        `incomplete-capture: no captured record for contract-referenced step(s) ${missing.join(', ')} — cannot evaluate on truncated evidence`,
+      ],
+    };
+  }
+  return evaluateContract(script.contract, captured, script.contractRefs);
+}
+
+// ---------------------------------------------------------------------------
+// Signal completeness — which capture channels were present
+// ---------------------------------------------------------------------------
+
+/**
+ * Which signal channels a captured run actually carried, over its executed
+ * ('ok') steps. Missing channels silently push verdicts toward inconclusive
+ * (which is directionally correct — conservative), but that downgrade must be
+ * VISIBLE: a systematic capture gap (network hook absent, predicates never
+ * sampled) shows up here in reporting instead of reading as eternal
+ * inconclusive.
+ */
+export interface SignalCompleteness {
+  /** At least one executed step carried a network signature list. */
+  network: boolean;
+  /** At least one executed step carried sampled page predicates. */
+  predicates: boolean;
+  /** At least one executed step carried a live URL. */
+  url: boolean;
+}
+
+/** Compute {@link SignalCompleteness} over the entry + all executed steps. */
+export function signalCompletenessOf(captured: CapturedTrace): SignalCompleteness {
+  const executed = [captured.entry, ...captured.steps].filter((s) => s.outcome === 'ok');
+  return {
+    network: executed.some((s) => s.network !== undefined),
+    predicates: executed.some((s) => s.predicates !== undefined),
+    url: executed.some((s) => s.url !== undefined),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Per-variant execution
 // ---------------------------------------------------------------------------
 
@@ -446,6 +606,13 @@ export interface VariantResult {
   reRecorded?: { stepIndex: number; note: string };
   /** Evidence lines backing the verdict / grounding-gap. */
   evidence: string[];
+  /**
+   * Which capture channels the evaluated run carried (present whenever a
+   * contract was evaluated against a captured trace). Missing channels bias
+   * verdicts toward inconclusive; this field makes that bias visible so
+   * systematic capture gaps surface in reporting.
+   */
+  signalCompleteness?: SignalCompleteness;
   /** Mirrors the variant's tolerate-vs-reject expectation. */
   wellFormed: boolean;
 }
@@ -503,15 +670,18 @@ export async function executeVariant(
     };
   }
 
-  // Fully grounded scripted run → evaluate the contract directly.
+  // Fully grounded scripted run → evaluate the contract directly (still
+  // completeness-guarded: a driver that drops a captured record must surface
+  // as incomplete-capture, never as a pass on partial evidence).
   if (scripted.failedStepIndex === null) {
-    const evaluation = evaluateContract(script.contract, scripted.captured, script.contractRefs);
+    const evaluation = evaluateContractComplete(script, scripted.captured);
     return {
       ...base,
       tier: 'scripted',
       category: 'assertion',
       verdict: evaluation.verdict,
       evidence: evaluation.evidence,
+      signalCompleteness: signalCompletenessOf(scripted.captured),
     };
   }
 
@@ -553,13 +723,16 @@ export async function executeVariant(
   }
 
   // Agent re-grounded the trace → evaluate the contract against ITS signals.
-  const evaluation = evaluateContract(script.contract, outcome.captured, script.contractRefs);
+  // The completeness guard matters most here: an agent that claims grounded but
+  // returns a partial capture must not produce a pass on truncated evidence.
+  const evaluation = evaluateContractComplete(script, outcome.captured);
   return {
     ...base,
     tier: 'agent-fallback',
     category: 'assertion',
     verdict: evaluation.verdict,
     reRecorded: outcome.reRecorded,
+    signalCompleteness: signalCompletenessOf(outcome.captured),
     evidence: [
       `scripted step ${failedStepIndex} drifted (${driftReason}); agent re-grounded the trace`,
       ...(outcome.reRecorded
