@@ -103,21 +103,39 @@ export interface CheckOptions {
 // Marker observation
 // ---------------------------------------------------------------------------
 
+/** True when a character continues an identifier-like token: a marker occurrence
+ * flanked by one of these is part of a LARGER value, not the marker itself. */
+function isTokenChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9]/.test(ch);
+}
+
 /**
- * True iff `marker` is present anywhere in an op's response body. Markers are
- * unique, prefixed UUID tokens (see MARKER_PREFIX in probe-workload.ts), so a
- * substring match over the serialized body is both sound (no collisions) and
- * robust to whatever nesting/wrapping the target uses for reads and lists.
+ * True iff `marker` is present anywhere in an op's response body as a whole
+ * token. Markers are unique, prefixed UUID tokens (see MARKER_PREFIX in
+ * probe-workload.ts), so a serialized-body scan is robust to whatever
+ * nesting/wrapping the target uses for reads and lists — but the match is
+ * BOUNDARY-AWARE: an occurrence immediately preceded or followed by an
+ * alphanumeric character is part of a larger value (e.g. the marker embedded
+ * inside a longer string the target derived from it) and does not count as an
+ * observation of the marker itself.
  */
 export function bodyContainsMarker(body: unknown, marker: string): boolean {
-  if (body === undefined || body === null) return false;
+  if (body === undefined || body === null || marker === '') return false;
   let serialized: string;
   try {
     serialized = typeof body === 'string' ? body : JSON.stringify(body);
   } catch {
     serialized = String(body);
   }
-  return serialized.includes(marker);
+  let from = 0;
+  for (;;) {
+    const idx = serialized.indexOf(marker, from);
+    if (idx === -1) return false;
+    const before = idx > 0 ? serialized[idx - 1] : undefined;
+    const after = serialized[idx + marker.length];
+    if (!isTokenChar(before) && !isTokenChar(after)) return true;
+    from = idx + 1;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -388,7 +406,23 @@ function checkObservation(
     return;
   }
 
-  // Missing. A list within the eventual-consistency window is tolerated.
+  // Missing. A regression of a previously-observed marker is a monotonic
+  // violation REGARDLESS of the eventual-consistency window: the window only
+  // excuses a fresh write not yet propagated. Once the marker HAS been observed
+  // present, a later read/list losing it is a regression, full stop.
+  if (est.observed) {
+    checks.push({
+      guarantee: 'monotonic-reads',
+      entity,
+      verdict: 'violated',
+      witness: chain,
+      detail: `Marker ${est.marker} (written by ${est.writeOp.opId}, ok at t=${est.writeOp.completeTs}) was previously observed but is absent from ${obsKind} ${op.opId} (ok at t=${op.completeTs}) — a monotonic regression.`,
+    });
+    return;
+  }
+
+  // Never yet observed: a list within the eventual-consistency window is
+  // tolerated (the write may simply not have propagated to the listing view).
   if (
     obsKind === 'list' &&
     toleranceMs > 0 &&
@@ -406,17 +440,13 @@ function checkObservation(
     return;
   }
 
-  // A regression of a previously-observed marker is a monotonic violation;
-  // a marker that never became visible is a read-your-writes / list violation.
-  const violated: GuaranteeKind = est.observed ? 'monotonic-reads' : kind;
+  // A marker that never became visible is a read-your-writes / list violation.
   checks.push({
-    guarantee: violated,
+    guarantee: kind,
     entity,
     verdict: 'violated',
     witness: chain,
-    detail: est.observed
-      ? `Marker ${est.marker} (written by ${est.writeOp.opId}, ok at t=${est.writeOp.completeTs}) was previously observed but is absent from ${obsKind} ${op.opId} (ok at t=${op.completeTs}) — a monotonic regression.`
-      : `Marker ${est.marker} written by ${est.writeOp.opId} (ok ${est.kind} at t=${est.writeOp.completeTs}) was NOT reflected in ${obsKind} ${op.opId} (ok at t=${op.completeTs}).`,
+    detail: `Marker ${est.marker} written by ${est.writeOp.opId} (ok ${est.kind} at t=${est.writeOp.completeTs}) was NOT reflected in ${obsKind} ${op.opId} (ok at t=${op.completeTs}).`,
   });
 }
 
