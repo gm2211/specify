@@ -22,7 +22,7 @@ import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
 import { learnedSkillsEnabled } from './feature-flags.js';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 
 /**
  * Numeric override from the environment for per-run agent caps
@@ -69,6 +69,18 @@ export interface SdkRunnerOptions {
   messageInjector?: MessageInjector;
   /** Custom ask_user handler (for chat mode / WebSocket). */
   askUserHandler?: (question: string) => Promise<string>;
+  /**
+   * Recorded prompt-context bundle (from a prior run's run-context.json) to
+   * replay verbatim instead of fetching live memory/layered-context/skills
+   * text. Used by `specify verify --with-context <path>` for "as-of-that-run"
+   * re-verification. An unset field falls back to live injection for that
+   * part; an explicit empty string means "nothing was injected that run".
+   */
+  contextOverride?: {
+    memoryPreamble?: string;
+    layeredContext?: string;
+    skillsText?: string;
+  };
 }
 
 export interface SdkRunnerResult {
@@ -127,6 +139,122 @@ function classifyError(err: unknown): ErrorClass {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// ---------------------------------------------------------------------------
+// Per-run repro bundle (run-context.json) — SP-bhm
+//
+// A verdict is a function of (spec, target, model, limits, AND the learning
+// state injected into the prompt: memory preamble, layered context, active
+// skills). Only outputs were persisted before this; when a verdict flips
+// between runs there was no way to tell whether the target changed or the
+// learning loop changed the prompt. This bundle records exactly what was
+// injected so a later `--with-context` run can reproduce it byte-identically.
+// ---------------------------------------------------------------------------
+
+/** Strip userinfo (username/password) from a URL. Never persist credentials. */
+export function redactUrlUserinfo(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl);
+    if (parsed.username || parsed.password) {
+      parsed.username = '';
+      parsed.password = '';
+    }
+    return parsed.toString();
+  } catch {
+    // Not a parseable URL (e.g. a CLI binary path) — nothing to redact.
+    return rawUrl;
+  }
+}
+
+function sha256Hex(text: string): string {
+  return createHash('sha256').update(text, 'utf-8').digest('hex');
+}
+
+/**
+ * Compose the final system prompt from the base prompt plus the optional
+ * injected preamble texts, in the same prepend order the runner has always
+ * used: memory preamble innermost-first, then skills, then layered context,
+ * each prepended ahead of what came before. Pulled out as a pure function so
+ * both the live run and tests (re-assembling from a recorded bundle) can
+ * produce the identical string.
+ */
+export function composeSystemPrompt(
+  basePrompt: string,
+  parts: { layeredContext?: string; skillsText?: string; memoryPreamble?: string },
+): string {
+  let prompt = basePrompt;
+  if (parts.layeredContext) prompt = parts.layeredContext + '\n\n' + prompt;
+  if (parts.skillsText) prompt = parts.skillsText + '\n\n' + prompt;
+  if (parts.memoryPreamble) prompt = parts.memoryPreamble + '\n\n' + prompt;
+  return prompt;
+}
+
+export interface RunContextBundle {
+  runId: string;
+  createdAt: string;
+  model: string;
+  maxTurns: number;
+  maxBudgetUsd: number;
+  systemPromptSha256: string;
+  /** Text actually injected this run, or null if none was injected. */
+  memoryPreamble: string | null;
+  layeredContext: string | null;
+  skillsText: string | null;
+  spec: { path: string; sha256: string } | null;
+  /** Target URL with any userinfo (credentials) redacted. */
+  targetUrl: string | null;
+}
+
+/** Pure builder for the repro bundle — no I/O beyond reading the spec file. */
+export function buildRunContextBundle(params: {
+  runId: string;
+  systemPrompt: string;
+  memoryPreamble?: string;
+  layeredContext?: string;
+  skillsText?: string;
+  model: string;
+  maxTurns: number;
+  maxBudgetUsd: number;
+  specPath?: string;
+  targetUrl?: string;
+}): RunContextBundle {
+  let spec: RunContextBundle['spec'] = null;
+  if (params.specPath) {
+    try {
+      const specYaml = fs.readFileSync(params.specPath, 'utf-8');
+      spec = { path: params.specPath, sha256: sha256Hex(specYaml) };
+    } catch {
+      spec = { path: params.specPath, sha256: '' };
+    }
+  }
+  return {
+    runId: params.runId,
+    createdAt: new Date().toISOString(),
+    model: params.model,
+    maxTurns: params.maxTurns,
+    maxBudgetUsd: params.maxBudgetUsd,
+    systemPromptSha256: sha256Hex(params.systemPrompt),
+    memoryPreamble: params.memoryPreamble ?? null,
+    layeredContext: params.layeredContext ?? null,
+    skillsText: params.skillsText ?? null,
+    spec,
+    targetUrl: params.targetUrl ? redactUrlUserinfo(params.targetUrl) : null,
+  };
+}
+
+/**
+ * Write the bundle to `${outputDir}/run-context.json`. Best-effort: this must
+ * never fail the run, so any error is caught and warned to stderr.
+ */
+export function writeRunContextBundle(outputDir: string, bundle: RunContextBundle): void {
+  try {
+    fs.mkdirSync(outputDir, { recursive: true });
+    const filePath = path.join(outputDir, 'run-context.json');
+    fs.writeFileSync(filePath, JSON.stringify(bundle, null, 2), 'utf-8');
+  } catch (err) {
+    process.stderr.write(`  Failed to write run-context.json: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -518,6 +646,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   const mcpServers: Record<string, McpServerConfig> = {};
   const allowedBrowserTools: string[] = [];
 
+  // Single run id shared by every MCP server this run spins up (memory,
+  // feedback, decisions) and recorded in run-context.json, so all events
+  // from one run can be correlated by that id.
+  const runId = `run_${randomUUID().slice(0, 8)}`;
+
   // Session indexer: persist every event from this run into a SQLite + FTS5
   // store for cross-session recall. Spec-scoped DB by default.
   let sessionStore: SessionStore | undefined;
@@ -616,23 +749,34 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     const feedbackTools: string[] = [];
     const decisionTools: string[] = [];
 
+    // Text actually injected into the system prompt this run, tracked
+    // separately so it can be recorded verbatim in run-context.json
+    // (SP-bhm). When opts.contextOverride is set (specify verify
+    // --with-context), we bypass live memory/layered/skills fetches and
+    // reuse the recorded text instead, for a byte-identical re-verify.
+    let layeredContextText: string | undefined;
+    let skillsText: string | undefined;
+    let memoryPreambleText: string | undefined;
+
     // Layered context (user / project / per-spec observations) is loaded for
     // every task — not just verify — since project-level guidance and user
     // preferences apply to capture/replay/compare too.
     if (opts.spec) {
       try {
-        const layered = renderLayeredPrompt(loadLayeredContext(opts.spec));
-        if (layered) systemPrompt = layered + '\n\n' + systemPrompt;
+        layeredContextText = opts.contextOverride
+          ? opts.contextOverride.layeredContext
+          : renderLayeredPrompt(loadLayeredContext(opts.spec));
       } catch (err) {
         process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
       }
 
       // Active learned skills are experimental. Keep them out of the default
       // prompt unless the operator explicitly opts in.
-      if (learnedSkillsEnabled()) {
+      if (learnedSkillsEnabled() || opts.contextOverride) {
         try {
-          const active = renderActiveSkillsPrompt(opts.spec);
-          if (active) systemPrompt = active + '\n\n' + systemPrompt;
+          skillsText = opts.contextOverride
+            ? opts.contextOverride.skillsText
+            : renderActiveSkillsPrompt(opts.spec);
         } catch (err) {
           process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
         }
@@ -658,13 +802,12 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
         verifyMemoryScope = scope;
         verifyMemoryProvider = provider;
-        const memoryIntro = await provider.prefetch(scope);
-        if (memoryIntro) {
-          systemPrompt = memoryIntro + '\n\n' + systemPrompt;
-        }
+        memoryPreambleText = opts.contextOverride
+          ? opts.contextOverride.memoryPreamble
+          : await provider.prefetch(scope);
         const memoryServer = createMemoryMcpServer({
           scope,
-          runId: `run_${randomUUID().slice(0, 8)}`,
+          runId,
           provider,
         });
         mcpServers.memory = memoryServer;
@@ -682,7 +825,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         const spec = loadSpec(opts.spec);
         const feedbackServer = createFeedbackMcpServer({
           specId: spec.name,
-          runId: `run_${randomUUID().slice(0, 8)}`,
+          runId,
           sink: feedbackSinkFromEnv(),
         });
         mcpServers.feedback = feedbackServer;
@@ -691,6 +834,15 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         process.stderr.write(`  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
       }
     }
+
+    // Compose the final system prompt once all injected parts are known, so
+    // the recorded texts and the actual prompt sent to the model always
+    // agree (see composeSystemPrompt / run-context.json below).
+    systemPrompt = composeSystemPrompt(systemPrompt, {
+      layeredContext: layeredContextText,
+      skillsText,
+      memoryPreamble: memoryPreambleText,
+    });
 
     // Decisions queue: available for verify and capture. Capture benefits from
     // being able to ask "is this an actual broken page or expected for an
@@ -712,7 +864,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         const memoryProvider = verifyMemoryProvider ?? defaultMemoryProvider();
         const decisionsServer = createDecisionsMcpServer({
           specId: spec.name,
-          runId: `run_${randomUUID().slice(0, 8)}`,
+          runId,
           memoryScope,
           memoryProvider,
         });
@@ -746,6 +898,28 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       persistSession: false,
       ...(outputFormat ? { outputFormat } : {}),
     };
+
+    // Persist the repro bundle: sha256 of the final systemPrompt, the
+    // rendered preamble texts, model/limits, spec identity, and the redacted
+    // target URL, all keyed to the shared runId. Best-effort — writing this
+    // must never fail the run.
+    try {
+      const runContextBundle = buildRunContextBundle({
+        runId,
+        systemPrompt,
+        memoryPreamble: memoryPreambleText,
+        layeredContext: layeredContextText,
+        skillsText,
+        model: queryOptions.model as string,
+        maxTurns: queryOptions.maxTurns as number,
+        maxBudgetUsd: queryOptions.maxBudgetUsd as number,
+        specPath: opts.spec,
+        targetUrl: opts.url ?? opts.remoteUrl ?? opts.localUrl,
+      });
+      writeRunContextBundle(opts.outputDir, runContextBundle);
+    } catch (err) {
+      process.stderr.write(`  Failed to build run-context.json: ${err instanceof Error ? err.message : String(err)}\n`);
+    }
 
     // Use message injector if provided, otherwise plain string prompt
     const prompt: string | AsyncIterable<SDKUserMessage> =

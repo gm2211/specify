@@ -665,6 +665,7 @@ async function main(): Promise<void> {
       const verifyArgs = verb ? [verb, ...rest] : rest;
       const specPath = resolveSpecArg(verifyArgs, ctx);
       const url = getArg(verifyArgs, '--url');
+      const withContextPath = getArg(verifyArgs, '--with-context');
 
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
@@ -680,6 +681,34 @@ async function main(): Promise<void> {
           // Determine target URL: explicit --url, or from spec target
           const targetUrl = url
             ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
+
+          // --with-context <path/to/run-context.json>: "as-of-that-run"
+          // re-verify. Loads a bundle recorded by a prior run and injects
+          // its memory/layered-context/skills text verbatim instead of
+          // fetching live state, so the rendered system prompt reproduces
+          // that run's byte-identically.
+          type ContextOverride = { memoryPreamble?: string; layeredContext?: string; skillsText?: string };
+          let contextOverride: ContextOverride | undefined;
+          if (withContextPath) {
+            try {
+              const raw = fs.readFileSync(path.resolve(withContextPath), 'utf-8');
+              const bundle = JSON.parse(raw) as {
+                memoryPreamble?: string | null;
+                layeredContext?: string | null;
+                skillsText?: string | null;
+              };
+              contextOverride = {
+                memoryPreamble: bundle.memoryPreamble ?? undefined,
+                layeredContext: bundle.layeredContext ?? undefined,
+                skillsText: bundle.skillsText ?? undefined,
+              };
+              process.stderr.write(`${c.dim(`Replaying recorded prompt context from ${withContextPath}`)}\n`);
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(`Failed to load --with-context bundle: ${msg}\n`);
+            }
+          }
+
           try {
             const { writeBehaviorProgress } = await import('./output.js');
             const areas = spec.areas?.length ?? 0;
@@ -698,6 +727,7 @@ async function main(): Promise<void> {
               headed: hasFlag(verifyArgs, '--headed'),
               debug,
               onBehaviorProgress: writeBehaviorProgress,
+              ...(contextOverride ? { contextOverride } : {}),
             });
             const { extractBool } = await import('../agent/sdk-runner.js');
             const pass = extractBool(structuredOutput, 'pass');
