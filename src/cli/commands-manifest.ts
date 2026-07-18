@@ -132,6 +132,20 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [],
   },
   {
+    name: 'spec compile',
+    description: 'Compile plain-language behaviors into LTLf formulas (specify.formulas.yaml) via an offline, browserless LLM agent. Behaviors the model cannot compile faithfully are honestly skipped, not forced.',
+    parameters: [
+      { name: '--spec', type: 'string', required: false, description: 'Path to spec file (auto-discovered if omitted)' },
+      { name: '--behavior', type: 'string', required: false, description: 'Fully-qualified area/behavior id to compile; repeatable to filter to a subset' },
+      { name: '--force', type: 'boolean', required: false, description: 'Recompile behaviors that already have a formula entry (default: skip them)' },
+    ],
+    examples: [
+      'specify spec compile --spec spec.yaml',
+      'specify spec compile --behavior auth/login --behavior auth/logout',
+      'specify spec compile --force',
+    ],
+  },
+  {
     name: 'daemon',
     description: 'Long-running Specify process with HTTP inbox. Idle = 0 tokens. Accepts tasks pushed by other agents.',
     parameters: [
