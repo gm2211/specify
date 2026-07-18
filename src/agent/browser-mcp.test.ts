@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createBrowserMcpServer } from './browser-mcp.js';
+import { FaultInjector } from './fault-injector.js';
 
 function mockPage(overrides: Record<string, (...args: any[]) => any> = {}) {
   return {
@@ -32,4 +33,15 @@ test('createBrowserMcpServer returns a valid MCP server config', () => {
   assert.ok(server, 'should return a server config');
   assert.equal(server.type, 'sdk');
   assert.ok(server.instance, 'should have an instance');
+});
+
+test('createBrowserMcpServer with a FaultInjector still returns a valid MCP server config', () => {
+  const page = mockPage();
+  const screenshotFn = async (name: string) => `/tmp/${name}.png`;
+  const injector = new FaultInjector({ seed: 1, rules: [] });
+  const server = createBrowserMcpServer(page, screenshotFn, 'browser', undefined, undefined, injector);
+
+  assert.ok(server);
+  assert.equal(server.type, 'sdk');
+  assert.ok(server.instance);
 });

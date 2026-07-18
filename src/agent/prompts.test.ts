@@ -52,6 +52,30 @@ test('getVerifyPrompt mentions behaviors and areas', () => {
   assert.ok(prompt.includes('evidence'), 'should mention evidence');
 });
 
+test('getVerifyPrompt: no fault plan omits the fault-injection section entirely', () => {
+  const prompt = getVerifyPrompt('version: "2"\nname: test');
+  assert.ok(!prompt.includes('Fault injection is active'));
+  assert.ok(!prompt.includes('browser_inject_fault'));
+});
+
+test('getVerifyPrompt: an empty fault plan (no rules) also omits the section', () => {
+  const prompt = getVerifyPrompt('version: "2"\nname: test', { seed: 1, rules: [] });
+  assert.ok(!prompt.includes('Fault injection is active'));
+});
+
+test('getVerifyPrompt: an active fault plan describes the rules and warns against confusing faults with regressions', () => {
+  const prompt = getVerifyPrompt('version: "2"\nname: test', {
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+  });
+  assert.ok(prompt.includes('Fault injection is active'));
+  assert.ok(prompt.includes('/api/orders'));
+  assert.ok(prompt.includes('500'));
+  assert.ok(prompt.includes('browser_clear_faults'));
+  assert.ok(prompt.includes('injectedFault'));
+  assert.ok(prompt.toLowerCase().includes('regression'));
+});
+
 test('getCapturePrompt includes assumptions format', () => {
   const prompt = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml');
   assert.ok(prompt.includes('assumptions:'), 'should show assumptions YAML');

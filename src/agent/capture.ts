@@ -8,8 +8,14 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page, Route } from 'playwright';
 import type { CapturedTraffic, CapturedConsoleEntry, CaptureManifest } from '../capture/types.js';
+import type { FaultInjector, FaultType } from './fault-injector.js';
+
+/** Bounded delay (ms) before a 'timeout' fault aborts the request. Keeps
+ * verify runs from hanging indefinitely while still exercising a
+ * degraded-mode / slow-response code path in the agent under test. */
+const FAULT_TIMEOUT_DELAY_MS = 3000;
 
 const STATIC_EXT = new Set([
   '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg',
@@ -117,7 +123,15 @@ export interface CaptureCollectorOptions {
   outputDir: string;
   targetUrl: string;
   hostFilter?: string;
+  /** Seeded fault injector, if fault injection is active for this session. */
+  injector?: FaultInjector;
 }
+
+/** Synthetic status recorded for fault types that never receive a real HTTP
+ * response ('abort', 'timeout'). 0 is not a valid HTTP status, which makes
+ * these entries easy to distinguish from a genuine response even without
+ * checking injectedFault. */
+const NO_RESPONSE_FAULT_STATUS = 0;
 
 export class CaptureCollector {
   private traffic: CapturedTraffic[] = [];
@@ -128,15 +142,44 @@ export class CaptureCollector {
   private targetUrl: string;
   private hostFilter: string;
   private startTime: string;
+  private injector: FaultInjector | undefined;
+  private faultSeq = 0;
 
   constructor(options: CaptureCollectorOptions) {
     this.outputDir = path.resolve(options.outputDir);
     this.screenshotDir = path.join(this.outputDir, 'screenshots');
     this.targetUrl = options.targetUrl;
     this.hostFilter = options.hostFilter ?? '';
+    this.injector = options.injector;
     this.startTime = new Date().toISOString();
 
     fs.mkdirSync(this.screenshotDir, { recursive: true });
+  }
+
+  /** Set (or clear, with undefined) the fault injector for this session. */
+  setInjector(injector: FaultInjector | undefined): void {
+    this.injector = injector;
+  }
+
+  /** Fulfill/abort a route per fault semantics, without ever calling route.fetch(). */
+  private async applyFault(route: Route, fault: FaultType): Promise<void> {
+    switch (fault) {
+      case '500':
+        await route
+          .fulfill({ status: 500, contentType: 'application/json', body: '{"error":"injected"}' })
+          .catch(() => {});
+        break;
+      case 'empty':
+        await route.fulfill({ status: 200, body: '' }).catch(() => {});
+        break;
+      case 'abort':
+        await route.abort().catch(() => {});
+        break;
+      case 'timeout':
+        await new Promise((resolve) => setTimeout(resolve, FAULT_TIMEOUT_DELAY_MS));
+        await route.abort('timedout').catch(() => {});
+        break;
+    }
   }
 
   /** Attach traffic interception to a browser context. */
@@ -146,6 +189,34 @@ export class CaptureCollector {
       const url = request.url();
       const method = request.method();
       const tsStart = Date.now();
+
+      // Fault decisions are made and applied BEFORE route.fetch(): a
+      // fault-matched request is fulfilled/aborted here and never reaches
+      // the network, so the live server sees no side effects for it.
+      if (this.injector) {
+        const seq = this.faultSeq++;
+        const decision = this.injector.decide(url, method, seq);
+        if (decision) {
+          await this.applyFault(route, decision.fault);
+
+          if (shouldCapture(url, this.hostFilter)) {
+            const tsEnd = Date.now();
+            this.traffic.push({
+              url,
+              method,
+              postData: request.postData() ?? null,
+              status: decision.fault === '500' ? 500 : decision.fault === 'empty' ? 200 : NO_RESPONSE_FAULT_STATUS,
+              contentType: decision.fault === '500' ? 'application/json' : '',
+              ts: tsEnd,
+              tsStart,
+              tsEnd,
+              responseBody: decision.fault === '500' ? '{"error":"injected"}' : null,
+              injectedFault: decision.fault,
+            });
+          }
+          return;
+        }
+      }
 
       const response = await route.fetch().catch(() => null);
       if (!response) {

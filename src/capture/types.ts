@@ -99,6 +99,15 @@ export interface CapturedTraffic {
 
   /** Response body as string, if captured. */
   responseBody: string | null;
+
+  /**
+   * Set when this entry was synthetically produced by the seeded fault
+   * injector (src/agent/fault-injector.ts) rather than observed from the
+   * live target — e.g. "500", "timeout", "abort", "empty". Absent for real
+   * traffic. Evidence consumers should treat entries carrying this field as
+   * a manufactured resilience-test condition, not a genuine regression.
+   */
+  injectedFault?: string;
 }
 
 /** A browser console log entry. */

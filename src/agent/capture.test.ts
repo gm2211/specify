@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import * as assert from 'node:assert/strict';
-import { shouldCapture, registrableDomain } from './capture.js';
+import { shouldCapture, registrableDomain, CaptureCollector } from './capture.js';
+import { FaultInjector } from './fault-injector.js';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 test('registrableDomain: strips subdomains down to the registrable domain', () => {
   assert.equal(registrableDomain('www.example.com'), 'example.com');
@@ -71,4 +75,130 @@ test('shouldCapture: still filters static assets regardless of host', () => {
 test('shouldCapture: no hostFilter captures everything but static assets', () => {
   assert.equal(shouldCapture('https://anywhere.example/data.json', ''), true);
   assert.equal(shouldCapture('https://anywhere.example/style.css', ''), false);
+});
+
+// ---------------------------------------------------------------------------
+// Fault injection: the route handler must decide + apply faults BEFORE
+// route.fetch() so a fault-matched request never reaches the live server.
+// ---------------------------------------------------------------------------
+
+function tmpOutputDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'specify-capture-'));
+}
+
+/** Minimal fake Playwright Route capturing which methods were invoked. */
+function fakeRoute(url: string, method: string) {
+  const calls: { fetch: number; fulfill: unknown[]; abort: unknown[]; continue: number } = {
+    fetch: 0,
+    fulfill: [],
+    abort: [],
+    continue: 0,
+  };
+  const route = {
+    request: () => ({
+      url: () => url,
+      method: () => method,
+      postData: () => null,
+    }),
+    fetch: async () => {
+      calls.fetch++;
+      return { status: () => 200, headers: () => ({ 'content-type': 'application/json' }), text: async () => '{}' };
+    },
+    fulfill: async (opts: unknown) => {
+      calls.fulfill.push(opts);
+    },
+    abort: async (reason?: unknown) => {
+      calls.abort.push(reason);
+    },
+    continue: async () => {
+      calls.continue++;
+    },
+  };
+  return { route, calls };
+}
+
+/** Fake BrowserContext that captures the route handler registered via context.route(). */
+function fakeContext() {
+  let handler: ((route: unknown) => Promise<void>) | undefined;
+  const context = {
+    route: async (_pattern: string, h: (route: unknown) => Promise<void>) => {
+      handler = h;
+    },
+  };
+  return { context, getHandler: () => handler! };
+}
+
+test('fault-matched request never invokes route.fetch (500)', async () => {
+  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }] });
+  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const { context, getHandler } = fakeContext();
+  await collector.attachToContext(context as never);
+
+  const { route, calls } = fakeRoute('https://x.test/api/orders', 'GET');
+  await getHandler()(route);
+
+  assert.equal(calls.fetch, 0, 'route.fetch() must never be called for a fault-matched request');
+  assert.equal(calls.fulfill.length, 1);
+  assert.deepEqual(calls.fulfill[0], { status: 500, contentType: 'application/json', body: '{"error":"injected"}' });
+
+  const traffic = collector.getTraffic();
+  assert.equal(traffic.length, 1);
+  assert.equal(traffic[0].injectedFault, '500');
+  assert.equal(traffic[0].status, 500);
+});
+
+test('fault-matched request never invokes route.fetch (abort)', async () => {
+  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: 'abort', rate: 1.0 }] });
+  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const { context, getHandler } = fakeContext();
+  await collector.attachToContext(context as never);
+
+  const { route, calls } = fakeRoute('https://x.test/api/orders', 'POST');
+  await getHandler()(route);
+
+  assert.equal(calls.fetch, 0);
+  assert.equal(calls.abort.length, 1);
+  assert.equal(collector.getTraffic()[0].injectedFault, 'abort');
+});
+
+test('fault-matched request never invokes route.fetch (empty)', async () => {
+  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: 'empty', rate: 1.0 }] });
+  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const { context, getHandler } = fakeContext();
+  await collector.attachToContext(context as never);
+
+  const { route, calls } = fakeRoute('https://x.test/api/orders', 'GET');
+  await getHandler()(route);
+
+  assert.equal(calls.fetch, 0);
+  assert.deepEqual(calls.fulfill[0], { status: 200, body: '' });
+  assert.equal(collector.getTraffic()[0].status, 200);
+  assert.equal(collector.getTraffic()[0].injectedFault, 'empty');
+});
+
+test('non-matching request falls through to the normal route.fetch() path', async () => {
+  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }] });
+  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const { context, getHandler } = fakeContext();
+  await collector.attachToContext(context as never);
+
+  const { route, calls } = fakeRoute('https://x.test/api/users', 'GET');
+  await getHandler()(route);
+
+  assert.equal(calls.fetch, 1, 'non-matching requests should still be fetched normally');
+  const traffic = collector.getTraffic();
+  assert.equal(traffic.length, 1);
+  assert.equal(traffic[0].injectedFault, undefined);
+});
+
+test('no injector configured: behavior is unchanged (route.fetch always called)', async () => {
+  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test' });
+  const { context, getHandler } = fakeContext();
+  await collector.attachToContext(context as never);
+
+  const { route, calls } = fakeRoute('https://x.test/api/orders', 'GET');
+  await getHandler()(route);
+
+  assert.equal(calls.fetch, 1);
+  assert.equal(collector.getTraffic()[0].injectedFault, undefined);
 });

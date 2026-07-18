@@ -28,3 +28,12 @@ export function learnedSkillsEnabled(): boolean {
 export function monitorVerdictsEnabled(): boolean {
   return envFlag('SPECIFY_ENABLE_MONITOR_VERDICTS');
 }
+
+/**
+ * Seeded fault-scenario injection (src/agent/fault-injector.ts) is
+ * off by default: it's a resilience-regression tool, not something every
+ * verify run should carry. Opt in with SPECIFY_ENABLE_FAULT_INJECTION.
+ */
+export function faultInjectionEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_FAULT_INJECTION');
+}

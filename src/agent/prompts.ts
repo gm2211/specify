@@ -2,6 +2,52 @@
  * src/agent/prompts.ts — Task-specific system prompts for the Specify agent
  */
 
+import type { FaultPlan } from './fault-injector.js';
+
+/**
+ * Render the conditional "active faults" paragraph for getVerifyPrompt.
+ * Only emitted when a fault plan is actually active (SPECIFY_ENABLE_FAULT_INJECTION
+ * on and at least one rule configured) — omitted entirely otherwise, so a
+ * normal verify run's prompt is byte-for-byte unchanged.
+ */
+function renderFaultInjectionSection(faultPlan?: FaultPlan): string {
+  if (!faultPlan || faultPlan.rules.length === 0) return '';
+
+  const ruleLines = faultPlan.rules
+    .map((r) => `- ${r.method ? r.method.toUpperCase() + ' ' : ''}${r.urlPattern} → ${r.fault}${r.rate < 1 ? ` (rate ${r.rate})` : ''}`)
+    .join('\n');
+
+  return `
+## Fault injection is active for this run
+
+This is resilience REGRESSION testing over a fixed, seeded fault schedule
+against the live target — NOT a simulation and NOT a substitute for the
+real backend. The requests below are deliberately intercepted before they
+reach the server and made to fail, so you can verify degraded-mode
+behaviors ("shows a friendly error when the API fails") that are otherwise
+unverifiable against a healthy target.
+
+Active fault rules for this run:
+${ruleLines}
+
+- You also have \`browser_inject_fault\` and \`browser_clear_faults\` tools to
+  scope additional faults to a specific behavior mid-run.
+- When verifying a behavior that depends on one of these faults, verify the
+  degraded-mode claim deliberately: trigger the faulted request, and check
+  that the UI's response to the failure (error message, retry affordance,
+  fallback state, etc.) matches what the spec claims — don't just assume it
+  works because a request failed.
+- Call \`browser_clear_faults\` after you finish verifying an error-handling
+  behavior that used \`browser_inject_fault\`, so the fault doesn't leak into
+  later behaviors that expect healthy responses.
+- Traffic entries produced by an injected fault are stamped with
+  \`injectedFault\` in the evidence. Never confuse an injected fault with a
+  real regression in the target — if you observe a failure that ISN'T
+  attributable to one of the rules above (or to your own \`browser_inject_fault\`
+  calls), that's a genuine finding, not an artifact of this feature.
+`;
+}
+
 export function getReplayPrompt(captureDir: string, url: string): string {
   return `You are Specify, a replay-and-diff agent. You have captured traffic from
 a reference system and must verify equivalent behavior on a target.
@@ -122,9 +168,10 @@ Do NOT ask for things you can figure out yourself. Be autonomous 99% of the time
 Explore ${url} and generate a comprehensive behavioral spec.`;
 }
 
-export function getVerifyPrompt(specYaml: string): string {
+export function getVerifyPrompt(specYaml: string, faultPlan?: FaultPlan): string {
   return `You are Specify, a verification agent. You have a behavioral spec (v2 format)
 and your job is to verify every behavior in the spec against the live system.
+${renderFaultInjectionSection(faultPlan)}
 
 ## CLI targets
 If the spec's target is \`type: cli\`, you do NOT have Bash. The \`cli_run\` tool
