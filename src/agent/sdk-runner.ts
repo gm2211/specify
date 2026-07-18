@@ -564,11 +564,35 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       process.stderr.write('  Browser ready.\n');
     }
 
-    // Sandbox: web-target sessions only get the tools they need.
+    // Sandbox: web-target sessions must be restricted to the browser MCP
+    // channel (plus the file I/O they need for evidence). Any action taken
+    // outside that channel is invisible to the CaptureCollector, so
+    // deterministic verdicts are only sound if the channel is exclusive —
+    // not merely the one we expect the model to prefer.
     const fileTools: string[] = ['Read'];
     if (opts.task === 'capture' || opts.task === 'compare' || opts.task === 'verify') {
       fileTools.push('Write');
     }
+
+    // `allowedTools` (below) only auto-approves listed tools for the
+    // permission prompt — it does NOT restrict which tools are available to
+    // the model (see node_modules/@anthropic-ai/claude-agent-sdk/sdk.d.ts:
+    // "To restrict which tools are available, use the `tools` option
+    // instead."). Combined with permissionMode 'bypassPermissions' +
+    // allowDangerouslySkipPermissions, omitting an explicit restriction
+    // would leave the full built-in tool set (Bash, WebFetch, WebSearch,
+    // etc.) available regardless of `allowedTools`. `disallowedTools`
+    // removes tools from the model's context outright, even if otherwise
+    // allowed, so it's the mechanism that actually restricts the channel.
+    //
+    // Scoped to web-target sessions only (a browser session was launched,
+    // i.e. opts.url/opts.remoteUrl+opts.localUrl set). Browserless
+    // ("compile"-style) and future cli-target runs may legitimately need
+    // Bash to drive the target; that restriction is left for SP-efd.
+    const hasBrowserSession = sessions.length > 0;
+    const disallowedTools: string[] = hasBrowserSession
+      ? ['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch']
+      : [];
 
     // Learned memory: only verify tasks participate. Read the store and
     // prepend the summary to the system prompt so the agent starts with
@@ -700,6 +724,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         ...feedbackTools,
         ...decisionTools,
       ],
+      ...(disallowedTools.length > 0 ? { disallowedTools } : {}),
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
       cwd: opts.cwd ?? process.cwd(),
