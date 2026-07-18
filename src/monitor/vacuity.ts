@@ -49,9 +49,9 @@ function collectAntecedents(formula: Formula, out: Formula[]): void {
     case 'U':
       collectAntecedents(formula.left, out);
       collectAntecedents(formula.right, out);
-      return;
   }
 }
+
 
 export interface VacuityOptions {
   /**
