@@ -5,7 +5,14 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { listFormulas, setFormulaStatus } from './server.js';
-import { addDraft, emptyFormulasFile, hashDescription, saveFormulas, defaultFormulasPath } from '../spec/formulas.js';
+import {
+  addDraft,
+  defaultFormulasPath,
+  emptyFormulasFile,
+  hashDescription,
+  loadFormulas,
+  saveFormulas,
+} from '../spec/formulas.js';
 import { eventually, pred } from '../monitor/formula.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
@@ -107,6 +114,44 @@ test('setFormulaStatus("rejected") is preserved across subsequent lists', async 
     // A second, unrelated read should still see the rejection.
     const second = await listFormulas(specPath);
     assert.equal(second.formulas[0].status, 'rejected');
+  } finally {
+    cleanup();
+  }
+});
+
+test('setFormulaStatus does not clobber a concurrent write that lands between load and save', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    const formulasPath = defaultFormulasPath(specPath);
+    const { id } = writeFormulasFile(formulasPath);
+
+    // Simulate a concurrent writer (e.g. spec-compile appending a draft via
+    // addDraft) landing on disk in the window between setFormulaStatus's
+    // initial load and its write, using the onLoadedForTest seam.
+    const result = setFormulaStatus(specPath, id, 'approved', () => {
+      const existing = loadFormulas(formulasPath)!;
+      const { file: withConcurrentDraft } = addDraft(existing, {
+        behavior: 'auth/login',
+        formula: eventually(pred('http.response', ['/api/login', '500'])),
+        description_hash: hashDescription('User can log in with valid credentials'),
+        predicates_used: ['http.response'],
+        provenance: { compiled_by: 'concurrent-writer', compiled_at: '2026-01-01T00:00:01Z' },
+      });
+      saveFormulas(formulasPath, withConcurrentDraft);
+    });
+
+    assert.deepEqual(result, { ok: true, id, status: 'approved' });
+
+    const { formulas } = await listFormulas(specPath);
+    assert.equal(formulas.length, 2, 'the concurrently-added draft must survive the status write');
+    const approved = formulas.find((f) => f.id === id);
+    assert.equal(approved?.status, 'approved');
+    assert.ok(
+      formulas.some((f) => f.provenance.compiled_by === 'concurrent-writer'),
+      'the concurrent draft must not have been clobbered',
+    );
   } finally {
     cleanup();
   }
