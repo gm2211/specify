@@ -199,6 +199,13 @@ export interface MonitorVerdict {
    * flagged here for burn-in review instead.
    */
   disagreement?: boolean;
+  /**
+   * Set when 'satisfied' rests on a never-fired antecedent (an `implies`
+   * whose left side never held anywhere in the trace) — see
+   * src/monitor/vacuity.ts. A vacuous pass is real but hollow: report it,
+   * never count it as evidence the formula was meaningfully exercised.
+   */
+  vacuous?: boolean;
 }
 
 export interface Evidence {

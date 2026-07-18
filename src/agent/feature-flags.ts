@@ -50,3 +50,19 @@ export function formulaReviewEnabled(): boolean {
 export function faultInjectionEnabled(): boolean {
   return envFlag('SPECIFY_ENABLE_FAULT_INJECTION');
 }
+
+/**
+ * Gate for auto-demotion (src/monitor/formula-stats.ts's
+ * applyRecompileDemotions): when off (default), an approved formula that
+ * disagrees with the LLM's independent verdict is only FLAGGED for
+ * recompilation — it keeps gating verdicts until a human acts. When on, the
+ * flag is also acted on automatically: the formula demotes back to 'draft'
+ * (shadow mode) the next time formulas are loaded for a run, so a drifted
+ * formula stops silently forcing failures while awaiting recompilation.
+ * Deliberately separate and off-by-default from monitorVerdictsEnabled —
+ * telemetry (flagging) is safe to always run; automatically rewriting the
+ * reviewed formulas file is a stronger policy decision.
+ */
+export function monitorAutoDemoteEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_MONITOR_AUTO_DEMOTE');
+}

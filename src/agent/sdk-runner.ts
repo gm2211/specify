@@ -21,7 +21,12 @@ import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
-import { learnedSkillsEnabled, monitorVerdictsEnabled, faultInjectionEnabled } from './feature-flags.js';
+import {
+  learnedSkillsEnabled,
+  monitorVerdictsEnabled,
+  monitorAutoDemoteEnabled,
+  faultInjectionEnabled,
+} from './feature-flags.js';
 import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { cliToolNames } from './cli-mcp.js';
@@ -818,11 +823,24 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // below. Stays empty (=> zero behavior change) whenever formulasForMerge
     // is null — same flag/task gating as the monitor merge itself.
     let probePlan: import('./probe-plan.js').ProbePlan = [];
+    // Lifecycle telemetry (SP-34f): loaded alongside the formulas file so the
+    // merge below can fold this run's verdicts into per-formula stats.
+    // Best-effort — a missing/corrupt stats file starts fresh rather than
+    // failing the run (see formula-stats.ts's loadFormulaStats).
+    let formulaStatsPath: string | undefined;
+    let formulaStatsForMerge: import('../monitor/formula-stats.js').FormulaStatsFile | undefined;
     if (opts.task === 'verify' && opts.spec && monitorVerdictsEnabled()) {
       const { loadFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
       formulasForMerge = loadFormulas(defaultFormulasPath(path.resolve(opts.spec)));
       if (formulasForMerge && formulasForMerge.formulas.length > 0) {
         process.stderr.write(`  Monitor: loaded ${formulasForMerge.formulas.length} compiled formula(s).\n`);
+        try {
+          const { loadFormulaStats, defaultFormulaStatsPath } = await import('../monitor/formula-stats.js');
+          formulaStatsPath = defaultFormulaStatsPath(path.resolve(opts.spec));
+          formulaStatsForMerge = loadFormulaStats(formulaStatsPath);
+        } catch (err) {
+          process.stderr.write(`  Formula stats unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        }
       }
       if (formulasForMerge) {
         const { buildProbePlanWithLog } = await import('./probe-plan.js');
@@ -1155,12 +1173,53 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
               consoleLogs: session ? session.collector.getConsoleLogs() : [],
               ...(session ? { axBaseDir: path.join(opts.outputDir, 'capture') } : {}),
               emit: (type, data) => eventBus.send(type, data, result.sessionId),
+              statsFile: formulaStatsForMerge,
             });
             result.structuredOutput = merged.output;
             if (merged.monitorForcedFailures.length > 0) {
               process.stderr.write(
                 `  Monitor forced ${merged.monitorForcedFailures.length} behavior(s) to failed: ${merged.monitorForcedFailures.join(', ')}\n`,
               );
+            }
+
+            // Lifecycle telemetry (SP-34f): persist the updated stats file and
+            // surface any newly-crossed promotion/drift/recompile flags.
+            // Best-effort — telemetry must never break a completed run.
+            if (merged.formulaStats && formulaStatsPath) {
+              try {
+                const { saveFormulaStats } = await import('../monitor/formula-stats.js');
+                saveFormulaStats(formulaStatsPath, merged.formulaStats.file);
+                if (merged.formulaStats.promotionSuggested.length > 0) {
+                  process.stderr.write(
+                    `  Monitor: promotion suggested for ${merged.formulaStats.promotionSuggested.join(', ')}\n`,
+                  );
+                }
+                if (merged.formulaStats.driftDetected.length > 0) {
+                  process.stderr.write(
+                    `  Monitor: grounding drift detected for ${merged.formulaStats.driftDetected.join(', ')}\n`,
+                  );
+                }
+                if (merged.formulaStats.recompileFlagged.length > 0) {
+                  process.stderr.write(
+                    `  Monitor: recompile flagged for ${merged.formulaStats.recompileFlagged.join(', ')}\n`,
+                  );
+                  if (monitorAutoDemoteEnabled()) {
+                    const { applyRecompileDemotions } = await import('../monitor/formula-stats.js');
+                    const { saveFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
+                    const demotion = applyRecompileDemotions(formulasForMerge, merged.formulaStats.file);
+                    if (demotion.demoted.length > 0 && opts.spec) {
+                      saveFormulas(defaultFormulasPath(path.resolve(opts.spec)), demotion.file);
+                      process.stderr.write(
+                        `  Monitor: auto-demoted to draft: ${demotion.demoted.join(', ')}\n`,
+                      );
+                    }
+                  }
+                }
+              } catch (err) {
+                process.stderr.write(
+                  `  Formula stats persist failed: ${err instanceof Error ? err.message : String(err)}\n`,
+                );
+              }
             }
           } catch (err) {
             // The merge must never lose a completed agent run's output.

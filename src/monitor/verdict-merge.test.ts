@@ -12,8 +12,9 @@ import type { CapturedConsoleEntry, CapturedTraffic } from '../capture/types.js'
 import type { StepObservation } from '../agent/observation.js';
 import type { BehaviorResult } from '../spec/types.js';
 import type { FormulaEntry, FormulasFile, FormulaStatus } from '../spec/formulas.js';
-import { eventually, globally, not, pred, type Formula } from './formula.js';
+import { eventually, globally, implies, not, pred, type Formula } from './formula.js';
 import { canonicalProbeKey } from './predicates.js';
+import { DRIFT_WINDOW, emptyFormulaStatsFile, PROMOTION_STREAK } from './formula-stats.js';
 import {
   buildVerifyTrace,
   isMonitorOnlyFailure,
@@ -440,4 +441,84 @@ test('SP-efp: dom.* probe never sampled (no probes map on any step) is unevaluab
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'passed');
   assert.equal(out.results[0].monitor?.[0].verdict, 'unevaluable');
+});
+
+// -----------------------------------------------------------------------------
+// SP-34f: vacuity + lifecycle telemetry
+// -----------------------------------------------------------------------------
+
+// F(http.request(/api/never-called) -> http.response(/api/never-called, 200)):
+// the antecedent never fires in serverErrorTrace() (which only ever sees
+// /api/session and /api/save), so the implication holds vacuously at
+// position 0 and F is satisfied immediately — a hollow pass.
+const VACUOUS_SAVE = eventually(
+  implies(pred('http.request', ['/api/never-called']), pred('http.response', ['/api/never-called', '200'])),
+);
+
+test('vacuous satisfied formula: verdict is satisfied but flagged vacuous, and emits monitor:vacuous', () => {
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const sink = emitSink();
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, VACUOUS_SAVE, 'approved')),
+    serverErrorTrace(),
+    { emit: sink.emit },
+  );
+
+  const out = merged.output as VerifyOut;
+  assert.equal(out.results[0].monitor?.[0].verdict, 'satisfied');
+  assert.equal(out.results[0].monitor?.[0].vacuous, true);
+  assert.equal(out.results[0].status, 'passed'); // vacuous satisfied still corroborates like any satisfied verdict
+  assert.ok(sink.events.some((e) => e.type === 'monitor:vacuous'));
+});
+
+test('non-vacuous satisfied formula: no vacuous flag, no monitor:vacuous event', () => {
+  const steps = [step(0, { trafficRange: [0, 1], consoleRange: [0, 0] })];
+  const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const sink = emitSink();
+  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')), trace, {
+    emit: sink.emit,
+  });
+
+  const out = merged.output as VerifyOut;
+  assert.equal(out.results[0].monitor?.[0].verdict, 'satisfied');
+  assert.equal(out.results[0].monitor?.[0].vacuous, undefined);
+  assert.ok(!sink.events.some((e) => e.type === 'monitor:vacuous'));
+});
+
+test('formulaStats is absent from the result when opts.statsFile is not provided', () => {
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'draft')), serverErrorTrace());
+  assert.equal(merged.formulaStats, undefined);
+});
+
+test('formulaStats: draft shadow-mode agreement folds into the stats file and reports promotion after a streak', () => {
+  const steps = [step(0, { trafficRange: [0, 1], consoleRange: [0, 0] })];
+  const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+  const file = formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'draft', 'fml-shadow'));
+
+  let statsFile = emptyFormulaStatsFile();
+  let lastPromotion: string[] = [];
+  for (let i = 0; i < PROMOTION_STREAK; i++) {
+    const merged = mergeMonitorVerdicts(output, file, trace, { statsFile });
+    assert.ok(merged.formulaStats, 'statsFile passed in -> formulaStats present on the result');
+    statsFile = merged.formulaStats!.file;
+    lastPromotion = merged.formulaStats!.promotionSuggested;
+  }
+  assert.deepEqual(lastPromotion, ['fml-shadow'], 'promotion suggested on the run that crosses the streak');
+  assert.equal(statsFile.rows['fml-shadow'].agreements, PROMOTION_STREAK);
+});
+
+test('formulaStats: an approved formula satisfied while the LLM fails flags recompile (not drift)', () => {
+  const steps = [step(0, { trafficRange: [0, 1], consoleRange: [0, 0] })];
+  const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'failed', 'Confirmation missing.'));
+  const file = formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved', 'fml-recompile'));
+
+  const merged = mergeMonitorVerdicts(output, file, trace, { statsFile: emptyFormulaStatsFile() });
+  assert.deepEqual(merged.formulaStats!.recompileFlagged, ['fml-recompile']);
+  assert.equal(merged.formulaStats!.file.rows['fml-recompile'].recompileFlagged, true);
+  assert.equal(merged.formulaStats!.driftDetected.length, 0);
 });
