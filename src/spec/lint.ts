@@ -21,6 +21,14 @@ import {
 } from './parser.js';
 import { assessSpecSize, splitSuggestion } from './size-guard.js';
 import { specRootDir } from './paths.js';
+import {
+  loadFormulas,
+  defaultFormulasPath,
+  collectPredicateNames,
+  hashDescription,
+  FormulasLoadError,
+  type FormulaEntry,
+} from './formulas.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -47,6 +55,23 @@ export interface LintResult {
   errors: LintError[];
 }
 
+/**
+ * Optional extra inputs for lint rules that need something the caller can
+ * only obtain asynchronously (e.g. dynamically importing an optional
+ * module). lintRaw/lintPath/lintSpec themselves stay synchronous; callers
+ * that want the unknown-predicate rule active resolve the registry once
+ * (typically at the CLI layer, which is already async) and pass it in here.
+ */
+export interface LintOptions {
+  /**
+   * Known predicate names (src/monitor/predicates.ts's registry), used by
+   * the unknown-predicate formulas rule. Omit to skip that rule — this is
+   * the default so lint works standalone when the registry module doesn't
+   * exist yet or the caller hasn't wired it up.
+   */
+  predicateRegistry?: ReadonlySet<string>;
+}
+
 // ---------------------------------------------------------------------------
 // Raw lint (parse + schema + semantic)
 // ---------------------------------------------------------------------------
@@ -55,7 +80,12 @@ export interface LintResult {
  * Lint a spec from raw YAML/JSON string.
  * Combines parse errors, schema validation errors, and semantic lint rules.
  */
-export function lintRaw(content: string, _sourceName = '<string>', _specPath?: string): LintResult {
+export function lintRaw(
+  content: string,
+  _sourceName = '<string>',
+  _specPath?: string,
+  options?: LintOptions,
+): LintResult {
   const errors: LintError[] = [];
 
   // 1. Parse
@@ -106,7 +136,7 @@ export function lintRaw(content: string, _sourceName = '<string>', _specPath?: s
 
   // 3. Semantic lint
   const spec = data as Spec;
-  errors.push(...lintSpec(spec));
+  errors.push(...lintSpec(spec, _specPath, options));
   const sourcePath = _sourceName !== '-' && _sourceName !== '<string>' ? _sourceName : undefined;
   errors.push(...lintSingleFileSize(content, spec, sourcePath));
 
@@ -118,10 +148,10 @@ export function lintRaw(content: string, _sourceName = '<string>', _specPath?: s
  * Lint a spec source path. The source may be one file or a composed spec
  * directory. Use lintRaw for stdin/string input.
  */
-export function lintPath(specPath: string): LintResult {
+export function lintPath(specPath: string, options?: LintOptions): LintResult {
   try {
     const { spec, provenance } = loadSpecWithProvenance(specPath);
-    const errors = lintSpec(spec, specPath);
+    const errors = lintSpec(spec, specPath, options);
     if (provenance.kind === 'file') {
       const content = fs.readFileSync(specPath, 'utf-8');
       errors.push(...lintSingleFileSize(content, spec, specPath));
@@ -176,7 +206,7 @@ function sourceIssueToLintError(issue: SpecSourceIssue): LintError {
  * Run semantic lint rules on a parsed and schema-validated spec.
  * Returns warnings and errors beyond what JSON Schema can catch.
  */
-export function lintSpec(spec: Spec, _specPath?: string): LintError[] {
+export function lintSpec(spec: Spec, _specPath?: string, options?: LintOptions): LintError[] {
   const errors: LintError[] = [];
 
   // Rule: duplicate area IDs
@@ -244,8 +274,126 @@ export function lintSpec(spec: Spec, _specPath?: string): LintError[] {
 
   if (_specPath) {
     errors.push(...lintDanglingLearnedState(spec, _specPath));
+    errors.push(...lintFormulas(spec, _specPath, undefined, options?.predicateRegistry));
   }
 
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Rule: formulas (specify.formulas.yaml)
+// ---------------------------------------------------------------------------
+
+/**
+ * Lint the compiled-formulas sibling file (specify.formulas.yaml), if
+ * present, against the current spec. Follows the wiring pattern of
+ * lintDanglingLearnedState: called from lintSpec whenever a specPath is
+ * available, no-ops when the file doesn't exist.
+ *
+ * ERROR  — the formulas file itself is unparseable/schema-invalid (surfaced
+ *          as a lint error rather than letting the strict loader throw and
+ *          crash the whole lint run); a formula's `behavior` doesn't resolve
+ *          to a fully-qualified behavior id in the spec; duplicate formula
+ *          ids within the file.
+ * WARNING — a predicate name not found in the predicate registry. The
+ *          registry (src/monitor/predicates.ts) is being built concurrently
+ *          on another branch and may not exist here, and resolving it
+ *          requires an async import — so this rule stays entirely opt-in:
+ *          pass a `predicateRegistry` set (see LintOptions) to activate it.
+ *          With no registry supplied, this rule contributes no rows, which
+ *          keeps this module synchronous and lint usable standalone before
+ *          the registry lands; description_hash no longer matches the
+ *          current behavior description ("stale formula — recompile").
+ */
+export function lintFormulas(
+  spec: Spec,
+  specPath: string,
+  formulasPathOverride?: string,
+  predicateRegistry?: ReadonlySet<string>,
+): LintError[] {
+  const errors: LintError[] = [];
+  const formulasPath = formulasPathOverride ?? defaultFormulasPath(specPath);
+  if (!fs.existsSync(formulasPath)) return errors;
+
+  let file;
+  try {
+    file = loadFormulas(formulasPath);
+  } catch (err) {
+    if (err instanceof FormulasLoadError) {
+      errors.push({
+        path: '/',
+        severity: 'error',
+        message: `${formulasPath}: ${err.message}`,
+        rule: 'formulas-file-invalid',
+      });
+      return errors;
+    }
+    throw err;
+  }
+  if (!file) return errors;
+
+  const fqBehaviors = new Map<string, string>(); // "area/behavior" -> description
+  for (const area of spec.areas) {
+    for (const behavior of area.behaviors) {
+      fqBehaviors.set(`${area.id}/${behavior.id}`, behavior.description);
+    }
+  }
+
+  const seenIds = new Map<string, number>();
+  file.formulas.forEach((entry: FormulaEntry, i: number) => {
+    if (seenIds.has(entry.id)) {
+      errors.push({
+        path: `/formulas/${i}/id`,
+        severity: 'error',
+        message: `Duplicate formula id "${entry.id}" (first at /formulas/${seenIds.get(entry.id)})`,
+        rule: 'duplicate-formula-id',
+      });
+    } else {
+      seenIds.set(entry.id, i);
+    }
+
+    const description = fqBehaviors.get(entry.behavior);
+    if (description === undefined) {
+      errors.push({
+        path: `/formulas/${i}/behavior`,
+        severity: 'error',
+        message: `Formula "${entry.id}" references behavior "${entry.behavior}" which does not exist in the spec.`,
+        rule: 'formula-behavior-not-found',
+      });
+    } else if (hashDescription(description) !== entry.description_hash) {
+      errors.push({
+        path: `/formulas/${i}/description_hash`,
+        severity: 'warning',
+        message: `Formula "${entry.id}" was compiled against a different description of "${entry.behavior}" — stale formula, recompile.`,
+        rule: 'stale-formula',
+      });
+    }
+
+    if (predicateRegistry) {
+      errors.push(...lintUnknownPredicates(entry, i, predicateRegistry));
+    }
+  });
+
+  return errors;
+}
+
+/**
+ * Warn about predicate names not found in the given predicate registry.
+ * Only called when a registry was supplied (see lintFormulas above) — this
+ * function itself doesn't attempt to resolve one.
+ */
+function lintUnknownPredicates(entry: FormulaEntry, index: number, registry: ReadonlySet<string>): LintError[] {
+  const errors: LintError[] = [];
+  for (const name of collectPredicateNames(entry.formula)) {
+    if (!registry.has(name)) {
+      errors.push({
+        path: `/formulas/${index}/formula`,
+        severity: 'warning',
+        message: `Formula "${entry.id}" uses unknown predicate "${name}" — not found in the predicate registry.`,
+        rule: 'unknown-predicate',
+      });
+    }
+  }
   return errors;
 }
 
