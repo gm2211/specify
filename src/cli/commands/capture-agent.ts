@@ -7,6 +7,7 @@
 
 import type { Page } from 'playwright';
 import type { ObservationRecorder } from '../../agent/observation.js';
+import type { ProbePlan, ProbeSpec } from '../../agent/probe-plan.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,6 +52,7 @@ export async function executeCommand(
   cmd: AgentCommand,
   screenshotFn?: (name: string) => Promise<string>,
   recorder?: ObservationRecorder,
+  probePlan?: ProbePlan,
 ): Promise<CommandResult> {
   if (cmd.action === 'done') {
     return { type: 'result', action: 'done', success: true, url: page.url() };
@@ -158,7 +160,12 @@ export async function executeCommand(
     }
 
     if (recorder) {
-      await recorder.endStep({ success: true, screenshot });
+      const sampled = probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
+      await recorder.endStep({
+        success: true,
+        screenshot,
+        ...(sampled ? { probes: sampled.probes, probesTruncated: sampled.truncated } : {}),
+      });
     }
 
     return {
@@ -173,7 +180,12 @@ export async function executeCommand(
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     if (recorder) {
-      await recorder.endStep({ success: false, error: errorMessage });
+      const sampled = probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
+      await recorder.endStep({
+        success: false,
+        error: errorMessage,
+        ...(sampled ? { probes: sampled.probes, probesTruncated: sampled.truncated } : {}),
+      });
     }
 
     return {
@@ -192,4 +204,125 @@ function slugifyUrl(url: string): string {
   } catch {
     return 'page';
   }
+}
+
+// ---------------------------------------------------------------------------
+// Live dom.* probe sampling (SP-efp)
+// ---------------------------------------------------------------------------
+//
+// Same hook point as the AX snapshot (recorder.endStep): after every action,
+// each dom.* predicate named by an approved/draft formula (see
+// src/agent/probe-plan.ts) is evaluated live against the current page and
+// its boolean result is recorded onto the step. A probe that errors or times
+// out is simply OMITTED from the result map — never a thrown error, never a
+// recorded `false` — so predicates.ts's dom.* evalFns correctly read it as
+// 'unevaluable' downstream, exactly mirroring every other predicate's
+// three-outcome contract.
+
+/** Per-probe timeout (ms). A single slow/hung locator must not stall the whole step. */
+const PROBE_TIMEOUT_MS = 500;
+/** Total probe budget per step (ms). Once exceeded, remaining planned probes are skipped for this step. */
+const PROBE_BUDGET_MS = 2000;
+
+/**
+ * Race `promise` against a timeout; rejects if `ms` elapses first.
+ *
+ * NOTE: this races but does NOT cancel the underlying Playwright call — a
+ * locator query that has already started keeps running in the background
+ * after the race rejects (its eventual settlement is absorbed by the
+ * already-settled promise). That's acceptable here because (a) the caller
+ * only omits the probe's key, it never awaits the loser again, (b) the 2s
+ * per-step budget (PROBE_BUDGET_MS) is the secondary guard bounding how much
+ * background work can pile up per step, and (c) Playwright's own default
+ * operation timeouts are the hard stop for any individual straggler.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`probe timed out after ${ms}ms`)), ms);
+    promise.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Evaluate one ProbeSpec live against `page`. Throws on any failure (unknown selector, bad op, page closed, ...) — caller catches and omits the key. */
+async function evalProbe(page: Page, spec: ProbeSpec): Promise<boolean> {
+  const [selector, arg2, arg3] = spec.args;
+  if (typeof selector !== 'string' || selector.length === 0) {
+    throw new Error(`probe ${spec.predicate} missing selector`);
+  }
+
+  switch (spec.predicate) {
+    case 'dom.exists': {
+      const count = await page.locator(selector).count();
+      return count > 0;
+    }
+    case 'dom.visible': {
+      return await page.locator(selector).first().isVisible();
+    }
+    case 'dom.text': {
+      if (typeof arg2 !== 'string') throw new Error('dom.text requires a regex arg');
+      // eslint-disable-next-line security/detect-non-literal-regexp
+      const re = new RegExp(arg2);
+      const text = await page.locator(selector).first().textContent();
+      return text !== null && re.test(text);
+    }
+    case 'dom.count': {
+      const n = Number(arg3);
+      if (!Number.isFinite(n)) throw new Error(`dom.count has non-numeric n: ${String(arg3)}`);
+      const count = await page.locator(selector).count();
+      switch (arg2) {
+        case 'eq':
+          return count === n;
+        case 'gte':
+          return count >= n;
+        case 'lte':
+          return count <= n;
+        case 'gt':
+          return count > n;
+        case 'lt':
+          return count < n;
+        default:
+          throw new Error(`dom.count has unknown op: ${String(arg2)}`);
+      }
+    }
+    default:
+      throw new Error(`unknown live probe predicate: ${spec.predicate}`);
+  }
+}
+
+/**
+ * Sample every probe in `plan` against the current page, bounded by
+ * PROBE_BUDGET_MS total. A probe that errors or times out (PROBE_TIMEOUT_MS)
+ * is omitted from `probes` (never a thrown error, never a recorded `false`).
+ * If the overall budget is exceeded, any remaining un-sampled probes are
+ * simply skipped and `truncated` is set — recorded onto the step so it's
+ * visible in observations.json, not silently dropped.
+ */
+async function sampleProbes(page: Page, plan: ProbePlan): Promise<{ probes: Record<string, boolean>; truncated: boolean }> {
+  const probes: Record<string, boolean> = {};
+  const budgetStart = Date.now();
+  let truncated = false;
+
+  for (const spec of plan) {
+    if (Date.now() - budgetStart > PROBE_BUDGET_MS) {
+      truncated = true;
+      break;
+    }
+    try {
+      probes[spec.key] = await withTimeout(evalProbe(page, spec), PROBE_TIMEOUT_MS);
+    } catch {
+      // Omit the key entirely — predicates.ts's dom.* evalFns read an absent
+      // key as 'unevaluable', matching every other predicate's contract.
+    }
+  }
+
+  return { probes, truncated };
 }

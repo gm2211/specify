@@ -18,6 +18,7 @@ import { executeCommand } from '../cli/commands/capture-agent.js';
 import { eventBus } from './event-bus.js';
 import type { ObservationRecorder } from './observation.js';
 import { isFaultType, type FaultInjector } from './fault-injector.js';
+import type { ProbePlan } from './probe-plan.js';
 
 function promptUser(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
@@ -36,6 +37,7 @@ export function createBrowserMcpServer(
   askUserHandler?: (question: string) => Promise<string>,
   recorder?: ObservationRecorder,
   faultInjector?: FaultInjector,
+  probePlan?: ProbePlan,
 ) {
   const handleAskUser = askUserHandler ?? promptUser;
 
@@ -47,7 +49,7 @@ export function createBrowserMcpServer(
         'Navigate to a URL',
         { url: z.string(), waitUntil: z.string().optional(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'goto', url: args.url, options: { waitUntil: args.waitUntil, timeout: args.timeout } }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'goto', url: args.url, options: { waitUntil: args.waitUntil, timeout: args.timeout } }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -56,7 +58,7 @@ export function createBrowserMcpServer(
         'Click an element by CSS selector',
         { selector: z.string(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'click', selector: args.selector, options: { timeout: args.timeout } }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'click', selector: args.selector, options: { timeout: args.timeout } }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -65,7 +67,7 @@ export function createBrowserMcpServer(
         'Fill an input element by CSS selector',
         { selector: z.string(), value: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'fill', selector: args.selector, value: args.value }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'fill', selector: args.selector, value: args.value }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -74,7 +76,7 @@ export function createBrowserMcpServer(
         'Type text character by character into an element',
         { selector: z.string(), text: z.string(), delay: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'type', selector: args.selector, text: args.text, options: { delay: args.delay } }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'type', selector: args.selector, text: args.text, options: { delay: args.delay } }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -83,7 +85,7 @@ export function createBrowserMcpServer(
         'Select an option from a dropdown by CSS selector',
         { selector: z.string(), value: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'selectOption', selector: args.selector, value: args.value }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'selectOption', selector: args.selector, value: args.value }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -92,7 +94,7 @@ export function createBrowserMcpServer(
         'Hover over an element by CSS selector',
         { selector: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'hover', selector: args.selector }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'hover', selector: args.selector }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -101,7 +103,7 @@ export function createBrowserMcpServer(
         'Press a key on an element by CSS selector',
         { selector: z.string(), key: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'press', selector: args.selector, key: args.key }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'press', selector: args.selector, key: args.key }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -110,7 +112,7 @@ export function createBrowserMcpServer(
         'Take a manual screenshot with an optional name',
         { name: z.string().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'screenshot', name: args.name }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'screenshot', name: args.name }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -119,7 +121,7 @@ export function createBrowserMcpServer(
         'Get the current page HTML content',
         {},
         async () => {
-          const result = await executeCommand(page, { action: 'content' }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'content' }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -128,7 +130,7 @@ export function createBrowserMcpServer(
         'Execute JavaScript in the page context',
         { expression: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'evaluate', expression: args.expression }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'evaluate', expression: args.expression }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -137,7 +139,7 @@ export function createBrowserMcpServer(
         'Get the current page URL',
         {},
         async () => {
-          const result = await executeCommand(page, { action: 'url' }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'url' }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -146,7 +148,7 @@ export function createBrowserMcpServer(
         'Get the current page title',
         {},
         async () => {
-          const result = await executeCommand(page, { action: 'title' }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'title' }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -155,7 +157,7 @@ export function createBrowserMcpServer(
         'Wait for a CSS selector to appear on the page',
         { selector: z.string(), state: z.string().optional(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'waitForSelector', selector: args.selector, options: { state: args.state, timeout: args.timeout } }, screenshotFn, recorder);
+          const result = await executeCommand(page, { action: 'waitForSelector', selector: args.selector, options: { state: args.state, timeout: args.timeout } }, screenshotFn, recorder, probePlan);
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),

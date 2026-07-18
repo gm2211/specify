@@ -598,6 +598,144 @@ const axRole: PredicateDefinition = {
   },
 };
 
+// --- dom.*: live-sampled probes, evaluated over StepObservation.probes -------
+//
+// Unlike every predicate above (grounded in data captured mechanically by the
+// runner and readable POST-HOC from the trace), dom.* predicates name a live
+// DOM query (`document.querySelector`-style) that can only be answered while
+// the page is actually open. Because APPROVED (and draft, for shadow-mode
+// burn-in) formulas exist BEFORE a verify run starts, their dom.* predicate
+// nodes are extracted into a ProbePlan (src/agent/probe-plan.ts) at session
+// start and SAMPLED LIVE at each step (src/cli/commands/capture-agent.ts's
+// executeCommand), recording a plain boolean into
+// `StepObservation.probes[canonicalProbeKey(name, args)]`. The monitor stays
+// a pure function over recorded data: these evalFns do nothing but look that
+// recorded boolean up. A key that was never sampled (formula compiled after
+// the run, probe errored/timed out, or the run predates this feature) is
+// indistinguishable from one that was sampled false at the recording layer —
+// so ABSENCE of the key (not `false`) is what maps to 'unevaluable' here.
+//
+// `canonicalProbeKey` is the single source of truth for turning a predicate
+// name + positional args into the same string on both sides (extraction at
+// probe-plan.ts and lookup here) — see its doc for the exact format.
+
+const DOM_PREDICATE_ARG_NAMES: Record<string, string[]> = {
+  'dom.exists': ['selector'],
+  'dom.visible': ['selector'],
+  'dom.text': ['selector', 'regex'],
+  'dom.count': ['selector', 'op', 'n'],
+};
+
+/**
+ * Canonical probe key for a dom.* predicate invocation: `name({"argName":"value",...})`,
+ * with keys assigned from the predicate's documented positional argument
+ * order (see `DOM_PREDICATE_ARG_NAMES`) and the object JSON.stringify'd for a
+ * stable, dedupe-able, human-legible string, e.g. `dom.visible({"selector":"#toast"})`.
+ * Used identically on both ends of the live-sampling pipeline: probe-plan.ts
+ * extracts this key per predicate node to dedupe a ProbePlan, and
+ * capture-agent.ts's sampler records the live-evaluated boolean under this
+ * exact key on `StepObservation.probes`; the dom.* evalFns below look it up
+ * the same way. A predicate name outside `DOM_PREDICATE_ARG_NAMES` falls back
+ * to keying on the raw args array — still stable and dedupe-able, just not in
+ * the documented `{"argName":...}` shape (not expected in practice, since
+ * only the four dom.* names below are ever passed through this function).
+ */
+export function canonicalProbeKey(name: string, args: string[]): string {
+  const argNames = DOM_PREDICATE_ARG_NAMES[name];
+  if (!argNames) {
+    return `${name}(${JSON.stringify(args)})`;
+  }
+  const obj: Record<string, string> = {};
+  argNames.forEach((argName, i) => {
+    if (args[i] !== undefined) obj[argName] = args[i];
+  });
+  return `${name}(${JSON.stringify(obj)})`;
+}
+
+const DOM_COUNT_OPS = new Set(['eq', 'gte', 'lte', 'gt', 'lt']);
+
+/**
+ * Shared evalFn factory for the four dom.* predicates: validate arg shape,
+ * compute the canonical key, and look it up on the step's recorded probes.
+ * `requiredArgCount` and `validate` gate malformed-arg 'unevaluable' the same
+ * way the other predicates in this file do (see e.g. httpResponse's
+ * Number.isInteger check) — this is purely arg-shape validation and never
+ * touches the live page; the actual DOM query already ran (or didn't) at
+ * capture time.
+ */
+function domProbeDefinition(
+  name: string,
+  requiredArgCount: number,
+  doc: string,
+  examples: string[][],
+  validate?: (args: string[]) => boolean,
+): PredicateDefinition {
+  return {
+    requires: 'step',
+    doc,
+    examples,
+    evalFn(state, args) {
+      const step = asStepObservation(state);
+      if (!step) return 'unevaluable';
+      if (args.length < requiredArgCount) return 'unevaluable';
+      if (validate && !validate(args)) return 'unevaluable';
+      const key = canonicalProbeKey(name, args);
+      const probes = step.probes;
+      if (!probes || !(key in probes)) return 'unevaluable';
+      return probes[key];
+    },
+  };
+}
+
+const domExists = domProbeDefinition(
+  'dom.exists',
+  1,
+  'LIVE PROBE. True iff a live DOM probe recorded at this step found at least one element ' +
+    "matching the CSS `selector` (Playwright locator count > 0). Args: `[selector]`. 'unevaluable' " +
+    "iff the position has no step observation, or no probe for this exact (selector) was sampled at " +
+    'this step (formula compiled after the run, sampling timed out/errored, or the run predates live ' +
+    'probe sampling — see module notes above). Never unevaluable merely because the element was ' +
+    'genuinely absent (that is a recorded `false`).',
+  [['#toast'], ['.cart-item']],
+);
+
+const domVisible = domProbeDefinition(
+  'dom.visible',
+  1,
+  'LIVE PROBE. True iff a live DOM probe recorded at this step found the first element matching ' +
+    "the CSS `selector` to be visible (Playwright locator `isVisible()`). Args: `[selector]`. " +
+    "'unevaluable' iff the position has no step observation or no probe for this exact (selector) " +
+    'was sampled at this step. A selector that matched no element, or matched one that is hidden, ' +
+    'is a recorded `false`, not unevaluable.',
+  [['#toast'], ['[role="alert"]']],
+);
+
+const domText = domProbeDefinition(
+  'dom.text',
+  2,
+  'LIVE PROBE. True iff a live DOM probe recorded at this step found the first element matching ' +
+    "the CSS `selector` to have text content matching `regex`. Args: `[selector, regex]`. " +
+    "'unevaluable' iff `regex` fails to compile as a regex (checked here, independent of sampling), " +
+    "the position has no step observation, or no probe for this exact (selector, regex) was sampled " +
+    'at this step. An element that matched but whose text does not satisfy `regex` (or that has no ' +
+    'text content) is a recorded `false`.',
+  [['#status', 'Order placed']],
+  (args) => safeRegex(args[1]) !== null,
+);
+
+const domCount = domProbeDefinition(
+  'dom.count',
+  3,
+  'LIVE PROBE. True iff a live DOM probe recorded at this step found the number of elements ' +
+    "matching the CSS `selector` to satisfy `count <op> n`, `op` one of `eq|gte|lte|gt|lt`. Args: " +
+    "`[selector, op, n]`. 'unevaluable' iff `op` is not one of the five comparators or `n` does not " +
+    "parse as a finite number (checked here, independent of sampling), the position has no step " +
+    'observation, or no probe for this exact (selector, op, n) was sampled at this step. A count ' +
+    'that fails the comparison is a recorded `false`.',
+  [['.cart-item', 'gte', '1'], ['.error-banner', 'eq', '0']],
+  (args) => DOM_COUNT_OPS.has(args[1]) && Number.isFinite(Number(args[2])),
+);
+
 // ==============================================================================
 // Registry
 // ==============================================================================
@@ -616,6 +754,10 @@ export const predicateRegistry: PredicateRegistry = {
   'page.url': pageUrl,
   'page.title': pageTitle,
   'ax.role': axRole,
+  'dom.exists': domExists,
+  'dom.visible': domVisible,
+  'dom.text': domText,
+  'dom.count': domCount,
 };
 
 // ==============================================================================
