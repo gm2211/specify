@@ -76,6 +76,37 @@ test('getVerifyPrompt: an active fault plan describes the rules and warns agains
   assert.ok(prompt.toLowerCase().includes('regression'));
 });
 
+test('getCapturePrompt: no exploration hints leaves the prompt unchanged', () => {
+  const base = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml');
+  assert.ok(!base.includes('Coverage-directed exploration hints'));
+  assert.equal(getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml', ''), base);
+});
+
+test('getCapturePrompt: exploration hints are appended when supplied', () => {
+  const hints = '## Coverage-directed exploration hints\n\n- [never visited] state `/settings`';
+  const prompt = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml', hints);
+  assert.ok(prompt.includes('Coverage-directed exploration hints'));
+  assert.ok(prompt.includes('/settings'));
+  // Still contains the base exploration strategy.
+  assert.ok(prompt.includes('Exploration Strategy'));
+});
+
+test('getVerifyPrompt: no exploration hints leaves the prompt unchanged', () => {
+  const base = getVerifyPrompt('version: "2"\nname: test');
+  assert.ok(!base.includes('Coverage-directed exploration hints'));
+  assert.equal(getVerifyPrompt('version: "2"\nname: test', undefined, ''), base);
+});
+
+test('getVerifyPrompt: exploration hints coexist with an active fault plan', () => {
+  const hints = '## Coverage-directed exploration hints\n\n- [never visited] state `/settings`';
+  const prompt = getVerifyPrompt('version: "2"\nname: test', {
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+  }, hints);
+  assert.ok(prompt.includes('Fault injection is active'));
+  assert.ok(prompt.includes('Coverage-directed exploration hints'));
+});
+
 test('getCapturePrompt includes assumptions format', () => {
   const prompt = getCapturePrompt('http://localhost:3000', '/tmp/spec.yaml');
   assert.ok(prompt.includes('assumptions:'), 'should show assumptions YAML');

@@ -48,6 +48,19 @@ ${ruleLines}
 `;
 }
 
+/**
+ * Render the conditional coverage-directed exploration-hints block. `hints` is
+ * the pre-rendered markdown from src/model/coverage.ts's renderExplorationHints
+ * (already '' for an empty model / first capture). Returns '' — leaving the
+ * prompt byte-for-byte unchanged — whenever there is nothing to steer toward,
+ * exactly like renderFaultInjectionSection.
+ */
+function renderExplorationHintsSection(hints?: string): string {
+  if (!hints) return '';
+  return `
+${hints}`;
+}
+
 export function getReplayPrompt(captureDir: string, url: string): string {
   return `You are Specify, a replay-and-diff agent. You have captured traffic from
 a reference system and must verify equivalent behavior on a target.
@@ -66,10 +79,15 @@ a reference system and must verify equivalent behavior on a target.
 Replay traffic from ${captureDir} against ${url}.`;
 }
 
-export function getCapturePrompt(url: string, specOutputPath: string): string {
+export function getCapturePrompt(
+  url: string,
+  specOutputPath: string,
+  explorationHints?: string,
+): string {
   return `You are Specify, an autonomous web application explorer. Your job is to
 thoroughly discover and document the behavior of a web application, producing a
 behavioral spec (v2 format).
+${renderExplorationHintsSection(explorationHints)}
 
 ## Exploration Strategy
 
@@ -168,10 +186,14 @@ Do NOT ask for things you can figure out yourself. Be autonomous 99% of the time
 Explore ${url} and generate a comprehensive behavioral spec.`;
 }
 
-export function getVerifyPrompt(specYaml: string, faultPlan?: FaultPlan): string {
+export function getVerifyPrompt(
+  specYaml: string,
+  faultPlan?: FaultPlan,
+  explorationHints?: string,
+): string {
   return `You are Specify, a verification agent. You have a behavioral spec (v2 format)
 and your job is to verify every behavior in the spec against the live system.
-${renderFaultInjectionSection(faultPlan)}
+${renderFaultInjectionSection(faultPlan)}${renderExplorationHintsSection(explorationHints)}
 
 ## CLI targets
 If the spec's target is \`type: cli\`, you do NOT have Bash. The \`cli_run\` tool
