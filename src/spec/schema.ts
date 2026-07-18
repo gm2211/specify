@@ -65,6 +65,21 @@ export const specSchema = {
               additionalProperties: { type: 'string' },
               description: 'Default headers for API requests.',
             },
+            probes: {
+              type: 'object',
+              additionalProperties: false,
+              description: 'Opt-in configuration for state-mutating session-guarantee probes.',
+              properties: {
+                enabled: {
+                  type: 'boolean',
+                  description: 'Must be true for probes to run against this target.',
+                },
+              },
+            },
+            production: {
+              type: 'boolean',
+              description: 'When true, hard-blocks state-mutating probes regardless of other flags.',
+            },
           },
         },
       ],
