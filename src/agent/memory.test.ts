@@ -23,6 +23,22 @@ test('targetKey derives stable keys from URLs and CLI binaries', () => {
   assert.equal(targetKey({ type: 'web' }), 'unknown');
 });
 
+test('targetKey: faultsActive suffixes the key so fault runs never share a memory file with the healthy target', () => {
+  assert.equal(
+    targetKey({ type: 'web', url: 'https://staging.example.com/path', faultsActive: true }),
+    'web_staging.example.com+faults',
+  );
+  assert.equal(
+    targetKey({ type: 'cli', binary: './specify', faultsActive: true }),
+    'cli_specify+faults',
+  );
+  // Absent/false is unchanged from the base key.
+  assert.equal(
+    targetKey({ type: 'web', url: 'https://staging.example.com/path', faultsActive: false }),
+    'web_staging.example.com',
+  );
+});
+
 test('memoryPath is scoped per spec_id and target_key', () => {
   const p = memoryPath('/tmp/app/spec.yaml', 'My App', { type: 'web', url: 'https://x.test' });
   assert.ok(p.includes('.specify/memory'));

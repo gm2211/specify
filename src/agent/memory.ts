@@ -66,6 +66,16 @@ export interface TargetDescriptor {
   type: 'web' | 'api' | 'cli';
   url?: string;
   binary?: string;
+  /**
+   * Set when a seeded fault plan (src/agent/fault-injector.ts) is active
+   * for this run. Suffixes the derived key with '+faults' so synthetic,
+   * injected failures write to a separate memory file and never poison the
+   * playbooks/quirks learned for the healthy target — those rows get
+   * auto-reinjected into future prompts, so mixing them with fault-run
+   * artifacts would teach the agent that a manufactured 500 is a real quirk
+   * of the target.
+   */
+  faultsActive?: boolean;
 }
 
 /**
@@ -74,18 +84,20 @@ export interface TargetDescriptor {
  * example.com); a CLI spec keys on its binary path.
  */
 export function targetKey(target: TargetDescriptor): string {
+  let base: string;
   if (target.type === 'cli' && target.binary) {
-    return 'cli_' + safe(path.basename(target.binary));
-  }
-  if (target.url) {
+    base = 'cli_' + safe(path.basename(target.binary));
+  } else if (target.url) {
     try {
       const u = new URL(target.url);
-      return 'web_' + safe(u.host);
+      base = 'web_' + safe(u.host);
     } catch {
-      return 'web_' + safe(target.url);
+      base = 'web_' + safe(target.url);
     }
+  } else {
+    base = 'unknown';
   }
-  return 'unknown';
+  return target.faultsActive ? base + '+faults' : base;
 }
 
 /** Collapse anything that isn't a safe filesystem char. */

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { envFlag, learnedSkillsEnabled, monitorVerdictsEnabled } from './feature-flags.js';
+import { envFlag, learnedSkillsEnabled, monitorVerdictsEnabled, faultInjectionEnabled } from './feature-flags.js';
 
 test('envFlag defaults to false', () => {
   const prev = process.env.SPECIFY_TEST_FLAG;
@@ -27,6 +27,21 @@ test('envFlag accepts explicit truthy values only', () => {
   } finally {
     if (prev === undefined) delete process.env.SPECIFY_TEST_FLAG;
     else process.env.SPECIFY_TEST_FLAG = prev;
+  }
+});
+
+test('faultInjectionEnabled reads SPECIFY_ENABLE_FAULT_INJECTION and defaults off', () => {
+  const prev = process.env.SPECIFY_ENABLE_FAULT_INJECTION;
+  try {
+    delete process.env.SPECIFY_ENABLE_FAULT_INJECTION;
+    assert.equal(faultInjectionEnabled(), false);
+    process.env.SPECIFY_ENABLE_FAULT_INJECTION = 'true';
+    assert.equal(faultInjectionEnabled(), true);
+    process.env.SPECIFY_ENABLE_FAULT_INJECTION = 'false';
+    assert.equal(faultInjectionEnabled(), false);
+  } finally {
+    if (prev === undefined) delete process.env.SPECIFY_ENABLE_FAULT_INJECTION;
+    else process.env.SPECIFY_ENABLE_FAULT_INJECTION = prev;
   }
 });
 

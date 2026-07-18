@@ -21,7 +21,7 @@ import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
-import { learnedSkillsEnabled, monitorVerdictsEnabled } from './feature-flags.js';
+import { learnedSkillsEnabled, monitorVerdictsEnabled, faultInjectionEnabled } from './feature-flags.js';
 import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
 import { cliToolNames } from './cli-mcp.js';
@@ -83,6 +83,13 @@ export interface SdkRunnerOptions {
     layeredContext?: string;
     skillsText?: string;
   };
+  /**
+   * Seeded fault plan for resilience-regression testing (src/agent/fault-injector.ts).
+   * Only takes effect when SPECIFY_ENABLE_FAULT_INJECTION is set — see
+   * faultInjectionEnabled() in feature-flags.ts. Ignored otherwise, so
+   * passing this with the flag off is a no-op (zero behavior change).
+   */
+  faultPlan?: import('./fault-injector.js').FaultPlan;
 }
 
 export interface SdkRunnerResult {
@@ -269,6 +276,7 @@ interface BrowserSession {
   observationRecorder: import('./observation.js').ObservationRecorder;
   page: import('playwright').Page;
   mcpServer: McpServerConfig;
+  faultInjector?: import('./fault-injector.js').FaultInjector;
 }
 
 async function launchBrowserSession(
@@ -277,11 +285,18 @@ async function launchBrowserSession(
   headed: boolean,
   serverName: string,
   askUserHandler?: (question: string) => Promise<string>,
+  faultPlan?: import('./fault-injector.js').FaultPlan,
 ): Promise<BrowserSession> {
   const { chromium } = await import('playwright');
   const { CaptureCollector } = await import('./capture.js');
   const { createBrowserMcpServer } = await import('./browser-mcp.js');
   const { ObservationRecorder } = await import('./observation.js');
+
+  let faultInjector: import('./fault-injector.js').FaultInjector | undefined;
+  if (faultInjectionEnabled() && faultPlan) {
+    const { FaultInjector } = await import('./fault-injector.js');
+    faultInjector = new FaultInjector(faultPlan);
+  }
 
   const parsedUrl = new URL(url);
   const contextOptions: Record<string, unknown> = {
@@ -304,6 +319,7 @@ async function launchBrowserSession(
     targetUrl: url,
     hostFilter: new URL(url).hostname,
   });
+  if (faultInjector) collector.setInjector(faultInjector);
 
   const browser = await chromium.launch({ headless: !headed });
   const context = await browser.newContext(contextOptions as Parameters<typeof browser.newContext>[0]);
@@ -330,12 +346,13 @@ async function launchBrowserSession(
     serverName,
     askUserHandler,
     observationRecorder,
+    faultInjector,
   );
 
-  return { browser, collector, observationRecorder, page, mcpServer };
+  return { browser, collector, observationRecorder, page, mcpServer, faultInjector };
 }
 
-function browserToolNames(serverName: string): string[] {
+function browserToolNames(serverName: string, includeFaultTools: boolean): string[] {
   return [
     `mcp__${serverName}__browser_goto`, `mcp__${serverName}__browser_click`,
     `mcp__${serverName}__browser_fill`, `mcp__${serverName}__browser_type`,
@@ -343,7 +360,11 @@ function browserToolNames(serverName: string): string[] {
     `mcp__${serverName}__browser_press`, `mcp__${serverName}__browser_screenshot`,
     `mcp__${serverName}__browser_content`, `mcp__${serverName}__browser_evaluate`,
     `mcp__${serverName}__browser_url`, `mcp__${serverName}__browser_title`,
-    `mcp__${serverName}__browser_wait_for`, `mcp__${serverName}__ask_user`,
+    `mcp__${serverName}__browser_wait_for`,
+    ...(includeFaultTools
+      ? [`mcp__${serverName}__browser_inject_fault`, `mcp__${serverName}__browser_clear_faults`]
+      : []),
+    `mcp__${serverName}__ask_user`,
   ];
 }
 
@@ -738,6 +759,21 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   // from one run can be correlated by that id.
   const runId = `run_${randomUUID().slice(0, 8)}`;
 
+  // Learning-loop hygiene: whether faults have (ever) been active for this
+  // run. This drives the '+faults' suffix on the memory target key —
+  // synthetic, injected failures must never poison playbooks/quirks learned
+  // for the healthy target (those rows are auto-reinjected into future
+  // prompts). Evaluated at WRITE time, not session start: the agent can
+  // activate faults mid-run via browser_inject_fault, after the memory
+  // scope was constructed, so the scope's target exposes this as a live
+  // getter and each memory write re-resolves the key. The injector's
+  // hasEverActivated() flag is sticky (never reset by clear()) — once a
+  // session has been exposed to injected faults, everything it learns is
+  // suspect and stays in the '+faults' scope.
+  const staticFaultsActive = faultInjectionEnabled() && !!opts.faultPlan && opts.faultPlan.rules.length > 0;
+  const faultsEverActive = (): boolean =>
+    staticFaultsActive || sessions.some((s) => s.faultInjector?.hasEverActivated() ?? false);
+
   // Session indexer: persist every event from this run into a SQLite + FTS5
   // store for cross-session recall. Spec-scoped DB by default.
   let sessionStore: SessionStore | undefined;
@@ -796,7 +832,10 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       sessions.push(localSession);
       mcpServers.remote = remoteSession.mcpServer;
       mcpServers.local = localSession.mcpServer;
-      allowedBrowserTools.push(...browserToolNames('remote'), ...browserToolNames('local'));
+      allowedBrowserTools.push(
+        ...browserToolNames('remote', !!remoteSession.faultInjector),
+        ...browserToolNames('local', !!localSession.faultInjector),
+      );
     } else if (opts.url) {
       // Single browser session for capture/verify/replay
       process.stderr.write('  Launching browser...\n');
@@ -806,10 +845,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         !!opts.headed,
         'browser',
         opts.askUserHandler,
+        opts.faultPlan,
       );
       sessions.push(session);
       mcpServers.browser = session.mcpServer;
-      allowedBrowserTools.push(...browserToolNames('browser'));
+      allowedBrowserTools.push(...browserToolNames('browser', !!session.faultInjector));
       process.stderr.write('  Browser ready.\n');
     } else if (opts.spec && opts.task !== 'compile') {
       // No web/remote+local URL set — this may be a cli-target run. Launch
@@ -921,6 +961,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           type: spec.target.type as 'web' | 'api' | 'cli',
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
+          // Live getter, not a snapshot: mid-run browser_inject_fault calls
+          // flip this for all subsequent memory writes (see faultsEverActive).
+          get faultsActive(): boolean {
+            return faultsEverActive();
+          },
         };
         const provider: MemoryProvider = honchoFromEnv() ?? defaultMemoryProvider();
         const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
@@ -979,6 +1024,10 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           type: spec.target.type as 'web' | 'api' | 'cli',
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
+          // Live getter — see faultsEverActive above.
+          get faultsActive(): boolean {
+            return faultsEverActive();
+          },
         };
         const memoryScope: MemoryScope = verifyMemoryScope ?? {
           specPath: opts.spec,
@@ -1141,6 +1190,14 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     throw lastError;
   } finally {
     for (const session of sessions) {
+      // Defensive cleanup: never let an agent-scoped fault rule (added via
+      // browser_inject_fault) outlive this run, even if the agent forgot to
+      // call browser_clear_faults or the run ended abnormally.
+      try {
+        session.faultInjector?.clear();
+      } catch {
+        // best-effort
+      }
       try {
         session.observationRecorder.save();
       } catch {

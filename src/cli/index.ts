@@ -712,6 +712,39 @@ async function main(): Promise<void> {
           const targetUrl = url
             ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
 
+          // Seeded fault-scenario injection (resilience regression testing,
+          // not simulation). Gated behind SPECIFY_ENABLE_FAULT_INJECTION —
+          // when the flag is off, --fault/--fault-seed are parsed but
+          // silently ignored (with a warning) so behavior is unchanged.
+          // Faults only apply to the agent tier: the scripted tier replays
+          // generated tests without the runner's route interception.
+          const faultArgs = getAllArgs(verifyArgs, '--fault');
+          let faultPlan: import('../agent/fault-injector.js').FaultPlan | undefined;
+          if (faultArgs.length > 0) {
+            const { faultInjectionEnabled } = await import('../agent/feature-flags.js');
+            if (!faultInjectionEnabled()) {
+              process.stderr.write(`  ${c.dim('--fault specified but SPECIFY_ENABLE_FAULT_INJECTION is not set; ignoring.')}\n`);
+            } else if (verifyMode === 'scripted') {
+              process.stderr.write(`  ${c.dim('--fault has no effect in --mode scripted (no agent browser session); ignoring.')}\n`);
+            } else {
+              const { parseFaultArg } = await import('../agent/fault-injector.js');
+              const rules: import('../agent/fault-injector.js').FaultRule[] = [];
+              for (const arg of faultArgs) {
+                const rule = parseFaultArg(arg);
+                if (!rule) {
+                  process.stderr.write(`  ${c.dim(`Ignoring malformed --fault "${arg}" (expected <urlPattern>=<500|timeout|abort|empty>)`)}\n`);
+                  continue;
+                }
+                rules.push(rule);
+              }
+              const seedArg = getArg(verifyArgs, '--fault-seed');
+              const seed = seedArg !== undefined ? Number(seedArg) : 1;
+              if (rules.length > 0) {
+                faultPlan = { seed: Number.isFinite(seed) ? seed : 1, rules };
+              }
+            }
+          }
+
           if (verifyMode === 'scripted') {
             // ---------------------------------------------------------------
             // Scripted tier (SP-bjr): no agent, no LLM cost. Executes
@@ -836,7 +869,7 @@ async function main(): Promise<void> {
 
             const { runSpecifyAgent, extractBool } = await import('../agent/sdk-runner.js');
             const { getVerifyPrompt } = await import('../agent/prompts.js');
-            const prompt = getVerifyPrompt(specToYaml(promptSpec));
+            const prompt = getVerifyPrompt(specToYaml(promptSpec), faultPlan);
 
             // --with-context <path/to/run-context.json>: "as-of-that-run"
             // re-verify. Loads a bundle recorded by a prior run and injects
@@ -898,6 +931,7 @@ async function main(): Promise<void> {
                   debug,
                   onBehaviorProgress: writeBehaviorProgress,
                   ...(contextOverride ? { contextOverride } : {}),
+                  ...(faultPlan ? { faultPlan } : {}),
                 });
                 result = agentRun.result;
                 costUsd = agentRun.costUsd;
