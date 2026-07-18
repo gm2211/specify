@@ -14,6 +14,13 @@ import {
   saveFormulas,
 } from '../spec/formulas.js';
 import { eventually, pred } from '../monitor/formula.js';
+import {
+  defaultFormulaStatsPath,
+  emptyFormulaStatsFile,
+  recordFormulaVerdict,
+  saveFormulaStats,
+  PROMOTION_STREAK,
+} from '../monitor/formula-stats.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-review-server-'));
@@ -66,6 +73,83 @@ test('listFormulas joins each entry with its behavior description, pretty formul
     assert.ok(entry.witnesses.accepting.length >= 1);
     assert.ok(entry.witnesses.rejecting.length >= 1);
     assert.equal(entry.status, 'draft');
+  } finally {
+    cleanup();
+  }
+});
+
+test('listFormulas: no stats file yet -> stats null, all flags false', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    writeFormulasFile(defaultFormulasPath(specPath));
+
+    const { formulas } = await listFormulas(specPath);
+    assert.equal(formulas[0].stats, null);
+    assert.equal(formulas[0].promotionSuggested, false);
+    assert.equal(formulas[0].driftFlagged, false);
+    assert.equal(formulas[0].recompileFlagged, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('listFormulas: surfaces a promotion suggestion once a draft formula crosses the agreement streak', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    const { id } = writeFormulasFile(defaultFormulasPath(specPath));
+
+    let statsFile = emptyFormulaStatsFile();
+    for (let i = 0; i < PROMOTION_STREAK; i++) {
+      statsFile = recordFormulaVerdict(statsFile, {
+        formulaId: id,
+        formulaStatus: 'draft',
+        verdict: 'satisfied',
+        llmStatus: 'passed',
+        vacuous: false,
+      }).file;
+    }
+    saveFormulaStats(defaultFormulaStatsPath(specPath), statsFile);
+
+    const { formulas } = await listFormulas(specPath);
+    assert.equal(formulas[0].promotionSuggested, true);
+    assert.equal(formulas[0].stats?.agreements, PROMOTION_STREAK);
+  } finally {
+    cleanup();
+  }
+});
+
+test('listFormulas: recompileFlagged only surfaces for approved formulas, not drafts', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeSpecFile(specPath);
+    const formulasPath = defaultFormulasPath(specPath);
+    const { id } = writeFormulasFile(formulasPath);
+
+    const statsFile = recordFormulaVerdict(emptyFormulaStatsFile(), {
+      formulaId: id,
+      formulaStatus: 'approved',
+      verdict: 'satisfied',
+      llmStatus: 'failed',
+      vacuous: false,
+    }).file;
+    saveFormulaStats(defaultFormulaStatsPath(specPath), statsFile);
+
+    // Still draft: the flag is tallied in stats but not surfaced as
+    // recompileFlagged until the formula is actually approved.
+    const { formulas: whileDraft } = await listFormulas(specPath);
+    assert.equal(whileDraft[0].recompileFlagged, false);
+    assert.equal(whileDraft[0].stats?.recompileFlagged, true, 'still recorded in the raw stats row');
+
+    // Approve it: now the same stats row should surface as recompileFlagged.
+    const result = setFormulaStatus(specPath, id, 'approved');
+    assert.ok('ok' in result);
+    const { formulas: whileApproved } = await listFormulas(specPath);
+    assert.equal(whileApproved[0].recompileFlagged, true);
   } finally {
     cleanup();
   }

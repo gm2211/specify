@@ -18,6 +18,12 @@ import { specRootDir } from '../spec/paths.js';
 import { render } from '../monitor/formula.js';
 import { generateWitnesses, type WitnessResult } from '../monitor/witness.js';
 import {
+  defaultFormulaStatsPath,
+  isPromotionCandidate,
+  loadFormulaStats,
+  type FormulaStatsRow,
+} from '../monitor/formula-stats.js';
+import {
   defaultFormulasPath,
   loadFormulas,
   saveFormulas,
@@ -63,6 +69,17 @@ export type FormulaListEntry = FormulaEntry & {
   behaviorDescription: string | null;
   prettyFormula: string;
   witnesses: WitnessResult;
+  /**
+   * Run-over-run telemetry (src/monitor/formula-stats.ts), null when the
+   * formula has never been evaluated in a merged verify run yet.
+   */
+  stats: FormulaStatsRow | null;
+  /** Draft only: agreement streak with the LLM has crossed the promotion threshold. */
+  promotionSuggested: boolean;
+  /** Grounding drift flagged: predicates likely stopped resolving against the app. */
+  driftFlagged: boolean;
+  /** Approved only: disagreed with the LLM's independent verdict — flagged for recompilation. */
+  recompileFlagged: boolean;
 };
 
 /**
@@ -84,12 +101,21 @@ export async function listFormulas(resolvedSpec: string): Promise<{ formulas: Fo
   const file = loadFormulas(defaultFormulasPath(resolvedSpec));
   if (!file) return { formulas: [] };
 
-  const formulas = file.formulas.map((entry) => ({
-    ...entry,
-    behaviorDescription: descriptionByBehavior.get(entry.behavior) ?? null,
-    prettyFormula: render(entry.formula),
-    witnesses: witnessesFor(entry),
-  }));
+  const statsFile = loadFormulaStats(defaultFormulaStatsPath(resolvedSpec));
+
+  const formulas = file.formulas.map((entry) => {
+    const stats = statsFile.rows[entry.id] ?? null;
+    return {
+      ...entry,
+      behaviorDescription: descriptionByBehavior.get(entry.behavior) ?? null,
+      prettyFormula: render(entry.formula),
+      witnesses: witnessesFor(entry),
+      stats,
+      promotionSuggested: entry.status === 'draft' && !!stats && isPromotionCandidate(stats),
+      driftFlagged: !!stats?.driftFlagged,
+      recompileFlagged: entry.status === 'approved' && !!stats?.recompileFlagged,
+    };
+  });
   return { formulas };
 }
 

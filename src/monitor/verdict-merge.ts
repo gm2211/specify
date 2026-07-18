@@ -43,6 +43,16 @@
  * files ARE on disk already (ObservationRecorder.captureAx writes them
  * incrementally per-step; only observations.json waits for save()), so
  * `ax.role` works at merge time given `axBaseDir` = the capture output dir.
+ *
+ * LIFECYCLE TELEMETRY (SP-34f, optional — pass `opts.statsFile`): every
+ * verdict computed here is also folded into a FormulaStatsFile
+ * (./formula-stats.ts) — per-formula run history that backs shadow-mode
+ * promotion suggestions, grounding-drift flags, and recompile-on-disagreement
+ * flags. A 'satisfied' verdict is additionally checked for vacuity
+ * (./vacuity.ts: did the formula's antecedent ever actually fire in this
+ * trace?) — a vacuous pass is labeled on the verdict (`vacuous: true`) and
+ * counted as neither shadow-mode agreement nor disagreement, so a formula
+ * can't "earn" promotion purely by never being exercised.
  */
 
 import type { CapturedConsoleEntry, CapturedTraffic } from '../capture/types.js';
@@ -58,6 +68,8 @@ import {
   type HttpTraceEvent,
   type ConsoleTraceEvent,
 } from './predicates.js';
+import { isVacuouslySatisfied } from './vacuity.js';
+import { recordFormulaVerdict, type FormulaStatsFile } from './formula-stats.js';
 
 // ---------------------------------------------------------------------------
 // Trace construction from in-memory run data
@@ -165,13 +177,38 @@ interface VerifyOutput {
   [key: string]: unknown;
 }
 
-export type MonitorEventType = 'monitor:violation' | 'monitor:disagreement';
+export type MonitorEventType =
+  | 'monitor:violation'
+  | 'monitor:disagreement'
+  | 'monitor:vacuous'
+  | 'monitor:promotion_suggested'
+  | 'monitor:drift_detected'
+  | 'monitor:recompile_flagged';
 
 export interface MergeMonitorOptions {
   /** Base dir for AX snapshot files (the capture outputDir). Enables ax.role. */
   axBaseDir?: string;
-  /** Event sink for 'monitor:violation' / 'monitor:disagreement'. */
+  /** Event sink for the MonitorEventType union. */
   emit?: (type: MonitorEventType, data: Record<string, unknown>) => void;
+  /**
+   * Existing formula-stats file (src/monitor/formula-stats.ts) to fold this
+   * run's verdicts into. Omit to skip telemetry entirely (no
+   * `formulaStats` on the result). Persistence is the caller's job — this
+   * function is pure and returns the updated file rather than writing it.
+   */
+  statsFile?: FormulaStatsFile;
+}
+
+/** Telemetry produced this run, present only when `opts.statsFile` was provided. */
+export interface FormulaStatsUpdate {
+  /** The updated stats file — persist this (see formula-stats.ts's saveFormulaStats). */
+  file: FormulaStatsFile;
+  /** Draft formula ids whose agreement streak crossed the promotion threshold THIS run. */
+  promotionSuggested: string[];
+  /** Formula ids whose grounding-drift flag was newly set THIS run. */
+  driftDetected: string[];
+  /** Approved formula ids whose recompile flag was newly set THIS run. */
+  recompileFlagged: string[];
 }
 
 export interface MergeMonitorResult {
@@ -185,6 +222,8 @@ export interface MergeMonitorResult {
   monitorForcedFailures: string[];
   /** Total formula verdicts attached across all behaviors. */
   verdictsAttached: number;
+  /** Present iff opts.statsFile was provided (see FormulaStatsUpdate). */
+  formulaStats?: FormulaStatsUpdate;
 }
 
 function hasResultsArray(output: unknown): output is VerifyOutput {
@@ -237,6 +276,11 @@ export function mergeMonitorVerdicts(
   const monitorForcedFailures: string[] = [];
   let verdictsAttached = 0;
 
+  let statsFile = opts.statsFile;
+  const promotionSuggested: string[] = [];
+  const driftDetected: string[] = [];
+  const recompileFlagged: string[] = [];
+
   const mergedResults = structuredOutput.results.map((result): BehaviorResult => {
     const formulas = typeof result.id === 'string' ? byBehavior.get(result.id) : undefined;
     if (!formulas || formulas.length === 0) return result;
@@ -251,6 +295,19 @@ export function mergeMonitorVerdicts(
         describeWitness: describeWitnessState,
       });
 
+      // Vacuity: only a 'satisfied' verdict can be vacuous (an implication
+      // whose antecedent never fired trivially "holds"); violated/
+      // inconclusive/unevaluable verdicts are never vacuous.
+      // traceComplete: true is deliberate and differs from the verdict
+      // evaluation above — the recorded trace IS the complete record of the
+      // run window, so "did the antecedent ever fire during this run?" is
+      // fully answerable (see VacuityOptions in vacuity.ts). The prefix flag
+      // on the verdict models the system's ongoing life beyond the run,
+      // which is irrelevant to this existence question.
+      const vacuous =
+        evaluated.verdict === 'satisfied' &&
+        isVacuouslySatisfied(entry.formula, trace, evaluator, { traceComplete: true });
+
       const verdict: MonitorVerdict = {
         formula_id: entry.id,
         status: entry.status as 'draft' | 'approved',
@@ -258,12 +315,21 @@ export function mergeMonitorVerdicts(
         ...(evaluated.witnessStep !== undefined ? { witness_step: evaluated.witnessStep } : {}),
         ...(evaluated.witnessDetail !== undefined ? { witness_detail: evaluated.witnessDetail } : {}),
         trace_length: trace.length,
+        ...(vacuous ? { vacuous: true } : {}),
       };
 
       // Flag monitor-satisfied vs LLM-failed disagreements on both approved
       // and shadow-mode draft entries (drafts: advisory metadata only).
       if (evaluated.verdict === 'satisfied' && result.status === 'failed') {
         verdict.disagreement = true;
+      }
+
+      if (vacuous) {
+        emit('monitor:vacuous', {
+          behavior: result.id,
+          formula_id: entry.id,
+          witness_step: evaluated.witnessStep,
+        });
       }
 
       if (entry.status === 'approved') {
@@ -292,6 +358,32 @@ export function mergeMonitorVerdicts(
 
       verdicts.push(verdict);
       verdictsAttached++;
+
+      // Lifecycle telemetry (SP-34f): fold this verdict into the stats file,
+      // keyed on the LLM's OWN status for this behavior (result.status),
+      // independent of whatever the merge below decides for `merged.status`.
+      if (statsFile) {
+        const recorded = recordFormulaVerdict(statsFile, {
+          formulaId: entry.id,
+          formulaStatus: entry.status as 'draft' | 'approved',
+          verdict: evaluated.verdict,
+          llmStatus: result.status,
+          vacuous,
+        });
+        statsFile = recorded.file;
+        if (recorded.promotionJustSuggested) {
+          promotionSuggested.push(entry.id);
+          emit('monitor:promotion_suggested', { behavior: result.id, formula_id: entry.id });
+        }
+        if (recorded.driftJustDetected) {
+          driftDetected.push(entry.id);
+          emit('monitor:drift_detected', { behavior: result.id, formula_id: entry.id });
+        }
+        if (recorded.recompileJustFlagged) {
+          recompileFlagged.push(entry.id);
+          emit('monitor:recompile_flagged', { behavior: result.id, formula_id: entry.id });
+        }
+      }
     }
 
     const merged: BehaviorResult = { ...result, monitor: verdicts };
@@ -330,7 +422,14 @@ export function mergeMonitorVerdicts(
     pass: failed === 0,
   };
 
-  return { output, monitorForcedFailures, verdictsAttached };
+  return {
+    output,
+    monitorForcedFailures,
+    verdictsAttached,
+    ...(statsFile
+      ? { formulaStats: { file: statsFile, promotionSuggested, driftDetected, recompileFlagged } }
+      : {}),
+  };
 }
 
 /**
@@ -357,6 +456,8 @@ export interface RunMergeInputs {
   consoleLogs: readonly CapturedConsoleEntry[];
   axBaseDir?: string;
   emit?: (type: MonitorEventType, data: Record<string, unknown>) => void;
+  /** See MergeMonitorOptions.statsFile. Omit to skip lifecycle telemetry. */
+  statsFile?: FormulaStatsFile;
 }
 
 /** One-call wrapper used by runSpecifyAgent: build the trace from in-memory run data, then merge. */
@@ -369,5 +470,6 @@ export function mergeMonitorVerdictsForRun(
   return mergeMonitorVerdicts(structuredOutput, formulasFile, trace, {
     axBaseDir: inputs.axBaseDir,
     emit: inputs.emit,
+    statsFile: inputs.statsFile,
   });
 }
