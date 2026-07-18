@@ -6,6 +6,7 @@
  */
 
 import type { Page } from 'playwright';
+import type { ObservationRecorder } from '../../agent/observation.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -49,9 +50,17 @@ export async function executeCommand(
   page: Page,
   cmd: AgentCommand,
   screenshotFn?: (name: string) => Promise<string>,
+  recorder?: ObservationRecorder,
 ): Promise<CommandResult> {
   if (cmd.action === 'done') {
     return { type: 'result', action: 'done', success: true, url: page.url() };
+  }
+
+  if (recorder) {
+    const args: Record<string, unknown> = {};
+    if ('selector' in cmd) args.selector = cmd.selector;
+    if ('url' in cmd) args.url = cmd.url;
+    await recorder.beginStep(cmd.action, args);
   }
 
   try {
@@ -148,6 +157,10 @@ export async function executeCommand(
       screenshot = await screenshotFn(label);
     }
 
+    if (recorder) {
+      await recorder.endStep({ success: true, screenshot });
+    }
+
     return {
       type: 'result',
       action: cmd.action,
@@ -157,12 +170,18 @@ export async function executeCommand(
       ...(data !== undefined ? { data } : {}),
     };
   } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+
+    if (recorder) {
+      await recorder.endStep({ success: false, error: errorMessage });
+    }
+
     return {
       type: 'result',
       action: cmd.action,
       success: false,
       url: page.url(),
-      error: err instanceof Error ? err.message : String(err),
+      error: errorMessage,
     };
   }
 }

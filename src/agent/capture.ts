@@ -302,6 +302,9 @@ export class CaptureCollector {
       consoleFile: 'console.json',
       screenshotFiles,
       summaryFile: 'summary.txt',
+      ...(fs.existsSync(path.join(this.outputDir, 'observations.json'))
+        ? { observationsFile: 'observations.json' }
+        : {}),
     };
 
     fs.writeFileSync(path.join(this.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');

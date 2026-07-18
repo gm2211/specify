@@ -164,13 +164,22 @@ For each behavior, produce a result with:
 - **action_trace**: ordered, step-by-step log of what you did (see below)
 - **rationale**: why you judged it passed or failed
 
-### Action trace — the QA playback
-For every behavior, fill \`action_trace\` with an ordered list of the steps you
-actually performed. This is the playback a human will read to audit your work,
-so write it like a QA engineer narrating their test. Each entry has:
+### Action trace — your annotation, not the evidence of record
+The runner itself records a ground-truth, per-step trace of every browser
+action you take — automatically, with no effort from you. It captures the
+URL before/after, success/failure, an accessibility snapshot, and the
+traffic/console activity attributable to each step. That recorded trace is
+the primary evidence; nothing you write can be lost or misremembered.
+
+\`action_trace\` is your own annotation layered on top of that ground truth —
+useful for a human skimming your reasoning, but it is not itself proof of
+anything. Write it like a QA engineer narrating their test, and where it's
+natural, reference the recorded step index (e.g. "step 4") so a reader can
+cross-check your narration against the runner's trace. Each entry has:
 - **type**: one of navigation | click | fill | screenshot | observation | assertion | wait | other
-- **description**: one sentence in your own words, e.g. "Clicked the Start button",
-  "Observed countdown showing 37 seconds", "Waited 37 seconds for countdown to end"
+- **description**: one sentence in your own words, e.g. "Clicked the Start button
+  (step 4)", "Observed countdown showing 37 seconds", "Waited 37 seconds for
+  countdown to end"
 - **screenshot**: (optional) the absolute file path returned by any browser tool
   that took a screenshot. Copy it verbatim from the tool result.
 

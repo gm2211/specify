@@ -136,6 +136,7 @@ function sleep(ms: number): Promise<void> {
 interface BrowserSession {
   browser: import('playwright').Browser;
   collector: import('./capture.js').CaptureCollector;
+  observationRecorder: import('./observation.js').ObservationRecorder;
   page: import('playwright').Page;
   mcpServer: McpServerConfig;
 }
@@ -150,6 +151,7 @@ async function launchBrowserSession(
   const { chromium } = await import('playwright');
   const { CaptureCollector } = await import('./capture.js');
   const { createBrowserMcpServer } = await import('./browser-mcp.js');
+  const { ObservationRecorder } = await import('./observation.js');
 
   const parsedUrl = new URL(url);
   const contextOptions: Record<string, unknown> = {
@@ -179,17 +181,28 @@ async function launchBrowserSession(
   const page = await context.newPage();
   collector.attachToPage(page);
 
+  const observationRecorder = new ObservationRecorder({
+    outputDir: captureOutputDir,
+    page,
+    collector,
+  });
+
+  // Step 0 = the initial goto. Without this, the runner-recorded trace would
+  // be invisible for the navigation that establishes the starting page.
+  await observationRecorder.beginStep('goto', { url: navigateUrl });
   await page.goto(navigateUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
-  await collector.screenshot(page, 'initial');
+  const initialScreenshot = await collector.screenshot(page, 'initial');
+  await observationRecorder.endStep({ success: true, screenshot: initialScreenshot });
 
   const mcpServer = createBrowserMcpServer(
     page,
     (name: string) => collector.screenshot(page, name),
     serverName,
     askUserHandler,
+    observationRecorder,
   );
 
-  return { browser, collector, page, mcpServer };
+  return { browser, collector, observationRecorder, page, mcpServer };
 }
 
 function browserToolNames(serverName: string): string[] {
@@ -797,6 +810,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     throw lastError;
   } finally {
     for (const session of sessions) {
+      try {
+        session.observationRecorder.save();
+      } catch {
+        // Observation trace is best-effort; never break session teardown.
+      }
       session.collector.save();
       await session.browser.close().catch(() => {});
     }
