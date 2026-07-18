@@ -193,6 +193,91 @@ export interface BehaviorResult {
    * satisfied that cannot overturn an LLM fail).
    */
   verdict_source?: 'monitor' | 'llm' | 'monitor+llm';
+  /**
+   * Deterministic session-guarantee checks, added POST-HOC by the runner after
+   * a probe workload finishes — NEVER produced by the agent itself (same
+   * pattern as `monitor` / `repro`). Present only on behaviors that bind to a
+   * data-consistency guarantee (see src/agent/session-guarantees.ts). Each
+   * entry is one guarantee verdict over the marker-tagged probe op log, with
+   * the op-level witness chain that decided it.
+   */
+  guarantees?: GuaranteeCheck[];
+  /**
+   * Who decided this behavior's status when guarantees bound to it. Absent when
+   * no guarantee bound. 'guarantee' = a violated guarantee overrode the LLM (a
+   * fully deterministic anomaly is ground truth); 'guarantee+llm' = a
+   * satisfied guarantee corroborated the LLM's pass; 'llm' = guarantees bound
+   * but the LLM's verdict stands (all bound guarantees held-or-inconclusive,
+   * and no guarantee can overturn an LLM fail).
+   */
+  guarantee_source?: 'guarantee' | 'llm' | 'guarantee+llm';
+}
+
+// ---------------------------------------------------------------------------
+// Session-guarantee checks (epic SP-jdb, Tier 4)
+// ---------------------------------------------------------------------------
+
+/**
+ * The session guarantees the probe-log checker deterministically verifies.
+ * See src/agent/session-guarantees.ts.
+ *  - `read-your-writes`: a read after a completed create/update must reflect
+ *    the written marker.
+ *  - `monotonic-reads`: once a marker is observed in a read/list, a later read
+ *    must not lose it (absent an intervening delete or overwriting update).
+ *  - `no-resurrection`: after a completed delete, the marker must not reappear.
+ *  - `create-appears-in-list`: a completed create's marker must appear in a
+ *    subsequent list (subject to a configurable eventual-consistency window).
+ */
+export type GuaranteeKind =
+  | 'read-your-writes'
+  | 'monotonic-reads'
+  | 'no-resurrection'
+  | 'create-appears-in-list';
+
+/**
+ * Three-outcome verdict, mirroring the probe outcome discipline: an
+ * indeterminate op never yields a false anomaly — it widens the acceptable
+ * outcomes and makes any dependent check `inconclusive`.
+ */
+export type GuaranteeVerdict = 'holds' | 'violated' | 'inconclusive';
+
+/**
+ * One op in a guarantee's evidence chain. Mirrors the load-bearing fields of a
+ * probe-workload ProbeOpRecord (kept as an inline union so this shared types
+ * module does not depend on the agent layer that produces the records).
+ */
+export interface GuaranteeWitnessOp {
+  opId: string;
+  type: 'create' | 'read' | 'list' | 'update' | 'delete';
+  outcome: 'ok' | 'fail' | 'indeterminate';
+  /** The marker written or expected-to-be-observed by this op (null if none). */
+  marker: string | null;
+  /** ms epoch when the op's outcome was known (ProbeOpRecord.completeTs). */
+  ts: number;
+}
+
+/** One guarantee verdict over the probe op log, with its evidence chain. */
+export interface GuaranteeCheck {
+  guarantee: GuaranteeKind;
+  /** Entity type whose CRUD session this check concerns. */
+  entity: string;
+  verdict: GuaranteeVerdict;
+  /**
+   * Ordered op-level witness chain: the write(s) that established the expected
+   * state and the observation that confirmed or contradicted it. This is the
+   * anomaly's evidence — which ops, which markers, which timestamps.
+   */
+  witness: GuaranteeWitnessOp[];
+  /** Human-readable statement of what was checked and what was found. */
+  detail: string;
+  /** For `inconclusive`: why no verdict could be reached (e.g. indeterminate op). */
+  inconclusiveReason?: string;
+  /**
+   * For a `create-appears-in-list`/`monotonic` observation excused by the
+   * eventual-consistency tolerance window: the note recording the tolerance
+   * that was applied.
+   */
+  toleranceNote?: string;
 }
 
 /**
@@ -237,7 +322,15 @@ export interface ActionTraceEntry {
   /**
    * What kind of step this is. The agent picks the closest match.
    */
-  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  type:
+    | 'navigation'
+    | 'click'
+    | 'fill'
+    | 'screenshot'
+    | 'observation'
+    | 'assertion'
+    | 'wait'
+    | 'other';
   /**
    * One-sentence description of the step in the agent's own words, e.g.
    * "Clicked the Start button" or "Observed countdown at 37 seconds".
