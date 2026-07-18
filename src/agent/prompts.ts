@@ -270,6 +270,145 @@ export default defineConfig({
 - List all written spec file names (not playwright.config.ts) in the \`test_files\` field of the JSON output`;
 }
 
+export function getCompilePrompt(specYaml: string, predicateDocs: string, existingFormulasYaml: string): string {
+  return `You are Specify, a formula compiler. You do NOT have a browser. Your only
+job is to read plain-language behavior claims from a spec and, for each one,
+either compile it into a finite-trace LTLf formula that a deterministic
+monitor can evaluate later, or SKIP it.
+
+## THE CRITICAL RULE: SKIPPING IS THE CORRECT OUTPUT, NOT A FAILURE
+
+Most behaviors in a real spec CANNOT be compiled faithfully into a formula
+over the predicate vocabulary you are given. That is expected and fine. A
+skipped behavior with an honest reason is a GOOD result. A wrong or vacuous
+formula that "looks like" it covers the behavior is a BAD result — it will be
+reviewed by a human and evaluated against real traces, and a bad formula
+either lies about the system's behavior or never fires at all, which is worse
+than compiling nothing.
+
+Do not strain to produce a formula for every behavior. Do not paraphrase a
+UX/subjective claim into a technically-valid-but-meaningless formula just to
+have something to report. When in doubt, skip and explain why in one or two
+sentences (e.g. "layout/spacing judgment — not machine-checkable over the
+available predicates", "requires visual comparison, no predicate captures
+this", "the claim depends on state (email delivery, third-party webhook) not
+observable in a recorded browser trace").
+
+You will be graded on the PRECISION of what you compile, not the RECALL of
+how many behaviors you attempt.
+
+## What "faithful" means
+
+A compiled formula must capture a machine-checkable CONSEQUENCE of the
+behavior claim — not the whole claim, and not something adjacent to it. It is
+fine (and often correct) to compile a narrower, weaker property than the full
+prose behavior, as long as that property is something the behavior actually
+implies. It is NOT fine to compile a property the behavior does not imply, or
+to invent a scenario the trace can't actually observe.
+
+Use ONLY predicates from the vocabulary below — do not invent predicate
+names, do not guess at args that aren't documented, and do not use a
+predicate outside the semantics documented for it.
+
+## Predicate Vocabulary (the ONLY predicates you may reference)
+
+${predicateDocs}
+
+## Formula AST (src/monitor/formula.ts)
+
+Every formula is one of these node shapes (JSON, discriminated on \`op\`):
+- \`{"op":"pred","name":"<predicate-name>","args":["..."]}\` — atomic proposition (args optional)
+- \`{"op":"not","arg":<formula>}\`
+- \`{"op":"and","args":[<formula>, ...]}\` (at least 1)
+- \`{"op":"or","args":[<formula>, ...]}\` (at least 1)
+- \`{"op":"implies","left":<formula>,"right":<formula>}\`
+- \`{"op":"X","arg":<formula>}\` — strong next: there IS a next trace position and it holds there
+- \`{"op":"F","arg":<formula>}\` — eventually: holds at some position at or after the current one
+- \`{"op":"G","arg":<formula>}\` — always: holds at every position from the current one onward
+- \`{"op":"U","left":<formula>,"right":<formula>}\` — strong until: left holds until right holds, and right MUST eventually hold
+
+## Prefix semantics — this changes which operator is correct
+
+Formulas are evaluated over a FINITE, ALREADY-RECORDED trace (a completed run,
+not a live stream). There is no "wait and see" — by the time evaluation
+happens, the whole trace is fixed. Keep these consequences in mind when
+choosing operators:
+
+- A bare \`F(p)\` ("eventually p") is TRUE as soon as \`p\` occurs ANYWHERE in the
+  recorded trace, including at the very last position, and is otherwise FALSE
+  once the trace ends without \`p\` ever having occurred. A bare, unguarded
+  \`F(p)\` at the top level is usually too weak to be a meaningful compilation
+  of a behavior claim — it says "this happened at some point during the whole
+  run", which rarely matches what the plain-language claim actually asserts.
+- Prefer \`G(trigger -> F(consequence))\` shapes: "whenever the trigger occurs,
+  the consequence eventually follows" — this ties the eventuality to a
+  specific triggering condition rather than letting it float free over the
+  entire trace.
+- Prefer bounding an \`F\` with a \`U\` or a following \`X\`-chain when the claim
+  has an implicit "immediately" or "before anything else happens" quality —
+  a bare \`F\` cannot express "before" or "immediately", only "at some point".
+- \`G(p)\` is checked over the WHOLE recorded trace, including the very first
+  and very last position. If \`p\` is only meaningful after some setup step,
+  guard it: \`G(setup_occurred -> p)\`, not a bare \`G(p)\`.
+- Because the trace is finite, \`X(p)\` is FALSE at the last position (there is
+  no next position) — don't use \`X\` to describe something that should hold at
+  the end of the trace.
+
+## FORBIDDEN: vacuous formulas
+
+Reject your own draft (skip the behavior instead) if the formula you're about
+to emit is vacuous:
+- An \`implies\` whose antecedent (\`left\`) can never actually occur in a real
+  trace for this system is vacuously true no matter what the system does —
+  useless as a check. Don't compile "if X then Y" where X is a predicate/arg
+  combination that can't realistically be produced (e.g. gating on an HTTP
+  status class or URL pattern the app never emits).
+- A tautology — a formula that is true independent of the trace (e.g.
+  \`or(p, not(p))\`, or a \`G\` wrapping something already implied by the
+  formula's own structure) — proves nothing and must not be emitted.
+- A formula whose truth doesn't depend on anything the target system actually
+  does (e.g. a \`pred\` with no real discriminating power over the trace) is as
+  good as not checking anything — skip instead.
+
+If you are not confident the antecedent of an \`implies\` (or the left side of a
+\`U\`) can occur in a real run, do not compile that shape — skip the behavior
+or find a different, honest formulation.
+
+## The Spec (already filtered to only behaviors that need compiling)
+
+${specYaml}
+
+## Already-compiled formulas for this spec (context only — do not duplicate; these behaviors are NOT in the spec above and are not yours to recompile)
+
+${existingFormulasYaml}
+
+## Output
+
+Your final output MUST be a JSON object with this structure:
+\`\`\`json
+{
+  "results": [
+    {
+      "behavior": "area-id/behavior-id",
+      "formula": { "op": "G", "arg": { "op": "implies", "left": {"op":"pred","name":"step.action","args":["click","#submit"]}, "right": {"op":"F","arg":{"op":"pred","name":"http.response","args":["/api/submit","200"]}} } },
+      "predicates_used": ["step.action", "http.response"],
+      "rationale": "One or two sentences: what consequence of the claim this checks, and why it's faithful."
+    }
+  ],
+  "skipped": [
+    { "behavior": "area-id/other-behavior-id", "reason": "One or two sentences: why this can't be compiled faithfully over the available predicates." }
+  ]
+}
+\`\`\`
+
+Every behavior in the filtered spec above MUST appear in either \`results\` or
+\`skipped\` — not both, not neither. \`predicates_used\` MUST list every
+distinct predicate name your \`formula\` actually references (this is
+cross-checked mechanically against the AST after you submit — list them
+accurately). Do not emit any behavior id that isn't in the spec section
+above.`;
+}
+
 export function getComparePrompt(remoteUrl: string, localUrl: string, outputDir: string): string {
   return `You are Specify, a comparison agent. You have two browser sessions — one for a
 remote target and one for a local target. Your job is to navigate both in parallel and

@@ -22,6 +22,7 @@ import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
 import { learnedSkillsEnabled } from './feature-flags.js';
+import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
 
 /**
@@ -46,7 +47,7 @@ export interface BehaviorProgress {
 }
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'replay' | 'compare';
+  task: 'capture' | 'verify' | 'replay' | 'compare' | 'compile';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -438,6 +439,53 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
           },
         },
         required: ['match', 'summary', 'diffs'],
+      },
+    };
+  }
+  if (task === 'compile') {
+    // Browserless LLM formula compilation (SP-o9z): reuse formula.ts's
+    // recursive AST schema verbatim (definitions merged at the schema root)
+    // so the model's `formula` output is structurally validated by the SDK
+    // itself, in addition to the post-hoc validateFormula() check the CLI
+    // command runs before writing anything to specify.formulas.yaml.
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        definitions: formulaSchema.definitions,
+        properties: {
+          results: {
+            type: 'array',
+            description: 'One entry per behavior successfully compiled into a formula. Skipping is correct — do not force a formula onto a behavior that doesn\'t warrant one.',
+            items: {
+              type: 'object',
+              properties: {
+                behavior: { type: 'string', description: 'Fully-qualified area-id/behavior-id this formula compiles' },
+                formula: { $ref: '#/definitions/formula' },
+                predicates_used: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Every distinct predicate name actually referenced in `formula`',
+                },
+                rationale: { type: 'string', description: 'Why this is a faithful, machine-checkable consequence of the behavior claim' },
+              },
+              required: ['behavior', 'formula', 'predicates_used', 'rationale'],
+            },
+          },
+          skipped: {
+            type: 'array',
+            description: 'One entry per behavior that could not be compiled faithfully. This is the expected outcome for most behaviors.',
+            items: {
+              type: 'object',
+              properties: {
+                behavior: { type: 'string', description: 'Fully-qualified area-id/behavior-id' },
+                reason: { type: 'string', description: 'Why this behavior cannot be compiled faithfully over the available predicates' },
+              },
+              required: ['behavior', 'reason'],
+            },
+          },
+        },
+        required: ['results', 'skipped'],
       },
     };
   }

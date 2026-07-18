@@ -19,6 +19,7 @@
  *   specify spec split      --spec <path> --output <dir>
  *   specify spec guide
  *   specify spec migrate-id  <old-fq-id> <new-fq-id> [--spec <path>]
+ *   specify spec compile     [--spec <path>] [--behavior <fq-id> ...] [--force]
  *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
@@ -108,6 +109,18 @@ function getArg(args: string[], flag: string): string | undefined {
   const value = args[idx + 1];
   if (value.length > 1 && value.startsWith('-')) return '';
   return value;
+}
+
+/** Collect every value for a repeatable flag (e.g. `--behavior a/b --behavior c/d`). */
+function getAllArgs(args: string[], flag: string): string[] {
+  const values: string[] = [];
+  for (let i = 0; i < args.length; i++) {
+    if (args[i] === flag && i + 1 < args.length) {
+      values.push(args[i + 1]);
+      i++;
+    }
+  }
+  return values;
 }
 
 /**
@@ -229,6 +242,7 @@ ${c.bold('Advanced:')}
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec generate')}    Generate a spec from capture data
   ${c.cyan('spec migrate-id')}  Rewrite learned-state keys after a behavior/area id rename
+  ${c.cyan('spec compile')}     Compile behaviors into LTLf formulas for deterministic verify
 
 ${c.bold('Infrastructure:')}
   ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
@@ -400,6 +414,15 @@ async function main(): Promise<void> {
         spec: resolveSpecArg(rest, ctx),
         oldId: positionals[0] ?? '',
         newId: positionals[1] ?? '',
+      }, ctx);
+
+    } else if (noun === 'spec' && verb === 'compile') {
+      const { specCompile } = await import('./commands/spec-compile.js');
+      exitCode = await specCompile({
+        spec: resolveSpecArg(rest, ctx),
+        behavior: getAllArgs(rest, '--behavior'),
+        force: hasFlag(rest, '--force'),
+        debug,
       }, ctx);
 
     } else if (noun === 'capture') {
