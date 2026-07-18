@@ -193,6 +193,50 @@ test('recompile flag: an approved formula satisfied while the LLM failed gets fl
   assert.equal(second.recompileJustFlagged, false, 'already flagged — does not re-fire');
 });
 
+test('recompile flag: violated while the LLM passed does NOT flag — the asymmetric policy already acts on it', () => {
+  const result = record(emptyFormulaStatsFile(), {
+    formulaId: 'fml-working',
+    formulaStatus: 'approved',
+    verdict: 'violated',
+    llmStatus: 'passed',
+  });
+  assert.equal(result.row.recompileFlagged, false, 'a violation the LLM missed is the formula WORKING, not drifting');
+  assert.equal(result.recompileJustFlagged, false);
+  assert.equal(result.row.disagreements, 1, 'still a disagreement for streak purposes');
+  assert.equal(result.row.consecutiveAgreements, 0);
+});
+
+test('recompile flag: a vacuous satisfied pass while the LLM failed does not flag', () => {
+  const result = record(emptyFormulaStatsFile(), {
+    formulaId: 'fml-vacuous',
+    formulaStatus: 'approved',
+    verdict: 'satisfied',
+    llmStatus: 'failed',
+    vacuous: true,
+  });
+  assert.equal(result.row.recompileFlagged, false);
+  assert.equal(result.recompileJustFlagged, false);
+});
+
+test('llmStatus skipped is neutral: no streak advance, no streak reset, no recompile flag', () => {
+  let file = emptyFormulaStatsFile();
+  file = record(file, { verdict: 'satisfied', llmStatus: 'passed' }).file; // streak 1
+  const skipped = record(file, { verdict: 'satisfied', llmStatus: 'skipped' });
+  assert.equal(skipped.row.consecutiveAgreements, 1, 'streak neither advances nor resets');
+  assert.equal(skipped.row.agreements, 1);
+  assert.equal(skipped.row.disagreements, 0);
+
+  const skippedViolated = record(skipped.file, {
+    formulaId: 'fml-abc',
+    formulaStatus: 'approved',
+    verdict: 'violated',
+    llmStatus: 'skipped',
+  });
+  assert.equal(skippedViolated.row.consecutiveAgreements, 1, 'violated + skipped is also neutral');
+  assert.equal(skippedViolated.row.disagreements, 0);
+  assert.equal(skippedViolated.row.recompileFlagged, false);
+});
+
 test('recompile flag: draft formulas never set it, even on the equivalent disagreement shape', () => {
   const result = record(emptyFormulaStatsFile(), {
     formulaId: 'fml-draft-only',

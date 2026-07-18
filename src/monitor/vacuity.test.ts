@@ -29,8 +29,8 @@ function evaluatorFrom(table: Record<string, boolean[]>) {
 test('isVacuouslySatisfied: false when the formula has no implies node', () => {
   const trace = buildTrace(3);
   const evaluator = evaluatorFrom({ a: [true, true, true] });
-  assert.equal(isVacuouslySatisfied(pred('a'), trace, evaluator), false);
-  assert.equal(isVacuouslySatisfied(globally(pred('a')), trace, evaluator), false);
+  assert.equal(isVacuouslySatisfied(pred('a'), trace, evaluator, { traceComplete: true }), false);
+  assert.equal(isVacuouslySatisfied(globally(pred('a')), trace, evaluator, { traceComplete: true }), false);
 });
 
 test('isVacuouslySatisfied: true when the antecedent never held anywhere in the trace', () => {
@@ -44,7 +44,7 @@ test('isVacuouslySatisfied: true when the antecedent never held anywhere in the 
   // implication holds vacuously at every position.
   const result = evaluate(formula, trace, evaluator, { traceComplete: true });
   assert.equal(result.verdict, 'satisfied');
-  assert.equal(isVacuouslySatisfied(formula, trace, evaluator), true);
+  assert.equal(isVacuouslySatisfied(formula, trace, evaluator, { traceComplete: true }), true);
 });
 
 test('isVacuouslySatisfied: false when the antecedent fires at least once and the consequence holds', () => {
@@ -56,7 +56,7 @@ test('isVacuouslySatisfied: false when the antecedent fires at least once and th
   const formula = globally(implies(pred('submit'), pred('saved')));
   const result = evaluate(formula, trace, evaluator, { traceComplete: true });
   assert.equal(result.verdict, 'satisfied');
-  assert.equal(isVacuouslySatisfied(formula, trace, evaluator), false, 'antecedent fired and held meaningfully');
+  assert.equal(isVacuouslySatisfied(formula, trace, evaluator, { traceComplete: true }), false, 'antecedent fired and held meaningfully');
 });
 
 test('isVacuouslySatisfied: an unevaluable antecedent is not treated as evidence of vacuity', () => {
@@ -66,7 +66,20 @@ test('isVacuouslySatisfied: an unevaluable antecedent is not treated as evidence
     saved: [true, true, true],
   });
   const formula = globally(implies(pred('submit'), pred('saved')));
-  assert.equal(isVacuouslySatisfied(formula, trace, evaluator), false);
+  assert.equal(isVacuouslySatisfied(formula, trace, evaluator, { traceComplete: true }), false);
+});
+
+test('isVacuouslySatisfied: refuses to claim vacuity on an incomplete trace', () => {
+  const trace = buildTrace(4);
+  const evaluator = evaluatorFrom({
+    submit: [false, false, false, false],
+    saved: [false, false, false, false],
+  });
+  const formula = globally(implies(pred('submit'), pred('saved')));
+  // Same never-fired-antecedent fixture as the positive test above — but a
+  // partial trace cannot prove the antecedent never fired (it may simply not
+  // have been captured yet), so the guard must return false.
+  assert.equal(isVacuouslySatisfied(formula, trace, evaluator, { traceComplete: false }), false);
 });
 
 test('isVacuouslySatisfied: nested implies inside and/or/not is still found', () => {
@@ -77,8 +90,8 @@ test('isVacuouslySatisfied: nested implies inside and/or/not is still found', ()
     c: [true, true, true],
   });
   const formula = and(implies(pred('a'), pred('b')), pred('c'));
-  assert.equal(isVacuouslySatisfied(formula, trace, evaluator), true);
+  assert.equal(isVacuouslySatisfied(formula, trace, evaluator, { traceComplete: true }), true);
 
   const formulaNot = not(implies(pred('a'), pred('b')));
-  assert.equal(isVacuouslySatisfied(formulaNot, trace, evaluator), true);
+  assert.equal(isVacuouslySatisfied(formulaNot, trace, evaluator, { traceComplete: true }), true);
 });

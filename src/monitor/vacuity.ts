@@ -53,6 +53,25 @@ function collectAntecedents(formula: Formula, out: Formula[]): void {
   }
 }
 
+export interface VacuityOptions {
+  /**
+   * Whether `trace` is the COMPLETE record of the observation window. The
+   * "did the antecedent ever fire?" question is only answerable on a
+   * complete record — on a partial/truncated trace the antecedent may
+   * simply not have been captured yet, and labeling that "vacuous" would be
+   * a false positive (which, downstream, would wrongly neutralize
+   * shadow-mode agreement evidence and stall promotion). When false, this
+   * function refuses to claim vacuity and returns false.
+   *
+   * NOTE this is a different question from the prefix semantics used for
+   * formula VERDICTS (verdict-merge.ts evaluates with traceComplete: false
+   * because the run is a truncated window of the system's ongoing life).
+   * The runner's recorded trace IS the complete record of what happened
+   * during the run window, so the merge passes true here.
+   */
+  traceComplete: boolean;
+}
+
 /**
  * True iff `formula` has at least one `implies` node whose antecedent
  * definitely never held anywhere in `trace` (so any 'satisfied' verdict for
@@ -64,7 +83,12 @@ export function isVacuouslySatisfied(
   formula: Formula,
   trace: Trace,
   evaluator: PredicateEvaluator,
+  opts: VacuityOptions,
 ): boolean {
+  // A partial trace cannot prove the antecedent never fired — refuse to
+  // claim vacuity rather than risk a false positive (see VacuityOptions).
+  if (!opts.traceComplete) return false;
+
   const antecedents: Formula[] = [];
   collectAntecedents(formula, antecedents);
   if (antecedents.length === 0) return false;

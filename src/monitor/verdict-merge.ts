@@ -298,8 +298,15 @@ export function mergeMonitorVerdicts(
       // Vacuity: only a 'satisfied' verdict can be vacuous (an implication
       // whose antecedent never fired trivially "holds"); violated/
       // inconclusive/unevaluable verdicts are never vacuous.
+      // traceComplete: true is deliberate and differs from the verdict
+      // evaluation above — the recorded trace IS the complete record of the
+      // run window, so "did the antecedent ever fire during this run?" is
+      // fully answerable (see VacuityOptions in vacuity.ts). The prefix flag
+      // on the verdict models the system's ongoing life beyond the run,
+      // which is irrelevant to this existence question.
       const vacuous =
-        evaluated.verdict === 'satisfied' && isVacuouslySatisfied(entry.formula, trace, evaluator);
+        evaluated.verdict === 'satisfied' &&
+        isVacuouslySatisfied(entry.formula, trace, evaluator, { traceComplete: true });
 
       const verdict: MonitorVerdict = {
         formula_id: entry.id,

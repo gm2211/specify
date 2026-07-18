@@ -207,10 +207,15 @@ export function recordFormulaVerdict(file: FormulaStatsFile, input: RecordVerdic
   }
 
   // Agreement: neutral (neither agree nor disagree) for inconclusive,
-  // unevaluable, and vacuous-satisfied passes — none of those are evidence
-  // the formula's determination tracks the LLM's independent judgement.
+  // unevaluable, vacuous-satisfied passes, AND LLM-skipped behaviors — none
+  // of those are evidence the formula's determination tracks (or fails to
+  // track) the LLM's independent judgement. Skipped in particular: the LLM
+  // never rendered a verdict to agree or disagree with, so the streak
+  // neither advances nor resets.
   let agree: boolean | undefined;
   if (input.verdict === 'inconclusive' || input.verdict === 'unevaluable') {
+    agree = undefined;
+  } else if (input.llmStatus === 'skipped') {
     agree = undefined;
   } else if (input.verdict === 'satisfied' && input.vacuous) {
     agree = undefined;
@@ -249,13 +254,22 @@ export function recordFormulaVerdict(file: FormulaStatsFile, input: RecordVerdic
     }
   }
 
-  // Recompile flag: an approved formula whose verdict disagreed with the
-  // LLM's independent call (satisfied-but-LLM-failed is the only case the
-  // asymmetric merge policy leaves unresolved — a violated approved formula
-  // forces the behavior to failed, so there's no "disagreement" left to
-  // recompile over there; it's already been acted on).
+  // Recompile flag: ONLY the satisfied-but-LLM-failed direction. That is
+  // the one disagreement the asymmetric merge policy leaves unresolved (the
+  // formula quietly missed a real failure — a recompile candidate). The
+  // opposite direction — violated while the LLM passed — is already acted
+  // on by the merge (monitor wins, behavior forced to failed) and is the
+  // formula WORKING, so it must never flag recompile. Vacuous passes are
+  // excluded too: a never-exercised implication trivially "holding" while
+  // the LLM fails says nothing about the compiled consequence.
   let recompileJustFlagged = false;
-  if (input.formulaStatus === 'approved' && agree === false && !row.recompileFlagged) {
+  if (
+    input.formulaStatus === 'approved' &&
+    input.verdict === 'satisfied' &&
+    !input.vacuous &&
+    input.llmStatus === 'failed' &&
+    !row.recompileFlagged
+  ) {
     row.recompileFlagged = true;
     row.recompileFlaggedAt = timestamp;
     recompileJustFlagged = true;

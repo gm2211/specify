@@ -1213,6 +1213,13 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
                         `  Monitor: auto-demoted to draft: ${demotion.demoted.join(', ')}\n`,
                       );
                     }
+                  } else {
+                    // No silent idling: the flag is recorded but the formula
+                    // keeps gating verdicts until a human recompiles it or
+                    // opts into auto-demotion.
+                    process.stderr.write(
+                      '  Monitor: auto-demotion skipped (SPECIFY_ENABLE_MONITOR_AUTO_DEMOTE is off); flagged formula(s) remain approved.\n',
+                    );
                   }
                 }
               } catch (err) {

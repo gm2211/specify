@@ -511,6 +511,37 @@ test('formulaStats: draft shadow-mode agreement folds into the stats file and re
   assert.equal(statsFile.rows['fml-shadow'].agreements, PROMOTION_STREAK);
 });
 
+test('formulaStats end-to-end drift: a grounded formula going unevaluable across the window gets driftFlagged', () => {
+  // A step predicate: evaluable (definite) on a step trace, unevaluable on a
+  // stepless event-timeline trace — exactly the shape of a renamed-anchor /
+  // lost-grounding regression across app changes.
+  const STEP_FORMULA = globally(pred('page.url', ['/checkout']));
+  const file = formulasFile(formulaEntry(BEHAVIOR, STEP_FORMULA, 'draft', 'fml-drifting'));
+  const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
+
+  // Run 1 — grounded: step trace, page.url evaluates to a definite verdict.
+  const groundedSteps = [step(0, { trafficRange: [0, 0], consoleRange: [0, 0] })];
+  const groundedTrace = buildVerifyTrace(groundedSteps, [], []);
+  let statsFile = emptyFormulaStatsFile();
+  const grounded = mergeMonitorVerdicts(output, file, groundedTrace, { statsFile });
+  statsFile = grounded.formulaStats!.file;
+  assert.equal(statsFile.rows['fml-drifting'].groundedSeen, true);
+  assert.equal(statsFile.rows['fml-drifting'].driftFlagged, false);
+
+  // Runs 2..N — the anchor is gone: stepless trace, page.url unevaluable.
+  const driftTrace = buildVerifyTrace([], [traffic('https://app.test/api/x', 200, 100)], []);
+  const allDriftDetections: string[] = [];
+  for (let i = 0; i < DRIFT_WINDOW; i++) {
+    const merged = mergeMonitorVerdicts(output, file, driftTrace, { statsFile });
+    statsFile = merged.formulaStats!.file;
+    allDriftDetections.push(...merged.formulaStats!.driftDetected);
+  }
+
+  assert.deepEqual(allDriftDetections, ['fml-drifting'], 'drift detected exactly once across the run series');
+  assert.equal(statsFile.rows['fml-drifting'].driftFlagged, true);
+  assert.ok(statsFile.rows['fml-drifting'].unevaluable >= DRIFT_WINDOW - 1);
+});
+
 test('formulaStats: an approved formula satisfied while the LLM fails flags recompile (not drift)', () => {
   const steps = [step(0, { trafficRange: [0, 1], consoleRange: [0, 0] })];
   const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
