@@ -173,7 +173,7 @@ test('drift: a healthy mix of satisfied/violated below the threshold does not fl
 // ---------------------------------------------------------------------------
 
 test('recompile flag: an approved formula satisfied while the LLM failed gets flagged, once, stickily', () => {
-  let file = emptyFormulaStatsFile();
+  const file = emptyFormulaStatsFile();
   const first = record(file, {
     formulaId: 'fml-approved',
     formulaStatus: 'approved',
