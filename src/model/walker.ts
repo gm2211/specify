@@ -207,8 +207,26 @@ interface Arc {
   recipe: Recipe;
 }
 
-/** The transition-pair key for two consecutive arcs `a` then `b` (a.to===b.from). */
+/**
+ * The transition-pair key for two consecutive arcs `a` then `b` (a.to===b.from).
+ *
+ * INVARIANT: neither arc key may contain the `>>` delimiter, or two distinct
+ * pairs could collide onto one key and coverage reporting would silently
+ * conflate them. Arc keys minted by nav-model are `${from}|${actionKey}|${to}`
+ * over 12-hex-char hashes, so the invariant holds for any real model; it is
+ * asserted here so a hand-built or corrupted model fails loudly instead of
+ * producing a suite whose pair counts are quietly wrong.
+ */
 export function pairKey(arcA: string, arcB: string): string {
+  if (arcA.includes(PAIR_SEP) || arcB.includes(PAIR_SEP)) {
+    throw new Error(
+      `pairKey: arc key contains the pair delimiter '${PAIR_SEP}' ` +
+        `(${JSON.stringify(arcA.includes(PAIR_SEP) ? arcA : arcB)}) — ` +
+        `pair keys would collide and coverage reporting would be unreliable. ` +
+        `Arc keys minted by nav-model (hex-hash state/action ids) never contain it; ` +
+        `rebuild the model rather than feeding hand-crafted keys.`,
+    );
+  }
   return `${arcA}${PAIR_SEP}${arcB}`;
 }
 
@@ -232,26 +250,30 @@ function modelArcs(transitions: ModelTransition[]): Arc[] {
 /**
  * All feasible transition pairs: for every state s, the cartesian product of
  * arcs INTO s with arcs OUT OF s. These are exactly the consecutive-arc pairs
- * the graph structurally admits. Sorted by pair key.
+ * the graph structurally admits. Returned as a map from pair key to the arc
+ * TUPLE — the generator seeds restarts from the tuple directly rather than
+ * splitting the key back apart, so a key-to-arc lookup can never fail and no
+ * obligation can be silently dropped on a failed re-resolution. Keys iterate
+ * in sorted order.
  */
-function feasiblePairs(arcs: Arc[]): string[] {
+function feasiblePairs(arcs: Arc[]): Map<string, [Arc, Arc]> {
   const inTo = new Map<string, Arc[]>();
   const outOf = new Map<string, Arc[]>();
   for (const a of arcs) {
     (inTo.get(a.to) ?? inTo.set(a.to, []).get(a.to)!).push(a);
     (outOf.get(a.from) ?? outOf.set(a.from, []).get(a.from)!).push(a);
   }
-  const pairs: string[] = [];
+  const pairs = new Map<string, [Arc, Arc]>();
   for (const [mid, ins] of inTo) {
     const outs = outOf.get(mid);
     if (!outs) continue;
     for (const a of ins) {
       for (const b of outs) {
-        pairs.push(pairKey(a.key, b.key));
+        pairs.set(pairKey(a.key, b.key), [a, b]);
       }
     }
   }
-  return pairs.sort();
+  return new Map([...pairs.entries()].sort(([x], [y]) => x.localeCompare(y)));
 }
 
 // ---------------------------------------------------------------------------
@@ -314,7 +336,6 @@ export function generateTraceSuite(model: NavModel, options: WalkerOptions = {})
   const rng = mulberry32(seed);
   const urlOf = new Map(model.states.map((s) => [s.id, s.urlTemplate]));
   const arcs = modelArcs(model.transitions);
-  const arcByKey = new Map(arcs.map((a) => [a.key, a]));
 
   // Outgoing arcs per state, sorted by key for deterministic iteration.
   const outArcs = new Map<string, Arc[]>();
@@ -322,11 +343,14 @@ export function generateTraceSuite(model: NavModel, options: WalkerOptions = {})
     (outArcs.get(a.from) ?? outArcs.set(a.from, []).get(a.from)!).push(a);
   }
 
-  // Remaining obligations. Each restart discharges at least one, so the outer
-  // loop terminates in at most (initial obligation count) iterations.
+  // Remaining obligations. Arc/pair obligations map their key straight to the
+  // Arc object(s), so seeding a restart never re-resolves a key — a lookup that
+  // could fail (and silently drop an obligation) is unrepresentable. Each
+  // restart discharges at least one obligation, so the outer loop terminates in
+  // at most (initial obligation count) iterations.
   const remainingStates = new Set<string>(want.states ? model.states.map((s) => s.id) : []);
-  const remainingArcs = new Set<string>(want.arcs ? arcs.map((a) => a.key) : []);
-  const remainingPairs = new Set<string>(want.pairs ? feasiblePairs(arcs) : []);
+  const remainingArcs = new Map<string, Arc>(want.arcs ? arcs.map((a) => [a.key, a]) : []);
+  const remainingPairs: Map<string, [Arc, Arc]> = want.pairs ? feasiblePairs(arcs) : new Map();
 
   // Accumulated coverage across the whole suite (for the final report).
   const coveredStates = new Set<string>();
@@ -438,19 +462,17 @@ export function generateTraceSuite(model: NavModel, options: WalkerOptions = {})
   /**
    * Seed the next restart on a still-remaining obligation, strongest first:
    * a pair (force both arcs), else an arc (force it), else a state (start there
-   * and walk greedily). Returns null when nothing remains. Marks and skips any
-   * obligation that cannot fit under `maxWalkLength`.
+   * and walk greedily). Returns null when nothing remains. An obligation that
+   * cannot fit under `maxWalkLength` is infeasible: it is removed from the
+   * remaining set AND the suite is marked `truncated`, so it shows up in the
+   * coverage report's `uncovered` list rather than being silently dropped.
+   * (Obligation keys map directly to their Arc objects — there is no key
+   * re-resolution step that could fail.)
    */
   const nextSeed = (): { start: string; forced: Arc[] } | null => {
     while (remainingPairs.size > 0) {
-      const pk = pick([...remainingPairs].sort());
-      const [aKey, bKey] = pk.split(PAIR_SEP);
-      const a = arcByKey.get(aKey);
-      const b = arcByKey.get(bKey);
-      if (!a || !b) {
-        remainingPairs.delete(pk); // defensive; arcs always resolve by construction.
-        continue;
-      }
+      const pk = pick([...remainingPairs.keys()].sort());
+      const [a, b] = remainingPairs.get(pk)!;
       if (budget.maxWalkLength < 2) {
         remainingPairs.delete(pk);
         truncated = true;
@@ -459,12 +481,8 @@ export function generateTraceSuite(model: NavModel, options: WalkerOptions = {})
       return { start: a.from, forced: [a, b] };
     }
     while (remainingArcs.size > 0) {
-      const key = pick([...remainingArcs].sort());
-      const a = arcByKey.get(key);
-      if (!a) {
-        remainingArcs.delete(key);
-        continue;
-      }
+      const key = pick([...remainingArcs.keys()].sort());
+      const a = remainingArcs.get(key)!;
       if (budget.maxWalkLength < 1) {
         remainingArcs.delete(key);
         truncated = true;
@@ -508,7 +526,7 @@ export function generateTraceSuite(model: NavModel, options: WalkerOptions = {})
     ),
   };
   if (want.pairs) {
-    coverage.pairs = axisCoverage(feasiblePairs(arcs), coveredPairs);
+    coverage.pairs = axisCoverage([...feasiblePairs(arcs).keys()], coveredPairs);
   }
 
   return {
