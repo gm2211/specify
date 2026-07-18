@@ -72,13 +72,15 @@ export const specSchema = {
               properties: {
                 enabled: {
                   type: 'boolean',
-                  description: 'Must be true for probes to run against this target.',
+                  description:
+                    'Must be true for probes to run against this target. Also requires an explicit production: false declaration on the target (fail-closed).',
                 },
               },
             },
             production: {
               type: 'boolean',
-              description: 'When true, hard-blocks state-mutating probes regardless of other flags.',
+              description:
+                'When true, hard-blocks state-mutating probes regardless of other flags. When probes are enabled this field MUST be explicitly declared: an absent value also blocks probes (fail-closed), so set it to false to consciously mark the target as safe to probe.',
             },
           },
         },

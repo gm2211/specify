@@ -60,7 +60,7 @@ function mapFile(endpoints: EndpointEntry[]): EndpointMapFile {
   return { version: 1, templates: [], endpoints };
 }
 
-const optedInTarget: ApiTarget = { type: 'api', url: 'http://api.test', probes: { enabled: true } };
+const optedInTarget: ApiTarget = { type: 'api', url: 'http://api.test', probes: { enabled: true }, production: false };
 
 /** Deterministic marker id generator. */
 function seqIds(): () => string {
@@ -156,6 +156,28 @@ test('assertProbesAllowed requires all three conditions', () => {
     () => assertProbesAllowed({ type: 'api', url: 'http://x', probes: { enabled: true }, production: true }, { allowProbes: true }),
     ProbeSafetyError,
   );
+});
+
+test('assertProbesAllowed fails closed when production is not declared', () => {
+  // probes.enabled without an explicit production: false refuses with a
+  // message telling the author to declare the field.
+  assert.throws(
+    () => assertProbesAllowed({ type: 'api', url: 'http://x', probes: { enabled: true } }, { allowProbes: true }),
+    (err: unknown) => err instanceof ProbeSafetyError && /production: false/.test(err.message),
+  );
+});
+
+test('runProbeWorkload refuses an undeclared-production target before any request', async () => {
+  const { client, calls } = scriptClient({});
+  await assert.rejects(
+    runProbeWorkload(
+      mapFile([endpoint('POST', '/users', 'create')]),
+      { type: 'api', url: 'http://x', probes: { enabled: true } },
+      { allowProbes: true, http: client },
+    ),
+    ProbeSafetyError,
+  );
+  assert.equal(calls.length, 0);
 });
 
 test('runProbeWorkload refuses a disallowed target before any request', async () => {
@@ -394,6 +416,57 @@ test('cleanup reports an un-deletable leftover when no delete endpoint exists', 
   assert.equal(result.cleanup.deleted, 0);
   assert.equal(result.cleanup.attempts[0].outcome, 'fail');
   assert.match(result.cleanup.attempts[0].error ?? '', /no approved delete endpoint/);
+});
+
+test('a collection-level delete template is never invoked: sequence skips it, cleanup reports skipped-unsafe', async () => {
+  // The approved delete endpoint is a bulk/collection DELETE with no :id —
+  // issuing it would delete far more than the probe entity. Neither the CRUD
+  // sequence nor cleanup may fire it.
+  const eps = [
+    endpoint('POST', '/users', 'create'),
+    endpoint('GET', '/users/:id', 'read'),
+    endpoint('DELETE', '/users', 'delete', { idLocation: { kind: 'none' } }),
+  ];
+  const { client, calls } = scriptClient({
+    'POST /users': { status: 201, body: { id: '4' } },
+    'GET /users/4': { status: 200, body: { id: '4' } },
+    'DELETE /users': { status: 204, body: undefined },
+  });
+  const result = await runProbeWorkload(mapFile(eps), optedInTarget, {
+    allowProbes: true,
+    http: client,
+    genId: seqIds(),
+    now: seqClock(),
+  });
+
+  // No DELETE ever left the building.
+  assert.ok(!calls.some((c) => c.method === 'DELETE'));
+  assert.equal(result.ops.filter((o) => o.type === 'delete').length, 0);
+  assert.equal(result.entities[0].deleted, false);
+  // Cleanup reports the leftover as skipped-unsafe with a reason.
+  assert.equal(result.cleanup.attempted, 1);
+  assert.equal(result.cleanup.deleted, 0);
+  assert.equal(result.cleanup.attempts[0].outcome, 'skipped-unsafe');
+  assert.match(result.cleanup.attempts[0].error ?? '', /does not address the entity id/);
+});
+
+test('a 400 response is a fail with the status recorded', async () => {
+  const { client } = scriptClient({
+    'POST /users': { status: 400, body: { error: 'validation' } },
+  });
+  const result = await runProbeWorkload(mapFile(crudEndpoints()), optedInTarget, {
+    allowProbes: true,
+    http: client,
+    genId: seqIds(),
+    now: seqClock(),
+  });
+  const create = result.ops[0];
+  assert.equal(create.outcome, 'fail');
+  assert.equal(create.response?.status, 400);
+  assert.deepEqual(create.response?.body, { error: 'validation' });
+  assert.equal(create.error, 'HTTP 400');
+  // A failed create mints no id, so the sequence stops after one op.
+  assert.equal(result.ops.length, 1);
 });
 
 test('only approved endpoints are ever invoked', async () => {

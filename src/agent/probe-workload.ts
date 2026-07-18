@@ -43,9 +43,10 @@
  * SAFETY
  * ----------------------------------------------------------------------------
  * Probes mutate target state. They run ONLY when the runtime flag is set AND
- * the target opts in (`target.probes.enabled`) AND the target is not flagged
- * `production`. `assertProbesAllowed` is the single gate; call it before any
- * request is issued.
+ * the target opts in (`target.probes.enabled`) AND the target EXPLICITLY
+ * declares `production: false` (fail-closed: an absent field refuses, and
+ * `production: true` hard-blocks). `assertProbesAllowed` is the single gate;
+ * call it before any request is issued.
  *
  * AUTH lives outside this module: callers resolve headers via the existing
  * hooks/variables machinery (src/agent/hooks.ts) and pass the resolved header
@@ -294,21 +295,30 @@ export class ProbeSafetyError extends Error {
 }
 
 /**
- * The single gate for state-mutating probes. All three must hold:
+ * The single gate for state-mutating probes. All of these must hold:
  *  - the run was invoked with `allowProbes: true` (the runtime flag);
  *  - the target opted in via `target.probes.enabled`;
- *  - the target is NOT flagged `production`.
+ *  - the target EXPLICITLY declares `production: false`. This is fail-closed:
+ *    an absent `production` field refuses, so an unmarked production target
+ *    can never be probed by omission — the spec author must consciously
+ *    declare the target non-production. `production: true` hard-blocks.
  * Throws ProbeSafetyError otherwise.
  */
 export function assertProbesAllowed(target: ApiTarget, opts: { allowProbes: boolean }): void {
   if (!opts.allowProbes) {
     throw new ProbeSafetyError('Probes are disabled for this run (runtime flag not set).');
   }
-  if (target.production) {
+  if (target.production === true) {
     throw new ProbeSafetyError('Refusing to probe a production-flagged target.');
   }
   if (!target.probes?.enabled) {
     throw new ProbeSafetyError('Target has not opted into probes (set target.probes.enabled).');
+  }
+  if (target.production === undefined) {
+    throw new ProbeSafetyError(
+      'Target does not declare "production". Probes mutate state and fail closed: ' +
+        'explicitly set production: false (or true) on the target so the declaration is a conscious decision.',
+    );
   }
 }
 
@@ -383,11 +393,16 @@ export interface EntityWorkloadResult {
   ops: ProbeOpRecord[];
 }
 
-/** One cleanup deletion attempt for an entity the sequence left behind. */
+/**
+ * One cleanup deletion attempt for an entity the sequence left behind.
+ * `skipped-unsafe` means the delete was never issued because the approved
+ * delete endpoint's template does not address the entity id (e.g. a
+ * collection-level DELETE) — invoking it could hit a broader endpoint.
+ */
 export interface CleanupAttempt {
   entity: string;
   id: string;
-  outcome: ProbeOutcome;
+  outcome: ProbeOutcome | 'skipped-unsafe';
   error?: string;
 }
 
@@ -538,8 +553,12 @@ export async function runProbeWorkload(
           );
         }
       }
-      // 6. DELETE
-      if (wl.delete) {
+      // 6. DELETE. Guarded: only issued when the delete template actually
+      // addresses the created id (see deleteAddressesId) — a collection-level
+      // DELETE template would hit far more than the one probe entity. A
+      // skipped delete leaves the entity for cleanup, which reports it as
+      // skipped-unsafe.
+      if (wl.delete && deleteAddressesId(wl.delete, itemParams(wl.delete.idLocation, wl.delete, id))) {
         const deleteParams = itemParams(wl.delete.idLocation, wl.delete, id);
         const deleteRec = await runOne({
           type: 'delete',
@@ -579,6 +598,24 @@ function mint(markers: Set<string>, genId?: () => string): string {
   const m = genId ? newMarker(genId) : newMarker();
   markers.add(m);
   return m;
+}
+
+/** Names of the `:param` segments in a template. */
+function templateParamNames(template: string): string[] {
+  const segments = template === '/' ? [] : template.replace(/^\//, '').split('/');
+  return segments.filter((s) => s.startsWith(':')).map((s) => s.slice(1));
+}
+
+/**
+ * True when invoking `del` with `params` (all of whose values are the entity
+ * id) actually addresses that id: the template must bind at least one of the
+ * params. renderTemplate silently ignores EXTRA params, so a collection-level
+ * template like `DELETE /users` would otherwise render fine and hit a much
+ * broader endpoint than the one entity we mean to delete.
+ */
+function deleteAddressesId(del: EndpointEntry, params: Record<string, string>): boolean {
+  const names = templateParamNames(del.template);
+  return names.some((name) => params[name] !== undefined);
 }
 
 /** Build the path-param map for an item endpoint, mapping its id path param to
@@ -719,6 +756,17 @@ async function cleanupEntities(
       continue;
     }
     const params = itemParams(wl!.create!.idLocation, del, ent.createdId);
+    if (!deleteAddressesId(del, params)) {
+      // The delete template does not bind the entity id — issuing it could
+      // hit a collection-level (or otherwise broader) endpoint. Never fire it.
+      attempts.push({
+        entity: ent.entity,
+        id: ent.createdId,
+        outcome: 'skipped-unsafe',
+        error: `delete template "${del.template}" does not address the entity id; refusing to invoke a broader delete`,
+      });
+      continue;
+    }
     const rec = await executeOp({
       opId: nextOpId(),
       spec: { type: 'delete', entity: ent.entity, marker: ent.marker, method: del.method, template: del.template, params, headers },
