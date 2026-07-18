@@ -7,6 +7,14 @@ import { specToYaml } from './parser.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import {
+  saveFormulas,
+  addDraft,
+  emptyFormulasFile,
+  hashDescription,
+  type FormulasFile,
+} from './formulas.js';
+import { pred, eventually } from '../monitor/formula.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-lint-dir-'));
@@ -338,6 +346,240 @@ test('lintPath does not warn about aggregate size for directory specs', () => {
 
     assert.equal(result.valid, true);
     assert.ok(!result.errors.some((error) => error.rule === 'oversized-single-file-spec'));
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rule: formulas (specify.formulas.yaml)
+// ---------------------------------------------------------------------------
+
+function sampleFormulasFile(behaviorDescription: string): FormulasFile {
+  const { file } = addDraft(emptyFormulasFile(), {
+    behavior: 'auth/login',
+    formula: eventually(pred('http.response', ['200'])),
+    description_hash: hashDescription(behaviorDescription),
+    predicates_used: ['http.response'],
+    provenance: { compiled_by: 'test', compiled_at: '2026-01-01T00:00:00Z' },
+  });
+  return file;
+}
+
+test('lintPath is unaffected when there is no specify.formulas.yaml', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+
+    const result = lintPath(specPath);
+    assert.ok(!result.errors.some((e) => e.rule.startsWith('formula') || e.rule === 'stale-formula'));
+    assert.equal(result.valid, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath accepts a valid, up-to-date formulas file with no errors or warnings', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in'));
+
+    const result = lintPath(specPath);
+    assert.ok(!result.errors.some((e) => e.rule === 'formulas-file-invalid'));
+    assert.ok(!result.errors.some((e) => e.rule === 'formula-behavior-not-found'));
+    assert.ok(!result.errors.some((e) => e.rule === 'duplicate-formula-id'));
+    assert.ok(!result.errors.some((e) => e.rule === 'stale-formula'));
+    assert.equal(result.valid, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports an error when specify.formulas.yaml is malformed YAML', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    writeFile(path.join(dir, 'specify.formulas.yaml'), 'formulas: [\n  - id: fml-abc\n    behavior: [unterminated');
+
+    const result = lintPath(specPath);
+    const errors = result.errors.filter((e) => e.rule === 'formulas-file-invalid');
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].severity, 'error');
+    assert.equal(result.valid, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports an error when a formula has a schema-invalid AST', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    writeFile(
+      path.join(dir, 'specify.formulas.yaml'),
+      [
+        'version: 1',
+        'predicates_version: 1',
+        'formulas:',
+        '  - id: fml-abc123',
+        '    behavior: auth/login',
+        '    description_hash: sha256:abc',
+        '    formula:',
+        '      op: not_a_real_op',
+        '    predicates_used: []',
+        '    status: draft',
+        '    provenance:',
+        '      compiled_by: test',
+        '      compiled_at: "2026-01-01T00:00:00Z"',
+        '',
+      ].join('\n'),
+    );
+
+    const result = lintPath(specPath);
+    const errors = result.errors.filter((e) => e.rule === 'formulas-file-invalid');
+    assert.equal(errors.length, 1);
+    assert.equal(result.valid, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports an error when a formula references a dangling behavior', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    const { file } = addDraft(emptyFormulasFile(), {
+      behavior: 'auth/signin', // renamed away from "login" — no longer exists
+      formula: eventually(pred('http.response', ['200'])),
+      description_hash: hashDescription('User can log in'),
+      predicates_used: ['http.response'],
+      provenance: { compiled_by: 'test', compiled_at: '2026-01-01T00:00:00Z' },
+    });
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), file);
+
+    const result = lintPath(specPath);
+    const errors = result.errors.filter((e) => e.rule === 'formula-behavior-not-found');
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].severity, 'error');
+    assert.ok(errors[0].message.includes('auth/signin'));
+    assert.equal(result.valid, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports an error on duplicate formula ids', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    writeFile(
+      path.join(dir, 'specify.formulas.yaml'),
+      [
+        'version: 1',
+        'predicates_version: 1',
+        'formulas:',
+        '  - id: fml-dup001',
+        '    behavior: auth/login',
+        `    description_hash: ${hashDescription('User can log in')}`,
+        '    formula:',
+        '      op: pred',
+        '      name: http.response',
+        "      args: ['200']",
+        '    predicates_used: [http.response]',
+        '    status: draft',
+        '    provenance:',
+        '      compiled_by: test',
+        '      compiled_at: "2026-01-01T00:00:00Z"',
+        '  - id: fml-dup001',
+        '    behavior: auth/login',
+        `    description_hash: ${hashDescription('User can log in')}`,
+        '    formula:',
+        '      op: pred',
+        '      name: page.url',
+        "      args: ['/dashboard']",
+        '    predicates_used: [page.url]',
+        '    status: draft',
+        '    provenance:',
+        '      compiled_by: test',
+        '      compiled_at: "2026-01-01T00:00:00Z"',
+        '',
+      ].join('\n'),
+    );
+
+    const result = lintPath(specPath);
+    const errors = result.errors.filter((e) => e.rule === 'duplicate-formula-id');
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].severity, 'error');
+    assert.equal(result.valid, false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath warns when description_hash is stale relative to the current behavior text', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    // Compiled against an older description than the spec now has.
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in (old wording)'));
+
+    const result = lintPath(specPath);
+    const warnings = result.errors.filter((e) => e.rule === 'stale-formula');
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].severity, 'warning');
+    assert.equal(result.valid, true, 'a stale-formula warning alone does not invalidate the spec');
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath skips the unknown-predicate rule when no predicate registry is supplied', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in'));
+
+    const result = lintPath(specPath);
+    assert.ok(!result.errors.some((e) => e.rule === 'unknown-predicate'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath warns about unknown predicates when a registry is supplied', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in'));
+
+    const result = lintPath(specPath, { predicateRegistry: new Set(['page.url']) });
+    const warnings = result.errors.filter((e) => e.rule === 'unknown-predicate');
+    assert.equal(warnings.length, 1);
+    assert.ok(warnings[0].message.includes('http.response'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports no unknown-predicate warnings once the registry covers all used predicates', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in'));
+
+    const result = lintPath(specPath, { predicateRegistry: new Set(['http.response']) });
+    assert.ok(!result.errors.some((e) => e.rule === 'unknown-predicate'));
   } finally {
     cleanup();
   }
