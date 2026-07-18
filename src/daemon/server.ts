@@ -202,6 +202,13 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
     if (!['verify', 'capture', 'compare', 'replay', 'freeform'].includes(task)) {
       return c.json({ error: 'invalid_task', task }, 400);
     }
+    if (
+      body.areas !== undefined &&
+      (!Array.isArray(body.areas) ||
+        !body.areas.every((a) => typeof a === 'string' && a.length > 0))
+    ) {
+      return c.json({ error: 'invalid_field', field: 'areas' }, 400);
+    }
     const message = inbox.submit(body as InboxRequest);
     return c.json({
       id: message.id,

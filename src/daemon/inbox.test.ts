@@ -90,6 +90,36 @@ function writeMinimalSpec(dir: string, targetUrl = 'http://localhost:3000'): str
   return specPath;
 }
 
+function writeMultiAreaSpec(dir: string, targetUrl = 'http://localhost:3000'): string {
+  const specPath = path.join(dir, 'spec.yaml');
+  fs.writeFileSync(specPath, [
+    'version: "2"',
+    'name: Test',
+    'description: Test spec.',
+    'target:',
+    '  type: web',
+    `  url: ${targetUrl}`,
+    'areas:',
+    '  - id: home',
+    '    name: Home',
+    '    behaviors:',
+    '      - id: loads',
+    '        description: Page loads.',
+    '  - id: checkout',
+    '    name: Checkout',
+    '    behaviors:',
+    '      - id: pays',
+    '        description: User can pay.',
+    '  - id: search',
+    '    name: Search',
+    '    behaviors:',
+    '      - id: finds',
+    '        description: Search returns results.',
+    '',
+  ].join('\n'));
+  return specPath;
+}
+
 function minimalSpecYaml(name: string, targetUrl: string): string {
   return [
     'version: "2"',
@@ -674,6 +704,134 @@ test('findActiveVerify: url-based match (no metadata) → found; non-verify → 
     assert.equal(notFound, undefined, 'non-verify task should not match');
 
     await flush();
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// verify `areas` filter tests
+// ---------------------------------------------------------------------------
+
+test('inbox.submit verify: areas filter restricts systemPrompt to requested areas only', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-areas-'));
+    const specPath = writeMultiAreaSpec(tmpDir);
+
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify checkout only.',
+      spec: specPath,
+      areas: ['checkout'],
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].systemPrompt, /checkout/);
+    assert.doesNotMatch(calls[0].systemPrompt, /\bhome\b/);
+    assert.doesNotMatch(calls[0].systemPrompt, /\bsearch\b/);
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit verify: areas filter matching nothing fails the job with a clear error', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-areas-none-'));
+    const specPath = writeMultiAreaSpec(tmpDir);
+
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify nothing.',
+      spec: specPath,
+      areas: ['does-not-exist'],
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'failed');
+    assert.match(finished.error ?? '', /areas filter matched no areas/);
+    assert.match(finished.error ?? '', /does-not-exist/);
+    assert.equal(calls.length, 0, 'runner should never be invoked when the filter matches nothing');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit verify: unknown id mixed with a valid id keeps the valid area and warns', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+  const stderrChunks: string[] = [];
+  process.stderr.write = ((chunk: string | Uint8Array, ...rest: unknown[]) => {
+    stderrChunks.push(chunk.toString());
+    return originalStderrWrite(chunk, ...(rest as []));
+  }) as typeof process.stderr.write;
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-areas-mixed-'));
+    const specPath = writeMultiAreaSpec(tmpDir);
+
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify a mix.',
+      spec: specPath,
+      areas: ['home', 'bogus-id'],
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].systemPrompt, /\bhome\b/);
+    assert.doesNotMatch(calls[0].systemPrompt, /\bcheckout\b/);
+    assert.doesNotMatch(calls[0].systemPrompt, /\bsearch\b/);
+
+    const warned = stderrChunks.some((c) => c.includes('bogus-id'));
+    assert.ok(warned, 'should warn about the unknown area id on stderr');
+  } finally {
+    process.stderr.write = originalStderrWrite;
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test('inbox.submit verify: no areas field runs the full spec (backward compatible)', async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-areas-none-filter-'));
+    const specPath = writeMultiAreaSpec(tmpDir);
+
+    const msg = inbox.submit({
+      task: 'verify',
+      prompt: 'Verify everything.',
+      spec: specPath,
+      outputDir: path.join(tmpDir, 'out'),
+    });
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'completed');
+    assert.equal(calls.length, 1);
+    assert.match(calls[0].systemPrompt, /\bhome\b/);
+    assert.match(calls[0].systemPrompt, /\bcheckout\b/);
+    assert.match(calls[0].systemPrompt, /\bsearch\b/);
   } finally {
     __setRunnerForTesting(prev);
     inbox.reset();

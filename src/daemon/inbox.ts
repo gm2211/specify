@@ -52,6 +52,11 @@ export interface InboxRequest {
   localUrl?: string;
   /** Optional path to a spec file to use as context. */
   spec?: string;
+  /**
+   * Verify-only: restrict the run to these spec area ids. Unknown ids are
+   * ignored with a warning; if none match, the job fails with a clear error.
+   */
+  areas?: string[];
   /** Optional capture directory (replay). */
   captureDir?: string;
   /** Output directory; defaults to .specify/<task>/<msgId>. */
@@ -485,7 +490,28 @@ interface PromptBundle {
 async function buildPrompts(req: InboxRequest, outputDir: string): Promise<PromptBundle> {
   if (req.task === 'verify') {
     const { spec, specPath } = await resolveVerifySpec(req);
-    const specYaml = specToYaml(spec);
+
+    let specForPrompt = spec;
+    if (req.areas?.length) {
+      const wanted = new Set(req.areas);
+      const matched = spec.areas.filter((a) => wanted.has(a.id));
+      const matchedIds = new Set(matched.map((a) => a.id));
+      const unknown = req.areas.filter((id) => !matchedIds.has(id));
+      if (unknown.length > 0) {
+        process.stderr.write(
+          `[inbox] verify areas filter: unknown area id(s) ignored: ${unknown.join(', ')}\n`,
+        );
+      }
+      if (matched.length === 0) {
+        const available = spec.areas.map((a) => a.id).join(', ') || '(none)';
+        throw new Error(
+          `verify areas filter matched no areas (requested: ${req.areas.join(', ')}; available: ${available})`,
+        );
+      }
+      specForPrompt = { ...spec, areas: matched };
+    }
+
+    const specYaml = specToYaml(specForPrompt);
     const targetUrl = req.url
       ?? (spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
