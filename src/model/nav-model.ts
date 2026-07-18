@@ -701,6 +701,66 @@ function mergeSignatures(
 }
 
 // ---------------------------------------------------------------------------
+// Trace signature — visited-key extraction for coverage measurement
+// ---------------------------------------------------------------------------
+
+/**
+ * The set of state ids and transition arcs a session set touches, derived under
+ * a FIXED template set and predicate extractor. Coverage measurement
+ * (src/model/coverage.ts) intersects this against a reference model's keys.
+ *
+ * Because it folds through the same `ModelBuilder` the learner uses, the keys
+ * it produces are byte-identical to those `learn()`/`mergeSessions()` would
+ * mint for the same input under the same abstraction — so an arc/state is
+ * "covered" iff its key literally appears in the reference model.
+ */
+export interface TraceSignature {
+  /** Distinct state ids reached by the walk. */
+  stateIds: Set<string>;
+  /** Distinct transition arcs, each keyed by {@link arcKey}. */
+  arcs: Set<string>;
+  /** Sorted predicate keys the extractor produced (fingerprint cross-check). */
+  predicateKeys: string[];
+}
+
+/** Canonical arc key: `${from}|${actionKey}|${to}`. */
+export function arcKey(from: string, action: string, to: string): string {
+  return `${from}|${action}|${to}`;
+}
+
+/**
+ * Compute the visited-key signature of a session set under a given template set
+ * and predicate extractor. Pure and order-independent (it reuses the learner's
+ * order-independent fold). Pass the SAME extractor the reference model was built
+ * with — a different one mints incompatible state ids and every element reads as
+ * uncovered (compare `predicateKeys` against the model's `predicateKeys` to
+ * detect the mismatch).
+ */
+export function signatureOf(
+  templateSet: TemplateSet,
+  sessions: SessionTrace[],
+  extractor: PredicateExtractor = NO_PREDICATES,
+): TraceSignature {
+  const builder = new ModelBuilder(templateSet, extractor);
+  const byRef = new Map<string, SessionTrace>();
+  for (const s of sessions) {
+    if (!byRef.has(s.ref)) byRef.set(s.ref, s);
+  }
+  for (const ref of [...byRef.keys()].sort()) {
+    builder.foldSession(byRef.get(ref)!);
+  }
+
+  const stateIds = new Set(builder.states().map((s) => s.id));
+  const arcs = new Set<string>();
+  for (const tr of builder.transitions()) {
+    for (const t of tr.targets) {
+      arcs.add(arcKey(tr.from, tr.actionKey, t.to));
+    }
+  }
+  return { stateIds, arcs, predicateKeys: builder.observedPredicateKeys() };
+}
+
+// ---------------------------------------------------------------------------
 // State cap enforcement
 // ---------------------------------------------------------------------------
 
