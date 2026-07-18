@@ -9,12 +9,13 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import {
   saveFormulas,
+  loadFormulas,
   addDraft,
   emptyFormulasFile,
   hashDescription,
   type FormulasFile,
 } from './formulas.js';
-import { pred, eventually } from '../monitor/formula.js';
+import { pred, eventually, globally, and as andF } from '../monitor/formula.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-lint-dir-'));
@@ -580,6 +581,135 @@ test('lintPath reports no unknown-predicate warnings once the registry covers al
 
     const result = lintPath(specPath, { predicateRegistry: new Set(['http.response']) });
     assert.ok(!result.errors.some((e) => e.rule === 'unknown-predicate'));
+  } finally {
+    cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Rule: entailment-refuted (parent_of decompositions)
+// ---------------------------------------------------------------------------
+
+function decompositionFormulasFile(opts: { soundLeaves: boolean }): FormulasFile {
+  const behavior = 'auth/login';
+  const descriptionHash = hashDescription('User can log in');
+  const provenance = { compiled_by: 'test', compiled_at: '2026-01-01T00:00:00Z' };
+
+  const parentFormula = globally(andF(pred('p'), pred('q')));
+  const leafP = globally(pred('p'));
+  const leafQ = globally(pred('q'));
+
+  let file = emptyFormulasFile();
+  const addedParent = addDraft(file, {
+    behavior,
+    formula: parentFormula,
+    description_hash: descriptionHash,
+    predicates_used: ['p', 'q'],
+    provenance,
+  });
+  file = addedParent.file;
+  const parentId = addedParent.entry.id;
+
+  const leaves = opts.soundLeaves ? [leafP, leafQ] : [leafP];
+  const leafIds: string[] = [];
+  for (const leaf of leaves) {
+    const added = addDraft(file, {
+      behavior,
+      formula: leaf,
+      description_hash: descriptionHash,
+      predicates_used: ['p'],
+      provenance,
+    });
+    file = added.file;
+    leafIds.push(added.entry.id);
+  }
+
+  return {
+    ...file,
+    formulas: file.formulas.map((f) => (f.id === parentId ? { ...f, parent_of: leafIds } : f)),
+  };
+}
+
+test('lintPath warns with a plain-English counterexample when a parent_of decomposition is refuted', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    // Parent claims G(p & q); the only declared sub-check is G(p) — a hole.
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), decompositionFormulasFile({ soundLeaves: false }));
+
+    const result = lintPath(specPath);
+    const warnings = result.errors.filter((e) => e.rule === 'entailment-refuted');
+    assert.equal(warnings.length, 1);
+    assert.equal(warnings[0].severity, 'warning');
+    assert.ok(
+      warnings[0].message.includes('a scenario where every sub-check passes but the parent claim fails'),
+      warnings[0].message,
+    );
+    assert.equal(result.valid, true, 'advisory rule: a refuted decomposition is a warning, never an error');
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath emits nothing for a sound parent_of decomposition', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    // Parent G(p & q) decomposed into [G(p), G(q)] — no bounded counterexample.
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), decompositionFormulasFile({ soundLeaves: true }));
+
+    const result = lintPath(specPath);
+    assert.ok(!result.errors.some((e) => e.rule === 'entailment-refuted'));
+    assert.equal(result.valid, true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath reports an error when parent_of references an unknown formula id', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'spec.yaml');
+    writeFile(specPath, specToYaml(makeAuthSpec()));
+    const base = decompositionFormulasFile({ soundLeaves: false });
+    const broken = {
+      ...base,
+      formulas: base.formulas.map((f) =>
+        f.parent_of ? { ...f, parent_of: ['fml-missing'] } : f,
+      ),
+    };
+    saveFormulas(path.join(dir, 'specify.formulas.yaml'), broken);
+
+    const result = lintPath(specPath);
+    const errors = result.errors.filter((e) => e.rule === 'entailment-parent-of-unknown-id');
+    assert.equal(errors.length, 1);
+    assert.equal(errors[0].severity, 'error');
+    assert.ok(errors[0].message.includes('fml-missing'));
+    assert.equal(result.valid, false);
+    // A broken reference must not also produce a semantic verdict.
+    assert.ok(!result.errors.some((e) => e.rule === 'entailment-refuted'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('parent_of round-trips through saveFormulas/loadFormulas and stays optional', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const formulasPath = path.join(dir, 'specify.formulas.yaml');
+    const file = decompositionFormulasFile({ soundLeaves: false });
+    saveFormulas(formulasPath, file);
+
+    const loaded = loadFormulas(formulasPath);
+    assert.ok(loaded);
+    const parent = loaded!.formulas.find((f) => f.parent_of !== undefined);
+    assert.ok(parent, 'parent entry with parent_of survives the round-trip');
+    assert.equal(parent!.parent_of!.length, 1);
+    const leaf = loaded!.formulas.find((f) => f.id === parent!.parent_of![0]);
+    assert.ok(leaf, 'leaf id resolves after round-trip');
+    assert.equal(leaf!.parent_of, undefined, 'entries without parent_of stay without it');
   } finally {
     cleanup();
   }

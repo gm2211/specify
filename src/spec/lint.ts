@@ -29,6 +29,7 @@ import {
   FormulasLoadError,
   type FormulaEntry,
 } from './formulas.js';
+import { checkEntailment } from '../monitor/entailment.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -372,6 +373,78 @@ export function lintFormulas(
     if (predicateRegistry) {
       errors.push(...lintUnknownPredicates(entry, i, predicateRegistry));
     }
+  });
+
+  errors.push(...lintEntailment(file.formulas));
+
+  return errors;
+}
+
+// ---------------------------------------------------------------------------
+// Rule: entailment-refuted (advisory, refutation-only)
+// ---------------------------------------------------------------------------
+
+/** Per-check wall-clock budget for the bounded entailment search. */
+const ENTAILMENT_BUDGET_MS = 2000;
+
+/**
+ * For every formula entry carrying a `parent_of: [formula-ids]` decomposition
+ * marker, run the bounded refutation-only entailment check from
+ * src/monitor/entailment.ts: does AND(children) imply the parent on every
+ * trace up to the searched bound?
+ *
+ * ADVISORY by design — this rule can only ever produce WARNINGS:
+ *   - refuted        -> warning carrying the plain-English counterexample.
+ *   - not refuted    -> silence. The check never proves entailment (its
+ *     coverage is bounded), so "no counterexample found" is not a clean bill
+ *     of health and gets no lint row.
+ *   - budget exceeded -> silence (each check is capped at 2s so lint stays
+ *     fast; an aborted search says nothing either way).
+ * The only ERROR this rule emits is structural: a `parent_of` id that
+ * doesn't resolve to a formula in the file (a broken reference, not a
+ * semantic verdict).
+ */
+function lintEntailment(formulas: FormulaEntry[]): LintError[] {
+  const errors: LintError[] = [];
+  const byId = new Map(formulas.map((f) => [f.id, f]));
+
+  formulas.forEach((entry, i) => {
+    if (!entry.parent_of || entry.parent_of.length === 0) return;
+
+    const leaves = [];
+    let broken = false;
+    for (const childId of entry.parent_of) {
+      const child = byId.get(childId);
+      if (!child) {
+        errors.push({
+          path: `/formulas/${i}/parent_of`,
+          severity: 'error',
+          message: `Formula "${entry.id}" lists "${childId}" in parent_of, but no formula with that id exists in the file.`,
+          rule: 'entailment-parent-of-unknown-id',
+        });
+        broken = true;
+        continue;
+      }
+      leaves.push(child.formula);
+    }
+    if (broken || leaves.length === 0) return;
+
+    const result = checkEntailment(entry.formula, leaves, {
+      timeBudgetMs: ENTAILMENT_BUDGET_MS,
+    });
+    if (result.refuted) {
+      errors.push({
+        path: `/formulas/${i}/parent_of`,
+        severity: 'warning',
+        message:
+          `Formula "${entry.id}" is not implied by its sub-checks (${entry.parent_of.join(', ')}): ` +
+          `found ${result.witness.description} This is an advisory bounded check — review the decomposition.`,
+        rule: 'entailment-refuted',
+      });
+    }
+    // Not refuted (whether exhaustive-to-k, sampled, or timed out): emit
+    // nothing. The bounded search cannot prove entailment, so silence is the
+    // only honest output.
   });
 
   return errors;
