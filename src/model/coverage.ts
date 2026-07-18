@@ -305,10 +305,26 @@ function rarity(uncovered: boolean, seenCount: number): string {
   return `only ${seenCount} visit${seenCount === 1 ? '' : 's'}`;
 }
 
+/** Max length of any page-derived string embedded into a hint label. */
+const EMBED_CAP = 120;
+
+/**
+ * Sanitize a page-derived string (selector, URL template, value template)
+ * before embedding it into a markdown hint label. These strings come from the
+ * target app, so they can contain backticks (which would break the code fence),
+ * newlines (which would break list structure and open a prompt-injection
+ * surface), or be arbitrarily long. Collapse whitespace/newlines to single
+ * spaces, strip backticks, and cap the length with an ellipsis.
+ */
+function sanitizeEmbedded(value: string): string {
+  const cleaned = value.replace(/[\r\n\t]+/g, ' ').replace(/`/g, '').trim();
+  return cleaned.length > EMBED_CAP ? cleaned.slice(0, EMBED_CAP - 1) + '…' : cleaned;
+}
+
 function recipePhrase(recipe: Recipe): string {
-  const parts = [recipe.action.replace(/^browser_/, '')];
-  if (recipe.selector) parts.push(`\`${recipe.selector}\``);
-  if (recipe.valueTemplate) parts.push(`→ ${recipe.valueTemplate}`);
+  const parts = [sanitizeEmbedded(recipe.action).replace(/^browser_/, '')];
+  if (recipe.selector) parts.push(`\`${sanitizeEmbedded(recipe.selector)}\``);
+  if (recipe.valueTemplate) parts.push(`→ ${sanitizeEmbedded(recipe.valueTemplate)}`);
   return parts.join(' ');
 }
 
@@ -320,9 +336,11 @@ function stateLabel(
   fromTemplate: string | undefined,
 ): string {
   const how = recipe
-    ? ` — reach via ${recipePhrase(recipe)}${fromTemplate ? ` from \`${fromTemplate}\`` : ''}`
+    ? ` — reach via ${recipePhrase(recipe)}${
+        fromTemplate ? ` from \`${sanitizeEmbedded(fromTemplate)}\`` : ''
+      }`
     : ' — reach by navigating there directly';
-  return `[${rarity(uncovered, seenCount)}] state \`${urlTemplate}\`${how}`;
+  return `[${rarity(uncovered, seenCount)}] state \`${sanitizeEmbedded(urlTemplate)}\`${how}`;
 }
 
 function transitionLabel(
@@ -332,9 +350,9 @@ function transitionLabel(
   count: number,
   recipe: Recipe,
 ): string {
-  return `[${rarity(uncovered, count)}] transition from \`${fromTemplate}\` via ${recipePhrase(
-    recipe,
-  )} → \`${toTemplate}\``;
+  return `[${rarity(uncovered, count)}] transition from \`${sanitizeEmbedded(
+    fromTemplate,
+  )}\` via ${recipePhrase(recipe)} → \`${sanitizeEmbedded(toTemplate)}\``;
 }
 
 /**
