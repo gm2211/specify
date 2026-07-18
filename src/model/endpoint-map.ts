@@ -32,6 +32,22 @@
  * endpoint whose template no longer appears in a fresh inference is flagged
  * `stale` rather than silently dropped.
  *
+ * Hand-edits survive regeneration: `mergeEndpointMap` keys endpoints by
+ * (method, template) identity and lets the existing (possibly human-corrected)
+ * classification win, only folding in newly-observed endpoints and refreshing
+ * volatile stats. The file-level `templates` drift baseline is PRUNED on
+ * merge rather than unioned unboundedly: it keeps the fresh inference's
+ * templates plus any template still referenced by a retained endpoint entry,
+ * so templates with no surviving observation or endpoint fall away.
+ *
+ * PROBE CONTRACT: probes MUST source endpoints exclusively via
+ * `approvedEndpoints()` — never by reading `endpoints` directly. Draft,
+ * rejected, and stale entries are not safe to invoke against a live target.
+ *
+ * `saveEndpointMap` is the canonicalization point: it sorts endpoints into
+ * canonical (template, method) order before serializing, so hand-edited or
+ * in-memory-mutated files always round-trip to a stable, diffable order.
+ *
  * Reuses src/model/url-template.ts for template inference so an app's
  * per-entity routes (`/users/1`, `/users/2`) collapse to one endpoint
  * (`/users/:id`) instead of exploding into one entry per id.
@@ -170,6 +186,9 @@ interface EndpointGroup {
   sampleRequestBody: unknown;
   /** A sample response body, if any request in the group had one. */
   sampleResponseBody: unknown;
+  /** A sample observed status. A 201 wins over other statuses since it is a
+   * corroborating hint for create classification. */
+  sampleStatus: number | undefined;
 }
 
 interface TemplateSetSegmentInfo {
@@ -244,8 +263,10 @@ export function pickMarkerField(requestBody: unknown): string | null {
   return stringKeys[0];
 }
 
-/** Detect which body field carries the entity id (for create responses). */
-function pickIdField(responseBody: unknown): string {
+/** Detect which body field carries the entity id (for create responses).
+ * Returns null when no id-like field is present — callers that need a
+ * default fall back to 'id'. */
+function pickIdField(responseBody: unknown): string | null {
   const obj = asObject(responseBody);
   if (obj) {
     for (const cand of ID_FIELD_CANDIDATES) {
@@ -256,17 +277,21 @@ function pickIdField(responseBody: unknown): string {
     const suffixed = Object.keys(obj).find((k) => /_id$/i.test(k));
     if (suffixed) return suffixed;
   }
-  return 'id';
+  return null;
 }
 
 /**
  * Classify a single endpoint from its method, template, and sample bodies.
  * Pure and deterministic — this is the heuristic baseline stage.
+ *
+ * `ctx.status` is a sample observed response status for the endpoint; it is
+ * used as a corroborating hint (e.g. a 201 boosts POST-to-collection create
+ * classification to high confidence).
  */
 export function classifyEndpoint(
   method: string,
   template: string,
-  ctx: { requestBody?: unknown; responseBody?: unknown } = {},
+  ctx: { requestBody?: unknown; responseBody?: unknown; status?: number } = {},
 ): EndpointClassification {
   const m = method.toUpperCase();
   const seg = parseTemplate(template);
@@ -304,11 +329,19 @@ export function classifyEndpoint(
         idLocation = pathId;
         rationale = `POST on an item template (${template}) is a custom action on a ${entity}; needs review.`;
       } else {
+        // POST-to-collection is only *assumed* to be a create. Boost to high
+        // confidence when a corroborating hint is observed: a 201 Created
+        // status, or a response body carrying an id-like field for the newly
+        // minted entity. Without a hint this stays medium and needs review.
         operation = 'create';
-        confidence = 'high';
-        idLocation = { kind: 'body', field: pickIdField(ctx.responseBody) };
+        const idField = pickIdField(ctx.responseBody);
+        const corroborated = ctx.status === 201 || idField !== null;
+        confidence = corroborated ? 'high' : 'medium';
+        idLocation = { kind: 'body', field: idField ?? 'id' };
         markerField = pickMarkerField(ctx.requestBody);
-        rationale = `POST on a collection template (${template}) creates a ${entity}; new id returned in the body.`;
+        rationale = corroborated
+          ? `POST on a collection template (${template}) creates a ${entity}; corroborated by ${ctx.status === 201 ? 'a 201 response' : `an id-like response field ("${idField}")`}.`
+          : `POST on a collection template (${template}) presumably creates a ${entity}, but no corroborating hint (201 status or id-like response field) was observed; needs review.`;
       }
       break;
     case 'PUT':
@@ -412,6 +445,7 @@ export function deriveEndpointMap(traffic: CapturedTraffic[], opts: DeriveOption
         sampleUrls: [],
         sampleRequestBody: undefined,
         sampleResponseBody: undefined,
+        sampleStatus: undefined,
       };
       groups.set(key, group);
     }
@@ -424,6 +458,9 @@ export function deriveEndpointMap(traffic: CapturedTraffic[], opts: DeriveOption
     }
     if (group.sampleResponseBody === undefined && req.responseBody) {
       group.sampleResponseBody = req.responseBody;
+    }
+    if (group.sampleStatus === undefined || (req.status === 201 && group.sampleStatus !== 201)) {
+      group.sampleStatus = req.status;
     }
   }
 
@@ -438,6 +475,7 @@ export function deriveEndpointMap(traffic: CapturedTraffic[], opts: DeriveOption
     const classification = classifyEndpoint(group.method, group.template, {
       requestBody: group.sampleRequestBody,
       responseBody: group.sampleResponseBody,
+      ...(group.sampleStatus !== undefined ? { status: group.sampleStatus } : {}),
     });
     return {
       id: endpointId(group.method, group.template),
@@ -504,6 +542,12 @@ export interface MergeResult {
  *    `template-drift` when the endpoint's template is absent from the fresh
  *    template set, otherwise `not-observed` (the template still exists but no
  *    request matched this method this round).
+ *
+ * The file-level `templates` baseline is PRUNED, not unioned: the merged file
+ * keeps the fresh inference's templates plus any template still referenced by
+ * a retained endpoint entry (its canonical (method, template) key). Templates
+ * with neither a fresh observation nor a surviving endpoint are dropped, so
+ * the baseline stays bounded across repeated regenerations.
  */
 export function mergeEndpointMap(existing: EndpointMapFile, fresh: EndpointMapFile): MergeResult {
   const freshByKey = new Map(fresh.endpoints.map((e) => [`${e.method} ${e.template}`, e]));
@@ -547,7 +591,9 @@ export function mergeEndpointMap(existing: EndpointMapFile, fresh: EndpointMapFi
 
   merged.sort(compareEndpoints);
 
-  const templates = [...new Set([...existing.templates, ...fresh.templates])].sort();
+  // Pruned baseline: fresh templates + templates still anchoring a retained
+  // endpoint. Anything else (no observation, no endpoint) falls away.
+  const templates = [...new Set([...fresh.templates, ...merged.map((e) => e.template)])].sort();
 
   return {
     file: {
@@ -755,13 +801,18 @@ function assertString(value: unknown, field: string, filePath: string): string {
 /**
  * Save `.specify/endpoints.json` atomically (tmp + rename) with a stable
  * field order per entry so diffs stay reviewable.
+ *
+ * This is the CANONICALIZATION POINT: endpoints are sorted into canonical
+ * (template, method) order here, regardless of the in-memory order the
+ * caller built up (hand-edits, setEndpointStatus, direct mutation of a
+ * merge result). Callers never need to sort before saving.
  */
 export function saveEndpointMap(filePath: string, file: EndpointMapFile): void {
   const ordered = {
     version: file.version,
     ...(file.target_key ? { target_key: file.target_key } : {}),
     templates: [...file.templates].sort(),
-    endpoints: file.endpoints.map((e) => orderEntry(e)),
+    endpoints: [...file.endpoints].sort(compareEndpoints).map((e) => orderEntry(e)),
   };
   const body = JSON.stringify(ordered, null, 2) + '\n';
 
