@@ -157,6 +157,48 @@ export interface BehaviorResult {
     /** Human-readable summary of the confirmation run. */
     output: string;
   };
+  /**
+   * Deterministic monitor verdicts, added POST-HOC by the runner after the
+   * agent finishes — NEVER produced by the agent itself (deliberately not
+   * part of the SDK output schema, same pattern as `repro`). One entry per
+   * compiled LTLf formula attached to this behavior; see
+   * src/monitor/verdict-merge.ts for the asymmetric reconciliation policy.
+   */
+  monitor?: MonitorVerdict[];
+  /**
+   * Who decided this behavior's final status. Absent when no formulas
+   * applied. 'monitor' = an approved formula's violation overrode the LLM;
+   * 'monitor+llm' = an approved formula's satisfied verdict corroborated the
+   * LLM's pass; 'llm' = formulas were evaluated but the LLM's verdict stands
+   * (shadow-mode drafts, inconclusive/unevaluable verdicts, or a monitor
+   * satisfied that cannot overturn an LLM fail).
+   */
+  verdict_source?: 'monitor' | 'llm' | 'monitor+llm';
+}
+
+/**
+ * One formula's verdict over the recorded run trace, attached post-hoc to a
+ * BehaviorResult by the monitor merge (src/monitor/verdict-merge.ts).
+ */
+export interface MonitorVerdict {
+  formula_id: string;
+  /** Formula status at evaluation time. Draft formulas run in shadow mode: advisory only, never affect status. */
+  status: 'draft' | 'approved';
+  verdict: 'satisfied' | 'violated' | 'inconclusive' | 'unevaluable';
+  /** Decisive trace position, when the evaluator pinned one down. */
+  witness_step?: number;
+  /** Human-readable rendering of the decisive position. */
+  witness_detail?: string;
+  /** Number of positions in the evaluated trace. */
+  trace_length: number;
+  /**
+   * Set when the monitor and the LLM disagree in the direction the monitor
+   * is NOT trusted to resolve (formula satisfied but LLM failed the
+   * behavior). A formula checks only what was compiled, not the whole
+   * claim, so 'satisfied' never overturns an LLM fail — the disagreement is
+   * flagged here for burn-in review instead.
+   */
+  disagreement?: boolean;
 }
 
 export interface Evidence {

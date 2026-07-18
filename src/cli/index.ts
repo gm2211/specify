@@ -940,7 +940,15 @@ async function main(): Promise<void> {
 
               process.stderr.write(`Verification complete${costUsd ? ` (cost: $${costUsd.toFixed(4)})` : ''}\n`);
               process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
-              exitCode = pass === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
+              // MONITOR_VIOLATION only when every failure was forced by an
+              // approved formula's violation (LLM had passed them all); any
+              // LLM-reported failure keeps ASSERTION_FAILURE.
+              const { isMonitorOnlyFailure } = await import('../monitor/verdict-merge.js');
+              exitCode = pass === true
+                ? ExitCode.SUCCESS
+                : isMonitorOnlyFailure(structuredOutput)
+                  ? ExitCode.MONITOR_VIOLATION
+                  : ExitCode.ASSERTION_FAILURE;
 
               const verifyResultPath = path.join(outputDir, 'verify-result.json');
               fs.mkdirSync(outputDir, { recursive: true });

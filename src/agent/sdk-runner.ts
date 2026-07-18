@@ -21,7 +21,7 @@ import { loadLayeredContext, renderLayeredPrompt } from './memory-layers.js';
 import { setActivePropagator } from './pattern-propagator.js';
 import { ConfidenceStore, defaultConfidencePath } from './confidence-store.js';
 import { renderActiveSkillsPrompt } from './skill-synthesizer.js';
-import { learnedSkillsEnabled } from './feature-flags.js';
+import { learnedSkillsEnabled, monitorVerdictsEnabled } from './feature-flags.js';
 import { formulaSchema } from '../monitor/formula.js';
 import { randomUUID, createHash } from 'node:crypto';
 
@@ -729,6 +729,22 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   }
 
   try {
+    // --- Monitor formulas (SP-c0n): STRICT load, before any browser/agent
+    // work. Formulas gate pass/fail verdicts, so a malformed
+    // specify.formulas.yaml is a run-fatal config error — and surfacing it
+    // here is far cheaper than after an expensive agent run. Behind the
+    // monitorVerdictsEnabled flag: flag off => the file is ignored entirely
+    // and the run is byte-identical to a build without the monitor tier.
+    let formulasForMerge: import('../spec/formulas.js').FormulasFile | null = null;
+    if (opts.task === 'verify' && opts.spec && monitorVerdictsEnabled()) {
+      const { loadFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
+      formulasForMerge = loadFormulas(defaultFormulasPath(path.resolve(opts.spec)));
+      if (formulasForMerge && formulasForMerge.formulas.length > 0) {
+        process.stderr.write(`  Monitor: loaded ${formulasForMerge.formulas.length} compiled formula(s).\n`);
+      }
+    }
+    // --- end monitor formulas load ---------------------------------------
+
     if (opts.task === 'compare') {
       // Dual browser sessions for compare
       if (!opts.remoteUrl || !opts.localUrl) {
@@ -999,6 +1015,38 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
 
         const result = await executeQuery(queryOptions, prompt, opts);
         result.costUsd += totalCostUsd;
+
+        // --- Monitor verdict merge (SP-c0n). Must run HERE — before the
+        // finally block calls collector.save()/recorder.save() — because it
+        // consumes the IN-MEMORY step records and traffic/console arrays
+        // (evidence files don't exist yet). This single insertion point
+        // covers all callers (CLI verify, review-server, daemon) uniformly.
+        // AX snapshot files are already on disk (written incrementally per
+        // step), so ax.role is evaluable via axBaseDir.
+        if (formulasForMerge && opts.task === 'verify' && result.structuredOutput !== undefined) {
+          try {
+            const { mergeMonitorVerdictsForRun } = await import('../monitor/verdict-merge.js');
+            const session = sessions[0];
+            const merged = mergeMonitorVerdictsForRun(result.structuredOutput, formulasForMerge, {
+              steps: session ? session.observationRecorder.getSteps() : [],
+              traffic: session ? session.collector.getTraffic() : [],
+              consoleLogs: session ? session.collector.getConsoleLogs() : [],
+              ...(session ? { axBaseDir: path.join(opts.outputDir, 'capture') } : {}),
+              emit: (type, data) => eventBus.send(type, data, result.sessionId),
+            });
+            result.structuredOutput = merged.output;
+            if (merged.monitorForcedFailures.length > 0) {
+              process.stderr.write(
+                `  Monitor forced ${merged.monitorForcedFailures.length} behavior(s) to failed: ${merged.monitorForcedFailures.join(', ')}\n`,
+              );
+            }
+          } catch (err) {
+            // The merge must never lose a completed agent run's output.
+            process.stderr.write(`  Monitor verdict merge failed: ${err instanceof Error ? err.message : String(err)}\n`);
+          }
+        }
+        // --- end monitor verdict merge ---------------------------------
+
         return result;
       } catch (err) {
         lastError = err;

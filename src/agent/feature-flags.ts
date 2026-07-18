@@ -15,3 +15,16 @@ export function envFlag(name: string): boolean {
 export function learnedSkillsEnabled(): boolean {
   return envFlag('SPECIFY_ENABLE_LEARNED_SKILLS');
 }
+
+/**
+ * Gate for the monitor-verdict merge (src/monitor/verdict-merge.ts): when
+ * off, `specify.formulas.yaml` is never loaded and verify runs are
+ * byte-identical to a build with no monitor tier at all. When on, verify
+ * loads compiled formulas next to the spec and merges deterministic
+ * verdicts into the agent's structured output per the asymmetric
+ * reconciliation policy (approved-violated forces a fail; draft formulas
+ * are shadow-mode advisory only).
+ */
+export function monitorVerdictsEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_MONITOR_VERDICTS');
+}
