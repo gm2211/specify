@@ -126,8 +126,16 @@ export interface CompileAgentOutput {
 export interface ValidatedCompileResult {
   behavior: string;
   formula: Formula;
+  /** AUTHORITATIVE predicate list: derived from the AST via collectPredicateNames, NOT the model's self-report. */
   predicatesUsed: string[];
   rationale: string;
+  /**
+   * Set when the model's self-reported `predicates_used` did not match the
+   * AST-derived set. The entry is still written (with the correct,
+   * AST-derived set) — this is surfaced as a stderr note only, so the lint
+   * drift-warning stays meaningful for hand-edits to specify.formulas.yaml.
+   */
+  misreportedPredicates?: { declared: string[]; actual: string[] };
 }
 
 export interface RejectedResult {
@@ -139,13 +147,27 @@ export type CompileValidation =
   | ({ ok: true } & ValidatedCompileResult)
   | ({ ok: false } & RejectedResult);
 
+/** Set equality over two string arrays, ignoring order and duplicates. */
+function sameNameSet(a: string[], b: string[]): boolean {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  if (sa.size !== sb.size) return false;
+  for (const x of sa) if (!sb.has(x)) return false;
+  return true;
+}
+
 /**
  * Validate one compiled result: the formula must pass formula.ts's ajv
  * schema, `behavior` must resolve to a behavior actually in the spec, and
- * every predicate referenced — both the model's self-reported
- * `predicates_used` AND the predicates actually walked out of the AST (the
- * two can disagree if the model mis-reports) — must be a known registry
+ * every predicate actually referenced by the AST must be a known registry
  * name. Invalid entries are rejected, never written.
+ *
+ * The model's self-reported `predicates_used` is ADVISORY only: the
+ * predicate set persisted with the entry is always derived from the AST
+ * (collectPredicateNames), so it cannot drift from the formula at the
+ * source. A mismatching self-report is surfaced via `misreportedPredicates`
+ * (logged to stderr by the caller) but does not reject the entry — the
+ * formula itself is what gets reviewed and evaluated, not the report.
  */
 export function validateCompileResult(
   raw: RawCompileResult,
@@ -166,33 +188,31 @@ export function validateCompileResult(
   }
   const formula = raw.formula as Formula;
 
-  if (!Array.isArray(raw.predicates_used) || raw.predicates_used.some((p) => typeof p !== 'string')) {
-    return { ok: false, behavior, reason: '"predicates_used" must be an array of strings' };
-  }
-  const predicatesUsed = raw.predicates_used as string[];
-
-  const unknownDeclared = predicatesUsed.filter((p) => !predicateNames.has(p));
-  if (unknownDeclared.length > 0) {
-    return {
-      ok: false,
-      behavior,
-      reason: `predicates_used references unknown predicate(s): ${unknownDeclared.join(', ')}`,
-    };
-  }
-
   const actuallyUsed = collectPredicateNames(formula);
   const unknownInFormula = actuallyUsed.filter((p) => !predicateNames.has(p));
   if (unknownInFormula.length > 0) {
     return {
       ok: false,
       behavior,
-      reason: `formula references unknown predicate(s) not in predicates_used: ${unknownInFormula.join(', ')}`,
+      reason: `formula references predicate(s) not in the registry: ${unknownInFormula.join(', ')}`,
     };
   }
 
   const rationale = typeof raw.rationale === 'string' ? raw.rationale : '';
 
-  return { ok: true, behavior, formula, predicatesUsed, rationale };
+  const declared = Array.isArray(raw.predicates_used)
+    ? raw.predicates_used.filter((p): p is string => typeof p === 'string')
+    : [];
+  const misreported = !sameNameSet(declared, actuallyUsed);
+
+  return {
+    ok: true,
+    behavior,
+    formula,
+    predicatesUsed: actuallyUsed,
+    rationale,
+    ...(misreported ? { misreportedPredicates: { declared, actual: actuallyUsed } } : {}),
+  };
 }
 
 /** Normalize a skipped-entry, tolerating malformed model output. */
@@ -366,6 +386,26 @@ export async function specCompile(
   }
 
   const allBehaviors = collectAllBehaviors(spec);
+
+  // --behavior filter ids that don't resolve to any behavior in the spec are
+  // almost always typos — warn about each; if NONE resolve, error out rather
+  // than silently proceeding (which would otherwise fall through to either
+  // "nothing to compile" or, worse, whatever the unfiltered set would be).
+  if (options.behavior && options.behavior.length > 0) {
+    const specFqIds = new Set(allBehaviors.map((b) => b.fqId));
+    const unmatched = options.behavior.filter((id) => !specFqIds.has(id));
+    for (const id of unmatched) {
+      process.stderr.write(`${c.yellow('Warning:')} --behavior "${id}" does not match any behavior in the spec\n`);
+    }
+    if (unmatched.length === options.behavior.length) {
+      process.stderr.write('None of the provided --behavior ids match a behavior in the spec — nothing to compile.\n');
+      if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
+        process.stdout.write(JSON.stringify({ error: 'unknown_behavior_filter', unmatched }, null, 2) + '\n');
+      }
+      return ExitCode.PARSE_ERROR;
+    }
+  }
+
   const candidates = selectCandidates(allBehaviors, existing, options.behavior, !!options.force);
 
   const summaryBase = { formulas_path: formulasPath, candidates: candidates.length };
@@ -434,6 +474,13 @@ export async function specCompile(
   for (const raw of agentResult.output.results) {
     const validated = validateCompileResult(raw, behaviorDescByFq, predicateNames);
     if (validated.ok) {
+      if (validated.misreportedPredicates) {
+        const { declared, actual } = validated.misreportedPredicates;
+        process.stderr.write(
+          `${c.yellow('Note:')} ${validated.behavior}: model misreported predicates_used ` +
+          `(declared: [${declared.join(', ')}], actual from formula: [${actual.join(', ')}]) — writing the AST-derived set\n`,
+        );
+      }
       compiledOk.push(validated);
     } else {
       rejected.push({ behavior: validated.behavior, reason: validated.reason });
