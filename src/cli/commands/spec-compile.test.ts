@@ -160,18 +160,22 @@ test('validateCompileResult rejects a malformed formula (schema failure)', () =>
   }
 });
 
-test('validateCompileResult rejects predicates_used referencing an unknown predicate', () => {
+test('validateCompileResult accepts a bogus predicates_used declaration and replaces it with the AST-derived set', () => {
   const behaviors = new Map([['auth/login', 'User can log in']]);
   const raw: RawCompileResult = {
     behavior: 'auth/login',
     formula: eventually(pred('http.response', ['200'])),
+    // declared set contains an unknown name the formula never uses — the
+    // declaration is advisory, the AST is authoritative.
     predicates_used: ['http.response', 'made.up.predicate'],
     rationale: 'x',
   };
   const result = validateCompileResult(raw, behaviors, PREDICATE_NAMES);
-  assert.equal(result.ok, false);
-  if (!result.ok) {
-    assert.match(result.reason, /unknown predicate/);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.predicatesUsed, ['http.response']);
+    assert.ok(result.misreportedPredicates, 'mismatching declaration must be flagged');
+    assert.deepEqual(result.misreportedPredicates?.declared, ['http.response', 'made.up.predicate']);
   }
 });
 
@@ -187,7 +191,43 @@ test('validateCompileResult rejects a formula whose actual predicates are unknow
   const result = validateCompileResult(raw, behaviors, PREDICATE_NAMES);
   assert.equal(result.ok, false);
   if (!result.ok) {
-    assert.match(result.reason, /not in predicates_used/);
+    assert.match(result.reason, /not in the registry/);
+  }
+});
+
+test('validateCompileResult stores the AST-derived predicate set when the model under-declares a known predicate', () => {
+  const behaviors = new Map([['auth/login', 'User can log in']]);
+  const raw: RawCompileResult = {
+    behavior: 'auth/login',
+    // formula uses a KNOWN predicate (step.action) the model failed to declare
+    formula: eventually(pred('step.action', ['click'])),
+    predicates_used: ['http.response'],
+    rationale: 'x',
+  };
+  const result = validateCompileResult(raw, behaviors, PREDICATE_NAMES);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.deepEqual(result.predicatesUsed, ['step.action'], 'persisted set must come from the AST, not the self-report');
+    assert.deepEqual(result.misreportedPredicates, {
+      declared: ['http.response'],
+      actual: ['step.action'],
+    });
+  }
+});
+
+test('validateCompileResult reports no misreport when declaration matches the AST (order/duplicates ignored)', () => {
+  const behaviors = new Map([['auth/login', 'User can log in']]);
+  const raw: RawCompileResult = {
+    behavior: 'auth/login',
+    formula: globally(implies(pred('step.action', ['click']), eventually(pred('http.response', ['200'])))),
+    predicates_used: ['http.response', 'step.action', 'http.response'],
+    rationale: 'x',
+  };
+  const result = validateCompileResult(raw, behaviors, PREDICATE_NAMES);
+  assert.equal(result.ok, true);
+  if (result.ok) {
+    assert.equal(result.misreportedPredicates, undefined);
+    assert.deepEqual([...result.predicatesUsed].sort(), ['http.response', 'step.action']);
   }
 });
 
@@ -301,10 +341,14 @@ test('specCompile writes valid drafts, rejects invalid ones, and records skips (
       },
     });
 
+    // First-compile path: no specify.formulas.yaml exists yet — loadFormulas
+    // must return null (legitimate empty state), not throw.
+    const formulasPath = path.join(dir, 'specify.formulas.yaml');
+    assert.ok(!fs.existsSync(formulasPath), 'precondition: first run starts with no formulas file');
+
     const exitCode = await specCompile({ spec: specPath }, quietCtx(), { agentRunner: stubRunner });
     assert.equal(exitCode, 0);
 
-    const formulasPath = path.join(dir, 'specify.formulas.yaml');
     assert.ok(fs.existsSync(formulasPath), 'formulas file should be written');
 
     const { loadFormulas } = await import('../../spec/formulas.js');
@@ -444,6 +488,104 @@ test('specCompile --force recompiles a behavior that already has a formula', asy
     const loginFormulas = written.formulas.filter((f) => f.behavior === 'auth/login');
     // --force recompiled with a structurally different formula, so both entries exist.
     assert.equal(loginFormulas.length, 2);
+  } finally {
+    cleanup();
+  }
+});
+
+test('specCompile writes the AST-derived predicates_used when the model misreports (known-but-undeclared predicate)', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = writeSpecFixture(dir);
+
+    const stubRunner: CompileAgentRunner = async () => ({
+      model: 'stub-model',
+      costUsd: 0,
+      output: {
+        results: [
+          {
+            behavior: 'auth/login',
+            // formula uses step.action (a KNOWN predicate) but declares only http.response
+            formula: eventually(pred('step.action', ['click'])),
+            predicates_used: ['http.response'],
+            rationale: 'x',
+          },
+        ],
+        skipped: [
+          { behavior: 'auth/logout', reason: 'skip' },
+          { behavior: 'dashboard/layout', reason: 'skip' },
+        ],
+      },
+    });
+
+    const exitCode = await specCompile({ spec: specPath }, quietCtx(), { agentRunner: stubRunner });
+    assert.equal(exitCode, 0);
+
+    const { loadFormulas } = await import('../../spec/formulas.js');
+    const written = loadFormulas(path.join(dir, 'specify.formulas.yaml')) as FormulasFile;
+    assert.equal(written.formulas.length, 1);
+    assert.deepEqual(
+      written.formulas[0].predicates_used,
+      ['step.action'],
+      'written predicates_used must be the AST-derived set, not the model self-report',
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('specCompile warns about a --behavior id matching nothing but proceeds with the ids that do match', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = writeSpecFixture(dir);
+
+    let promptedIds: string[] = [];
+    const stubRunner: CompileAgentRunner = async (params) => {
+      promptedIds = [...params.specYaml.matchAll(/- id:\s*(\S+)/g)].map((m) => m[1]);
+      return {
+        model: 'stub-model',
+        costUsd: 0,
+        output: {
+          results: [
+            { behavior: 'auth/login', formula: eventually(pred('http.response', ['200'])), predicates_used: ['http.response'], rationale: 'x' },
+          ],
+          skipped: [],
+        },
+      };
+    };
+
+    const exitCode = await specCompile(
+      { spec: specPath, behavior: ['auth/login', 'auth/does-not-exist'] },
+      quietCtx(),
+      { agentRunner: stubRunner },
+    );
+    assert.equal(exitCode, 0);
+    assert.ok(promptedIds.includes('login'), 'the matching id must still be compiled');
+    assert.ok(!promptedIds.includes('logout'), 'unfiltered behaviors must not sneak in');
+  } finally {
+    cleanup();
+  }
+});
+
+test('specCompile errors out (non-zero, no agent call) when NO --behavior id matches the spec', async () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = writeSpecFixture(dir);
+
+    let callCount = 0;
+    const stubRunner: CompileAgentRunner = async () => {
+      callCount++;
+      return { model: 'stub-model', costUsd: 0, output: { results: [], skipped: [] } };
+    };
+
+    const exitCode = await specCompile(
+      { spec: specPath, behavior: ['nope/nothing', 'also/nothing'] },
+      quietCtx(),
+      { agentRunner: stubRunner },
+    );
+    assert.notEqual(exitCode, 0, 'an all-unmatched filter must fail loudly');
+    assert.equal(callCount, 0, 'the agent must not be invoked');
+    assert.ok(!fs.existsSync(path.join(dir, 'specify.formulas.yaml')), 'nothing must be written');
   } finally {
     cleanup();
   }
