@@ -26,6 +26,22 @@ export interface ApiTarget {
   type: 'api';
   url: string;
   headers?: Record<string, string>;
+  /**
+   * Session-guarantee probes (epic SP-jdb) actively MUTATE target state:
+   * they issue marker-tagged CRUD against approved endpoints. Because that is
+   * destructive, probes are OFF unless the target explicitly opts in here AND
+   * the run is invoked with the probe flag. See src/agent/probe-workload.ts.
+   */
+  probes?: {
+    /** Opt-in switch. Probes never run against a target where this is falsy. */
+    enabled?: boolean;
+  };
+  /**
+   * Marks this target as a production system. Probes mutate state and must
+   * NEVER touch production, so a truthy value here hard-blocks probing even
+   * when `probes.enabled` and the runtime flag are both set.
+   */
+  production?: boolean;
 }
 
 export type Target = WebTarget | CliTarget | ApiTarget;
