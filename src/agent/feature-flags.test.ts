@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { envFlag, learnedSkillsEnabled } from './feature-flags.js';
+import { envFlag, learnedSkillsEnabled, monitorVerdictsEnabled } from './feature-flags.js';
 
 test('envFlag defaults to false', () => {
   const prev = process.env.SPECIFY_TEST_FLAG;
@@ -40,5 +40,20 @@ test('learnedSkillsEnabled reads SPECIFY_ENABLE_LEARNED_SKILLS', () => {
   } finally {
     if (prev === undefined) delete process.env.SPECIFY_ENABLE_LEARNED_SKILLS;
     else process.env.SPECIFY_ENABLE_LEARNED_SKILLS = prev;
+  }
+});
+
+test('monitorVerdictsEnabled reads SPECIFY_ENABLE_MONITOR_VERDICTS and defaults off', () => {
+  const prev = process.env.SPECIFY_ENABLE_MONITOR_VERDICTS;
+  try {
+    delete process.env.SPECIFY_ENABLE_MONITOR_VERDICTS;
+    assert.equal(monitorVerdictsEnabled(), false);
+    process.env.SPECIFY_ENABLE_MONITOR_VERDICTS = 'true';
+    assert.equal(monitorVerdictsEnabled(), true);
+    process.env.SPECIFY_ENABLE_MONITOR_VERDICTS = 'false';
+    assert.equal(monitorVerdictsEnabled(), false);
+  } finally {
+    if (prev === undefined) delete process.env.SPECIFY_ENABLE_MONITOR_VERDICTS;
+    else process.env.SPECIFY_ENABLE_MONITOR_VERDICTS = prev;
   }
 });
