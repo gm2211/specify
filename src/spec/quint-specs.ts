@@ -89,17 +89,41 @@ export function hashNarrative(narrative: string): string {
 }
 
 /**
- * Derive a stable 6-hex-char id from the flow id and the spec text, so
+ * Derive a stable 10-hex-char id from the flow id and the spec text, so
  * re-drafting the exact same spec for the same flow reproduces the same id
- * (used by addDraft's dedupe check).
+ * (used by addQuintDraft's dedupe check). 10 hex chars (40 bits) keeps the
+ * birthday-collision probability negligible for any realistic entry count;
+ * `addQuintDraft` additionally DETECTS a collision (same id, different
+ * content) and throws {@link QuintSpecIdCollisionError} rather than silently
+ * treating two different specs as the same entry.
  */
 export function quintSpecId(flowFqId: string, specText: string): string {
   const hash = crypto
     .createHash('sha256')
     .update(`${flowFqId}\n${specText}`, 'utf-8')
     .digest('hex')
-    .slice(0, 6);
+    .slice(0, 10);
   return `qnt-${hash}`;
+}
+
+/**
+ * Thrown by addQuintDraft when a freshly-derived id equals an existing entry's
+ * id but the (flow, spec_text) content differs — a hash collision. Without this
+ * check a collision would silently alias two different specs under one id,
+ * corrupting the review gate (approving one would approve "both").
+ */
+export class QuintSpecIdCollisionError extends Error {
+  constructor(
+    public readonly id: string,
+    public readonly existingFlow: string,
+    public readonly newFlow: string,
+  ) {
+    super(
+      `Quint spec id collision: derived id "${id}" for flow "${newFlow}" already belongs to a different spec ` +
+        `(flow "${existingFlow}"). This is a hash collision — change the spec text trivially (e.g. a comment) to re-derive.`,
+    );
+    this.name = 'QuintSpecIdCollisionError';
+  }
 }
 
 function assertString(value: unknown, field: string, filePath: string): string {
@@ -258,8 +282,16 @@ export function addQuintDraft(
     return { file, entry: existing, deduped: true };
   }
 
+  const id = quintSpecId(entry.flow, entry.spec_text);
+  // Content differs from every existing entry (dedupe above), so a matching id
+  // can only be a hash collision — refuse rather than alias two specs.
+  const collision = file.specs.find((s) => s.id === id);
+  if (collision) {
+    throw new QuintSpecIdCollisionError(id, collision.flow, entry.flow);
+  }
+
   const newEntry: QuintSpecEntry = {
-    id: quintSpecId(entry.flow, entry.spec_text),
+    id,
     flow: entry.flow,
     description_hash: entry.description_hash,
     spec_text: entry.spec_text,

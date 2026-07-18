@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeItfValue, parseItfTrace, parseItfJson, type ItfMap } from './quint-itf.js';
+import { decodeItfValue, parseItfTrace, parseItfJson, MAX_ITF_DEPTH, type ItfMap } from './quint-itf.js';
 
 // ---------------------------------------------------------------------------
 // decodeItfValue
@@ -55,6 +55,27 @@ test('decodeItfValue: malformed #set reports an error and yields empty array', (
   const onErr = (m: string): void => void errs.push(m);
   assert.deepEqual(decodeItfValue({ '#set': 'nope' }, onErr), []);
   assert.equal(errs.length, 1);
+});
+
+test('decodeItfValue: nesting beyond the depth cap is a structured error, not a stack overflow', () => {
+  // Build a #tup chain nested well past the cap — deep enough that unbounded
+  // recursion would overflow the stack, so this test is a real regression guard.
+  let value: unknown = 'leaf';
+  const depth = MAX_ITF_DEPTH * 100;
+  for (let i = 0; i < depth; i++) value = { '#tup': [value] };
+  const errs: string[] = [];
+  const decoded = decodeItfValue(value, (m) => void errs.push(m));
+  // The over-deep subtree is dropped as null; the cap is reported.
+  assert.ok(errs.some((e) => e.includes(`maximum depth of ${MAX_ITF_DEPTH}`)));
+  assert.ok(Array.isArray(decoded)); // outermost #tup still decodes
+});
+
+test('decodeItfValue: nesting under the cap decodes fully with no errors', () => {
+  let value: unknown = 'leaf';
+  for (let i = 0; i < MAX_ITF_DEPTH - 2; i++) value = { '#tup': [value] };
+  const errs: string[] = [];
+  decodeItfValue(value, (m) => void errs.push(m));
+  assert.deepEqual(errs, []);
 });
 
 // ---------------------------------------------------------------------------

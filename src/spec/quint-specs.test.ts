@@ -14,6 +14,7 @@ import {
   quintSpecId,
   hashNarrative,
   QuintSpecsLoadError,
+  QuintSpecIdCollisionError,
   type QuintSpecsFile,
   type QuintSpecProvenance,
 } from './quint-specs.js';
@@ -45,7 +46,8 @@ test('quintSpecId: stable and content-derived', () => {
   const c = quintSpecId('auth/login', 'module auth { var x: int }');
   assert.equal(a, b);
   assert.notEqual(a, c);
-  assert.ok(a.startsWith('qnt-'));
+  // 10 hex chars after the prefix (widened from 6 to keep collisions negligible).
+  assert.match(a, /^qnt-[0-9a-f]{10}$/);
 });
 
 // ---------------------------------------------------------------------------
@@ -73,6 +75,30 @@ test('addQuintDraft: same flow, different text is a new entry', () => {
   const second = addQuintDraft(first.file, draft('auth/login', 'module auth { var x: int }'));
   assert.equal(second.deduped, false);
   assert.equal(second.file.specs.length, 2);
+});
+
+test('addQuintDraft: an id collision between DIFFERENT content throws, never aliases', () => {
+  // Force the collision: pre-seed an entry whose id equals what the new,
+  // content-different draft will derive.
+  const collidingId = quintSpecId('auth/login', 'module auth { /* v2 */ }');
+  const seeded: QuintSpecsFile = {
+    version: 1,
+    specs: [
+      {
+        id: collidingId,
+        flow: 'checkout/pay',
+        description_hash: hashNarrative('other'),
+        spec_text: 'module checkout {}',
+        predicates_used: [],
+        status: 'draft',
+        provenance: PROV,
+      },
+    ],
+  };
+  assert.throws(
+    () => addQuintDraft(seeded, draft('auth/login', 'module auth { /* v2 */ }')),
+    QuintSpecIdCollisionError,
+  );
 });
 
 // ---------------------------------------------------------------------------

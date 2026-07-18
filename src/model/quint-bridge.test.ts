@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { bridgeItfTrace, readPredicateBits, type QuintTraceScript } from './quint-bridge.js';
+import {
+  bridgeItfTrace,
+  bridgeApprovedSpecTrace,
+  readPredicateBits,
+  QuintSpecNotApprovedError,
+  type QuintTraceScript,
+} from './quint-bridge.js';
 import type { ItfTrace, ItfState } from './quint-itf.js';
+import type { QuintSpecsFile, QuintSpecStatus } from '../spec/quint-specs.js';
 
 function trace(states: ItfState[]): ItfTrace {
   return { vars: [], states, meta: {} };
@@ -140,4 +147,57 @@ test('bridgeItfTrace: empty trace yields an entry-only script, no crash', () => 
   const script = bridgeItfTrace(trace([]), 'auth/none');
   assert.equal(script.steps.length, 0);
   assert.equal(script.entry.value, '/');
+});
+
+// ---------------------------------------------------------------------------
+// bridgeApprovedSpecTrace — the structural review gate
+// ---------------------------------------------------------------------------
+
+function storeWith(status: QuintSpecStatus): QuintSpecsFile {
+  return {
+    version: 1,
+    specs: [
+      {
+        id: 'qnt-0123456789',
+        flow: 'auth/login',
+        description_hash: 'sha256:x',
+        spec_text: 'module auth {}',
+        predicates_used: ['page.url'],
+        status,
+        provenance: { drafted_by: 'llm', drafted_at: '2026-07-18T00:00:00Z' },
+      },
+    ],
+  };
+}
+
+test('bridgeApprovedSpecTrace: refuses a draft spec — the gate is structural', () => {
+  assert.throws(
+    () => bridgeApprovedSpecTrace(storeWith('draft'), 'qnt-0123456789', trace([{ url: '/login' }])),
+    (err: unknown) => err instanceof QuintSpecNotApprovedError && err.message.includes('"draft"'),
+  );
+});
+
+test('bridgeApprovedSpecTrace: refuses a rejected spec', () => {
+  assert.throws(
+    () => bridgeApprovedSpecTrace(storeWith('rejected'), 'qnt-0123456789', trace([{ url: '/login' }])),
+    QuintSpecNotApprovedError,
+  );
+});
+
+test('bridgeApprovedSpecTrace: refuses an unknown spec id', () => {
+  assert.throws(
+    () => bridgeApprovedSpecTrace(storeWith('approved'), 'qnt-missing', trace([{ url: '/login' }])),
+    (err: unknown) => err instanceof QuintSpecNotApprovedError && err.message.includes('not found'),
+  );
+});
+
+test('bridgeApprovedSpecTrace: an approved spec bridges, carrying flow + id provenance', () => {
+  const script = bridgeApprovedSpecTrace(
+    storeWith('approved'),
+    'qnt-0123456789',
+    trace([{ url: '/login' }, { url: '/dashboard', action: 'browser_click', selector: '#go' }]),
+  );
+  assert.equal(script.flow, 'auth/login');
+  assert.equal(script.id, 'auth/login~qnt-0123456789~quint~0');
+  assert.equal(script.steps.length, 1);
 });

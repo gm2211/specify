@@ -49,6 +49,10 @@ export interface ExecResult {
   code: number | null;
   stdout: string;
   stderr: string;
+  /** True when stdout crossed the per-stream cap and was truncated. */
+  stdoutTruncated?: boolean;
+  /** True when stderr crossed the per-stream cap and was truncated. */
+  stderrTruncated?: boolean;
   /** Present when the process could not be spawned at all (e.g. binary missing). */
   spawnError?: string;
 }
@@ -56,12 +60,50 @@ export interface ExecResult {
 /** The subprocess boundary. Injected in tests; defaults to a real `spawn`. */
 export type QuintExec = (argv: string[], opts: { cwd?: string; timeoutMs: number }) => Promise<ExecResult>;
 
+/**
+ * Per-stream output cap: 256 KiB, matching src/agent/cli-mcp.ts's
+ * OUTPUT_CAP_BYTES. quint's stdout/stderr are diagnostics only (the real
+ * output is the `--out-itf` file), so a chatty or looping process must not be
+ * able to balloon memory before its timeout fires.
+ */
+export const QUINT_OUTPUT_CAP_BYTES = 256 * 1024;
+
+/**
+ * Bounded accumulator for a child process stream (the BoundedSink pattern from
+ * src/agent/cli-mcp.ts): appends only up to `capBytes`, then flips `truncated`
+ * and drops everything past the cap. The stream keeps flowing — exit-code
+ * collection is unaffected; we just stop storing.
+ */
+class BoundedSink {
+  text = '';
+  truncated = false;
+  constructor(private readonly capBytes: number) {}
+
+  append(chunk: Buffer | string): void {
+    if (this.truncated) return;
+    const s = chunk.toString();
+    const remaining = this.capBytes - this.text.length;
+    if (s.length <= remaining) {
+      this.text += s;
+    } else {
+      this.text += s.slice(0, remaining);
+      this.truncated = true;
+    }
+  }
+}
+
 /** Default exec: spawn `quint …` with an argv array (no shell). Never throws. */
 export const spawnQuint: QuintExec = (argv, opts) =>
   new Promise<ExecResult>((resolve) => {
-    let stdout = '';
-    let stderr = '';
+    const stdout = new BoundedSink(QUINT_OUTPUT_CAP_BYTES);
+    const stderr = new BoundedSink(QUINT_OUTPUT_CAP_BYTES);
     let settled = false;
+    const snapshot = (): Pick<ExecResult, 'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'> => ({
+      stdout: stdout.text,
+      stderr: stderr.text,
+      stdoutTruncated: stdout.truncated,
+      stderrTruncated: stderr.truncated,
+    });
     const finish = (r: ExecResult): void => {
       if (settled) return;
       settled = true;
@@ -71,26 +113,26 @@ export const spawnQuint: QuintExec = (argv, opts) =>
     try {
       child = spawn(argv[0], argv.slice(1), { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
-      finish({ code: null, stdout, stderr, spawnError: (err as Error).message });
+      finish({ code: null, ...snapshot(), spawnError: (err as Error).message });
       return;
     }
     const timer = setTimeout(() => {
       child.kill('SIGKILL');
-      finish({ code: null, stdout, stderr, spawnError: `quint timed out after ${opts.timeoutMs}ms` });
+      finish({ code: null, ...snapshot(), spawnError: `quint timed out after ${opts.timeoutMs}ms` });
     }, opts.timeoutMs);
     child.stdout?.on('data', (d) => {
-      stdout += String(d);
+      stdout.append(d);
     });
     child.stderr?.on('data', (d) => {
-      stderr += String(d);
+      stderr.append(d);
     });
     child.on('error', (err) => {
       clearTimeout(timer);
-      finish({ code: null, stdout, stderr, spawnError: err.message });
+      finish({ code: null, ...snapshot(), spawnError: err.message });
     });
     child.on('close', (code) => {
       clearTimeout(timer);
-      finish({ code, stdout, stderr });
+      finish({ code, ...snapshot() });
     });
   });
 
@@ -137,6 +179,24 @@ const DEFAULT_MAX_STEPS = 20;
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 /**
+ * Validate `options.binary`. PATH resolution of a bare command name is
+ * INTENTIONAL here — the toolchain is operator-installed (see the module doc),
+ * so "quint on PATH" is the expected default and an absolute path is the
+ * explicit override. What is NOT accepted is anything shell-shaped: whitespace,
+ * quoting, or metacharacters. We never invoke a shell (argv-array spawn), so a
+ * composite string like "quint --evil" would misresolve rather than inject —
+ * but rejecting it up front turns a confusing ENOENT into a clear config error.
+ * Kept permissive enough for tests to inject an absolute node binary path.
+ */
+export function isValidQuintBinary(binary: string): boolean {
+  if (binary.length === 0) return false;
+  // No whitespace or shell metacharacters anywhere.
+  if (/[\s;&|<>$`"'\\!*?(){}[\]#~\n\r]/.test(binary)) return false;
+  // A bare command name (resolved on PATH) or an absolute path.
+  return !binary.includes('/') || binary.startsWith('/');
+}
+
+/**
  * Simulate a Quint spec and return the ITF traces it produced. Never throws.
  * Writes the ITF to a temp file, invokes quint, reads it back, and parses it
  * with the tolerant ITF parser. A symbolic request is refused unless the caller
@@ -147,6 +207,16 @@ export async function runQuintSimulation(options: QuintRunOptions): Promise<Quin
   const exec = options.exec ?? spawnQuint;
   const binary = options.binary ?? 'quint';
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+
+  if (!isValidQuintBinary(binary)) {
+    return {
+      ok: false,
+      traces: [],
+      itfErrors: [],
+      error: `invalid quint binary "${binary}" — expected a bare command name (resolved on PATH) or an absolute path, with no whitespace or shell metacharacters`,
+      argv: [],
+    };
+  }
 
   if (options.symbolic && !quintSymbolicBackendEnabled()) {
     return {

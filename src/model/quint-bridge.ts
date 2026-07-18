@@ -50,6 +50,7 @@ import type { CompiledStep, CompiledAssertion } from './trace-compiler.js';
 import { renderStep, urlTemplateToRegex } from './trace-compiler.js';
 import type { ItfState, ItfValue, ItfTrace } from './quint-itf.js';
 import { predicateRegistry } from '../monitor/predicates.js';
+import type { QuintSpecsFile } from '../spec/quint-specs.js';
 
 // ---------------------------------------------------------------------------
 // Convention
@@ -250,6 +251,58 @@ export function bridgeItfTrace(
   };
   script.playwright = renderQuintPlaywright(script);
   return script;
+}
+
+// ---------------------------------------------------------------------------
+// Review-gate enforcement — the ONLY sanctioned path from a stored spec's
+// traces to the executable substrate
+// ---------------------------------------------------------------------------
+
+/**
+ * Thrown by {@link bridgeApprovedSpecTrace} when the referenced spec is missing
+ * or not approved. The review gate is STRUCTURAL, not caller-discipline: a
+ * draft (or rejected) spec's simulated traces must never reach compilation /
+ * execution, even through a careless caller, so the gated entry point takes the
+ * store + spec id and refuses internally.
+ */
+export class QuintSpecNotApprovedError extends Error {
+  constructor(
+    public readonly specId: string,
+    public readonly status: string | undefined,
+  ) {
+    super(
+      status === undefined
+        ? `Quint spec "${specId}" not found in specify.quint.yaml — cannot bridge traces for an unknown spec`
+        : `Quint spec "${specId}" has status "${status}" — only an APPROVED spec's traces may be bridged into ` +
+          'the executable pipeline. Review the draft in specify.quint.yaml and approve it first (mandatory human review).',
+    );
+    this.name = 'QuintSpecNotApprovedError';
+  }
+}
+
+/**
+ * The gated bridge entry: look the spec up in the store, refuse unless its
+ * status is `approved`, and only then adapt the ITF trace into the executable
+ * substrate (delegating to {@link bridgeItfTrace} with the entry's flow).
+ * Callers that hold ITF traces produced from a stored spec MUST come through
+ * here — `bridgeItfTrace` remains exported for tests and for traces that do not
+ * originate from the store, but anything wired to specify.quint.yaml goes
+ * through this check.
+ */
+export function bridgeApprovedSpecTrace(
+  specs: QuintSpecsFile,
+  specId: string,
+  trace: ItfTrace,
+  options: Omit<BridgeOptions, 'idPrefix'> = {},
+): QuintTraceScript {
+  const entry = specs.specs.find((s) => s.id === specId);
+  if (!entry) {
+    throw new QuintSpecNotApprovedError(specId, undefined);
+  }
+  if (entry.status !== 'approved') {
+    throw new QuintSpecNotApprovedError(specId, entry.status);
+  }
+  return bridgeItfTrace(trace, entry.flow, { ...options, idPrefix: `${entry.flow}~${entry.id}` });
 }
 
 // ---------------------------------------------------------------------------

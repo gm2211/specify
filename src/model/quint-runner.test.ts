@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import test from 'node:test';
-import { runQuintSimulation, type QuintExec, type ExecResult } from './quint-runner.js';
+import {
+  runQuintSimulation,
+  spawnQuint,
+  isValidQuintBinary,
+  QUINT_OUTPUT_CAP_BYTES,
+  type QuintExec,
+  type ExecResult,
+} from './quint-runner.js';
 
 /**
  * A fake `quint` that plays the CLI's role: it reads the `--out-itf <path>`
@@ -106,6 +113,53 @@ test('runQuintSimulation: symbolic backend is refused unless the JVM flag is set
   } finally {
     if (prev !== undefined) process.env.SPECIFY_ENABLE_QUINT_SYMBOLIC = prev;
   }
+});
+
+test('spawnQuint: caps runaway stdout/stderr at the per-stream bound with truncation flags', async () => {
+  // Drive the REAL spawn boundary with node as the child, emitting well past
+  // the cap on both streams — the BoundedSink must stop storing at the cap.
+  const script =
+    `process.stdout.write('o'.repeat(${QUINT_OUTPUT_CAP_BYTES + 4096}));` +
+    `process.stderr.write('e'.repeat(${QUINT_OUTPUT_CAP_BYTES + 4096}));`;
+  const res = await spawnQuint([process.execPath, '-e', script], { timeoutMs: 30_000 });
+  assert.equal(res.code, 0);
+  assert.equal(res.stdout.length, QUINT_OUTPUT_CAP_BYTES);
+  assert.equal(res.stderr.length, QUINT_OUTPUT_CAP_BYTES);
+  assert.equal(res.stdoutTruncated, true);
+  assert.equal(res.stderrTruncated, true);
+});
+
+test('spawnQuint: output under the cap is untouched and unflagged', async () => {
+  const res = await spawnQuint([process.execPath, '-e', "process.stdout.write('hello')"], { timeoutMs: 30_000 });
+  assert.equal(res.stdout, 'hello');
+  assert.equal(res.stdoutTruncated, false);
+  assert.equal(res.stderrTruncated, false);
+});
+
+test('isValidQuintBinary: accepts bare names and absolute paths, rejects shell shapes', () => {
+  assert.equal(isValidQuintBinary('quint'), true);
+  assert.equal(isValidQuintBinary('quint-v2.cmd'), true);
+  assert.equal(isValidQuintBinary('/usr/local/bin/quint'), true);
+  assert.equal(isValidQuintBinary(process.execPath), true);
+  // Relative paths, whitespace, and metacharacters are all rejected.
+  assert.equal(isValidQuintBinary(''), false);
+  assert.equal(isValidQuintBinary('./quint'), false);
+  assert.equal(isValidQuintBinary('bin/quint'), false);
+  assert.equal(isValidQuintBinary('quint --evil'), false);
+  assert.equal(isValidQuintBinary('quint;rm'), false);
+  assert.equal(isValidQuintBinary('$(quint)'), false);
+  assert.equal(isValidQuintBinary('quint|cat'), false);
+  assert.equal(isValidQuintBinary('quint`x`'), false);
+});
+
+test('runQuintSimulation: an invalid binary is a structured config error before any spawn', async () => {
+  const exec: QuintExec = async () => {
+    throw new Error('exec must not be reached');
+  };
+  const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', binary: 'quint; rm -rf /', exec });
+  assert.equal(res.ok, false);
+  assert.ok(res.error && res.error.includes('invalid quint binary'));
+  assert.deepEqual(res.argv, []);
 });
 
 test('runQuintSimulation: symbolic uses the `verify` verb when the JVM flag is on', async () => {

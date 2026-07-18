@@ -94,6 +94,16 @@ export interface ParseItfResult {
 
 const MAX_SAFE = Number.MAX_SAFE_INTEGER;
 
+/**
+ * Recursion depth cap for `decodeItfValue`. ITF documents come from an
+ * EXTERNAL tool's output; a pathologically (or maliciously) nested document
+ * must not be able to blow the JS call stack — per the parser's
+ * report-not-throw contract, hitting the cap is a structured parse error
+ * (the subtree decodes to `null` and `onError` is notified), never a crash.
+ * 128 is far beyond any state shape a real Quint model produces.
+ */
+export const MAX_ITF_DEPTH = 128;
+
 function isTagged(value: object, tag: string): boolean {
   const keys = Object.keys(value);
   return keys.length === 1 && keys[0] === tag;
@@ -102,16 +112,22 @@ function isTagged(value: object, tag: string): boolean {
 /**
  * Decode one raw ITF value into an `ItfValue`. Never throws — an unexpected
  * shape is decoded best-effort (e.g. a malformed `#bigint` falls back to its
- * string). `onError` collects a note for anything genuinely lossy.
+ * string). `onError` collects a note for anything genuinely lossy. Nesting
+ * beyond {@link MAX_ITF_DEPTH} is reported and decoded as `null` (see the
+ * constant's doc for why the cap exists).
  */
-export function decodeItfValue(raw: unknown, onError: (msg: string) => void): ItfValue {
+export function decodeItfValue(raw: unknown, onError: (msg: string) => void, depth = 0): ItfValue {
+  if (depth > MAX_ITF_DEPTH) {
+    onError(`value nesting exceeds the maximum depth of ${MAX_ITF_DEPTH} — subtree dropped`);
+    return null;
+  }
   if (raw === null) return null;
   const t = typeof raw;
   if (t === 'string' || t === 'boolean' || t === 'number') {
     return raw as string | boolean | number;
   }
   if (Array.isArray(raw)) {
-    return raw.map((el) => decodeItfValue(el, onError));
+    return raw.map((el) => decodeItfValue(el, onError, depth + 1));
   }
   if (t !== 'object') {
     onError(`unsupported ${t} value in trace`);
@@ -136,7 +152,7 @@ export function decodeItfValue(raw: unknown, onError: (msg: string) => void): It
       onError('#set value is not an array');
       return [];
     }
-    return items.map((el) => decodeItfValue(el, onError));
+    return items.map((el) => decodeItfValue(el, onError, depth + 1));
   }
   if (isTagged(obj, '#tup')) {
     const items = obj['#tup'];
@@ -144,7 +160,7 @@ export function decodeItfValue(raw: unknown, onError: (msg: string) => void): It
       onError('#tup value is not an array');
       return [];
     }
-    return items.map((el) => decodeItfValue(el, onError));
+    return items.map((el) => decodeItfValue(el, onError, depth + 1));
   }
   if (isTagged(obj, '#map')) {
     const pairs = obj['#map'];
@@ -158,7 +174,7 @@ export function decodeItfValue(raw: unknown, onError: (msg: string) => void): It
         onError('#map entry is not a [key, value] pair');
         continue;
       }
-      decoded.push([decodeItfValue(pair[0], onError), decodeItfValue(pair[1], onError)]);
+      decoded.push([decodeItfValue(pair[0], onError, depth + 1), decodeItfValue(pair[1], onError, depth + 1)]);
     }
     return { map: decoded };
   }
@@ -170,7 +186,7 @@ export function decodeItfValue(raw: unknown, onError: (msg: string) => void): It
   const out: Record<string, ItfValue> = {};
   for (const [key, value] of Object.entries(obj)) {
     if (key === '#meta') continue;
-    out[key] = decodeItfValue(value, onError);
+    out[key] = decodeItfValue(value, onError, depth + 1);
   }
   return out;
 }
