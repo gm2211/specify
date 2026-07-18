@@ -16,13 +16,84 @@ const STATIC_EXT = new Set([
   '.woff', '.woff2', '.ttf', '.ico', '.map', '.less',
 ]);
 
-function shouldCapture(url: string, hostFilter: string): boolean {
+/**
+ * Common two-level public suffixes where the registrable domain needs three
+ * labels instead of two (e.g. "example.co.uk", not "co.uk"). This is a
+ * pragmatic heuristic, not a full Public Suffix List implementation — it
+ * covers the common cases without pulling in a PSL dependency. Widen this
+ * list (or use SPECIFY_CAPTURE_HOST_FILTER, see below) if a target domain
+ * isn't matched correctly.
+ */
+const TWO_LEVEL_PUBLIC_SUFFIXES = new Set([
+  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'me.uk', 'net.uk',
+  'com.au', 'net.au', 'org.au', 'gov.au',
+  'co.nz', 'co.jp', 'co.in', 'co.za', 'co.kr',
+  'com.br', 'com.mx', 'com.cn', 'com.sg', 'com.hk',
+]);
+
+/**
+ * Reduce a hostname to its registrable domain (a.k.a. "eTLD+1"), e.g.
+ * "api.example.com" -> "example.com" and "www.example.co.uk" -> "example.co.uk".
+ * IP addresses and single-label hosts (localhost, etc.) are returned as-is.
+ */
+export function registrableDomain(hostname: string): string {
+  const host = hostname.toLowerCase();
+  // Leave IPv4/IPv6-ish and single-label hosts (e.g. "localhost") untouched.
+  if (/^[\d.]+$/.test(host) || !host.includes('.')) return host;
+
+  const labels = host.split('.');
+  if (labels.length < 2) return host;
+
+  const lastTwo = labels.slice(-2).join('.');
+  if (TWO_LEVEL_PUBLIC_SUFFIXES.has(lastTwo) && labels.length >= 3) {
+    return labels.slice(-3).join('.');
+  }
+  return lastTwo;
+}
+
+/**
+ * Decide whether a request/response pair should be recorded as traffic.
+ *
+ * Host matching is by *registrable domain*, not substring/hostname equality:
+ * a target page loaded from "www.example.com" also captures calls to
+ * "api.example.com" or "cdn.example.com", since they share the registrable
+ * domain "example.com". This matters for evidence soundness — a naive
+ * `hostname.includes(hostFilter)` check silently drops same-site,
+ * different-subdomain API traffic, which makes any predicate over "no
+ * request occurred" unsound (the request happened, it just wasn't captured).
+ *
+ * For targets that call genuinely cross-origin APIs (a different
+ * registrable domain, e.g. a first-party app calling a third-party payments
+ * API), set SPECIFY_CAPTURE_HOST_FILTER to a comma-separated list of
+ * additional registrable domains (or hostnames) to widen the filter, or set
+ * it to "*" to disable host filtering entirely and capture all traffic.
+ *
+ * Static assets (STATIC_EXT) are always filtered out regardless of host,
+ * since they're not meaningful evidence for functional verification.
+ */
+export function shouldCapture(url: string, hostFilter: string): boolean {
   try {
     const u = new URL(url);
-    if (hostFilter && !u.hostname.includes(hostFilter)) return false;
+
+    if (hostFilter) {
+      const extra = (process.env.SPECIFY_CAPTURE_HOST_FILTER ?? '')
+        .split(',')
+        .map((h) => h.trim().toLowerCase())
+        .filter(Boolean);
+
+      if (!extra.includes('*')) {
+        const targetDomain = registrableDomain(hostFilter);
+        const requestDomain = registrableDomain(u.hostname);
+        const matchesTarget = requestDomain === targetDomain;
+        const matchesExtra = extra.some(
+          (h) => requestDomain === registrableDomain(h) || u.hostname.toLowerCase() === h,
+        );
+        if (!matchesTarget && !matchesExtra) return false;
+      }
+    }
+
     const ext = path.extname(u.pathname).toLowerCase();
-    if (STATIC_EXT.has(ext)) return false;
-    return true;
+    return !STATIC_EXT.has(ext);
   } catch {
     return false;
   }
@@ -74,6 +145,7 @@ export class CaptureCollector {
       const request = route.request();
       const url = request.url();
       const method = request.method();
+      const tsStart = Date.now();
 
       const response = await route.fetch().catch(() => null);
       if (!response) {
@@ -84,13 +156,16 @@ export class CaptureCollector {
       await route.fulfill({ response }).catch(() => {});
 
       if (shouldCapture(url, this.hostFilter)) {
+        const tsEnd = Date.now();
         const entry: CapturedTraffic = {
           url,
           method,
           postData: request.postData() ?? null,
           status: response.status(),
           contentType: response.headers()['content-type'] ?? '',
-          ts: Date.now(),
+          ts: tsEnd,
+          tsStart,
+          tsEnd,
           responseBody: null,
         };
 

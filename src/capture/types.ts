@@ -77,8 +77,25 @@ export interface CapturedTraffic {
   /** Content-Type header value. */
   contentType: string;
 
-  /** Unix timestamp in milliseconds. */
+  /**
+   * Unix timestamp in milliseconds, historically the moment the response
+   * completed. Kept for backward compatibility with existing captures and
+   * consumers (e.g. mock-server.ts replay); prefer tsEnd for new code.
+   */
   ts: number;
+
+  /**
+   * Unix timestamp in milliseconds when the request was sent. Optional
+   * because older captures (pre-dating this field) won't have it.
+   */
+  tsStart?: number;
+
+  /**
+   * Unix timestamp in milliseconds when the response completed. Equal to
+   * `ts` for entries captured after this field was introduced. Optional
+   * because older captures won't have it.
+   */
+  tsEnd?: number;
 
   /** Response body as string, if captured. */
   responseBody: string | null;

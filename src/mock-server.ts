@@ -174,6 +174,8 @@ interface TrafficEntry {
   status: number;
   contentType: string;
   ts: number;
+  tsStart?: number;
+  tsEnd?: number;
   responseBody: string | null;
 }
 
