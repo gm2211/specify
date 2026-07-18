@@ -759,11 +759,20 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   // from one run can be correlated by that id.
   const runId = `run_${randomUUID().slice(0, 8)}`;
 
-  // Whether a seeded fault plan is actually active for this run (flag on +
-  // a non-empty plan supplied). Drives the learning-loop hygiene suffix on
-  // the memory target key below — synthetic, injected failures must never
-  // poison playbooks/quirks learned for the healthy target.
-  const faultsActive = faultInjectionEnabled() && !!opts.faultPlan && opts.faultPlan.rules.length > 0;
+  // Learning-loop hygiene: whether faults have (ever) been active for this
+  // run. This drives the '+faults' suffix on the memory target key —
+  // synthetic, injected failures must never poison playbooks/quirks learned
+  // for the healthy target (those rows are auto-reinjected into future
+  // prompts). Evaluated at WRITE time, not session start: the agent can
+  // activate faults mid-run via browser_inject_fault, after the memory
+  // scope was constructed, so the scope's target exposes this as a live
+  // getter and each memory write re-resolves the key. The injector's
+  // hasEverActivated() flag is sticky (never reset by clear()) — once a
+  // session has been exposed to injected faults, everything it learns is
+  // suspect and stays in the '+faults' scope.
+  const staticFaultsActive = faultInjectionEnabled() && !!opts.faultPlan && opts.faultPlan.rules.length > 0;
+  const faultsEverActive = (): boolean =>
+    staticFaultsActive || sessions.some((s) => s.faultInjector?.hasEverActivated() ?? false);
 
   // Session indexer: persist every event from this run into a SQLite + FTS5
   // store for cross-session recall. Spec-scoped DB by default.
@@ -952,7 +961,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           type: spec.target.type as 'web' | 'api' | 'cli',
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
-          faultsActive,
+          // Live getter, not a snapshot: mid-run browser_inject_fault calls
+          // flip this for all subsequent memory writes (see faultsEverActive).
+          get faultsActive(): boolean {
+            return faultsEverActive();
+          },
         };
         const provider: MemoryProvider = honchoFromEnv() ?? defaultMemoryProvider();
         const scope: MemoryScope = { specPath: opts.spec, specId: spec.name, target };
@@ -1011,7 +1024,10 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           type: spec.target.type as 'web' | 'api' | 'cli',
           url: (spec.target as { url?: string }).url,
           binary: (spec.target as { binary?: string }).binary,
-          faultsActive,
+          // Live getter — see faultsEverActive above.
+          get faultsActive(): boolean {
+            return faultsEverActive();
+          },
         };
         const memoryScope: MemoryScope = verifyMemoryScope ?? {
           specPath: opts.spec,

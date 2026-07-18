@@ -111,8 +111,22 @@ export function patternMatches(pattern: string, url: string): boolean {
 export class FaultInjector {
   private plan: FaultPlan;
 
+  /**
+   * Sticky flag: true from the first moment any fault rule exists in this
+   * session (plan constructed with rules, setPlan with rules, or addRule),
+   * or the first time a fault decision actually fires. NEVER reset by
+   * clear() — once a session has been exposed to injected faults, anything
+   * learned in it is suspect. Memory writes consult this (via the live
+   * `faultsActive` getter on the memory scope's target, see sdk-runner.ts)
+   * so mid-run fault activation routes learned-memory writes to the
+   * '+faults' scope instead of polluting the healthy target's
+   * playbooks/quirks.
+   */
+  private everActivated = false;
+
   constructor(plan?: FaultPlan) {
     this.plan = plan ?? { seed: 1, rules: [] };
+    if (this.plan.rules.length > 0) this.everActivated = true;
   }
 
   getPlan(): FaultPlan {
@@ -121,11 +135,13 @@ export class FaultInjector {
 
   setPlan(plan: FaultPlan): void {
     this.plan = plan;
+    if (plan.rules.length > 0) this.everActivated = true;
   }
 
   /** Add a rule to the active plan (creating one with the default seed if none exists yet). */
   addRule(rule: FaultRule): void {
     this.plan.rules.push(rule);
+    this.everActivated = true;
   }
 
   /** Remove all rules. The plan's seed is left in place; only rules are cleared. */
@@ -139,6 +155,14 @@ export class FaultInjector {
   }
 
   /**
+   * Whether any fault rule has EVER been active in this session, regardless
+   * of whether it has since been cleared. Sticky — see the field doc above.
+   */
+  hasEverActivated(): boolean {
+    return this.everActivated;
+  }
+
+  /**
    * Decide whether request `seq` (a monotonically increasing per-session
    * counter, not a retry count) should be faulted. Returns the first
    * matching rule's decision, or null if no rule matches or fires.
@@ -149,10 +173,12 @@ export class FaultInjector {
       if (rule.method && rule.method.toUpperCase() !== method.toUpperCase()) continue;
 
       if (rule.rate >= 1) {
+        this.everActivated = true;
         return { rule, fault: rule.fault };
       }
       if (rule.rate <= 0) continue;
       if (seededDraw(this.plan.seed, seq) < rule.rate) {
+        this.everActivated = true;
         return { rule, fault: rule.fault };
       }
     }

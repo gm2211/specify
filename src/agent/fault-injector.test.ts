@@ -120,6 +120,30 @@ test('FaultInjector: addRule/clear mutate the active plan', () => {
   assert.equal(injector.decide('https://x.test/api/orders', 'GET', 0), null);
 });
 
+test('FaultInjector.hasEverActivated: false for a rule-less session, sticky once a rule is added, survives clear()', () => {
+  const injector = new FaultInjector({ seed: 1, rules: [] });
+  assert.equal(injector.hasEverActivated(), false);
+
+  injector.addRule({ urlPattern: '/api/', fault: '500', rate: 1.0 });
+  assert.equal(injector.hasEverActivated(), true);
+
+  injector.clear();
+  assert.equal(injector.isActive(), false);
+  assert.equal(injector.hasEverActivated(), true, 'clear() must never reset the sticky flag');
+});
+
+test('FaultInjector.hasEverActivated: true from construction when the plan has rules', () => {
+  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/', fault: 'abort', rate: 1.0 }] });
+  assert.equal(injector.hasEverActivated(), true);
+});
+
+test('FaultInjector.hasEverActivated: setPlan with rules also sets the sticky flag', () => {
+  const injector = new FaultInjector({ seed: 1, rules: [] });
+  assert.equal(injector.hasEverActivated(), false);
+  injector.setPlan({ seed: 2, rules: [{ urlPattern: '/x', fault: 'empty', rate: 1.0 }] });
+  assert.equal(injector.hasEverActivated(), true);
+});
+
 test('FaultInjector.decide: first matching rule wins', () => {
   const injector = new FaultInjector({
     seed: 1,
