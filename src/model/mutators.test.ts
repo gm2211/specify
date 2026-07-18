@@ -192,6 +192,11 @@ test('double-submit fires once per write-bearing transition, tolerate contract',
     assert.equal(m.contract.class, 'no-second-side-effect');
     assert.equal(m.contract.outcome, 'tolerate');
     assert.equal(m.contract.check.kind, 'no-repeated-write');
+    if (m.contract.check.kind === 'no-repeated-write') {
+      // Conservative policy: a repeated 2xx is inconclusive (idempotent retry
+      // vs duplicate), never a violation on its own.
+      assert.equal(m.contract.check.onRepeatedSuccess, 'inconclusive');
+    }
     assert.ok(m.wellFormed, 'a re-fired real arc keeps the path well-formed');
   }
 });
@@ -455,9 +460,13 @@ test('a sink with no predicate is still terminal (structural signal)', () => {
   const suite = mutateSuite(manualSuite(model, [['A', 'x', 'B']]), model);
   const rv = byOperator(suite, 'revisit-after-terminal');
   assert.equal(rv.length, 1);
-  // Reached by a non-write arc => reject contract (redirect away), not no-repeated-write.
-  assert.equal(rv[0].contract.outcome, 'reject');
-  assert.equal(rv[0].contract.check.kind, 'expect-reject-or-redirect');
+  // Reached by a non-write arc => safe-revisit contract: a redirect away OR a
+  // safely re-shown completed view both pass; only a write on revisit violates.
+  assert.equal(rv[0].contract.outcome, 'tolerate');
+  assert.equal(rv[0].contract.check.kind, 'expect-safe-revisit');
+  if (rv[0].contract.check.kind === 'expect-safe-revisit') {
+    assert.equal(rv[0].contract.check.target, 'B');
+  }
 });
 
 test('a custom classifier overrides the auth signal', () => {
@@ -484,6 +493,9 @@ test('an empty source suite yields an empty mutation suite', () => {
   const suite = mutateSuite(empty, model);
   assert.deepEqual(suite.mutations, []);
   for (const op of ALL_OPERATORS) assert.equal(suite.operatorCounts[op], 0);
+  for (const a of suite.applicability) {
+    assert.equal(a.skippedReason, 'source suite has no traces');
+  }
 });
 
 test('a model with no write arcs yields no double-submit variants', () => {
@@ -493,6 +505,67 @@ test('a model with no write arcs yields no double-submit variants', () => {
   );
   const suite = mutateSuite(manualSuite(model, [['A', 'x', 'B']]), model);
   assert.equal(byOperator(suite, 'double-submit').length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Applicability report — the coverage gap must be visible, not silent.
+// ---------------------------------------------------------------------------
+
+test('operators that fired report their variant count with no skip reason', () => {
+  const model = checkoutModel();
+  const suite = mutateSuite(fullCheckoutSuite(model), model);
+  assert.equal(suite.applicability.length, ALL_OPERATORS.length);
+  for (const a of suite.applicability) {
+    assert.equal(a.variants, suite.operatorCounts[a.operator]);
+    if (a.variants > 0) assert.equal(a.skippedReason, undefined);
+    else assert.ok(a.skippedReason, `${a.operator} with 0 variants must carry a reason`);
+  }
+});
+
+test('a model with no auth labels reports the auth operators as skipped, with the gap named', () => {
+  // Same graph shape, but nothing labeled authenticated: the auth-dependent
+  // operators are vacuous and MUST say so instead of silently emitting nothing.
+  const model = wrapModel(
+    [state('A', '/a'), state('B', '/b'), state('C', '/c')],
+    [
+      edge('A', 'browser_click', 'B', { signature: [sig('POST', '/b', '2xx')] }),
+      edge('B', 'browser_click', 'C', { signature: [sig('POST', '/c', '2xx')] }),
+    ],
+  );
+  const suite = mutateSuite(manualSuite(model, [['A', 'x', 'B'], ['B', 'x', 'C']]), model);
+  const byOp = new Map(suite.applicability.map((a) => [a.operator, a]));
+  assert.equal(byOp.get('back-nav-after-auth-exit')!.variants, 0);
+  assert.match(byOp.get('back-nav-after-auth-exit')!.skippedReason!, /no authenticated-labeled states/);
+  assert.equal(byOp.get('session-clear-midflow')!.variants, 0);
+  assert.match(byOp.get('session-clear-midflow')!.skippedReason!, /no authenticated-labeled states/);
+});
+
+test('a model with no write arcs names that gap for double-submit', () => {
+  const model = wrapModel(
+    [state('A', '/a'), state('B', '/b')],
+    [edge('A', 'browser_click', 'B', { signature: [sig('GET', '/b', '2xx')] })],
+  );
+  const suite = mutateSuite(manualSuite(model, [['A', 'x', 'B']]), model);
+  const ds = suite.applicability.find((a) => a.operator === 'double-submit')!;
+  assert.equal(ds.variants, 0);
+  assert.match(ds.skippedReason!, /no write-bearing arcs/);
+});
+
+test('signal-present-but-unused reports the trace-level reason, not the model-level one', () => {
+  const model = checkoutModel();
+  // A trace that never leaves auth: LOGIN->DASH->CHECKOUT. The model HAS auth
+  // labels and a logout edge, so the reason is about the traces, not the model.
+  const suite = mutateSuite(fullCheckoutSuite(model), model);
+  const bn = suite.applicability.find((a) => a.operator === 'back-nav-after-auth-exit')!;
+  assert.equal(bn.variants, 0);
+  assert.match(bn.skippedReason!, /no source trace contains a transition leaving/);
+});
+
+test('renderMutationSummary surfaces skipped operators', () => {
+  const model = checkoutModel();
+  const suite = mutateSuite(fullCheckoutSuite(model), model);
+  const line = renderMutationSummary(suite);
+  assert.match(line, /skipped: back-nav-after-auth-exit — /);
 });
 
 // ---------------------------------------------------------------------------

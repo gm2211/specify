@@ -34,7 +34,13 @@
  *
  *   - WRITE arcs (double-submit / revisit contracts) are detected from the
  *     arc's recorded network signature: a non-GET method (POST/PUT/PATCH/
- *     DELETE) that reached the network is a side-effecting request.
+ *     DELETE) that reached the network is a side-effecting request. KNOWN
+ *     LIMITATION (accepted): an endpoint that performs side effects behind a
+ *     GET (an anti-pattern, but real) is invisible to this detection — its
+ *     arcs read as non-writes, so double-submit and repeated-write contracts
+ *     never target it. Method is the only side-effect signal the recorded
+ *     signatures carry; flagging GETs would drown the suite in false
+ *     candidates, so we accept the blind spot rather than guess.
  *   - AUTHENTICATED / TERMINAL / IN-SCOPE states come from a pluggable
  *     `FlowClassifier`. The default derives them from the model itself: an
  *     opt-in predicate bit marks authenticated pages, a sink (no outgoing
@@ -103,10 +109,26 @@ export type ExpectedOutcome = 'tolerate' | 'reject';
  */
 export type ContractCheck =
   /**
-   * The step at `injectedStepIndex` re-fires a side-effecting request; the
-   * write signature `write` must NOT appear a second time (idempotent / deduped).
+   * The step at `injectedStepIndex` re-fires a side-effecting request.
+   * Conservative verdict tiers (a correct app must never be flagged):
+   *
+   *   - PASS: the second fire's write is rejected or absorbed with a non-2xx
+   *     (409/4xx — server-side dedup made visible).
+   *   - INCONCLUSIVE (`onRepeatedSuccess`): the write signature appears a
+   *     second time with 2xx. Status alone cannot distinguish "duplicate
+   *     created" from a legitimately idempotent endpoint returning the same
+   *     success twice — record it for corroboration (e.g. a later list/read
+   *     showing duplication), do NOT flag it as a violation.
+   *   - VIOLATION: only corroborated duplication (a second side effect
+   *     actually observed), never the repeated 2xx alone.
    */
-  | { kind: 'no-repeated-write'; injectedStepIndex: number; write: NetworkSignatureEntry[] }
+  | {
+      kind: 'no-repeated-write';
+      injectedStepIndex: number;
+      write: NetworkSignatureEntry[];
+      /** Fixed policy marker: a repeated 2xx write is inconclusive, not a violation. */
+      onRepeatedSuccess: 'inconclusive';
+    }
   /**
    * From `fromStepIndex` onward the session is invalid; any step that would
    * land on one of `authStates` must instead redirect to login (a 3xx) or land
@@ -117,7 +139,17 @@ export type ContractCheck =
    * The trace enters `target` directly without the `omittedPrerequisites`
    * arcs; the entry must be rejected or redirected away from `target`.
    */
-  | { kind: 'expect-reject-or-redirect'; target: string; omittedPrerequisites: string[] };
+  | { kind: 'expect-reject-or-redirect'; target: string; omittedPrerequisites: string[] }
+  /**
+   * Re-entry of terminal state `target`. BOTH of these observed outcomes are a
+   * PASS — a well-behaved app may do either:
+   *   - redirect away from `target`, or
+   *   - re-show the already-complete view (the terminal state's predicates
+   *     still hold) with NO write signature firing on the revisit.
+   * The only violation signal is a side-effecting request firing again on the
+   * revisit (the flow re-processing).
+   */
+  | { kind: 'expect-safe-revisit'; target: string };
 
 /** The full expected-outcome contract attached to every mutated trace. */
 export interface Contract {
@@ -191,6 +223,22 @@ export interface MutatedTrace {
   wellFormed: boolean;
 }
 
+/**
+ * Per-operator applicability: how many variants an operator produced, and —
+ * when it produced none — WHY. Predicate-dependent operators (auth/terminal)
+ * silently emitting nothing is an invisible coverage gap otherwise: a model
+ * with no `authenticated` labels makes the auth operators vacuous, and nothing
+ * in the mutation list itself distinguishes "checked and safe" from "never
+ * checked". This report makes the gap visible in the artifact.
+ */
+export interface OperatorApplicability {
+  operator: MutationOperatorName;
+  /** Number of variants the operator emitted across the whole suite. */
+  variants: number;
+  /** Present iff `variants` is 0 — why the operator had nothing to bite on. */
+  skippedReason?: string;
+}
+
 /** A generated mutation suite plus provenance and an operator coverage matrix. */
 export interface MutationSuite {
   version: 1;
@@ -207,6 +255,8 @@ export interface MutationSuite {
   mutations: MutatedTrace[];
   /** Operator → number of variants emitted. The coverage matrix. */
   operatorCounts: Record<MutationOperatorName, number>;
+  /** One entry per requested operator, in run order. See {@link OperatorApplicability}. */
+  applicability: OperatorApplicability[];
 }
 
 // ---------------------------------------------------------------------------
@@ -449,7 +499,12 @@ const backNavAfterAuthExit: MutationOperator = (trace, ctx) => {
 
 // --- double-submit ---------------------------------------------------------
 // Re-fire a side-effecting (write) transition immediately. The second fire
-// must produce no second side effect (idempotency / server-side dedup).
+// must not create a second side effect — but "no second side effect" is not
+// directly observable from status codes: an idempotent endpoint legitimately
+// returns 2xx twice without duplicating anything. The contract therefore
+// treats a rejected second fire (409/4xx) as a clean pass, a repeated 2xx as
+// INCONCLUSIVE pending corroboration, and only corroborated duplication as a
+// violation. See the `no-repeated-write` check doc.
 const doubleSubmit: MutationOperator = (trace, ctx) => {
   const rng = operatorRng(ctx.seed, 'double-submit', trace.id);
   const candidates: number[] = [];
@@ -476,8 +531,8 @@ const doubleSubmit: MutationOperator = (trace, ctx) => {
       contract: {
         class: 'no-second-side-effect',
         outcome: 'tolerate',
-        description: `Re-submitting ${dup.actionKey} on ${dup.fromUrlTemplate} must not repeat its write; expect the second fire to be deduped (no repeated ${write.map((w) => w.method).join('/')} 2xx).`,
-        check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write },
+        description: `Re-submitting ${dup.actionKey} on ${dup.fromUrlTemplate} must not create a second side effect. A rejected second fire (409/4xx) passes; a repeated ${write.map((w) => w.method).join('/')} 2xx is inconclusive (idempotent retry vs duplicate — needs corroboration); only corroborated duplication is a violation.`,
+        check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write, onRepeatedSuccess: 'inconclusive' },
       },
       // A re-submit is a valid-if-unusual action the server should dedup.
       wellFormed: true,
@@ -571,18 +626,18 @@ const revisitAfterTerminal: MutationOperator = (trace, ctx) => {
         ? {
             class: 'terminal-state-not-reprocessable',
             outcome: 'tolerate',
-            description: `Re-opening completed ${arrival.toUrlTemplate} must not re-run its side effect (${write.map((w) => w.method).join('/')}); expect an already-complete view, not a repeated write.`,
-            check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write },
+            description: `Re-opening completed ${arrival.toUrlTemplate} must not re-run its side effect (${write.map((w) => w.method).join('/')}); a redirect away or an already-complete view both pass — only a repeated write is suspect, and a repeated 2xx alone is inconclusive.`,
+            check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write, onRepeatedSuccess: 'inconclusive' },
           }
         : {
             class: 'terminal-state-not-reprocessable',
-            outcome: 'reject',
-            description: `Re-opening completed ${arrival.toUrlTemplate} must not restart the flow; expect a redirect away or an already-complete view.`,
-            check: { kind: 'expect-reject-or-redirect', target: arrival.to, omittedPrerequisites: [] },
+            outcome: 'tolerate',
+            description: `Re-opening completed ${arrival.toUrlTemplate} must not restart the flow. A redirect away OR safely re-showing the already-complete view both pass; the only violation signal is a side-effecting request firing on the revisit.`,
+            check: { kind: 'expect-safe-revisit', target: arrival.to },
           },
-      // Re-opening a completed page that re-issued a write is a tolerate case
-      // (must not re-charge); one with no write should redirect away (reject).
-      wellFormed: reprocesses,
+      // Both branches are tolerate-cases: a well-behaved app may redirect away
+      // or safely re-show the completed view — either observed outcome passes.
+      wellFormed: true,
     };
   });
 };
@@ -637,6 +692,50 @@ export const MUTATION_OPERATORS: Record<MutationOperatorName, MutationOperator> 
 };
 
 // ---------------------------------------------------------------------------
+// Applicability — why an operator produced nothing
+// ---------------------------------------------------------------------------
+
+/**
+ * Explain why `op` emitted zero variants, from model/suite-level signal.
+ * Distinguishes "the model carries no signal for this operator at all" (the
+ * invisible-coverage-gap case worth surfacing loudly) from "signal exists but
+ * no source trace offered a qualifying spot".
+ */
+function skippedReasonFor(
+  op: MutationOperatorName,
+  suite: TraceSuite,
+  model: NavModel,
+  index: ModelIndex,
+  classifier: FlowClassifier,
+): string {
+  if (suite.traces.length === 0) return 'source suite has no traces';
+  const inScopeStates = model.states.filter((s) => classifier.inScope(s));
+  const anyAuth = inScopeStates.some((s) => classifier.isAuthenticated(s));
+  switch (op) {
+    case 'back-nav-after-auth-exit':
+      return anyAuth
+        ? 'no source trace contains a transition leaving an authenticated state'
+        : 'no authenticated-labeled states in model (auth predicate absent or unlabeled)';
+    case 'session-clear-midflow':
+      return anyAuth
+        ? 'no source trace continues into an authenticated page after a candidate clear point'
+        : 'no authenticated-labeled states in model (auth predicate absent or unlabeled)';
+    case 'revisit-after-terminal':
+      return inScopeStates.some((s) => classifier.isTerminal(s, model))
+        ? 'no source trace reaches a terminal state'
+        : 'no terminal states in model (terminal predicate absent and no in-scope sink)';
+    case 'double-submit': {
+      const anyWrite = [...index.signatureOf.keys()].some((arc) => isWriteArc(index, arc));
+      return anyWrite
+        ? 'no source trace takes an in-scope write-bearing arc'
+        : 'no write-bearing arcs in model (network signatures record no POST/PUT/PATCH/DELETE)';
+    }
+    case 'direct-url-skip-prereqs':
+      return 'no in-scope mid-flow states reached by any source trace';
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -687,6 +786,17 @@ export function mutateSuite(
     }
   }
 
+  const applicability: OperatorApplicability[] = orderedOps.map((op) => {
+    const variants = operatorCounts[op];
+    return variants > 0
+      ? { operator: op, variants }
+      : {
+          operator: op,
+          variants,
+          skippedReason: skippedReasonFor(op, suite, model, index, classifier),
+        };
+  });
+
   return {
     version: 1,
     specId: suite.specId,
@@ -697,6 +807,7 @@ export function mutateSuite(
     operators: orderedOps,
     mutations,
     operatorCounts,
+    applicability,
   };
 }
 
@@ -709,9 +820,14 @@ export function renderMutationSummary(suite: MutationSuite): string {
   const parts = suite.operators
     .map((op) => `${op} ${suite.operatorCounts[op]}`)
     .join(', ');
+  const skipped = suite.applicability.filter((a) => a.variants === 0);
+  const warn =
+    skipped.length > 0
+      ? ` [skipped: ${skipped.map((a) => `${a.operator} — ${a.skippedReason}`).join('; ')}]`
+      : '';
   return `Mutation suite: ${suite.mutations.length} variant${
     suite.mutations.length === 1 ? '' : 's'
-  } [${parts}]`;
+  } [${parts}]${warn}`;
 }
 
 /**
