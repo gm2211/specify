@@ -564,6 +564,133 @@ test('ModelStore.update is idempotent across re-runs', () => {
   }
 });
 
+test('actionKey inputs are delimited (no cross-boundary collisions)', () => {
+  // Without a delimiter between action and selector these two would hash the
+  // same ("click" + "k#a" vs "clic" + "#a" style shifts).
+  assert.notEqual(actionKey('click', 'x#a'), actionKey('clickx', '#a'));
+  assert.notEqual(stateId('/ax', {}), stateId('/a', { x: true }));
+});
+
+test('mergeSessions prunes states orphaned by template re-inference', () => {
+  // 8 distinct /blog/<slug> literals stay literal under the default threshold
+  // (minDistinctForParam=8 means 9+ distinct values parameterize).
+  const slugs = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel'];
+  const mk = (slug: string): SessionTrace => ({
+    ref: `run-${slug}`,
+    steps: [
+      step({
+        step: 0,
+        action: 'browser_goto',
+        args: { url: 'https://x.test/' },
+        urlBefore: 'about:blank',
+        urlAfter: 'https://x.test/',
+      }),
+      step({
+        step: 1,
+        action: 'browser_goto',
+        args: { url: `https://x.test/blog/${slug}` },
+        urlBefore: 'https://x.test/',
+        urlAfter: `https://x.test/blog/${slug}`,
+      }),
+    ],
+  });
+
+  const base = learn(
+    's',
+    't',
+    slugs.map((slug) => mk(slug)),
+  );
+  // 1 home + 8 literal /blog/<slug> states.
+  assert.equal(base.states.length, 9);
+  assert.ok(base.states.every((s) => !s.urlTemplate.includes(':')));
+  assert.equal(base.orphanedStatesPruned, 0);
+
+  // The 9th distinct slug crosses the threshold: /blog/:id appears and the 8
+  // literal templates are no longer produced by any source URL.
+  const merged = mergeSessions(base, [mk('india')]);
+  const templates = merged.states.map((s) => s.urlTemplate).sort();
+  assert.deepEqual(templates, ['/', '/blog/:id']);
+  assert.equal(merged.orphanedStatesPruned, 8);
+  // No transition may reference a pruned state.
+  const ids = new Set(merged.states.map((s) => s.id));
+  for (const tr of merged.transitions) {
+    assert.ok(ids.has(tr.from));
+    for (const t of tr.targets) assert.ok(ids.has(t.to));
+  }
+});
+
+test('mergeSessions throws on predicate-extractor fingerprint mismatch', () => {
+  const withKeys: PredicateExtractor = (ctx) => ({ dashboard: ctx.urlTemplate === '/dashboard' });
+  const model = learn('s', 't', [loginSession('run-1')], { predicates: withKeys });
+  assert.deepEqual(model.predicateKeys, ['dashboard']);
+
+  // Omitting the extractor on merge must throw, not silently mint bare ids.
+  assert.throws(
+    () => mergeSessions(model, [loginSession('run-2')]),
+    /predicate extractor mismatch.*\[dashboard\].*\[\]/s,
+  );
+
+  // A different extractor must throw too.
+  const otherKeys: PredicateExtractor = () => ({ hasForm: false });
+  assert.throws(
+    () => mergeSessions(model, [loginSession('run-2')], { predicates: otherKeys }),
+    /predicate extractor mismatch/,
+  );
+
+  // The matching extractor still merges fine.
+  const ok = mergeSessions(model, [loginSession('run-2')], { predicates: withKeys });
+  assert.deepEqual(ok.sessions, ['run-1', 'run-2']);
+  assert.deepEqual(ok.predicateKeys, ['dashboard']);
+});
+
+test('saveModel writes atomically (no .tmp leftover)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'navmodel-'));
+  try {
+    const file = path.join(dir, 'm.json');
+    const model = learn('s', 't', [loginSession('r')]);
+    saveModel(file, model);
+    assert.ok(fs.existsSync(file));
+    assert.ok(!fs.existsSync(file + '.tmp'));
+    assert.deepEqual(loadModel(file), model);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('truncation on a nondeterministic edge keeps the surviving targets', () => {
+  const run = (ref: string, dest: string): SessionTrace => ({
+    ref,
+    steps: [
+      step({
+        step: 0,
+        action: 'browser_goto',
+        args: { url: 'https://x.test/' },
+        urlBefore: 'about:blank',
+        urlAfter: 'https://x.test/',
+      }),
+      step({
+        step: 1,
+        action: 'click',
+        args: { selector: '#go' },
+        urlBefore: 'https://x.test/',
+        urlAfter: `https://x.test/${dest}`,
+      }),
+    ],
+  });
+  // home seen 3x, /a seen 2x, /b seen 1x. Cap 2 with 'stop' keeps home + /a,
+  // dropping /b — the #go edge must survive with its /a target (and count)
+  // intact rather than being dropped wholesale.
+  const model = learn('s', 't', [run('A1', 'a'), run('A2', 'a'), run('B', 'b')], {
+    config: { maxStates: 2, overflow: 'stop', minDistinctForParam: 100 },
+  });
+  assert.equal(model.truncated, true);
+  const edge = model.transitions.find((t) => t.recipe.selector === '#go')!;
+  assert.equal(edge.targets.length, 1);
+  const dest = model.states.find((s) => s.id === edge.targets[0].to)!;
+  assert.equal(dest.urlTemplate, '/a');
+  assert.equal(edge.targets[0].count, 2);
+});
+
 test('ModelStore.rebuild overwrites via batch learn', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'navmodel-'));
   try {
