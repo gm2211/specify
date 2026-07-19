@@ -80,3 +80,33 @@ export function monitorAutoDemoteEnabled(): boolean {
 export function navMapCoverageEnabled(): boolean {
   return envFlag('SPECIFY_ENABLE_NAV_MAP_COVERAGE');
 }
+
+/**
+ * Opt-in TLA-family (Quint) spec integration for hand-modeled critical flows
+ * (SP-i35): when off (default), the CLI never drafts, stores, simulates, or
+ * bridges a Quint spec — a run is byte-identical to a build with no Quint tier
+ * at all. When on, the drafting orchestrator and the ITF-to-trace bridge become
+ * available for the 2-3 flows whose business logic outlives UI redesigns
+ * (auth, checkout). Kept opt-in because dual-artifact maintenance (a
+ * hand-written formal model ALONGSIDE the inferred navigation map) is exactly
+ * what killed classic model-based-testing adoption — most teams should never
+ * turn this on, and the inferred-model adversarial suite (SP-3fh/SP-w5d) is the
+ * default path.
+ */
+export function quintSpecsEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_QUINT_SPECS');
+}
+
+/**
+ * Gate for the JVM-backed symbolic checker (Apalache) behind the Quint
+ * integration: OFF by default and deliberately separate from
+ * quintSpecsEnabled. The default trace generator is `quint run` random
+ * simulation, which is pure npm and needs no JVM. The symbolic backend
+ * requires a Java runtime and a much heavier install, so it is a second,
+ * stronger opt-in a team turns on only after the npm-only path is proven — the
+ * runner refuses a symbolic request unless BOTH this flag and quintSpecsEnabled
+ * are set.
+ */
+export function quintSymbolicBackendEnabled(): boolean {
+  return envFlag('SPECIFY_ENABLE_QUINT_SYMBOLIC');
+}

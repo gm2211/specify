@@ -54,7 +54,7 @@ export interface BehaviorProgress {
 }
 
 export interface SdkRunnerOptions {
-  task: 'capture' | 'verify' | 'replay' | 'compare' | 'compile';
+  task: 'capture' | 'verify' | 'replay' | 'compare' | 'compile' | 'quint-draft';
   systemPrompt: string;
   userPrompt: string;
   url?: string;
@@ -555,6 +555,52 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
       },
     };
   }
+  if (task === 'quint-draft') {
+    // Browserless LLM Quint-spec drafting (SP-i35). The model returns `.qnt`
+    // source text per critical flow, plus the grounded predicate names it
+    // wrote the model over. The spec is a DRAFT — inert until a human reviews
+    // and approves it — so this schema only shapes the draft; it does not (and
+    // cannot) certify the model is correct.
+    return {
+      type: 'json_schema',
+      schema: {
+        type: 'object',
+        properties: {
+          results: {
+            type: 'array',
+            description: 'One entry per critical flow successfully modeled as a Quint spec. Modeling only 1-2 flows is the expected, correct outcome — do not model a flow whose logic does not warrant a hand-written formal model.',
+            items: {
+              type: 'object',
+              properties: {
+                flow: { type: 'string', description: 'Fully-qualified area-id/behavior-id this Quint spec models' },
+                spec_text: { type: 'string', description: 'The complete Quint (.qnt) module source' },
+                predicates_used: {
+                  type: 'array',
+                  items: { type: 'string' },
+                  description: 'Every grounded predicate name the model is written over (from the shared vocabulary)',
+                },
+                rationale: { type: 'string', description: 'Why this flow is worth a hand-modeled formal spec and what the model asserts' },
+              },
+              required: ['flow', 'spec_text', 'predicates_used', 'rationale'],
+            },
+          },
+          skipped: {
+            type: 'array',
+            description: 'One entry per flow that should NOT be hand-modeled. This is the expected outcome for most behaviors — a formal model is only worth it for the 2-3 flows whose business logic outlives UI redesigns.',
+            items: {
+              type: 'object',
+              properties: {
+                flow: { type: 'string', description: 'Fully-qualified area-id/behavior-id' },
+                reason: { type: 'string', description: 'Why this flow does not warrant a hand-modeled formal spec' },
+              },
+              required: ['flow', 'reason'],
+            },
+          },
+        },
+        required: ['results', 'skipped'],
+      },
+    };
+  }
   return undefined;
 }
 
@@ -882,13 +928,13 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       mcpServers.browser = session.mcpServer;
       allowedBrowserTools.push(...browserToolNames('browser', !!session.faultInjector));
       process.stderr.write('  Browser ready.\n');
-    } else if (opts.spec && opts.task !== 'compile') {
+    } else if (opts.spec && opts.task !== 'compile' && opts.task !== 'quint-draft') {
       // No web/remote+local URL set — this may be a cli-target run. Launch
       // the recorded command channel (cli_run) so command execution is
       // deterministically captured instead of relying on agent-pasted
-      // 'command_output' evidence. Compile tasks are excluded: they are pure
-      // spec analysis with no execution surface, and are expected to stay
-      // browserless AND channel-less regardless of target type.
+      // 'command_output' evidence. Compile and quint-draft tasks are excluded:
+      // they are pure spec analysis with no execution surface, and are expected
+      // to stay browserless AND channel-less regardless of target type.
       try {
         const { loadSpec } = await import('../spec/parser.js');
         const spec = loadSpec(opts.spec);
