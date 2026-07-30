@@ -46,7 +46,40 @@ test('assessSpecSize flags specs above behavior threshold', () => {
   const assessment = assessSpecSize(specToYaml(spec), spec);
 
   assert.equal(assessment.overLimit, true);
+  assert.equal(assessment.overHardLimit, false);
+  assert.deepEqual(assessment.hardReasons, []);
   assert.ok(assessment.reasons.some((reason) => reason.includes('121 behaviors')));
+});
+
+test('assessSpecSize flags the hard tier at double the advisory thresholds', () => {
+  const spec: Spec = {
+    ...sampleSpec(),
+    areas: [
+      {
+        id: 'huge',
+        name: 'Huge',
+        behaviors: Array.from({ length: 241 }, (_, i) => ({
+          id: `behavior-${i}`,
+          description: `Behavior ${i} works`,
+        })),
+      },
+    ],
+  };
+  const assessment = assessSpecSize(specToYaml(spec), spec);
+
+  assert.equal(assessment.overLimit, true);
+  assert.equal(assessment.overHardLimit, true);
+  assert.ok(assessment.hardReasons.some((reason) => reason.includes('241 behaviors exceeds 240')));
+});
+
+test('assessSpecSize reports no exceedances for a small spec', () => {
+  const spec = sampleSpec();
+  const assessment = assessSpecSize(specToYaml(spec), spec);
+
+  assert.equal(assessment.overLimit, false);
+  assert.equal(assessment.overHardLimit, false);
+  assert.deepEqual(assessment.reasons, []);
+  assert.deepEqual(assessment.hardReasons, []);
 });
 
 test('splitSpecFileToDirectory writes a composable manifest and area files', () => {

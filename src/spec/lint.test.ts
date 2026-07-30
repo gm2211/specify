@@ -198,6 +198,40 @@ test('lintPath warns when a single-file spec is large enough to split', () => {
   }
 });
 
+test('lintPath fails when a single-file spec is past the hard size limit', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const specPath = path.join(dir, 'app.spec.yaml');
+    const spec: Spec = {
+      version: '2',
+      name: 'Unreviewable Single File',
+      target: { type: 'web', url: 'http://localhost:3000' },
+      areas: [
+        {
+          id: 'huge',
+          name: 'Huge',
+          behaviors: Array.from({ length: 241 }, (_, i) => ({
+            id: `behavior-${i}`,
+            description: `Behavior ${i} works`,
+          })),
+        },
+      ],
+    };
+    writeFile(specPath, specToYaml(spec));
+
+    const result = lintPath(specPath);
+
+    assert.equal(result.valid, false);
+    const finding = result.errors.find((error) => error.rule === 'oversized-single-file-spec');
+    assert.ok(finding);
+    assert.equal(finding.severity, 'error');
+    assert.ok(finding.message.includes('241 behaviors exceeds 240'));
+    assert.ok(finding.message.includes('specify spec split'));
+  } finally {
+    cleanup();
+  }
+});
+
 function makeAuthSpec(): Spec {
   return {
     version: '2',

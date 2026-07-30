@@ -118,8 +118,10 @@ specify review --spec spec/
 ```
 
 `specify spec lint` warns when a single YAML/JSON spec starts getting unwieldy
-(more than about 40 KiB, 800 lines, 12 areas, or 120 behaviors). Split it
-mechanically with:
+(more than about 40 KiB, 800 lines, 12 areas, or 120 behaviors), and **fails**
+once it passes double those limits (80 KiB, 1600 lines, 24 areas, or 240
+behaviors) — past that point the file is no longer reviewable, so the finding is
+an error and lint exits non-zero. Split it mechanically with:
 
 ```bash
 specify spec split --spec spec.yaml --output spec/
