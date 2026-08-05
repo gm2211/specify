@@ -1,6 +1,6 @@
 {
   "name": "specify",
-  "version": "0.2.16",
+  "version": "0.2.17",
   "description": "Web capture toolkit for spec-based functional verification",
   "type": "module",
   "bin": {
