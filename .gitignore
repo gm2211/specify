@@ -33,3 +33,7 @@ deploy/terraform/**/terraform.tfstate*
 deploy/terraform/**/*.auto.tfvars
 
 .last-update-check
+
+.beads/issues.jsonl
+.beads/interactions.jsonl
+.beads/export-state.json
