@@ -219,5 +219,9 @@ export async function saveStorageStateOutput(
   const resolved = path.resolve(destination);
   fs.mkdirSync(path.dirname(resolved), { recursive: true, mode: 0o700 });
   fs.writeFileSync(resolved, json, { mode: 0o600 });
+  // writeFileSync only applies `mode` when it creates the file, so overwriting
+  // a pre-existing state file would silently keep permissions we just widened
+  // away from. Re-assert them.
+  fs.chmodSync(resolved, 0o600);
   log(`Storage state saved: ${resolved}`);
 }
