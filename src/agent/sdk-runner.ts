@@ -67,6 +67,10 @@ export interface SdkRunnerOptions {
   specOutput?: string;
   specName?: string;
   headed?: boolean;
+  /** Path to a Playwright storage-state JSON file, loaded into the browser context so the run starts authenticated. */
+  storageState?: string;
+  /** Path to write the browser context's storage state (cookies + localStorage) after a `capture` task completes normally. */
+  saveStorageState?: string;
   /** Enable verbose/debug output to stderr. */
   debug?: boolean;
   /** Max retry attempts for transient API errors (default: 3). */
@@ -293,6 +297,7 @@ async function launchBrowserSession(
   askUserHandler?: (question: string) => Promise<string>,
   faultPlan?: import('./fault-injector.js').FaultPlan,
   probePlan?: import('./probe-plan.js').ProbePlan,
+  storageState?: string,
 ): Promise<BrowserSession> {
   const { chromium } = await import('playwright');
   const { CaptureCollector } = await import('./capture.js');
@@ -310,6 +315,9 @@ async function launchBrowserSession(
     viewport: { width: 1440, height: 900 },
     ignoreHTTPSErrors: true,
   };
+  if (storageState) {
+    contextOptions.storageState = path.resolve(storageState);
+  }
   let navigateUrl = url;
   if (parsedUrl.username) {
     contextOptions.httpCredentials = {
@@ -923,6 +931,7 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         opts.askUserHandler,
         opts.faultPlan,
         probePlan,
+        opts.storageState,
       );
       sessions.push(session);
       mcpServers.browser = session.mcpServer;
@@ -1366,6 +1375,20 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // Should not reach here, but just in case
     throw lastError;
   } finally {
+    // --save-storage-state (capture task only): persist cookies + localStorage
+    // for reuse in later --storage-state runs. Single-session capture only
+    // (never the two-session compare task); best-effort so a save failure
+    // never masks the run's real result.
+    if (opts.task === 'capture' && opts.saveStorageState && sessions.length === 1) {
+      try {
+        const saveStorageStatePath = path.resolve(opts.saveStorageState);
+        fs.mkdirSync(path.dirname(saveStorageStatePath), { recursive: true });
+        await sessions[0].page.context().storageState({ path: saveStorageStatePath });
+        process.stderr.write(`Storage state saved: ${saveStorageStatePath}\n`);
+      } catch (err) {
+        process.stderr.write(`Warning: failed to save storage state: ${err instanceof Error ? err.message : String(err)}\n`);
+      }
+    }
     for (const session of sessions) {
       // Defensive cleanup: never let an agent-scoped fault rule (added via
       // browser_inject_fault) outlive this run, even if the agent forgot to

@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
+import { validateStorageStatePath } from '../storage-state.js';
 
 type CapturePage = {
   goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
@@ -29,6 +30,8 @@ export interface CaptureOptions {
   specName?: string;
   ignoreHttpsErrors?: boolean;
   human?: boolean;
+  storageState?: string;
+  saveStorageState?: string;
 }
 
 export async function navigateWithLoadFallback(
@@ -61,6 +64,14 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     const err = { error: 'missing_parameter', parameter: '--output', hint: 'Provide an output directory' };
     process.stdout.write(JSON.stringify(err) + '\n');
     return ExitCode.PARSE_ERROR;
+  }
+
+  if (options.storageState) {
+    const storageStateErr = validateStorageStatePath(options.storageState);
+    if (storageStateErr) {
+      process.stdout.write(JSON.stringify(storageStateErr) + '\n');
+      return ExitCode.PARSE_ERROR;
+    }
   }
 
   const outputDir = path.resolve(options.output);
@@ -110,6 +121,9 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       viewport: { width: 1440, height: 900 },
       ignoreHTTPSErrors: true,
     };
+    if (options.storageState) {
+      contextOptions.storageState = path.resolve(options.storageState);
+    }
     let navigateUrl = options.url;
     if (parsedUrl.username) {
       contextOptions.httpCredentials = {
@@ -168,6 +182,17 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     } else {
       // Default passive mode: wait for deferred API calls
       await page.waitForTimeout(2000);
+    }
+
+    // Save the browser context's storage state (cookies + localStorage) for
+    // reuse in later --storage-state runs. Placed here so it covers both the
+    // human-mode branch (after the operator presses Enter) and the default
+    // passive-mode branch (after settling) with a single call.
+    if (options.saveStorageState) {
+      const saveStorageStatePath = path.resolve(options.saveStorageState);
+      fs.mkdirSync(path.dirname(saveStorageStatePath), { recursive: true });
+      await context.storageState({ path: saveStorageStatePath });
+      log(`Storage state saved: ${saveStorageStatePath}`);
     }
 
     // Take a post-settle screenshot

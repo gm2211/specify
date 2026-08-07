@@ -42,6 +42,7 @@ import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 import { resolveSpecPath } from './spec-finder.js';
+import { validateStorageStatePath } from './storage-state.js';
 
 // Read version from package.json at startup
 const __filename = fileURLToPath(import.meta.url);
@@ -432,6 +433,8 @@ async function main(): Promise<void> {
         const human = hasFlag(captureArgs, '--human');
         const url = getArg(captureArgs, '--url') ?? '';
         const output = getArg(captureArgs, '--output') ?? '';
+        const storageState = getArg(captureArgs, '--storage-state');
+        const saveStorageState = getArg(captureArgs, '--save-storage-state');
 
         // Specify IS the agent — use SDK runner for live capture (human mode is the only exception)
         if (!human) {
@@ -446,6 +449,14 @@ async function main(): Promise<void> {
               process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
               exitCode = ExitCode.PARSE_ERROR;
               validUrl = false;
+            }
+            if (validUrl && storageState) {
+              const storageStateErr = validateStorageStatePath(storageState);
+              if (storageStateErr) {
+                process.stdout.write(JSON.stringify(storageStateErr) + '\n');
+                exitCode = ExitCode.PARSE_ERROR;
+                validUrl = false;
+              }
             }
             if (validUrl) {
               const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
@@ -468,6 +479,8 @@ async function main(): Promise<void> {
                   specName: specName ?? new URL(url).hostname,
                   headed: hasFlag(captureArgs, '--headed'),
                   debug,
+                  ...(storageState ? { storageState } : {}),
+                  ...(saveStorageState ? { saveStorageState } : {}),
                 });
                 process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
 
@@ -514,6 +527,8 @@ async function main(): Promise<void> {
             specOutput: getArg(captureArgs, '--spec-output'),
             specName: getArg(captureArgs, '--spec-name'),
             human,
+            storageState,
+            saveStorageState,
           }, ctx);
         }
       }
@@ -698,12 +713,17 @@ async function main(): Promise<void> {
       // FULL scripted suite first, escalate failures) instead of the
       // confidence-driven partition. Cheap A/B lever.
       const routeAllScripted = hasFlag(verifyArgs, '--route-all-scripted');
+      const storageState = getArg(verifyArgs, '--storage-state');
+      const storageStateErr = storageState ? validateStorageStatePath(storageState) : null;
 
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
         exitCode = ExitCode.PARSE_ERROR;
       } else if (verifyMode !== 'agent' && verifyMode !== 'scripted' && verifyMode !== 'auto') {
         process.stdout.write(JSON.stringify({ error: 'invalid_parameter', parameter: '--mode', hint: 'Expected one of: agent, scripted, auto' }) + '\n');
+        exitCode = ExitCode.PARSE_ERROR;
+      } else if (storageStateErr) {
+        process.stdout.write(JSON.stringify(storageStateErr) + '\n');
         exitCode = ExitCode.PARSE_ERROR;
       } else {
         const { loadSpec, specToYaml } = await import('../spec/parser.js');
@@ -944,6 +964,7 @@ async function main(): Promise<void> {
                   onBehaviorProgress: writeBehaviorProgress,
                   ...(contextOverride ? { contextOverride } : {}),
                   ...(faultPlan ? { faultPlan } : {}),
+                  ...(storageState ? { storageState } : {}),
                 });
                 result = agentRun.result;
                 costUsd = agentRun.costUsd;
