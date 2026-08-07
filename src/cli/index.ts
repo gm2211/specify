@@ -42,7 +42,7 @@ import { c } from './colors.js';
 
 import { COMMANDS } from './commands-manifest.js';
 import { resolveSpecPath } from './spec-finder.js';
-import { validateStorageStatePath } from './storage-state.js';
+import { resolveStorageStateInput } from '../agent/storage-state.js';
 
 // Read version from package.json at startup
 const __filename = fileURLToPath(import.meta.url);
@@ -451,9 +451,9 @@ async function main(): Promise<void> {
               validUrl = false;
             }
             if (validUrl && storageState) {
-              const storageStateErr = validateStorageStatePath(storageState);
-              if (storageStateErr) {
-                process.stdout.write(JSON.stringify(storageStateErr) + '\n');
+              const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
+              if (!resolved.ok) {
+                process.stdout.write(JSON.stringify(resolved.error) + '\n');
                 exitCode = ExitCode.PARSE_ERROR;
                 validUrl = false;
               }
@@ -714,7 +714,10 @@ async function main(): Promise<void> {
       // confidence-driven partition. Cheap A/B lever.
       const routeAllScripted = hasFlag(verifyArgs, '--route-all-scripted');
       const storageState = getArg(verifyArgs, '--storage-state');
-      const storageStateErr = storageState ? validateStorageStatePath(storageState) : null;
+      const storageStateCheck = storageState
+        ? await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'))
+        : null;
+      const storageStateErr = storageStateCheck && !storageStateCheck.ok ? storageStateCheck.error : null;
 
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');

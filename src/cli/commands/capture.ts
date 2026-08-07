@@ -12,7 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
-import { validateStorageStatePath } from '../storage-state.js';
+import { resolveStorageStateInput, saveStorageStateOutput } from '../../agent/storage-state.js';
 
 type CapturePage = {
   goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
@@ -66,20 +66,22 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     return ExitCode.PARSE_ERROR;
   }
 
-  if (options.storageState) {
-    const storageStateErr = validateStorageStatePath(options.storageState);
-    if (storageStateErr) {
-      process.stdout.write(JSON.stringify(storageStateErr) + '\n');
-      return ExitCode.PARSE_ERROR;
-    }
-  }
-
   const outputDir = path.resolve(options.output);
   const timeout = options.timeout ?? 30_000;
 
   const log = (msg: string) => {
     if (!ctx.quiet) process.stderr.write(msg + '\n');
   };
+
+  let storageStateValue: string | Record<string, unknown> | undefined;
+  if (options.storageState) {
+    const resolved = await resolveStorageStateInput(options.storageState, log);
+    if (!resolved.ok) {
+      process.stdout.write(JSON.stringify(resolved.error) + '\n');
+      return ExitCode.PARSE_ERROR;
+    }
+    storageStateValue = resolved.contextValue;
+  }
 
   let hostFilter: string;
   try {
@@ -121,8 +123,8 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       viewport: { width: 1440, height: 900 },
       ignoreHTTPSErrors: true,
     };
-    if (options.storageState) {
-      contextOptions.storageState = path.resolve(options.storageState);
+    if (storageStateValue !== undefined) {
+      contextOptions.storageState = storageStateValue as NonNullable<Parameters<typeof browser.newContext>[0]>['storageState'];
     }
     let navigateUrl = options.url;
     if (parsedUrl.username) {
@@ -189,10 +191,7 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     // human-mode branch (after the operator presses Enter) and the default
     // passive-mode branch (after settling) with a single call.
     if (options.saveStorageState) {
-      const saveStorageStatePath = path.resolve(options.saveStorageState);
-      fs.mkdirSync(path.dirname(saveStorageStatePath), { recursive: true });
-      await context.storageState({ path: saveStorageStatePath });
-      log(`Storage state saved: ${saveStorageStatePath}`);
+      await saveStorageStateOutput(options.saveStorageState, context, log);
     }
 
     // Take a post-settle screenshot

@@ -316,7 +316,12 @@ async function launchBrowserSession(
     ignoreHTTPSErrors: true,
   };
   if (storageState) {
-    contextOptions.storageState = path.resolve(storageState);
+    const { resolveStorageStateInput } = await import('./storage-state.js');
+    const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
+    if (!resolved.ok) {
+      throw new Error(`${resolved.error.error}: ${resolved.error.hint} (${resolved.error.target})`);
+    }
+    contextOptions.storageState = resolved.contextValue;
   }
   let navigateUrl = url;
   if (parsedUrl.username) {
@@ -1381,10 +1386,12 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // never masks the run's real result.
     if (opts.task === 'capture' && opts.saveStorageState && sessions.length === 1) {
       try {
-        const saveStorageStatePath = path.resolve(opts.saveStorageState);
-        fs.mkdirSync(path.dirname(saveStorageStatePath), { recursive: true });
-        await sessions[0].page.context().storageState({ path: saveStorageStatePath });
-        process.stderr.write(`Storage state saved: ${saveStorageStatePath}\n`);
+        const { saveStorageStateOutput } = await import('./storage-state.js');
+        await saveStorageStateOutput(
+          opts.saveStorageState,
+          sessions[0].page.context(),
+          (msg) => process.stderr.write(msg + '\n'),
+        );
       } catch (err) {
         process.stderr.write(`Warning: failed to save storage state: ${err instanceof Error ? err.message : String(err)}\n`);
       }

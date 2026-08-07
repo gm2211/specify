@@ -27,8 +27,8 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--spec-output', type: 'string', required: false, description: 'Output path for generated spec (default: <output>/../spec.yaml)' },
       { name: '--spec-name', type: 'string', required: false, description: 'Name for the generated spec (default: hostname)' },
       { name: '--human', type: 'boolean', required: false, description: 'Open a headed browser for human recording instead of autonomous agent' },
-      { name: '--storage-state', type: 'string', required: false, description: 'Path to a Playwright storage-state JSON file; loaded into the browser context so the run starts authenticated' },
-      { name: '--save-storage-state', type: 'string', required: false, description: 'Path to write the browser context storage state (cookies + localStorage) after the run completes; most useful with --human --headed' },
+      { name: '--storage-state', type: 'string', required: false, description: 'Playwright storage-state JSON, as a filesystem path or keychain:<name> (macOS Keychain); loaded into the browser context so the run starts authenticated' },
+      { name: '--save-storage-state', type: 'string', required: false, description: 'Where to write the browser context storage state (cookies + localStorage) after the run completes, as a filesystem path or keychain:<name> (macOS Keychain); most useful with --human --headed' },
     ],
     modes: [
       {
@@ -60,6 +60,7 @@ export const COMMANDS: CommandDefinition[] = [
       'specify capture --from code --input ./tests --output spec.yaml',
       'specify capture --url http://localhost:3000 --output ./cap --human --headed --save-storage-state .auth/storage-state.json',
       'specify capture --url http://localhost:3000 --output ./cap --storage-state .auth/storage-state.json',
+      'specify capture --url http://localhost:3000 --output ./cap --human --headed --save-storage-state keychain:my-app-session',
     ],
   },
   {
@@ -227,7 +228,7 @@ export const COMMANDS: CommandDefinition[] = [
       { name: '--mode', type: 'string', required: false, description: 'Verification tier: agent (default), scripted (replay generated tests only, no LLM), or auto (confidence-driven routing: high-confidence behaviors with fresh passing tests replay scripted, everything else goes to the agent; scripted failures still escalate)' },
       { name: '--cross-check', type: 'boolean', required: false, description: 'After the agent run, replay the generated suite and report agent/test agreement as cross_check in verify-result.json (report-only, never changes pass/fail)' },
       { name: '--route-all-scripted', type: 'boolean', required: false, description: 'With --mode auto: skip confidence-driven routing and run the FULL scripted suite first, escalating failures/untested to the agent (the pre-routing behavior)' },
-      { name: '--storage-state', type: 'string', required: false, description: 'Path to a Playwright storage-state JSON file; loaded into the browser context so the run starts authenticated' },
+      { name: '--storage-state', type: 'string', required: false, description: 'Playwright storage-state JSON, as a filesystem path or keychain:<name> (macOS Keychain); loaded into the browser context so the run starts authenticated' },
     ],
     examples: [
       'specify verify --spec spec.yaml --url http://localhost:3000',
