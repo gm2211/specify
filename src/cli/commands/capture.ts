@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { CliContext } from '../types.js';
 import { ExitCode } from '../exit-codes.js';
+import { resolveStorageStateInput, saveStorageStateOutput } from '../../agent/storage-state.js';
 
 type CapturePage = {
   goto(url: string, options: { waitUntil: 'networkidle'; timeout: number }): Promise<unknown>;
@@ -29,6 +30,8 @@ export interface CaptureOptions {
   specName?: string;
   ignoreHttpsErrors?: boolean;
   human?: boolean;
+  storageState?: string;
+  saveStorageState?: string;
 }
 
 export async function navigateWithLoadFallback(
@@ -70,6 +73,16 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     if (!ctx.quiet) process.stderr.write(msg + '\n');
   };
 
+  let storageStateValue: string | Record<string, unknown> | undefined;
+  if (options.storageState) {
+    const resolved = await resolveStorageStateInput(options.storageState, log);
+    if (!resolved.ok) {
+      process.stdout.write(JSON.stringify(resolved.error) + '\n');
+      return ExitCode.PARSE_ERROR;
+    }
+    storageStateValue = resolved.contextValue;
+  }
+
   let hostFilter: string;
   try {
     hostFilter = new URL(options.url).hostname;
@@ -110,6 +123,9 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
       viewport: { width: 1440, height: 900 },
       ignoreHTTPSErrors: true,
     };
+    if (storageStateValue !== undefined) {
+      contextOptions.storageState = storageStateValue as NonNullable<Parameters<typeof browser.newContext>[0]>['storageState'];
+    }
     let navigateUrl = options.url;
     if (parsedUrl.username) {
       contextOptions.httpCredentials = {
@@ -168,6 +184,14 @@ export async function capture(options: CaptureOptions, ctx: CliContext): Promise
     } else {
       // Default passive mode: wait for deferred API calls
       await page.waitForTimeout(2000);
+    }
+
+    // Save the browser context's storage state (cookies + localStorage) for
+    // reuse in later --storage-state runs. Placed here so it covers both the
+    // human-mode branch (after the operator presses Enter) and the default
+    // passive-mode branch (after settling) with a single call.
+    if (options.saveStorageState) {
+      await saveStorageStateOutput(options.saveStorageState, context, log);
     }
 
     // Take a post-settle screenshot
