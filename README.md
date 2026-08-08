@@ -132,15 +132,16 @@ The split command writes `spec/spec.yaml` plus one file per area under
 
 | Command | What |
 |---------|------|
+| **`create`** | Interactive interview that writes a starter spec (`--narrative` for a companion doc) |
 | **`spec generate`** | Generate a spec from a capture directory |
-| **`capture`** | Agent-driven capture from a live system (`--url`) or code (`--from code`) |
+| **`capture`** | Agent-driven capture from a live system (`--url`) |
 | **`compare`** | Live side-by-side comparison of remote vs local targets |
 | **`review`** | Browser UI: narrative, activity stream, feedback, skill drafts |
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
 | `replay` | Replay captured traffic against a target and diff results |
 | `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
-| `schema` | Emit JSON Schema for spec, report, or commands |
+| `schema` | Emit JSON Schema for spec or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
 | `review --background` / `review --stop` | Daemonize or stop the review webapp |
@@ -379,41 +380,47 @@ for the full input / output reference.
 
 ## Spec format
 
-YAML or JSON. Human-readable, machine-verifiable.
+YAML or JSON, both parse the same way. Specs are v2 behavioral contracts:
+areas group behaviors, and each behavior is a plain-language claim about what
+should be true. There are no selectors, no matchers, no step sequences — the
+agent decides how to verify each claim.
 
 ```yaml
-version: "1.0"
+version: "2"
 name: "My App"
 description: "Behavioral contract for My App"
 
-pages:
-  - id: dashboard
-    path: /dashboard
-    title: "Dashboard"
-    visual_assertions:
-      - type: element_exists
-        selector: "nav.sidebar"
-        description: "Navigation sidebar is present"
-    expected_requests:
-      - method: GET
-        url_pattern: "/api/v1/stats"
-    scenarios:
-      - id: user-login
-        description: "User logs in and sees dashboard"
-        steps:
-          - action: fill
-            selector: "#email"
-            value: "{{email}}"
-          - action: click
-            selector: "button[type=submit]"
-          - action: wait_for_navigation
-            url_pattern: "/dashboard"
-          - action: assert_visible
-            selector: ".welcome-message"
+target:
+  type: web
+  url: "http://localhost:3000"
 
 variables:
-  base_url: "${TARGET_BASE_URL}"
+  admin_email: "admin@example.com"
+
+areas:
+  - id: dashboard
+    name: "Dashboard"
+    prose: >
+      The dashboard is the default landing page after login and summarizes
+      account activity.
+    behaviors:
+      - id: shows-nav-sidebar
+        description: >
+          The dashboard renders a navigation sidebar linking to every major
+          section of the app
+        tags: [ui, navigation]
+
+  - id: auth
+    name: "Authentication"
+    behaviors:
+      - id: valid-login-redirects
+        description: >
+          A user who logs in with {{admin_email}} and a valid password is
+          redirected to /dashboard and sees a welcome message
+        details: "Applies to both password and SSO login flows."
 ```
+
+Full schema: `specify schema spec` (or see [`src/spec/schema.ts`](src/spec/schema.ts)). The repo's own [`specify.spec.yaml`](specify.spec.yaml) is a complete real-world example, including `assumptions` and `hooks`.
 
 ## Self-verifying
 
