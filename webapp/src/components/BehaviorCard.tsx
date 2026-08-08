@@ -8,7 +8,6 @@ interface BehaviorCardProps {
   result?: BehaviorResult;
   onVerify: () => void;
   verifying: boolean;
-  onEdit: (newDescription: string) => void;
 }
 
 export default function BehaviorCard({
@@ -16,27 +15,12 @@ export default function BehaviorCard({
   result,
   onVerify,
   verifying,
-  onEdit,
 }: BehaviorCardProps) {
-  const [editing, setEditing] = useState(false);
-  const [editText, setEditText] = useState(behavior.description);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [traceOpen, setTraceOpen] = useState(true);
 
   const status = result?.status ?? 'untested';
   const trace = result?.action_trace ?? [];
-
-  const handleSave = () => {
-    if (editText.trim() && editText !== behavior.description) {
-      onEdit(editText.trim());
-    }
-    setEditing(false);
-  };
-
-  const handleCancel = () => {
-    setEditText(behavior.description);
-    setEditing(false);
-  };
 
   return (
     <div className={`behavior-card behavior-card--${status}`}>
@@ -54,22 +38,7 @@ export default function BehaviorCard({
         )}
       </div>
 
-      {editing ? (
-        <div className="behavior-edit">
-          <textarea
-            className="behavior-edit-textarea"
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            rows={3}
-          />
-          <div className="behavior-edit-actions">
-            <button className="btn btn--sm btn--primary" onClick={handleSave}>Save</button>
-            <button className="btn btn--sm btn--ghost" onClick={handleCancel}>Cancel</button>
-          </div>
-        </div>
-      ) : (
-        <p className="behavior-description">{behavior.description}</p>
-      )}
+      <p className="behavior-description">{behavior.description}</p>
 
       {behavior.details && (
         <p className="behavior-details">{behavior.details}</p>
@@ -164,14 +133,6 @@ export default function BehaviorCard({
             'Verify'
           )}
         </button>
-        {!editing && (
-          <button
-            className="btn btn--sm btn--ghost"
-            onClick={() => setEditing(true)}
-          >
-            Edit
-          </button>
-        )}
       </div>
     </div>
   );

@@ -23,15 +23,6 @@ export async function fetchNarrative(): Promise<string | null> {
   return typeof body?.content === 'string' && body.content.length > 0 ? body.content : null;
 }
 
-export async function saveSpec(yaml: string): Promise<void> {
-  const res = await fetch(`${BASE}/api/spec`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'text/yaml' },
-    body: yaml,
-  });
-  if (!res.ok) throw new Error(`Failed to save spec: ${res.status}`);
-}
-
 export async function triggerVerify(areaId?: string, behaviorId?: string): Promise<{ started: boolean; busy?: boolean }> {
   const url = areaId && behaviorId
     ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
@@ -153,55 +144,6 @@ export async function postFeedback(input: FeedbackInput): Promise<FeedbackResult
   if (!res.ok) {
     const body = await res.json().catch(() => ({ message: res.statusText }));
     throw new Error(`Feedback failed: ${body?.message ?? res.status}`);
-  }
-  return res.json();
-}
-
-export interface ProposedResolution {
-  scope: 'narrow' | 'medium' | 'broad';
-  label: string;
-  action_hint?: string;
-}
-
-export interface PendingDecision {
-  id: string;
-  createdAt: string;
-  specId: string;
-  runId: string;
-  area_id?: string;
-  behavior_id?: string;
-  question: string;
-  context: string;
-  proposed_resolutions: ProposedResolution[];
-  status: 'open' | 'resolved' | 'expired';
-  resolved?: {
-    at: string;
-    resolved_by?: string;
-    resolution_index: number;
-    scope: 'narrow' | 'medium' | 'broad';
-    note?: string;
-  };
-}
-
-export async function listDecisions(status: string = 'open'): Promise<PendingDecision[]> {
-  const res = await fetch(`${BASE}/decisions?status=${encodeURIComponent(status)}`);
-  if (!res.ok) throw new Error(`Failed to fetch decisions: ${res.status}`);
-  const body = await res.json();
-  return Array.isArray(body?.decisions) ? body.decisions : [];
-}
-
-export async function resolveDecision(
-  id: string,
-  body: { resolution_index: number; scope: string; resolved_by?: string; note?: string },
-): Promise<PendingDecision> {
-  const res = await fetch(`${BASE}/decisions/${encodeURIComponent(id)}/resolve`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((err as { detail?: string; error?: string }).detail ?? (err as { error?: string }).error ?? `resolve failed: ${res.status}`);
   }
   return res.json();
 }
