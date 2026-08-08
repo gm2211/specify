@@ -14,7 +14,8 @@ import NarrativePanel from './components/NarrativePanel';
 import ActivityStream from './components/ActivityStream';
 import SkillDraftsPanel from './components/SkillDraftsPanel';
 import FormulaPanel from './components/FormulaPanel';
-import DecisionsList from './components/DecisionsList';
+
+const WS_RECONNECT_DELAY_MS = 3000;
 
 export default function App() {
   const { spec, loading: specLoading, error: specError, refresh: refreshSpec } = useSpec();
@@ -27,36 +28,47 @@ export default function App() {
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [expandedAreas, setExpandedAreas] = useState<Set<string>>(new Set());
-  const [activeTab, setActiveTab] = useState<'behaviors' | 'decisions'>('behaviors');
-  const [openDecisionCount, setOpenDecisionCount] = useState(0);
 
-  // WebSocket for live updates
+  // WebSocket for live updates, with a fixed-delay auto-reconnect that stops
+  // once the effect is cleaned up (component unmount).
   useEffect(() => {
-    const ws = createWebSocket();
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        if (msg.type === 'spec:updated' || msg.type === 'spec-updated') {
-          refreshSpec();
-          refreshNarrative();
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const connect = () => {
+      if (cancelled) return;
+      ws = createWebSocket();
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'spec:updated' || msg.type === 'spec-updated') {
+            refreshSpec();
+            refreshNarrative();
+          }
+          if (msg.type === 'results:updated' || msg.type === 'results-updated' || msg.type === 'verify-complete') {
+            refreshResults();
+          }
+          if (msg.type === 'agent:event' && msg.event?.type === 'verify:completed') {
+            refreshResults();
+          }
+        } catch {
+          // ignore non-JSON messages
         }
-        if (msg.type === 'results:updated' || msg.type === 'results-updated' || msg.type === 'verify-complete') {
-          refreshResults();
-        }
-        if (msg.type === 'agent:event' && msg.event?.type === 'verify:completed') {
-          refreshResults();
-        }
-      } catch {
-        // ignore non-JSON messages
-      }
+      };
+      ws.onclose = () => {
+        if (cancelled) return;
+        reconnectTimer = setTimeout(connect, WS_RECONNECT_DELAY_MS);
+      };
     };
-    ws.onclose = () => {
-      // Reconnect after a delay
-      setTimeout(() => {
-        // Component will re-mount or user will refresh
-      }, 3000);
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      ws?.close();
     };
-    return () => ws.close();
   }, [refreshSpec, refreshResults, refreshNarrative]);
 
   // Expand all areas by default when spec loads
@@ -100,13 +112,6 @@ export default function App() {
     [verifyBehavior, refreshResults]
   );
 
-  const handleEdit = useCallback(
-    (_areaId: string, _behaviorId: string, _newDescription: string) => {
-      // Editing would require a spec update endpoint; placeholder for now
-    },
-    []
-  );
-
   if (specLoading) {
     return (
       <div className="loading-screen">
@@ -135,27 +140,6 @@ export default function App() {
         {spec.description && (
           <span className="header-description">{spec.description}</span>
         )}
-      </div>
-      <div className="header-center">
-        <nav className="tab-bar">
-          <button
-            type="button"
-            className={`tab-btn${activeTab === 'behaviors' ? ' tab-btn--active' : ''}`}
-            onClick={() => setActiveTab('behaviors')}
-          >
-            Behaviors
-          </button>
-          <button
-            type="button"
-            className={`tab-btn${activeTab === 'decisions' ? ' tab-btn--active' : ''}`}
-            onClick={() => setActiveTab('decisions')}
-          >
-            Decisions
-            {openDecisionCount > 0 && (
-              <span className="tab-badge">{openDecisionCount}</span>
-            )}
-          </button>
-        </nav>
       </div>
       <div className="header-right">
         <Summary spec={spec} results={results} />
@@ -188,48 +172,40 @@ export default function App() {
 
   return (
     <Layout header={header} sidebar={sidebar}>
-      {activeTab === 'behaviors' && (
-        <>
-          <NarrativePanel description={spec.description} narrative={narrative} />
-          <ActivityStream active={verifying.size > 0} />
-          <SkillDraftsPanel />
-          <FormulaPanel />
-          {verifyError && (
-            <div className="verify-error" role="alert">
-              <strong>Verify error:</strong> {verifyError}
-            </div>
-          )}
-          <SearchBar
+      <NarrativePanel description={spec.description} narrative={narrative} />
+      <ActivityStream active={verifying.size > 0} />
+      <SkillDraftsPanel />
+      <FormulaPanel />
+      {verifyError && (
+        <div className="verify-error" role="alert">
+          <strong>Verify error:</strong> {verifyError}
+        </div>
+      )}
+      <SearchBar
+        searchText={searchText}
+        onSearchChange={setSearchText}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        tagFilter={tagFilter}
+        onTagChange={setTagFilter}
+        allTags={allTags}
+      />
+      <div className="area-list">
+        {spec.areas.map((area) => (
+          <AreaCard
+            key={area.id}
+            area={area}
+            results={results}
+            expanded={expandedAreas.has(area.id)}
+            onToggle={() => handleToggleArea(area.id)}
             searchText={searchText}
-            onSearchChange={setSearchText}
             statusFilter={statusFilter}
-            onStatusChange={setStatusFilter}
             tagFilter={tagFilter}
-            onTagChange={setTagFilter}
-            allTags={allTags}
+            onVerify={handleVerify}
+            verifying={verifying}
           />
-          <div className="area-list">
-            {spec.areas.map((area) => (
-              <AreaCard
-                key={area.id}
-                area={area}
-                results={results}
-                expanded={expandedAreas.has(area.id)}
-                onToggle={() => handleToggleArea(area.id)}
-                searchText={searchText}
-                statusFilter={statusFilter}
-                tagFilter={tagFilter}
-                onVerify={handleVerify}
-                verifying={verifying}
-                onEdit={handleEdit}
-              />
-            ))}
-          </div>
-        </>
-      )}
-      {activeTab === 'decisions' && (
-        <DecisionsList onCountChange={setOpenDecisionCount} />
-      )}
+        ))}
+      </div>
     </Layout>
   );
 }

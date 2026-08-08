@@ -11,7 +11,6 @@ interface AreaCardProps {
   tagFilter: string[];
   onVerify: (areaId: string, behaviorId: string) => void;
   verifying: Set<string>;
-  onEdit: (areaId: string, behaviorId: string, newDescription: string) => void;
 }
 
 export default function AreaCard({
@@ -24,7 +23,6 @@ export default function AreaCard({
   tagFilter,
   onVerify,
   verifying,
-  onEdit,
 }: AreaCardProps) {
   const resultMap = new Map(results?.results.map((r) => [r.id, r]) ?? []);
 
@@ -97,7 +95,6 @@ export default function AreaCard({
                 result={resultMap.get(behavior.id)}
                 onVerify={() => onVerify(area.id, behavior.id)}
                 verifying={verifying.has(`${area.id}/${behavior.id}`)}
-                onEdit={(desc) => onEdit(area.id, behavior.id, desc)}
               />
             ))}
           </div>

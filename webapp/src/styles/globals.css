@@ -746,35 +746,6 @@ body {
   margin: 0;
 }
 
-/* ===== Behavior Edit ===== */
-.behavior-edit {
-  margin-bottom: 8px;
-}
-
-.behavior-edit-textarea {
-  width: 100%;
-  padding: 8px 10px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: var(--font-sans);
-  resize: vertical;
-  outline: none;
-  line-height: 1.5;
-}
-
-.behavior-edit-textarea:focus {
-  border-color: var(--accent);
-}
-
-.behavior-edit-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 6px;
-}
-
 /* ===== Behavior Actions ===== */
 .behavior-actions {
   display: flex;
