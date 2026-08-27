@@ -295,15 +295,22 @@ export class InboxRegistry {
   }
 
   private async runStatelessViaPool(message: InboxMessage): Promise<void> {
-    message.status = 'running';
-    message.startedAt = new Date().toISOString();
-    this.persist(message);
-    eventBus.send('inbox:running', { id: message.id }, message.id);
+    // SP-1xd: stay 'queued' (as submit() left it) until the pool actually
+    // grants this job a worker slot — marking it 'running' any earlier
+    // mislabels jobs still waiting behind a saturated pool, and they could
+    // wait indefinitely once the pool wedges.
     try {
       const runnerOpts = await this.buildRunnerOptions(message);
       message.outputDir = runnerOpts.outputDir;
       const pool = getPool()!;
-      const result = await pool.dispatch(message.id, runnerOpts);
+      const result = await pool.dispatch(message.id, runnerOpts, {
+        onSlotAcquired: () => {
+          message.status = 'running';
+          message.startedAt = new Date().toISOString();
+          this.persist(message);
+          eventBus.send('inbox:running', { id: message.id }, message.id);
+        },
+      });
       message.status = 'completed';
       message.completedAt = new Date().toISOString();
       message.result = result;

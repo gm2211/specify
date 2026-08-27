@@ -11,8 +11,40 @@ import {
   composeSystemPrompt,
   buildRunContextBundle,
   writeRunContextBundle,
+  SubscriptionLimitError,
 } from './sdk-runner.js';
 import type { SdkRunnerOptions, SdkRunnerResult, RunContextBundle } from './sdk-runner.js';
+
+// ---------------------------------------------------------------------------
+// SP-1xd: subscription-limit fail-fast detection.
+//
+// The detection itself lives inline in executeQuery()'s SDK message loop
+// (a 'rate_limit_event' message with rate_limit_info.status === 'rejected'
+// throws immediately instead of letting the query stall), which isn't
+// unit-testable without mocking the SDK's own query() stream. What *is*
+// testable in isolation — and what the bug report specifically asks for —
+// is that the resulting error is thrown immediately with a clear message,
+// so these tests pin down SubscriptionLimitError's contract.
+// ---------------------------------------------------------------------------
+
+test('SubscriptionLimitError message names the limit type and reset time', () => {
+  const resetsAt = Date.parse('2026-08-27T18:00:00.000Z');
+  const err = new SubscriptionLimitError('five_hour', resetsAt);
+  assert.equal(err.name, 'SubscriptionLimitError');
+  assert.match(err.message, /subscription rate limit reached/i);
+  assert.match(err.message, /five_hour/);
+  assert.match(err.message, /2026-08-27T18:00:00/);
+  assert.match(err.message, /aborting immediately/i);
+  assert.equal(err.rateLimitType, 'five_hour');
+  assert.equal(err.resetsAt, resetsAt);
+});
+
+test('SubscriptionLimitError still produces a clear message with no rateLimitType/resetsAt', () => {
+  const err = new SubscriptionLimitError(undefined, undefined);
+  assert.match(err.message, /subscription rate limit reached/i);
+  assert.match(err.message, /aborting immediately/i);
+  assert.doesNotMatch(err.message, /undefined/);
+});
 
 test('SdkRunnerOptions interface accepts valid capture options', () => {
   const opts: SdkRunnerOptions = {

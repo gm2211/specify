@@ -7,6 +7,8 @@ import { inbox, __setRunnerForTesting } from './inbox.js';
 import { saveMessage, loadMessages } from './inbox-state.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 import { eventBus } from '../agent/event-bus.js';
+import { configurePool, __resetPoolForTesting } from './worker-pool.js';
+import type { WorkerHandle } from './worker-pool.js';
 
 const ENV_KEYS = [
   'SPECIFY_SPEC_INLINE_PATH',
@@ -41,6 +43,27 @@ function makeFakeRunner(onCall?: (opts: SdkRunnerOptions) => void) {
 async function flush(): Promise<void> {
   // Give the microtask/timer queue a tick so dispatched runners settle.
   await new Promise((r) => setTimeout(r, 10));
+}
+
+/**
+ * Poll `predicate` until it's true, instead of waiting out a fixed sleep.
+ * Fixed sleeps are the classic source of CI flakiness: too short and a slow
+ * runner fails the assertion before work finishes, too long and every test
+ * run pays the tax. Polling on the actual condition removes the guesswork —
+ * the `timeoutMs` is just a generous upper bound for a genuine hang, not the
+ * synchronization mechanism itself.
+ */
+async function waitUntil(
+  predicate: () => boolean,
+  { timeoutMs = 5000, intervalMs = 5 }: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) {
+      throw new Error(`waitUntil: condition not met within ${timeoutMs}ms`);
+    }
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -278,7 +301,14 @@ test('inbox.submit stateless: serializes concurrent submits', async () => {
     const b = inbox.submit({ task: 'freeform', prompt: 'second' });
     const c = inbox.submit({ task: 'freeform', prompt: 'third' });
 
-    await new Promise((r) => setTimeout(r, 150));
+    // Deterministic sync: wait for all three to reach a terminal status
+    // rather than a fixed sleep guessing how long 3x20ms serialized runs
+    // plus dispatch overhead takes on whatever machine is running the test.
+    await waitUntil(() =>
+      ['completed', 'failed'].includes(inbox.get(a.id)?.status ?? '') &&
+      ['completed', 'failed'].includes(inbox.get(b.id)?.status ?? '') &&
+      ['completed', 'failed'].includes(inbox.get(c.id)?.status ?? ''),
+    );
     assert.equal(inbox.get(a.id)?.status, 'completed');
     assert.equal(inbox.get(b.id)?.status, 'completed');
     assert.equal(inbox.get(c.id)?.status, 'completed');
@@ -899,6 +929,110 @@ test('inbox.submit verify with request spec loads exploration hints from a persi
     if (prevFlag === undefined) delete process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE;
     else process.env.SPECIFY_ENABLE_NAV_MAP_COVERAGE = prevFlag;
     __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// SP-1xd: accurate queued/running status through the real WorkerPool.
+//
+// Before this fix, dispatchStateless() via the pool marked a job 'running'
+// the instant dispatch() was called — even while it was still waiting for a
+// free worker slot behind a saturated pool. These tests drive `inbox`
+// through a real WorkerPool (via configurePool) with an injected fake
+// worker handle, so no real process is forked.
+// ---------------------------------------------------------------------------
+
+/** Minimal fake child_process.ChildProcess stand-in — see the identical
+ *  helper in worker-pool.test.ts for rationale (no `implements`, no `pid`,
+ *  cast to WorkerHandle only where a WorkerPool needs one). */
+class FakeWorker {
+  readonly sent: Array<Record<string, unknown>> = [];
+  private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  on(event: string, listener: (...args: unknown[]) => void): this {
+    const list = this.listeners.get(event) ?? [];
+    list.push(listener);
+    this.listeners.set(event, list);
+    return this;
+  }
+  send(msg: Record<string, unknown>): boolean {
+    this.sent.push(msg);
+    return true;
+  }
+  kill(): boolean {
+    return true;
+  }
+  emit(event: string, ...args: unknown[]): void {
+    for (const l of this.listeners.get(event) ?? []) l(...args);
+  }
+  asHandle(): WorkerHandle {
+    return this as unknown as WorkerHandle;
+  }
+}
+
+test('inbox.submit via pool: stays queued behind a saturated pool, flips to running only once a slot is granted', async () => {
+  inbox.reset();
+  const workers: FakeWorker[] = [];
+  configurePool(1, {
+    jobTimeoutMs: 0,
+    spawnWorker: () => {
+      const w = new FakeWorker();
+      workers.push(w);
+      return w.asHandle();
+    },
+  });
+  try {
+    const a = inbox.submit({ task: 'freeform', prompt: 'first' });
+    await flush();
+    assert.equal(inbox.get(a.id)?.status, 'running', 'A should be running — it had a free slot');
+
+    const b = inbox.submit({ task: 'freeform', prompt: 'second' });
+    await flush();
+    assert.equal(
+      inbox.get(b.id)?.status,
+      'queued',
+      'B must stay queued while A holds the only slot — never prematurely marked running',
+    );
+
+    // Free A's slot; B should now be granted it.
+    workers[0].emit('message', { kind: 'result', jobId: a.id, result: { result: 'ok', costUsd: 0 } });
+    await flush();
+    assert.equal(inbox.get(a.id)?.status, 'completed');
+    assert.equal(inbox.get(b.id)?.status, 'running', 'B should flip to running once granted a slot');
+
+    workers[1].emit('message', { kind: 'result', jobId: b.id, result: { result: 'ok', costUsd: 0 } });
+    await flush();
+    assert.equal(inbox.get(b.id)?.status, 'completed');
+  } finally {
+    __resetPoolForTesting();
+    inbox.reset();
+  }
+});
+
+test('inbox.submit via pool: a job that never gets a worker response fails via the pool timeout, without ever being marked running incorrectly', async () => {
+  inbox.reset();
+  const workers: FakeWorker[] = [];
+  configurePool(1, {
+    jobTimeoutMs: 20,
+    killGraceMs: 10,
+    spawnWorker: () => {
+      const w = new FakeWorker();
+      workers.push(w);
+      return w.asHandle();
+    },
+  });
+  try {
+    const a = inbox.submit({ task: 'freeform', prompt: 'stalled' });
+    await flush();
+    assert.equal(inbox.get(a.id)?.status, 'running');
+
+    // Never respond — let the pool's real timer fire (short timeouts above,
+    // no fake timers here: this exercises the real end-to-end wiring from
+    // inbox through the pool's setTimeout-based timeout).
+    await waitUntil(() => inbox.get(a.id)?.status === 'failed', { timeoutMs: 2000 });
+    assert.match(inbox.get(a.id)?.error ?? '', /timeout|timed out|exceeded/i);
+  } finally {
+    __resetPoolForTesting();
     inbox.reset();
   }
 });

@@ -8,6 +8,8 @@ import { startDaemonServer, resolveToken } from './server.js';
 import { inbox, __setRunnerForTesting } from './inbox.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 import { appendDecision } from '../agent/pending-decisions.js';
+import { configurePool, getPool, __resetPoolForTesting } from './worker-pool.js';
+import type { WorkerHandle } from './worker-pool.js';
 
 // Redirect inbox state dir to a tmp location so server tests never write
 // into .specify/inbox/_registry in the source tree.
@@ -258,4 +260,135 @@ test('daemon HTTP: GET /inbox/:id for a restored interrupted record returns 200 
   assert.equal(res.status, 200, 'restored interrupted record should return 200, not 404');
   assert.equal((res.json as { status: string }).status, 'interrupted');
   assert.match((res.json as { error: string }).error ?? '', /restarted/i);
+});
+
+// ---------------------------------------------------------------------------
+// SP-1xd: /health pool telemetry + bounded queue backpressure (HTTP layer).
+//
+// Both tests pre-configure the WorkerPool singleton (with a fake worker —
+// see the identical helper's rationale in worker-pool.test.ts) *before*
+// calling startDaemonServer with maxWorkers: 0, which makes
+// startDaemonServer skip its own configurePool() call and leaves the
+// pre-configured pool in place for the running server to use.
+// ---------------------------------------------------------------------------
+
+class FakeWorker {
+  private readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+  on(event: string, listener: (...args: unknown[]) => void): this {
+    const list = this.listeners.get(event) ?? [];
+    list.push(listener);
+    this.listeners.set(event, list);
+    return this;
+  }
+  send(): boolean {
+    return true;
+  }
+  kill(): boolean {
+    return true;
+  }
+  emit(event: string, ...args: unknown[]): void {
+    for (const l of this.listeners.get(event) ?? []) l(...args);
+  }
+  asHandle(): WorkerHandle {
+    return this as unknown as WorkerHandle;
+  }
+}
+
+async function waitUntil(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!predicate()) {
+    if (Date.now() >= deadline) throw new Error(`waitUntil: condition not met within ${timeoutMs}ms`);
+    await new Promise((r) => setTimeout(r, 5));
+  }
+}
+
+test('daemon HTTP: /health surfaces pool saturation and wedged workers instead of staying green', async (t) => {
+  inbox.reset();
+  __resetPoolForTesting();
+  configurePool(1, {
+    jobTimeoutMs: 20,
+    killGraceMs: 10,
+    spawnWorker: () => new FakeWorker().asHandle(),
+  });
+  const port = pickPort();
+  const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0, noAuth: true });
+  t.after(async () => {
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    __resetPoolForTesting();
+    inbox.reset();
+  });
+
+  await waitForHealth(port);
+
+  const idleHealth = await request(port, '/health');
+  assert.equal(idleHealth.status, 200);
+  const idleBody = idleHealth.json as { degraded: boolean; pool: { active: number; wedged: number } | null };
+  assert.equal(idleBody.degraded, false, 'an idle pool must not be reported as degraded');
+  assert.equal(idleBody.pool?.active, 0);
+
+  // Submit a job whose fake worker never responds — it will occupy the
+  // pool's only slot, time out (jobTimeoutMs: 20ms), and stay "wedged"
+  // (never emits 'exit') so /health has something stuck to report.
+  const submitted = await request(port, '/inbox', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ task: 'freeform', prompt: 'stall forever' }),
+  });
+  assert.equal(submitted.status, 202);
+
+  await waitUntil(() => (getPool()?.stats().wedged ?? 0) > 0, 2000);
+
+  const degradedHealth = await request(port, '/health');
+  assert.equal(degradedHealth.status, 200, '/health must stay a 200 liveness probe even when the pool is degraded');
+  const degradedBody = degradedHealth.json as {
+    ok: boolean;
+    degraded: boolean;
+    pool: { wedged: number; active: number; maxConcurrent: number } | null;
+  };
+  assert.equal(degradedBody.ok, true, 'basic process liveness is unaffected — only the pool section reports trouble');
+  assert.equal(degradedBody.degraded, true, 'a wedged worker must flip the degraded flag');
+  assert.ok(degradedBody.pool, 'pool telemetry must be present once a pool is configured');
+  assert.ok(degradedBody.pool!.wedged > 0);
+});
+
+test('daemon HTTP: POST /inbox sheds new stateless jobs with 429 once the worker queue is full', async (t) => {
+  inbox.reset();
+  __resetPoolForTesting();
+  configurePool(1, {
+    jobTimeoutMs: 0,
+    maxQueueLength: 1,
+    spawnWorker: () => new FakeWorker().asHandle(),
+  });
+  const port = pickPort();
+  const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0, noAuth: true });
+  t.after(async () => {
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    __resetPoolForTesting();
+    inbox.reset();
+  });
+
+  await waitForHealth(port);
+
+  const submit = (prompt: string) => request(port, '/inbox', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ task: 'freeform', prompt }),
+  });
+
+  const a = await submit('A occupies the only slot');
+  assert.equal(a.status, 202);
+  await waitUntil(() => (getPool()?.stats().active ?? 0) === 1);
+
+  const b = await submit('B fills the one-slot queue');
+  assert.equal(b.status, 202);
+  await waitUntil(() => (getPool()?.stats().queued ?? 0) === 1);
+
+  const c = await submit('C should be shed');
+  assert.equal(c.status, 429, 'a third job must be rejected once active + queue are both at their bound');
+  const cBody = c.json as { error: string; queued: number; maxQueueLength: number };
+  assert.equal(cBody.error, 'queue_full');
+  assert.equal(cBody.queued, 1);
+  assert.equal(cBody.maxQueueLength, 1);
 });

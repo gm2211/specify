@@ -26,7 +26,7 @@ import { randomBytes } from 'node:crypto';
 import { eventBus } from '../agent/event-bus.js';
 import { inbox } from './inbox.js';
 import type { InboxRequest } from './inbox.js';
-import { configurePool } from './worker-pool.js';
+import { configurePool, getPool } from './worker-pool.js';
 import { renderInspectorHtml } from './inspector.js';
 import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 import { attachReportSinks } from '../agent/report-sink.js';
@@ -41,6 +41,16 @@ export interface DaemonOptions {
   /** Max concurrent stateless jobs (each in its own forked process).
    *  Default 2 — keeps memory bounded while still parallelizing verifies. */
   maxWorkers?: number;
+  /** Per-job wall-clock timeout (ms), starting once a worker slot is
+   *  acquired. Defaults to WorkerPool's own default (env-configurable via
+   *  SPECIFY_DAEMON_JOB_TIMEOUT_MS) when omitted. */
+  jobTimeoutMs?: number;
+  /** Grace period (ms) after a graceful cancel before the process-tree
+   *  SIGKILL fallback. Defaults to WorkerPool's own default. */
+  killGraceMs?: number;
+  /** Max jobs allowed to wait for a free worker slot before new dispatches
+   *  are rejected. Defaults to WorkerPool's own default. */
+  maxQueueLength?: number;
 }
 
 const TOKEN_DIR = path.join(os.homedir(), '.specify');
@@ -91,7 +101,13 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   // maxWorkers=0 disables the worker pool (useful for tests that stub the
   // SDK runner via __setRunnerForTesting — they need the in-process path).
   const maxWorkers = opts.maxWorkers ?? 2;
-  if (maxWorkers > 0) configurePool(maxWorkers);
+  if (maxWorkers > 0) {
+    configurePool(maxWorkers, {
+      jobTimeoutMs: opts.jobTimeoutMs,
+      killGraceMs: opts.killGraceMs,
+      maxQueueLength: opts.maxQueueLength,
+    });
+  }
 
   // Restore inbox job history from the previous run. Any job that was still
   // queued or running when the pod restarted is marked 'interrupted' so
@@ -145,14 +161,34 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   // Routes
   // ---------------------------------------------------------------------------
 
-  app.get('/health', (c) =>
-    c.json({
+  app.get('/health', (c) => {
+    // SP-1xd: surface worker-pool saturation/wedge state instead of staying
+    // green no matter what — a pool with wedged workers or a full queue is
+    // meaningfully unhealthy even though the HTTP server itself is fine.
+    const pool = getPool();
+    const poolStats = pool?.stats() ?? null;
+    const saturated = poolStats ? poolStats.active >= poolStats.maxConcurrent : false;
+    const queueFull = poolStats ? poolStats.queued >= poolStats.maxQueueLength : false;
+    const degraded = poolStats ? poolStats.wedged > 0 || queueFull : false;
+    return c.json({
       ok: true,
       uptime_s: Math.round(process.uptime()),
       sessions: inbox.sessionIds().length,
       maxWorkers,
-    }),
-  );
+      degraded,
+      pool: poolStats && {
+        active: poolStats.active,
+        maxConcurrent: poolStats.maxConcurrent,
+        queued: poolStats.queued,
+        maxQueueLength: poolStats.maxQueueLength,
+        oldestActiveMs: poolStats.oldestActiveMs,
+        wedged: poolStats.wedged,
+        jobTimeoutMs: poolStats.jobTimeoutMs,
+        saturated,
+        queueFull,
+      },
+    });
+  });
 
   // Landing page: live inspector for agent events, messages, sessions.
   app.get('/', (c) => {
@@ -208,6 +244,22 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
         !body.areas.every((a) => typeof a === 'string' && a.length > 0))
     ) {
       return c.json({ error: 'invalid_field', field: 'areas' }, 400);
+    }
+    // SP-1xd: bounded queue backpressure. This is a best-effort synchronous
+    // check for a fast, structured rejection — the worker pool itself is
+    // the authoritative bound (dispatch() rejects if the queue fills
+    // between this check and actual dispatch, and the job is marked
+    // 'failed' with the same WorkerPoolQueueFullError message).
+    if ((body.mode ?? 'stateless') === 'stateless') {
+      const poolStats = getPool()?.stats();
+      if (poolStats && poolStats.active >= poolStats.maxConcurrent && poolStats.queued >= poolStats.maxQueueLength) {
+        return c.json({
+          error: 'queue_full',
+          detail: `daemon worker queue is full (${poolStats.queued}/${poolStats.maxQueueLength} waiting) — try again later`,
+          queued: poolStats.queued,
+          maxQueueLength: poolStats.maxQueueLength,
+        }, 429);
+      }
     }
     const message = inbox.submit(body as InboxRequest);
     return c.json({

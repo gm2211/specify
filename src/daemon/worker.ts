@@ -8,7 +8,9 @@
  * cross-job (queue, session keys, history) lives in the parent.
  *
  * Parent → worker messages:
- *   { kind: 'job', jobId: string, opts: SdkRunnerOptions }
+ *   { kind: 'job',    jobId: string, opts: SdkRunnerOptions }
+ *   { kind: 'cancel', jobId: string }  — graceful abort (SP-1xd); the parent
+ *     follows up with a process-tree SIGKILL if we don't exit in time.
  *
  * Worker → parent messages:
  *   { kind: 'event',  jobId, event: SpecifyEvent }
@@ -47,13 +49,28 @@ function send(msg: Record<string, unknown>): void {
 // filters by the event's sessionId (which is the inbox message id).
 eventBus.onAny((event) => send({ kind: 'event', event }));
 
+// SP-1xd: the currently-running job id and its abort controller, so a
+// 'cancel' message from the parent (sent when its per-job timeout fires) can
+// ask the in-flight SDK query to stop gracefully. `runSpecifyAgent` mirrors
+// this signal onto the SDK's own AbortController.
+let currentJobId: string | undefined;
+let currentAbortController: AbortController | undefined;
+
 process.on('message', async (raw: unknown) => {
   const msg = raw as { kind: string; jobId?: string; opts?: SdkRunnerOptions };
+
+  if (msg.kind === 'cancel') {
+    if (msg.jobId && msg.jobId === currentJobId) currentAbortController?.abort();
+    return;
+  }
+
   if (msg.kind !== 'job' || !msg.jobId || !msg.opts) return;
 
   const { jobId, opts } = msg;
+  currentJobId = jobId;
+  currentAbortController = new AbortController();
   try {
-    const result = await runSpecifyAgent(opts);
+    const result = await runSpecifyAgent({ ...opts, abortSignal: currentAbortController.signal });
     send({ kind: 'result', jobId, result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
