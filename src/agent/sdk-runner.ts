@@ -100,6 +100,14 @@ export interface SdkRunnerOptions {
    * passing this with the flag off is a no-op (zero behavior change).
    */
   faultPlan?: import('./fault-injector.js').FaultPlan;
+  /**
+   * External cancellation signal (SP-1xd). When aborted, the underlying SDK
+   * query is asked to stop and clean up (Options.abortController.abort()).
+   * The daemon's worker-pool wires this to a bounded per-job timeout so a
+   * stalled/wedged SDK query (e.g. after a subscription-limit stall) can be
+   * cancelled gracefully instead of leaving the worker alive forever.
+   */
+  abortSignal?: AbortSignal;
 }
 
 export interface SdkRunnerResult {
@@ -118,6 +126,29 @@ export class AgentError extends Error {
   ) {
     super(`Agent ended with ${subtype}`);
     this.name = 'AgentError';
+  }
+}
+
+/**
+ * Error thrown when the SDK reports the claude.ai subscription's rate limit
+ * as 'rejected' (SP-1xd). Before this, a rejected request from a maxed-out
+ * subscription could just stop yielding further messages — the query never
+ * throws, it just stalls — so a caller awaiting the result would hang
+ * indefinitely. Failing fast on the rate-limit event itself means callers
+ * (notably the daemon worker pool) get an immediate, clearly-labelled error
+ * instead of relying on a bounded timeout to eventually notice the stall.
+ */
+export class SubscriptionLimitError extends Error {
+  constructor(
+    public readonly rateLimitType: string | undefined,
+    public readonly resetsAt: number | undefined,
+  ) {
+    const resetDesc = resetsAt ? ` — resets at ${new Date(resetsAt).toISOString()}` : '';
+    super(
+      `Claude subscription rate limit reached${rateLimitType ? ` (${rateLimitType})` : ''}${resetDesc}. ` +
+      'Aborting immediately instead of waiting for the SDK to stall.',
+    );
+    this.name = 'SubscriptionLimitError';
   }
 }
 
@@ -764,6 +795,17 @@ async function executeQuery(
           process.stderr.write(`  \x1b[2m${summary}\x1b[0m\n`);
         }
         eventBus.send('agent:tool_use', { summary }, sessionId);
+      } else if (message.type === 'rate_limit_event' && 'rate_limit_info' in message) {
+        // SP-1xd: subscription-limit fail-fast. A 'rejected' status means the
+        // SDK's underlying claude.ai subscription request was denied — the
+        // query can stall from here (no further assistant messages) rather
+        // than throwing, so we throw ourselves instead of waiting to find
+        // out. 'allowed' / 'allowed_warning' are just informational.
+        const info = (message as { rate_limit_info: { status: string; rateLimitType?: string; resetsAt?: number } }).rate_limit_info;
+        eventBus.send('agent:rate_limit', { status: info.status, rateLimitType: info.rateLimitType, resetsAt: info.resetsAt }, sessionId);
+        if (info.status === 'rejected') {
+          throw new SubscriptionLimitError(info.rateLimitType, info.resetsAt);
+        }
       } else if (message.type === 'result') {
       if (message.subtype === 'success') {
         finalResult = message.result;
@@ -1163,6 +1205,22 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       persistSession: false,
       ...(outputFormat ? { outputFormat } : {}),
     };
+
+    // SP-1xd: forward an external cancellation signal (if any) onto the SDK's
+    // own AbortController so a caller (the daemon worker-pool's per-job
+    // timeout) can ask the query to gracefully stop and clean up resources
+    // instead of leaving it running forever. The SDK only accepts a real
+    // AbortController instance, so we own one here and mirror abort() calls
+    // from the caller-supplied signal onto it.
+    if (opts.abortSignal) {
+      const abortController = new AbortController();
+      if (opts.abortSignal.aborted) {
+        abortController.abort();
+      } else {
+        opts.abortSignal.addEventListener('abort', () => abortController.abort(), { once: true });
+      }
+      queryOptions.abortController = abortController;
+    }
 
     // Persist the repro bundle: sha256 of the final systemPrompt, the
     // rendered preamble texts, model/limits, spec identity, and the redacted
