@@ -6,7 +6,6 @@ export const ExitCode = {
   PARSE_ERROR: 10,
   NETWORK_ERROR: 11,
   TIMEOUT: 12,
-  ASSUMPTION_FAILURE: 13,
   BROWSER_ERROR: 14,
   /**
    * Every failed behavior in the run was failed SOLELY by the monitor tier

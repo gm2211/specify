@@ -5,7 +5,7 @@
  *
  * Design principles (agent-first):
  *   - Structured JSON to stdout, human messages to stderr
- *   - Meaningful exit codes for branching (0, 1, 2, 10-14)
+ *   - Meaningful exit codes for branching (0, 1, 2, 10-12, 14-15)
  *   - Noun-verb command pattern for tree-search discovery
  *   - Schema introspection via `specify schema <target>`
  *   - Field masks via --fields for context-window discipline
@@ -24,7 +24,7 @@
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
  *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
- *   specify schema spec|report|commands
+ *   specify schema spec|commands
  *   specify mcp              MCP server for LLM tool integration
  *   specify human            Interactive chat REPL
  *
@@ -219,8 +219,8 @@ function printHelp(asJson: boolean): void {
         '10': 'parse_error',
         '11': 'network_error',
         '12': 'timeout',
-        '13': 'assumption_failure',
         '14': 'browser_error',
+        '15': 'monitor_violation',
       },
       hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
     }, null, 2) + '\n');
@@ -246,7 +246,7 @@ ${c.bold('Advanced:')}
   ${c.cyan('spec compile')}     Compile behaviors into LTLf formulas for deterministic verify
 
 ${c.bold('Infrastructure:')}
-  ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec, report, or commands)')}
+  ${c.cyan('schema')}            JSON Schema introspection ${c.dim('(spec or commands)')}
   ${c.cyan('mcp')}               MCP server for agent integration
 
 ${c.dim(`Run "specify human" for interactive chat REPL`)}
