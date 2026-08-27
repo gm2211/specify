@@ -1,0 +1,20 @@
+id: create
+name: Interactive Spec Creation
+prose: |
+  Guided interview for creating a v2 spec from scratch.
+behaviors:
+  - id: create-launches-interview
+    description: |
+      Prompts for app name, description, target type, and target value
+  - id: create-shows-preview
+    description: |
+      Shows YAML preview and asks for confirmation before saving
+  - id: create-writes-spec
+    description: |
+      Writes spec to --output (default spec.yaml) on confirmation
+  - id: create-outputs-json
+    description: |
+      Outputs JSON with generated spec and file paths
+  - id: create-exits-zero
+    description: |
+      Exits 0 on success or cancellation

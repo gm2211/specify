@@ -1,0 +1,25 @@
+id: mcp-server
+name: MCP Server
+prose: |
+  Exposes Specify capabilities as MCP tools for LLM clients, over stdio by default or HTTP with --http.
+behaviors:
+  - id: mcp-starts-stdio
+    description: |
+      'specify mcp' starts MCP server on stdio transport
+  - id: mcp-http-transport
+    description: |
+      --http switches to HTTP transport with --port and --host options
+  - id: mcp-exposes-spec-tools
+    description: >
+      Exposes get_authoring_guide, lint_spec, parse_spec, and spec_to_yaml — spec authoring and validation without
+      shelling out to the CLI
+  - id: mcp-exposes-discovery-tool
+    description: |
+      Exposes list_commands, returning the same command manifest as 'specify schema commands'
+  - id: mcp-exposes-event-tools
+    description: >
+      Exposes subscribe_events, publish_event, and inject_message for observing and steering a live agent run from an
+      MCP client
+  - id: mcp-exposes-daemon-tools
+    description: |
+      Exposes daemon_verify, daemon_submit, and daemon_status, which talk to a running 'specify daemon' inbox over HTTP

@@ -1,0 +1,17 @@
+id: compare
+name: Live Side-by-Side Comparison
+prose: |
+  Opens parallel browser sessions to --remote and --local URLs and compares behavior.
+behaviors:
+  - id: compare-requires-remote-and-local
+    description: |
+      Without --remote or --local, outputs error and exits 10
+  - id: compare-match-exits-zero
+    description: |
+      If systems match, exits 0
+  - id: compare-mismatch-exits-one
+    description: |
+      If differences detected, exits 1
+  - id: compare-outputs-json
+    description: |
+      Outputs JSON with result, costUsd, match flag, and structured output

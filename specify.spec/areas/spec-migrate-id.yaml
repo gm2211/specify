@@ -1,0 +1,31 @@
+id: spec-migrate-id
+name: Spec ID Migration
+prose: >
+  Renaming a behavior or area id orphans everything keyed off its old fully-qualified id across learned-state stores.
+  `spec migrate-id` rewrites those stores in place so learned state survives the rename.
+behaviors:
+  - id: migrate-id-requires-positionals
+    description: >
+      Requires two positional arguments, <old-fq-id> and <new-fq-id>, each in "area-id/behavior-id" form; missing either
+      exits 10
+  - id: migrate-id-rejects-malformed-ids
+    description: |
+      An id that isn't a fully-qualified "area/behavior" pair exits 10
+  - id: migrate-id-updates-confidence-store
+    description: |
+      Rewrites the matching row in confidence.json from the old id to the new id
+  - id: migrate-id-updates-observations
+    description: |
+      Rewrites matching rows in specify.observations.yaml from the old area_id/behavior_id to the new ones
+  - id: migrate-id-updates-memory-store
+    description: >
+      Rewrites matching rows across every .specify/memory/<spec>/<target>.json file from the old area_id/behavior_id to
+      the new ones
+  - id: migrate-id-outputs-summary
+    description: >
+      Outputs a JSON summary of how many rows were migrated in each of the three stores (confidence, observations,
+      memory)
+  - id: migrate-id-idempotent
+    description: >
+      Re-running the same migration after it already completed is a no-op — nothing remains keyed to the old id, so zero
+      additional rows change

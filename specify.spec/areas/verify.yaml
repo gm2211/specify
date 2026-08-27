@@ -1,0 +1,71 @@
+id: verify
+name: Agent-Driven Verification
+prose: >
+  Runs verification of an implementation against a spec. Reads the spec, determines target type (web/api/cli), and
+  checks each behavior via one of three techniques selected by --mode.
+behaviors:
+  - id: verify-requires-spec
+    description: |
+      Without --spec and no auto-discoverable spec, outputs error and exits 10
+  - id: verify-auto-discovers-spec
+    description: |
+      Without --spec, auto-discovers spec file (or spec directory) from cwd
+  - id: verify-uses-explicit-url
+    description: |
+      --url overrides the spec target URL for web/api targets
+  - id: verify-uses-spec-target
+    description: |
+      Without --url, extracts URL from spec.target for web/api, binary for cli
+  - id: verify-pass-exits-zero
+    description: |
+      All behaviors passed exits 0
+  - id: verify-fail-exits-one
+    description: |
+      Any behavior failed exits 1
+  - id: verify-outputs-json
+    description: |
+      Outputs JSON with result, costUsd, pass flag, and structured verification output
+  - id: verify-writes-result-file
+    description: |
+      Writes verify-result.json to --output dir (default .specify/verify/)
+  - id: verify-shows-review-hint
+    description: |
+      After verification, stderr shows 'specify review --spec ... --agent-report ...'
+  - id: verify-mode-flag
+    description: >
+      --mode selects the verification technique: "agent" (default, LLM browses and judges each behavior), "scripted"
+      (replays a previously generated test suite, no LLM cost), or "auto" (confidence-driven mix of both); any other
+      value is an invalid_parameter error, exit 10
+  - id: verify-scripted-mode-runs-existing-tests
+    description: >
+      --mode scripted replays whatever generated test suite already exists in the output directory and builds
+      verify-result.json from that replay alone; if no matching tests exist for any behavior, exits 2 (all untested)
+      instead of 0 or 1
+  - id: verify-auto-mode-routes-behaviors
+    description: >
+      --mode auto partitions behaviors between the scripted suite and the agent by confidence; a scripted failure (or a
+      missing/stale scripted result) is never terminal in auto mode — it escalates to the agent instead of failing the
+      behavior outright
+  - id: verify-route-all-scripted-flag
+    description: >
+      --route-all-scripted (only meaningful with --mode auto) restores the legacy behavior of running the full scripted
+      suite first and escalating every failed or untested behavior to the agent, instead of the confidence-driven
+      partition
+  - id: verify-cross-check-flag
+    description: >
+      --cross-check independently replays the full generated test suite and records agreement/disagreement with the
+      agent's verdicts under cross_check in the output; it is report-only and never changes pass or the exit code
+  - id: verify-storage-state-flag
+    description: >
+      --storage-state <path|keychain:name> loads a saved browser session before verifying; an unreadable file, invalid
+      JSON, or (on non-macOS) a keychain reference fails with a structured error and exits 10
+  - id: verify-fault-injection-flags
+    description: >
+      --fault <urlPattern>=<500|timeout|abort|empty> (repeatable) and --fault-seed inject deterministic network faults
+      during the agent tier for resilience testing; both are parsed but silently ignored (with a stderr note) unless
+      SPECIFY_ENABLE_FAULT_INJECTION is set, and --fault has no effect in --mode scripted
+  - id: verify-monitor-violation-exit-code
+    description: >
+      Exits 15 instead of 1 when every failed behavior in the run was failed solely because an approved LTLf formula's
+      deterministic check overturned an LLM pass/skip verdict; any behavior the LLM itself judged failed keeps exit 1
+      regardless of monitor agreement

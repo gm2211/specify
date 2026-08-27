@@ -1,0 +1,26 @@
+id: spec-lint
+name: Spec Linting
+prose: >
+  Validates spec file structure without requiring captures. Schema validation plus semantic checks (duplicate IDs, empty
+  descriptions, oversized single files).
+behaviors:
+  - id: lint-valid-spec-exits-zero
+    description: |
+      Linting a valid spec outputs JSON result and exits 0
+  - id: lint-invalid-spec-exits-nonzero
+    description: |
+      Linting an invalid spec outputs JSON with errors array and exits 10
+  - id: lint-auto-discovers-spec
+    description: |
+      Without --spec, auto-discovers spec file (or spec directory) from cwd
+  - id: lint-accepts-stdin
+    description: |
+      --spec - reads spec YAML from stdin
+  - id: lint-warns-oversized-single-file
+    description: >
+      Linting a single-file spec that exceeds 40KiB, 800 lines, 12 areas, or 120 behaviors adds a non-fatal
+      "oversized-single-file-spec" warning suggesting `spec split`; the spec still reports valid if otherwise correct
+  - id: lint-directory-spec-no-size-warning
+    description: >
+      A directory spec (manifest + area files) never triggers the oversized-single-file-spec warning, regardless of its
+      total size

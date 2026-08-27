@@ -1,0 +1,36 @@
+id: spec-compile
+name: Spec Compilation
+prose: >
+  Compiles plain-language behavior descriptions into LTLf formulas (specify.formulas.yaml) via an offline LLM pass, so
+  subsequent `verify` runs can evaluate approved formulas deterministically instead of re-asking an LLM every time.
+behaviors:
+  - id: compile-requires-spec
+    description: |
+      Without --spec and no auto-discoverable spec, exits 10
+  - id: compile-skips-already-compiled
+    description: >
+      Without --force, behaviors that already have a formula entry (draft, approved, or rejected) are excluded from this
+      run's candidates
+  - id: compile-behavior-filter
+    description: >
+      --behavior <fq-id> is repeatable and scopes compilation to the given fully-qualified behavior ids; ids that don't
+      match any behavior in the spec produce a warning, and if none match, exits 10
+  - id: compile-force-recompiles
+    description: |
+      --force re-sends behaviors that already have a formula entry
+  - id: compile-validates-formulas
+    description: >
+      Each compiled formula is schema-validated; entries whose behavior id doesn't resolve in the spec, or that
+      reference an unknown predicate, are rejected and never written
+  - id: compile-writes-drafts
+    description: >
+      Accepted formulas are written as drafts into specify.formulas.yaml for human review, without changing verify's
+      behavior until approved
+  - id: compile-self-check-lints
+    description: >
+      After writing new drafts, runs the same lint used by `spec lint` against the updated formulas file and includes
+      the result in output; exits 1 if that self-check finds an error
+  - id: compile-nothing-to-compile-exits-zero
+    description: >
+      When every behavior already has a formula entry (and --force isn't given), exits 0 with an empty
+      compiled/skipped/rejected result and no LLM call is made

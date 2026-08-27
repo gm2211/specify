@@ -15,7 +15,7 @@ type_cmd() {
 
 clear
 type_cmd "specify spec lint --spec app.spec.yaml"
-$CLI spec lint --spec specify.spec.yaml 2>&1 1>/dev/null
+$CLI spec lint --spec specify.spec 2>&1 1>/dev/null
 sleep 1
 echo
 type_cmd "specify cli run --spec app.spec.yaml"

@@ -1,0 +1,22 @@
+id: daemon
+name: Daemon Mode
+prose: >
+  Long-running mode: an HTTP inbox server that accepts verify/capture/ compare/replay/freeform tasks from other agents
+  or the MCP daemon tools, idle at zero token cost until a task is pushed in.
+behaviors:
+  - id: daemon-runs-forever
+    description: |
+      'specify daemon' starts the inbox server and does not exit on its own — it runs until SIGINT/SIGTERM
+  - id: daemon-default-port-and-host
+    description: |
+      Defaults to port 4100 and host 127.0.0.1; overridable with --port and --host
+  - id: daemon-invalid-port-fails
+    description: |
+      A non-numeric or non-positive --port outputs error JSON with invalid_port and exits 10
+  - id: daemon-no-auth-flag
+    description: |
+      --no-auth disables the inbox's auth check
+  - id: daemon-max-workers
+    description: >
+      --max-workers caps concurrent daemon tasks (default 2); a non-numeric or non-positive value outputs error JSON
+      with invalid_max_workers and exits 10

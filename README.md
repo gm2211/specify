@@ -420,11 +420,11 @@ areas:
         details: "Applies to both password and SSO login flows."
 ```
 
-Full schema: `specify schema spec` (or see [`src/spec/schema.ts`](src/spec/schema.ts)). The repo's own [`specify.spec.yaml`](specify.spec.yaml) is a complete real-world example, including `assumptions` and `hooks`.
+Full schema: `specify schema spec` (or see [`src/spec/schema.ts`](src/spec/schema.ts)). The repo's own [`specify.spec/`](specify.spec/spec.yaml) is a complete real-world example, split into a directory spec via `specify spec split`.
 
 ## Self-verifying
 
-Specify eats its own dogfood. The repo includes [`specify.spec.yaml`](specify.spec.yaml) — a spec for Specify itself — validated on every release.
+Specify eats its own dogfood. The repo includes [`specify.spec/`](specify.spec/spec.yaml) — a spec for Specify itself — validated on every release.
 
 ## License
 
