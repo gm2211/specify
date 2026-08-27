@@ -1,0 +1,37 @@
+id: review
+name: Interactive Spec Browser
+prose: >
+  Generates a self-contained HTML file displaying spec with areas, behaviors, prose, and optional verification results
+  overlay. Can also run as a background daemon.
+behaviors:
+  - id: review-requires-spec
+    description: |
+      Without --spec (and no --stop) and no auto-discoverable spec, outputs error and exits 10
+  - id: review-generates-html
+    description: |
+      Generates self-contained HTML with spec data, narrative, and results
+  - id: review-auto-opens-browser
+    description: |
+      Opens generated HTML in default browser (skip with --no-open)
+  - id: review-loads-agent-report
+    description: |
+      --agent-report loads verification results for overlay
+  - id: review-auto-discovers-report
+    description: |
+      Auto-discovers agent report from .specify/verify/ if omitted
+  - id: review-outputs-json
+    description: |
+      Outputs JSON with output path, spec name, and hasAgentReport flag
+  - id: review-background-daemonizes
+    description: >
+      --background spawns a detached review server process, writes its pid and port to .specify/ui.pid, opens the
+      browser at http://localhost:<port> unless --no-open, and returns immediately instead of blocking
+  - id: review-background-already-running
+    description: >
+      --background against an already-running review daemon (live pid in .specify/ui.pid) reports the existing pid/URL
+      and exits 0 without spawning a second process
+  - id: review-stop-kills-daemon
+    description: >
+      --stop reads .specify/ui.pid, sends SIGTERM (escalating to SIGKILL if it doesn't exit), removes the pidfile, and
+      exits 0; with no pidfile, or a pidfile whose process is already dead, it also exits 0 (cleaning up a stale pidfile
+      in the latter case)

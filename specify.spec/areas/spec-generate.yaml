@@ -1,0 +1,17 @@
+id: spec-generate
+name: Spec Generation
+prose: |
+  Creates a v2 spec from captured traffic data. Groups endpoints into areas with behavioral descriptions.
+behaviors:
+  - id: generate-requires-input
+    description: |
+      Without --input, outputs error JSON and exits 10
+  - id: generate-missing-dir-fails
+    description: |
+      Nonexistent --input directory outputs error and exits 10
+  - id: generate-writes-spec
+    description: |
+      Reads traffic.json from input dir and writes v2 spec to --output
+  - id: generate-defaults-output
+    description: |
+      Without --output, writes to <parent-dir>/spec.yaml

@@ -1,0 +1,32 @@
+id: error-handling
+name: Error Handling & Exit Codes
+prose: |
+  Granular exit codes distinguish error categories. Structured JSON on error to stdout, human messages to stderr.
+behaviors:
+  - id: exit-code-zero-success
+    description: Exit 0 = success
+  - id: exit-code-one-assertion-failure
+    description: Exit 1 = behavioral verification failed
+  - id: exit-code-two-all-untested
+    description: |
+      Exit 2 = scripted-mode verify found no matching generated test for any behavior in scope
+  - id: exit-code-ten-parse-error
+    description: Exit 10 = argument parsing, file not found, or invalid YAML
+  - id: exit-code-eleven-network-error
+    description: >
+      Exit 11 = a compile/verify/capture agent call failed for a network-shaped reason (distinct from a browser
+      automation failure)
+  - id: exit-code-twelve-timeout
+    description: Exit 12 = operation timed out or agent reached limits
+  - id: exit-code-fourteen-browser-error
+    description: Exit 14 = browser launch or automation error
+  - id: exit-code-fifteen-monitor-violation
+    description: >
+      Exit 15 = every failed behavior in a verify run was failed solely by an approved LTLf formula's deterministic
+      check, not by the LLM's own judgment
+  - id: error-json-structure
+    description: |
+      Error JSON includes error, parameter, hint, and message fields
+  - id: missing-param-error
+    description: |
+      Missing required params output JSON with error: "missing_parameter"

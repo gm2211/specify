@@ -1,0 +1,21 @@
+id: auto-discovery
+name: Spec Auto-Discovery
+prose: |
+  When --spec is omitted, commands that need a spec look for one in cwd instead of failing immediately.
+behaviors:
+  - id: auto-discovery-patterns
+    description: >
+      Searches spec.yaml, spec.yml, *.spec.yaml (and .json equivalents) in cwd, plus directories named "spec"/"specs" or
+      ending in ".spec" that contain a recognized manifest file (spec.yaml, spec.yml, spec.json,
+      specify.spec.yaml/.yml/.json, or manifest.yaml/.yml/.json)
+  - id: auto-discovery-logs
+    description: |
+      Logs "Using auto-discovered spec: <path>" to stderr
+  - id: auto-discovery-multiple-candidates-fails
+    description: >
+      When more than one spec file/directory matches, discovery fails with an error listing the candidates instead of
+      guessing
+  - id: auto-discovery-applied-to
+    description: >
+      Applies to: human, spec lint, spec split, spec migrate-id, spec compile, review (skipped when --stop is given),
+      and verify

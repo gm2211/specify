@@ -1,0 +1,9 @@
+id: spec-guide
+name: Spec Authoring Guide
+behaviors:
+  - id: guide-outputs-json
+    description: |
+      Outputs JSON guide with schema, examples, patterns, and tips
+  - id: guide-exits-zero
+    description: |
+      Exits 0

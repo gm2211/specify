@@ -1,0 +1,12 @@
+id: schema
+name: Schema Introspection
+behaviors:
+  - id: schema-spec
+    description: |
+      'specify schema spec' outputs v2 JSON Schema definition
+  - id: schema-commands
+    description: |
+      'specify schema commands' outputs full command manifest
+  - id: schema-unknown-target-fails
+    description: |
+      Unknown target outputs error and exits 10

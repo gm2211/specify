@@ -1,0 +1,18 @@
+id: overview
+name: Overview & Help
+prose: >
+  Running with no arguments returns a JSON manifest of all commands. Running with --help shows human-readable text.
+  --version shows the semver string.
+behaviors:
+  - id: no-args-returns-json-manifest
+    description: |
+      Running with no arguments exits 0 and outputs JSON manifest with commands, global options, exit codes, and hints
+  - id: help-flag-shows-text
+    description: |
+      --help or -h shows human-readable help to stderr and exits 0
+  - id: version-flag-shows-version
+    description: |
+      --version or -V outputs semver to stdout and exits 0
+  - id: unknown-command-fails
+    description: |
+      Unknown commands output structured error JSON and exit 10

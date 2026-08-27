@@ -1,0 +1,31 @@
+id: human-mode
+name: Interactive Chat Mode
+prose: >
+  'specify human' always launches a freeform chat REPL (not an arrow-key wizard) — a persistent session where a loaded
+  spec, target URL, and running-agent state carry across commands typed at the prompt.
+behaviors:
+  - id: human-launches-chat-repl
+    description: >
+      'specify human' starts a chat REPL on stdin/stdout; any extra argument after 'human' that isn't a recognized flag
+      (e.g. a leftover verb like "shell" or "watch") is accepted and silently ignored — the same REPL launches either
+      way
+  - id: human-preloads-spec-and-url
+    description: >
+      --spec <path> (or an auto-discovered spec) and --url <url> pre-load session state so the first 'verify' typed at
+      the prompt doesn't need them repeated
+  - id: human-repl-commands
+    description: >
+      The REPL understands slash or bare commands: verify, capture, load, set url, show, lint, review, status, debug,
+      help, and exit/quit; text that doesn't match a command is interpreted with simple keyword matching (e.g. a
+      sentence containing "verify" and a URL runs verify against that URL)
+  - id: human-injects-messages-during-run
+    description: >
+      While an agent command (verify/capture) is running, lines typed at the prompt are injected into the live agent
+      session instead of being parsed as new REPL commands
+  - id: human-non-tty-reads-stdin-lines
+    description: >
+      Without a TTY, the REPL still reads and executes commands line by line from stdin (no interactive
+      completion/history UI) and exits 0 when stdin reaches EOF
+  - id: human-history-file
+    description: |
+      Every submitted line is appended to .specify/.chat_history

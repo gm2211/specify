@@ -1,0 +1,23 @@
+id: deploy
+name: Deployment Descriptors
+prose: >
+  Self-describing install surface so another agent, in another repo, can generate a working Terraform config for running
+  Specify as a deployed QA service without human hand-holding.
+behaviors:
+  - id: deploy-describe-outputs-manifest
+    description: >
+      'specify deploy describe' outputs a JSON manifest with image coordinates, Terraform module source/ref,
+      mutually-exclusive variable groups, required secrets, outputs, an install recipe, and worked examples
+  - id: deploy-describe-text-format
+    description: |
+      --format text renders a human-readable version of the same manifest instead of JSON
+  - id: deploy-print-tf-presets
+    description: >
+      'specify deploy print-tf <preset>' emits a working Terraform snippet for one of: minimal, watch-mode,
+      webhook-mode, gitops-spec (default minimal when no preset is given)
+  - id: deploy-print-tf-unknown-preset-fails
+    description: |
+      An unrecognized preset outputs error JSON with unknown_preset and the list of supported presets, and exits 10
+  - id: deploy-unknown-verb-fails
+    description: |
+      A verb other than describe or print-tf outputs error JSON with unknown_verb and exits 10
