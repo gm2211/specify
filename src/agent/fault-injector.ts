@@ -16,13 +16,14 @@
  * effects for that request.
  */
 
-/** Fault vocabulary shared in spirit with mock-server.ts's MOCK_FAULT_TYPES
- * (302/500/timeout/empty/malformed, Math.random-based, server-side). This
- * injector is seeded and client-side (route-layer), so it reuses the type
- * names that make sense at the route-interception point rather than the
- * full server-side vocabulary (no '302' or 'malformed' here — those are
- * response-shape concerns for a real backend, not something a route
- * handler fabricates convincingly without a body to mutate). */
+/** Fault vocabulary shared in spirit with MOCK_FAULT_TYPES from mockify's
+ * mock server (302/500/timeout/empty/malformed, Math.random-based,
+ * server-side). This injector is seeded and client-side (route-layer), so
+ * it reuses the type names that make sense at the route-interception point
+ * rather than the full server-side vocabulary (no '302' or 'malformed'
+ * here — those are response-shape concerns for a real backend, not
+ * something a route handler fabricates convincingly without a body to
+ * mutate). */
 export type FaultType = '500' | 'timeout' | 'abort' | 'empty';
 
 /** A single fault rule: which requests it matches, what it does to them,

@@ -172,15 +172,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ['scripts/browse-and-capture.mjs'],
-    languageOptions: {
-      globals: {
-        ...nodeGlobals,
-        document: 'readonly',
-      },
-    },
-  },
-  {
     files: ['src/**/*.ts', 'scripts/**/*.ts', 'webapp/src/**/*.{ts,tsx}', 'webapp/vite.config.ts'],
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
