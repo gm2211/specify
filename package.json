@@ -8,13 +8,9 @@
   },
   "scripts": {
     "login": "PLAYWRIGHT_BROWSERS_PATH=0 npx tsx scripts/login.ts",
-    "browse": "node scripts/browse-and-capture.mjs",
-    "capture": "npx tsx scripts/cdp-capture.ts",
     "discover": "npx tsx scripts/api-discover.ts",
     "live-discover": "npx tsx scripts/live-discover.ts",
     "live-discover-fetch": "npx tsx scripts/live-discover-fetch.ts",
-    "mock": "npx tsx src/mock-server.ts",
-    "mock:chaos": "MOCK_FAULT_RATE=0.1 npx tsx src/mock-server.ts",
     "generate-spec": "npx tsx src/spec/generator.ts",
     "typecheck": "npx tsc --noEmit",
     "typecheck:webapp": "npm --prefix webapp run typecheck",

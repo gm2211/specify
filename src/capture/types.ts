@@ -1,9 +1,11 @@
 /**
  * src/capture/types.ts — TypeScript types for capture output
  *
- * These types describe the data produced by the capture scripts
- * (browse-and-capture.mjs, cdp-capture.ts) and consumed by the
- * spec generator and future validator.
+ * These types describe the on-disk shape of a capture session, produced by
+ * src/agent/capture.ts and consumed by the spec generator and future
+ * validator. The file format they describe (traffic.json, console.json,
+ * manifest.json) is also the contract consumed by mockify's mock server for
+ * replay — see docs/capture-format.md.
  */
 
 /** Metadata about a capture session. */
@@ -80,7 +82,8 @@ export interface CapturedTraffic {
   /**
    * Unix timestamp in milliseconds, historically the moment the response
    * completed. Kept for backward compatibility with existing captures and
-   * consumers (e.g. mock-server.ts replay); prefer tsEnd for new code.
+   * consumers (e.g. mockify's mock server, which replays this file); prefer
+   * tsEnd for new code.
    */
   ts: number;
 

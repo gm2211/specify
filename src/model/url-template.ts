@@ -19,7 +19,7 @@
  *     entity ids) into filesystem slugs, so `/users/1` and `/users/2`
  *     produce different capture artifacts instead of being recognized as
  *     the same page template.
- *   - src/mock-server.ts indexes recorded traffic by literal
+ *   - mockify's mock server indexes recorded traffic by literal
  *     `METHOD pathname`, so mock matching is exact-path only; templating
  *     would let one recorded `/users/1` response serve `/users/:id`.
  */
