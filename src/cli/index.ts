@@ -17,6 +17,7 @@
  *   specify spec lint       --spec <path|->
  *   specify spec split      --spec <path> --output <dir>
  *   specify spec guide
+ *   specify spec context     [--spec <path>] [--out-dir <dir>] [--product <path>] [--design <path>] [--force]
  *   specify spec migrate-id  <old-fq-id> <new-fq-id> [--spec <path>]
  *   specify spec compile     [--spec <path>] [--behavior <fq-id> ...] [--force]
  *   specify capture          --url <url> --output <dir> [--headed] [--spec-output <path>]
@@ -239,6 +240,7 @@ ${c.bold('Advanced:')}
   ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec split')}        Break a large spec file into a directory spec
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
+  ${c.cyan('spec context')}     Generate/refresh PRODUCT.md and DESIGN.md from the spec
   ${c.cyan('spec migrate-id')}  Rewrite learned-state keys after a behavior/area id rename
   ${c.cyan('spec compile')}     Compile behaviors into LTLf formulas for deterministic verify
 
@@ -395,6 +397,16 @@ async function main(): Promise<void> {
     } else if (noun === 'spec' && verb === 'guide') {
       const { specGuide } = await import('./commands/spec-guide.js');
       exitCode = await specGuide(ctx);
+
+    } else if (noun === 'spec' && verb === 'context') {
+      const { specContext } = await import('./commands/spec-context.js');
+      exitCode = await specContext({
+        spec: resolveSpecArg(rest, ctx),
+        outDir: getArg(rest, '--out-dir'),
+        product: getArg(rest, '--product'),
+        design: getArg(rest, '--design'),
+        force: hasFlag(rest, '--force'),
+      }, ctx);
 
     } else if (noun === 'spec' && verb === 'migrate-id') {
       const { specMigrateId } = await import('./commands/spec-migrate-id.js');

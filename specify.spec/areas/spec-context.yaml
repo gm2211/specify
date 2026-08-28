@@ -1,0 +1,48 @@
+id: spec-context
+name: Product/Design Context Generation
+prose: >
+  `spec context` regenerates PRODUCT.md and DESIGN.md directly from the composed spec — a deterministic projection, no
+  LLM call, so the spec's own area prose and behavior descriptions ARE the content. Every generated claim carries an
+  inline `[area/behavior]` anchor back to its source. DESIGN.md additionally separates spec-derived product constraints
+  (behaviors tagged design/ui/ux/visual/accessibility/a11y/style/layout/branding/theme) from an optional pass that
+  extracts real visual tokens from code (tokens.json/design-tokens.json, CSS custom properties) — nothing is ever
+  invented to fill either section. Regeneration is non-destructive: content stays inside `<!-- specify:begin/end -->`
+  managed-region markers so hand edits outside them survive every run, and a target file that predates the markers is
+  never silently overwritten.
+behaviors:
+  - id: context-projects-every-area-and-behavior-into-product-md
+    description: >
+      PRODUCT.md contains every area's prose and every behavior's description from the composed spec, each followed by
+      an inline `[area-id/behavior-id]` (or `[area-id]` for area prose) traceability anchor
+  - id: context-design-md-separates-spec-constraints-from-code-tokens
+    description: >
+      DESIGN.md has two clearly labeled sections: "Product Constraints (from spec)" — only behaviors tagged
+      design/ui/ux/visual/accessibility/a11y/style/layout/branding/theme, each anchored — and "Visual Tokens (from
+      code)" — tokens extracted from tokens.json/design-tokens.json or CSS custom properties, each labeled with its
+      source file
+  - id: context-omits-rather-than-fabricates
+    description: >
+      An area with no prose, a spec with no design-tagged behaviors, or a codebase with no token sources yields an
+      omitted or explicitly-empty section — never invented text, colors, or values
+  - id: context-regeneration-preserves-hand-edits-outside-markers
+    description: >
+      Re-running against an existing PRODUCT.md/DESIGN.md that has the specify managed-region markers replaces only the
+      content between them; any heading, note, or section a human added outside the markers is untouched
+  - id: context-refuses-to-clobber-unmanaged-files
+    description: >
+      Targeting an existing PRODUCT.md/DESIGN.md that has no specify managed-region markers does not overwrite it in
+      place — instead a reviewable `<name>.proposed.<ext>` file is written alongside the original, which is left
+      untouched
+  - id: context-force-overwrites-unmanaged-files
+    description: |
+      --force overwrites an unmanaged target file in place instead of writing a .proposed file
+  - id: context-accepts-out-dir-and-filename-overrides
+    description: |
+      --out-dir, --product, and --design control where PRODUCT.md and DESIGN.md are written
+  - id: context-auto-discovers-spec
+    description: |
+      Without --spec, auto-discovers the spec file or spec directory from cwd, same as spec lint and verify
+  - id: context-json-emits-structured-projection
+    description: >
+      In JSON output mode, emits the structured product/design projection (areas, claims, anchors, token extraction,
+      per-file apply status) to stdout in addition to writing the files

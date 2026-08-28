@@ -128,6 +128,34 @@ specify spec split --spec spec.yaml --output spec/
 The split command writes `spec/spec.yaml` plus one file per area under
 `spec/areas/`. Directory specs do not trigger the single-file size warning.
 
+`specify spec context` regenerates `PRODUCT.md` and `DESIGN.md` straight from
+the composed spec — a deterministic projection, no LLM call, so the spec's own
+area prose and behavior descriptions ARE the content:
+
+```bash
+specify spec context
+specify spec context --spec spec/ --out-dir docs --json
+```
+
+Every claim carries an inline `[area/behavior]` traceability anchor back to
+its source, e.g. `[capture/capture-agent-generates-spec]`. `DESIGN.md` keeps
+two sources separate and clearly labeled: spec-derived "Product Constraints"
+(behaviors tagged `design`, `ui`, `ux`, `visual`, `accessibility`, `a11y`,
+`style`, `layout`, `branding`, or `theme`) and an optional "Visual Tokens"
+pass that extracts real values from code (`tokens.json`/`design-tokens.json`,
+CSS custom properties) — never invented ones. An area with no prose, a spec
+with no design-tagged behaviors, or a codebase with no token sources yields an
+omitted or explicitly-empty section, not fabricated text.
+
+Regeneration is non-destructive: generated content lives inside
+`<!-- specify:begin:product-context -->` / `<!-- specify:end:... -->` marker
+pairs, and only that region is replaced on each run — anything you write
+outside the markers survives every regeneration. If a target file already
+exists but has no markers (hand-authored before this feature, or edited such
+that they were removed), Specify refuses to touch it and writes a reviewable
+`PRODUCT.proposed.md` / `DESIGN.proposed.md` alongside it instead; pass
+`--force` to overwrite in place anyway.
+
 ## Commands
 
 | Command | What |
@@ -138,6 +166,7 @@ The split command writes `spec/spec.yaml` plus one file per area under
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
 | `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
+| `spec context` | Regenerate `PRODUCT.md`/`DESIGN.md` from the spec, non-destructively |
 | `schema` | Emit JSON Schema for spec or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
 | `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
