@@ -57,8 +57,8 @@ npm run sonar -- -Dsonar.host.url=http://localhost:9000
 ## Quickstart
 
 ```bash
-# 1. Generate a contract from existing capture data (or run `specify capture` first)
-specify spec generate --input ./captures/my-app --output app.spec.yaml
+# 1. Capture the app with an autonomous agent — it explores and writes a spec directly
+specify capture --url http://localhost:3000 --spec-output app.spec.yaml
 
 # 2. Verify the implementation
 specify verify --spec app.spec.yaml --url http://localhost:3000
@@ -133,12 +133,9 @@ The split command writes `spec/spec.yaml` plus one file per area under
 | Command | What |
 |---------|------|
 | **`create`** | Interactive interview that writes a starter spec (`--narrative` for a companion doc) |
-| **`spec generate`** | Generate a spec from a capture directory |
-| **`capture`** | Agent-driven capture from a live system (`--url`) |
-| **`compare`** | Live side-by-side comparison of remote vs local targets |
+| **`capture`** | Agent-driven capture from a live system (`--url`) — writes a spec directly |
 | **`review`** | Browser UI: narrative, activity stream, feedback, skill drafts |
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
-| `replay` | Replay captured traffic against a target and diff results |
 | `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
 | `schema` | Emit JSON Schema for spec or commands |

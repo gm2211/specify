@@ -12,9 +12,6 @@
  *
  * Retrofit opportunity (NOT done in this change — this module ships as a
  * standalone unit; consumers land with the model learner bead):
- *   - src/spec/generator.ts `groupByPage()` currently groups traffic by the
- *     first path segment only (`/api/x/y` -> `/x`), which is far cruder
- *     than template inference and will misgroup per-entity API routes.
  *   - src/agent/capture.ts `slugify()` turns full pathnames (including
  *     entity ids) into filesystem slugs, so `/users/1` and `/users/2`
  *     produce different capture artifacts instead of being recognized as

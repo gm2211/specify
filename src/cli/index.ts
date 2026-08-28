@@ -14,16 +14,14 @@
  *   - `specify human` enters interactive chat REPL
  *
  * Command structure:
- *   specify spec generate   --input <dir> --output <path>
  *   specify spec lint       --spec <path|->
  *   specify spec split      --spec <path> --output <dir>
  *   specify spec guide
  *   specify spec migrate-id  <old-fq-id> <new-fq-id> [--spec <path>]
  *   specify spec compile     [--spec <path>] [--behavior <fq-id> ...] [--force]
- *   specify capture          --url <url> --output <dir> [--no-generate] [--headed]
+ *   specify capture          --url <url> --output <dir> [--headed] [--spec-output <path>]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
  *   specify create           [--output <path>] [--narrative <path>]
- *   specify replay            --capture <dir> --url <url> [--headed] [--output <dir>]
  *   specify schema spec|commands
  *   specify mcp              MCP server for LLM tool integration
  *   specify human            Interactive chat REPL
@@ -241,7 +239,6 @@ ${c.bold('Advanced:')}
   ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
   ${c.cyan('spec split')}        Break a large spec file into a directory spec
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
-  ${c.cyan('spec generate')}    Generate a spec from capture data
   ${c.cyan('spec migrate-id')}  Rewrite learned-state keys after a behavior/area id rename
   ${c.cyan('spec compile')}     Compile behaviors into LTLf formulas for deterministic verify
 
@@ -381,15 +378,6 @@ async function main(): Promise<void> {
     // -----------------------------------------------------------------
     // Agent-friendly commands — structured output to stdout
     // -----------------------------------------------------------------
-    } else if (noun === 'spec' && verb === 'generate') {
-      const { specGenerate } = await import('./commands/spec-generate.js');
-      exitCode = await specGenerate({
-        input: getArg(rest, '--input') ?? '',
-        output: getArg(rest, '--output'),
-        name: getArg(rest, '--name'),
-      }, ctx);
-
-
     } else if (noun === 'spec' && verb === 'lint') {
       const { specLint } = await import('./commands/spec-lint.js');
       exitCode = await specLint({
@@ -430,222 +418,87 @@ async function main(): Promise<void> {
       // capture is a standalone command (no verb) — recombine args
       const captureArgs = verb ? [verb, ...rest] : rest;
       {
-        const human = hasFlag(captureArgs, '--human');
         const url = getArg(captureArgs, '--url') ?? '';
         const output = getArg(captureArgs, '--output') ?? '';
         const storageState = getArg(captureArgs, '--storage-state');
         const saveStorageState = getArg(captureArgs, '--save-storage-state');
 
-        // Specify IS the agent — use SDK runner for live capture (human mode is the only exception)
-        if (!human) {
-          if (!url) {
-            process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' }) + '\n');
+        // Specify IS the agent — use SDK runner for live capture
+        if (!url) {
+          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' }) + '\n');
+          exitCode = ExitCode.PARSE_ERROR;
+        } else {
+          let validUrl = true;
+          try {
+            new URL(url);
+          } catch {
+            process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
             exitCode = ExitCode.PARSE_ERROR;
-          } else {
-            let validUrl = true;
-            try {
-              new URL(url);
-            } catch {
-              process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+            validUrl = false;
+          }
+          if (validUrl && storageState) {
+            const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
+            if (!resolved.ok) {
+              process.stdout.write(JSON.stringify(resolved.error) + '\n');
               exitCode = ExitCode.PARSE_ERROR;
               validUrl = false;
             }
-            if (validUrl && storageState) {
-              const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
-              if (!resolved.ok) {
-                process.stdout.write(JSON.stringify(resolved.error) + '\n');
+          }
+          if (validUrl) {
+            const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
+            const { getCapturePrompt } = await import('../agent/prompts.js');
+            const outputDir = path.resolve(output || '.specify/capture');
+            const specOutput = getArg(captureArgs, '--spec-output');
+            const specName = getArg(captureArgs, '--spec-name');
+            const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
+            const { loadExplorationHintsForSpecFile } = await import('../model/runner-hooks.js');
+            const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
+            const prompt = getCapturePrompt(url, specOutputPath, explorationHints);
+            try {
+              const { result, costUsd } = await runSpecifyAgent({
+                task: 'capture',
+                systemPrompt: prompt,
+                userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
+                url,
+                outputDir,
+                specOutput: specOutputPath,
+                specName: specName ?? new URL(url).hostname,
+                headed: hasFlag(captureArgs, '--headed'),
+                debug,
+                ...(storageState ? { storageState } : {}),
+                ...(saveStorageState ? { saveStorageState } : {}),
+              });
+              process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
+
+              // Post-run validation: verify the spec file exists and parses
+              if (!fs.existsSync(specOutputPath)) {
+                process.stderr.write(`Warning: agent did not write spec file at ${specOutputPath}\n`);
+                process.stdout.write(JSON.stringify({ error: 'spec_not_written', costUsd, outputDir, specOutput: specOutputPath }) + '\n');
                 exitCode = ExitCode.PARSE_ERROR;
-                validUrl = false;
-              }
-            }
-            if (validUrl) {
-              const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-              const { getCapturePrompt } = await import('../agent/prompts.js');
-              const outputDir = path.resolve(output || '.specify/capture');
-              const specOutput = getArg(captureArgs, '--spec-output');
-              const specName = getArg(captureArgs, '--spec-name');
-              const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
-              const { loadExplorationHintsForSpecFile } = await import('../model/runner-hooks.js');
-              const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
-              const prompt = getCapturePrompt(url, specOutputPath, explorationHints);
-              try {
-                const { result, costUsd } = await runSpecifyAgent({
-                  task: 'capture',
-                  systemPrompt: prompt,
-                  userPrompt: `Explore ${url} and generate a comprehensive behavioral spec.`,
-                  url,
-                  outputDir,
-                  specOutput: specOutputPath,
-                  specName: specName ?? new URL(url).hostname,
-                  headed: hasFlag(captureArgs, '--headed'),
-                  debug,
-                  ...(storageState ? { storageState } : {}),
-                  ...(saveStorageState ? { saveStorageState } : {}),
-                });
-                process.stderr.write(`Agent capture complete (cost: $${costUsd.toFixed(4)})\n`);
+              } else {
+                try {
+                  const { loadSpec } = await import('../spec/parser.js');
+                  const spec = loadSpec(specOutputPath);
+                  const areaCount = spec.areas?.length ?? 0;
+                  process.stderr.write(`Spec validated: ${specOutputPath} (${areaCount} areas)\n`);
+                  process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, areas: areaCount }) + '\n');
+                  exitCode = ExitCode.SUCCESS;
 
-                // Post-run validation: verify the spec file exists and parses
-                if (!fs.existsSync(specOutputPath)) {
-                  process.stderr.write(`Warning: agent did not write spec file at ${specOutputPath}\n`);
-                  process.stdout.write(JSON.stringify({ error: 'spec_not_written', costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                  process.stderr.write(`\n  To review the spec:\n`);
+                  process.stderr.write(`  $ specify review --spec ${specOutputPath}\n\n`);
+                } catch (parseErr) {
+                  const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
+                  process.stderr.write(`Warning: agent wrote invalid spec: ${parseMsg}\n`);
+                  process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: parseMsg, costUsd, outputDir, specOutput: specOutputPath }) + '\n');
                   exitCode = ExitCode.PARSE_ERROR;
-                } else {
-                  try {
-                    const { loadSpec } = await import('../spec/parser.js');
-                    const spec = loadSpec(specOutputPath);
-                    const areaCount = spec.areas?.length ?? 0;
-                    process.stderr.write(`Spec validated: ${specOutputPath} (${areaCount} areas)\n`);
-                    process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, areas: areaCount }) + '\n');
-                    exitCode = ExitCode.SUCCESS;
-
-                    process.stderr.write(`\n  To review the spec:\n`);
-                    process.stderr.write(`  $ specify review --spec ${specOutputPath}\n\n`);
-                  } catch (parseErr) {
-                    const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
-                    process.stderr.write(`Warning: agent wrote invalid spec: ${parseMsg}\n`);
-                    process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: parseMsg, costUsd, outputDir, specOutput: specOutputPath }) + '\n');
-                    exitCode = ExitCode.PARSE_ERROR;
-                  }
                 }
-              } catch (err) {
-                const msg = err instanceof Error ? err.message : String(err);
-                process.stderr.write(`Agent capture failed: ${msg}\n`);
-                process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-                exitCode = agentExitCode(err);
               }
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : String(err);
+              process.stderr.write(`Agent capture failed: ${msg}\n`);
+              process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
+              exitCode = agentExitCode(err);
             }
-          }
-        } else {
-          const { capture: captureCmd } = await import('./commands/capture.js');
-          exitCode = await captureCmd({
-            url,
-            output,
-            headed: hasFlag(captureArgs, '--headed') || human,
-            timeout: getArg(captureArgs, '--timeout') ? parseInt(getArg(captureArgs, '--timeout')!) : undefined,
-            noScreenshots: hasFlag(captureArgs, '--no-screenshots'),
-            noGenerate: hasFlag(captureArgs, '--no-generate'),
-            specOutput: getArg(captureArgs, '--spec-output'),
-            specName: getArg(captureArgs, '--spec-name'),
-            human,
-            storageState,
-            saveStorageState,
-          }, ctx);
-        }
-      }
-
-    } else if (noun === 'replay') {
-      // replay command — recombine args
-      const replayArgs = verb ? [verb, ...rest] : rest;
-      const captureDir = getArg(replayArgs, '--capture') ?? '';
-      const url = getArg(replayArgs, '--url') ?? '';
-      if (!captureDir || !url) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide --capture and --url' }) + '\n');
-        exitCode = ExitCode.PARSE_ERROR;
-      } else {
-        const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-        const { getReplayPrompt } = await import('../agent/prompts.js');
-        const outputDir = path.resolve(getArg(replayArgs, '--output') ?? '.specify/replay');
-        const prompt = getReplayPrompt(captureDir, url);
-        try {
-          const { result, costUsd } = await runSpecifyAgent({
-            task: 'replay',
-            systemPrompt: prompt,
-            userPrompt: `Replay traffic from ${captureDir} against ${url}.`,
-            url,
-            captureDir,
-            outputDir,
-            headed: hasFlag(replayArgs, '--headed'),
-            debug,
-          });
-          process.stderr.write(`Replay complete (cost: $${costUsd.toFixed(4)})\n`);
-          process.stdout.write(JSON.stringify({ result, costUsd, outputDir }) + '\n');
-          exitCode = ExitCode.SUCCESS;
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`Replay failed: ${msg}\n`);
-          process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-          exitCode = agentExitCode(err);
-        }
-      }
-
-    } else if (noun === 'compare') {
-      const compareArgs = verb ? [verb, ...rest] : rest;
-      let remoteUrl = getArg(compareArgs, '--remote') ?? '';
-      let localUrl = getArg(compareArgs, '--local') ?? '';
-      const remoteAuth = getArg(compareArgs, '--remote-auth');
-      const localAuth = getArg(compareArgs, '--local-auth');
-      // Embed credentials into URLs (user:pass@host format)
-      if (remoteAuth && remoteUrl) {
-        try {
-          const u = new URL(remoteUrl);
-          const [user, ...passParts] = remoteAuth.split(':');
-          u.username = encodeURIComponent(user);
-          u.password = encodeURIComponent(passParts.join(':'));
-          remoteUrl = u.toString();
-        } catch { /* URL validation below will catch */ }
-      }
-      if (localAuth && localUrl) {
-        try {
-          const u = new URL(localUrl);
-          const [user, ...passParts] = localAuth.split(':');
-          u.username = encodeURIComponent(user);
-          u.password = encodeURIComponent(passParts.join(':'));
-          localUrl = u.toString();
-        } catch { /* URL validation below will catch */ }
-      }
-
-      if (!remoteUrl || !localUrl) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', hint: 'Provide both --remote and --local URLs' }) + '\n');
-        exitCode = ExitCode.PARSE_ERROR;
-      } else {
-        let validUrls = true;
-        for (const u of [remoteUrl, localUrl]) {
-          try { new URL(u); } catch {
-            process.stdout.write(JSON.stringify({ error: 'invalid_url', url: u, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
-            exitCode = ExitCode.PARSE_ERROR;
-            validUrls = false;
-            break;
-          }
-        }
-        if (validUrls) {
-          const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
-          const { getComparePrompt } = await import('../agent/prompts.js');
-          const outputDir = path.resolve(getArg(compareArgs, '--output') ?? '.specify/compare');
-          const prompt = getComparePrompt(remoteUrl, localUrl, outputDir);
-          try {
-            const { result, costUsd, structuredOutput } = await runSpecifyAgent({
-              task: 'compare',
-              systemPrompt: prompt,
-              userPrompt: `Compare remote ${remoteUrl} against local ${localUrl}.`,
-              remoteUrl,
-              localUrl,
-              outputDir,
-              headed: hasFlag(compareArgs, '--headed'),
-              debug,
-            });
-            const { extractBool } = await import('../agent/sdk-runner.js');
-            const match = extractBool(structuredOutput, 'match');
-            process.stderr.write(`Compare complete (cost: $${costUsd.toFixed(4)})\n`);
-            process.stdout.write(JSON.stringify({ result, costUsd, outputDir, match, structuredOutput }) + '\n');
-            exitCode = match === true ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;
-
-            // Save structured output for review
-            const compareResultPath = path.join(outputDir, 'compare-result.json');
-            fs.mkdirSync(outputDir, { recursive: true });
-            fs.writeFileSync(compareResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
-
-            // Human-friendly hint
-            const reportPath = path.join(outputDir, 'compare-report.md');
-            if (fs.existsSync(reportPath)) {
-              process.stderr.write(`\n  Report: ${reportPath}\n`);
-            }
-            process.stderr.write(`\n  To review interactively:\n`);
-            process.stderr.write(`  $ specify review --spec <your-spec.yaml> --agent-report ${compareResultPath}\n\n`);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err);
-            process.stderr.write(`Compare failed: ${msg}\n`);
-            process.stdout.write(JSON.stringify({ error: 'agent_error', message: msg }) + '\n');
-            exitCode = agentExitCode(err);
           }
         }
       }
