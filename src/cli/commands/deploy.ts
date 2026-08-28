@@ -136,7 +136,7 @@ interface TriggerModel {
 interface AgentTool {
   name: string;
   doc: string;
-  enabled_for_tasks: Array<'verify' | 'capture' | 'compare' | 'replay' | 'freeform'>;
+  enabled_for_tasks: Array<'verify' | 'capture' | 'freeform'>;
   configuration: Array<{ env: string; doc: string }>;
   /** Per-run call cap (Infinity → no cap). */
   budget_default: number;

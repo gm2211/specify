@@ -169,7 +169,7 @@ that they were removed), Specify refuses to touch it and writes a reviewable
 | `spec context` | Regenerate `PRODUCT.md`/`DESIGN.md` from the spec, non-destructively |
 | `schema` | Emit JSON Schema for spec or commands |
 | `mcp` | MCP server — any LLM client can use Specify as a tool |
-| `daemon` | Long-running HTTP inbox; other agents push verify/capture/compare jobs |
+| `daemon` | Long-running HTTP inbox; other agents push verify/capture/freeform jobs |
 | `review --background` / `review --stop` | Daemonize or stop the review webapp |
 | `human` | Interactive chat REPL |
 

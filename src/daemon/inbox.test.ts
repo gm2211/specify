@@ -218,6 +218,62 @@ test('inbox.submit verify without spec fails', async () => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// SP-94z: 'replay' and 'compare' moved to mockify — the daemon inbox no
+// longer accepts them. InboxRequest.task no longer types these literals, but
+// callers post untyped JSON over HTTP, so buildPrompts() still validates at
+// runtime and must fail with a message naming the mockify equivalent rather
+// than a generic error.
+// ---------------------------------------------------------------------------
+
+test("inbox.submit: 'replay' task fails with a structured error naming the mockify equivalent", async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const msg = inbox.submit({
+      task: 'replay',
+      prompt: 'replay captured traffic',
+      captureDir: './captures/baseline',
+      url: 'http://localhost:3000',
+    } as unknown as Parameters<typeof inbox.submit>[0]);
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'failed');
+    assert.match(finished.error ?? '', /no longer accepted/);
+    assert.match(finished.error ?? '', /mockify replay --against/);
+    assert.equal(calls.length, 0, 'runner should never be invoked for a rejected task');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
+test("inbox.submit: 'compare' task fails with a structured error naming the mockify equivalent", async () => {
+  inbox.reset();
+  const { runner, calls } = makeFakeRunner();
+  const prev = __setRunnerForTesting(runner);
+  try {
+    const msg = inbox.submit({
+      task: 'compare',
+      prompt: 'compare remote vs local',
+      remoteUrl: 'https://prod.example.com',
+      localUrl: 'http://localhost:3000',
+    } as unknown as Parameters<typeof inbox.submit>[0]);
+    await flush();
+
+    const finished = inbox.get(msg.id)!;
+    assert.equal(finished.status, 'failed');
+    assert.match(finished.error ?? '', /no longer accepted/);
+    assert.match(finished.error ?? '', /mockify compare/);
+    assert.equal(calls.length, 0, 'runner should never be invoked for a rejected task');
+  } finally {
+    __setRunnerForTesting(prev);
+    inbox.reset();
+  }
+});
+
 test('inbox.submit verify without request spec falls back to SPECIFY_SPEC_INLINE_PATH', async () => {
   inbox.reset();
   const { runner, calls } = makeFakeRunner();

@@ -263,17 +263,19 @@ export function registerTools(server: McpServer): void {
   );
 
   // ---------------------------------------------------------------------------
-  // daemon_submit — Generic inbox submit (for capture, compare, replay, freeform)
+  // daemon_submit — Generic inbox submit (for capture, verify, freeform)
   // ---------------------------------------------------------------------------
   server.registerTool(
     'daemon_submit',
     {
       title: 'Specify daemon: submit task',
       description:
-        'Submit any task to a running `specify daemon` inbox (capture, compare, replay, ' +
-        'verify, or freeform). Returns a message id and an SSE stream URL.',
+        'Submit any task to a running `specify daemon` inbox (capture, verify, or ' +
+        'freeform). Returns a message id and an SSE stream URL. Deterministic replay/' +
+        'compare now live in mockify (`mockify replay --against`, `mockify compare`) — ' +
+        'not accepted here.',
       inputSchema: {
-        task: z.enum(['verify', 'capture', 'compare', 'replay', 'freeform']),
+        task: z.enum(['verify', 'capture', 'freeform']),
         prompt: z.string().describe('Freeform instruction or task description'),
         url: z.string().optional(),
         remoteUrl: z.string().optional(),
