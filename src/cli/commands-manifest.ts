@@ -185,6 +185,7 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [
       { name: '--spec', type: 'string', required: false, description: 'Path to spec file (auto-discovered if omitted)' },
       { name: '--port', type: 'number', required: false, description: 'Port to listen on', default: 3000 },
+      { name: '--host', type: 'string', required: false, description: 'Host to bind to (unauthenticated API — widen beyond localhost only if you mean to); also settable via SPECIFY_REVIEW_HOST', default: '127.0.0.1' },
       { name: '--agent-report', type: 'string', required: false, description: 'Path to agent verification result JSON (from specify verify --url)' },
       { name: '--no-open', type: 'boolean', required: false, description: 'Skip auto-opening the browser' },
       { name: '--background', type: 'boolean', required: false, description: 'Daemonize the server; writes .specify/ui.pid' },
@@ -195,6 +196,7 @@ export const COMMANDS: CommandDefinition[] = [
       'specify review --spec spec.yaml --background',
       'specify review --stop',
       'specify review --spec spec.yaml --agent-report .specify/verify/verify-result.json',
+      'specify review --spec spec.yaml --host 0.0.0.0',
     ],
   },
   {

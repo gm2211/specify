@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as fs from 'node:fs';
+import * as http from 'node:http';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { listFormulas, setFormulaStatus } from './server.js';
+import { listFormulas, setFormulaStatus, startReviewServer } from './server.js';
 import {
   addDraft,
   defaultFormulasPath,
@@ -295,4 +296,102 @@ test('setFormulaStatus reports not_found for an unknown id', () => {
   } finally {
     cleanup();
   }
+});
+
+// ---------------------------------------------------------------------------
+// SP-q50: the review server's HTTP API is unauthenticated, so it must bind
+// loopback-only (127.0.0.1) by default rather than every interface — see
+// startReviewServer()'s ServeOptions.host in ./server.ts.
+// ---------------------------------------------------------------------------
+
+function pickServerPort(): number {
+  return 4200 + Math.floor(Math.random() * 4000);
+}
+
+function getRequest(port: number, urlPath: string): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { host: '127.0.0.1', port, path: urlPath, method: 'GET' },
+      (res) => {
+        let buf = '';
+        res.on('data', (chunk) => { buf += chunk; });
+        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: buf }));
+      },
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+async function waitForReviewServerUp(port: number, timeoutMs = 5000): Promise<void> {
+  const start = Date.now();
+  let lastErr: unknown;
+  while (Date.now() - start < timeoutMs) {
+    try {
+      const res = await getRequest(port, '/api/spec');
+      if (res.status > 0) return;
+    } catch (err) {
+      lastErr = err;
+    }
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  throw new Error(`review server never came up on port ${port}: ${String(lastErr)}`);
+}
+
+test('startReviewServer defaults to loopback-only (127.0.0.1) when no host option is given', async (t) => {
+  const { dir, cleanup } = tmpDir();
+  const specPath = path.join(dir, 'spec.yaml');
+  writeSpecFile(specPath);
+  const port = pickServerPort();
+
+  const stderrChunks: string[] = [];
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string) => {
+    stderrChunks.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+
+  const serverPromise = startReviewServer({ specPath, port, open: false });
+
+  t.after(async () => {
+    process.stderr.write = originalWrite;
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    cleanup();
+  });
+
+  await waitForReviewServerUp(port);
+  const res = await getRequest(port, '/api/spec');
+  assert.equal(res.status, 200);
+
+  const banner = stderrChunks.join('');
+  assert.match(banner, /Server:\s+http:\/\/127\.0\.0\.1:/,
+    'server should report binding to loopback (127.0.0.1), not a wider interface');
+});
+
+test('startReviewServer honors an explicit host option', async (t) => {
+  const { dir, cleanup } = tmpDir();
+  const specPath = path.join(dir, 'spec.yaml');
+  writeSpecFile(specPath);
+  const port = pickServerPort();
+
+  const stderrChunks: string[] = [];
+  const originalWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string) => {
+    stderrChunks.push(String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+
+  const serverPromise = startReviewServer({ specPath, port, open: false, host: '127.0.0.1' });
+
+  t.after(async () => {
+    process.stderr.write = originalWrite;
+    process.kill(process.pid, 'SIGTERM');
+    try { await serverPromise; } catch { /* ignore */ }
+    cleanup();
+  });
+
+  await waitForReviewServerUp(port);
+  const banner = stderrChunks.join('');
+  assert.match(banner, /Server:\s+http:\/\/127\.0\.0\.1:/);
 });

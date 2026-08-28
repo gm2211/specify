@@ -310,10 +310,15 @@ export interface ServeOptions {
   port: number;
   open: boolean;
   agentReport?: string;
+  /** Interface to bind to. The review API is unauthenticated, so this
+   *  defaults to loopback-only (127.0.0.1) — callers must opt in explicitly
+   *  (e.g. a --host flag) to expose it beyond the local machine. */
+  host?: string;
 }
 
 export async function startReviewServer(options: ServeOptions): Promise<void> {
   const { specPath, port, open: shouldOpen, agentReport } = options;
+  const bindHost = options.host?.trim() ? options.host.trim() : '127.0.0.1';
   const resolvedSpec = path.resolve(specPath);
   const specDir = specRootDir(resolvedSpec);
   const resultsPath = path.join(specDir, '.specify', 'verify', 'verify-result.json');
@@ -717,6 +722,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   const server = serve({
     fetch: app.fetch,
     port,
+    hostname: bindHost,
   });
 
   // -------------------------------------------------------------------------
@@ -775,7 +781,10 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   // Startup info
   // -------------------------------------------------------------------------
 
-  const url = `http://localhost:${port}`;
+  // 0.0.0.0 isn't a client-facing address — show "localhost" for it so the
+  // printed URL is actually usable; any other explicit host is shown as-is.
+  const displayHost = bindHost === '0.0.0.0' ? 'localhost' : bindHost;
+  const url = `http://${displayHost}:${port}`;
   process.stderr.write(`\n  Specify Review Server\n`);
   process.stderr.write(`  Spec:    ${resolvedSpec}\n`);
   process.stderr.write(`  Server:  ${url}\n`);
@@ -808,6 +817,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       unsubEvents();
       for (const w of watchers) w.close();
       wss.close();
+      try { (server as unknown as { close?: () => void }).close?.(); } catch { /* best effort */ }
       resolve();
     };
     process.on('SIGINT', cleanup);
