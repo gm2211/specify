@@ -65,6 +65,22 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [],
   },
   {
+    name: 'spec context',
+    description: 'Generate/refresh PRODUCT.md and DESIGN.md from the composed spec — deterministic projection, every claim traced to its source area/behavior id',
+    parameters: [
+      { name: '--spec', type: 'string', required: false, description: 'Path to spec file or directory (auto-discovered if omitted)' },
+      { name: '--out-dir', type: 'string', required: false, description: 'Output directory for generated files', default: '.' },
+      { name: '--product', type: 'string', required: false, description: 'Output path (relative to --out-dir) for the product-doctrine file', default: 'PRODUCT.md' },
+      { name: '--design', type: 'string', required: false, description: 'Output path (relative to --out-dir) for the design-context file', default: 'DESIGN.md' },
+      { name: '--force', type: 'boolean', required: false, description: 'Overwrite a target file in place even when it has no specify managed-region markers (destroys unmanaged hand edits); default writes a reviewable <name>.proposed<ext> file instead' },
+    ],
+    examples: [
+      'specify spec context',
+      'specify spec context --spec spec/ --out-dir docs',
+      'specify spec context --json',
+    ],
+  },
+  {
     name: 'spec compile',
     description: 'Compile plain-language behaviors into LTLf formulas (specify.formulas.yaml) via an offline, browserless LLM agent. Behaviors the model cannot compile faithfully are honestly skipped, not forced.',
     parameters: [

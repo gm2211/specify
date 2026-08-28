@@ -12,6 +12,7 @@ areas:
   - areas/spec-lint.yaml
   - areas/spec-split.yaml
   - areas/spec-guide.yaml
+  - areas/spec-context.yaml
   - areas/spec-migrate-id.yaml
   - areas/spec-compile.yaml
   - areas/schema.yaml
