@@ -35,3 +35,7 @@ behaviors:
       --stop reads .specify/ui.pid, sends SIGTERM (escalating to SIGKILL if it doesn't exit), removes the pidfile, and
       exits 0; with no pidfile, or a pidfile whose process is already dead, it also exits 0 (cleaning up a stale pidfile
       in the latter case)
+  - id: review-default-host
+    description: |
+      The unauthenticated review API binds to 127.0.0.1 (loopback only) by default; --host or SPECIFY_REVIEW_HOST
+      widens the bind address (--host takes precedence)

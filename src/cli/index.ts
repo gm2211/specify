@@ -686,6 +686,7 @@ async function main(): Promise<void> {
         spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
         agentReport: getArg(reviewArgs, '--agent-report'),
         port: getArg(reviewArgs, '--port'),
+        host: getArg(reviewArgs, '--host'),
         noOpen: hasFlag(reviewArgs, '--no-open'),
         background,
         stop,

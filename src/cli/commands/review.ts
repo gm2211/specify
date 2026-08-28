@@ -1,9 +1,13 @@
 /**
  * src/cli/commands/review.ts — Launch the review webapp
  *
- * `specify review [--spec <path>] [--port <port>] [--agent-report <path>] [--no-open]`
- * `specify review --background [--spec <path>] [--port <port>]`   daemonize
+ * `specify review [--spec <path>] [--port <port>] [--host <host>] [--agent-report <path>] [--no-open]`
+ * `specify review --background [--spec <path>] [--port <port>] [--host <host>]`   daemonize
  * `specify review --stop`                                          kill daemon
+ *
+ * The review API is unauthenticated, so the server binds to loopback-only
+ * (127.0.0.1) by default. Widen it with --host or SPECIFY_REVIEW_HOST — see
+ * resolveReviewHost() below.
  */
 
 import * as fs from 'fs';
@@ -20,6 +24,7 @@ export interface ReviewOptions {
   output?: string;
   noOpen?: boolean;
   port?: string;
+  host?: string;
   background?: boolean;
   stop?: boolean;
 }
@@ -28,6 +33,26 @@ const DEFAULT_PORT = 3000;
 const STATE_DIR = '.specify';
 const PID_FILE = path.join(STATE_DIR, 'ui.pid');
 const LOG_FILE = path.join(STATE_DIR, 'ui.log');
+
+/**
+ * Resolve the interface the review server should bind to: an explicit
+ * --host flag wins, then SPECIFY_REVIEW_HOST, then loopback-only
+ * (127.0.0.1). The review API is unauthenticated, so the default must never
+ * widen to the LAN without an explicit opt-in. Exported for unit testing.
+ */
+export function resolveReviewHost(cliHost?: string): string {
+  const flag = cliHost?.trim();
+  if (flag) return flag;
+  const envHost = process.env.SPECIFY_REVIEW_HOST?.trim();
+  if (envHost) return envHost;
+  return '127.0.0.1';
+}
+
+function displayUrl(host: string, port: number): string {
+  // 0.0.0.0 isn't a client-facing address — show "localhost" for it.
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  return `http://${displayHost}:${port}`;
+}
 
 function isAlive(pid: number): boolean {
   try {
@@ -38,7 +63,7 @@ function isAlive(pid: number): boolean {
   }
 }
 
-function readPidFile(): { pid: number; port: number } | null {
+function readPidFile(): { pid: number; port: number; host?: string } | null {
   try {
     const content = fs.readFileSync(PID_FILE, 'utf-8').trim();
     const parsed = JSON.parse(content);
@@ -83,7 +108,7 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
 
   const existing = readPidFile();
   if (existing && isAlive(existing.pid)) {
-    process.stderr.write(`Review already running — pid ${existing.pid}, http://localhost:${existing.port}\n`);
+    process.stderr.write(`Review already running — pid ${existing.pid}, ${displayUrl(existing.host ?? '127.0.0.1', existing.port)}\n`);
     return ExitCode.SUCCESS;
   }
   if (existing) {
@@ -92,6 +117,7 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
   const port = parseInt(options.port ?? String(DEFAULT_PORT), 10);
+  const host = resolveReviewHost(options.host);
 
   const out = fs.openSync(LOG_FILE, 'a');
   const err = fs.openSync(LOG_FILE, 'a');
@@ -103,6 +129,9 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
     ? ['tsx', scriptPath, 'review', '--spec', path.resolve(options.spec), '--port', String(port), '--no-open']
     : [scriptPath, 'review', '--spec', path.resolve(options.spec), '--port', String(port), '--no-open'];
   if (options.agentReport) childArgs.push('--agent-report', path.resolve(options.agentReport));
+  // Forward an explicit --host so the detached child (which re-parses its
+  // own argv) binds the same interface the caller asked for.
+  if (options.host) childArgs.push('--host', options.host);
 
   const child = spawn(cmd, childArgs, {
     detached: true,
@@ -112,11 +141,11 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
   });
   child.unref();
 
-  fs.writeFileSync(PID_FILE, JSON.stringify({ pid: child.pid, port, startedAt: new Date().toISOString() }));
+  fs.writeFileSync(PID_FILE, JSON.stringify({ pid: child.pid, port, host, startedAt: new Date().toISOString() }));
 
   await new Promise((r) => setTimeout(r, 600));
 
-  process.stderr.write(`Review started — pid ${child.pid}, http://localhost:${port}\n`);
+  process.stderr.write(`Review started — pid ${child.pid}, ${displayUrl(host, port)}\n`);
   process.stderr.write(`Logs: ${LOG_FILE}\n`);
   process.stderr.write(`Stop: specify review --stop\n`);
 
@@ -125,9 +154,10 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
     const openCmd = process.platform === 'darwin' ? 'open'
       : process.platform === 'win32' ? 'cmd'
       : 'xdg-open';
+    const openUrl = displayUrl(host, port);
     const openArgs = process.platform === 'win32'
-      ? ['/c', 'start', '', `http://localhost:${port}`]
-      : [`http://localhost:${port}`];
+      ? ['/c', 'start', '', openUrl]
+      : [openUrl];
     execFile(openCmd, openArgs, () => {});
   }
 
@@ -157,6 +187,7 @@ export async function review(options: ReviewOptions, _ctx: CliContext): Promise<
     port,
     open: !options.noOpen,
     agentReport: options.agentReport,
+    host: resolveReviewHost(options.host),
   });
 
   return ExitCode.SUCCESS;
