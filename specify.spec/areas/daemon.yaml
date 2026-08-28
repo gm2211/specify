@@ -1,8 +1,9 @@
 id: daemon
 name: Daemon Mode
 prose: >
-  Long-running mode: an HTTP inbox server that accepts verify/capture/ compare/replay/freeform tasks from other agents
-  or the MCP daemon tools, idle at zero token cost until a task is pushed in.
+  Long-running mode: an HTTP inbox server that accepts verify/capture/freeform tasks from other agents or the MCP
+  daemon tools, idle at zero token cost until a task is pushed in. Deterministic replay/compare tasks live in mockify
+  (`mockify replay --against`, `mockify compare`), not here.
 behaviors:
   - id: daemon-runs-forever
     description: |

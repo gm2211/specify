@@ -235,6 +235,13 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
     if (!prompt || typeof prompt !== 'string') {
       return c.json({ error: 'missing_field', field: 'prompt' }, 400);
     }
+    // 'compare' and 'replay' are intentionally still accepted past this
+    // coarse presence check (SP-94z removed them from InboxRequest's task
+    // type, not from this literal list) — inbox.submit() -> buildPrompts()
+    // rejects them with a structured error naming the mockify equivalent
+    // (`mockify replay --against`, `mockify compare`). Dropping them here
+    // instead would short-circuit to a bare `invalid_task` 400 and callers
+    // would never see that message.
     if (!['verify', 'capture', 'compare', 'replay', 'freeform'].includes(task)) {
       return c.json({ error: 'invalid_task', task }, 400);
     }

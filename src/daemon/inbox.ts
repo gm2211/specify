@@ -24,12 +24,7 @@ import { MessageInjector } from '../agent/message-injector.js';
 import { runSpecifyAgent } from '../agent/sdk-runner.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 import { getPool } from './worker-pool.js';
-import {
-  getVerifyPrompt,
-  getCapturePrompt,
-  getComparePrompt,
-  getReplayPrompt,
-} from '../agent/prompts.js';
+import { getVerifyPrompt, getCapturePrompt } from '../agent/prompts.js';
 import { resolveSpec, specSourceFromEnv } from '../agent/spec-loader.js';
 import { loadSpec, specToYaml } from '../spec/parser.js';
 import type { Spec } from '../spec/types.js';
@@ -40,15 +35,27 @@ export type InboxMode = 'stateless' | 'attach';
 export interface InboxRequest {
   /** Optional explicit message id; generated if omitted. */
   id?: string;
-  /** Task to run. 'freeform' uses `prompt` as both system and user input. */
-  task: 'verify' | 'capture' | 'compare' | 'replay' | 'freeform';
+  /**
+   * Task to run. 'freeform' uses `prompt` as both system and user input.
+   * 'replay' and 'compare' are no longer accepted here — deterministic
+   * replay/compare now live in mockify (`mockify replay --against`,
+   * `mockify compare`). A request that still sends one of those literals
+   * (the type below no longer allows it, but callers post untyped JSON)
+   * fails with a validation error naming the mockify equivalent — see
+   * buildPrompts().
+   */
+  task: 'verify' | 'capture' | 'freeform';
   /** Freeform instruction from the caller. */
   prompt: string;
   /** Optional URL override (web/api targets). */
   url?: string;
-  /** Optional remote URL (compare). */
+  /**
+   * Optional remote URL. No currently-accepted task type reads this — it
+   * was compare-only, and compare moved to mockify. Kept on the type only
+   * because SdkRunnerOptions still carries it; unused by buildPrompts().
+   */
   remoteUrl?: string;
-  /** Optional local URL (compare). */
+  /** Optional local URL. See remoteUrl — same compare-only history. */
   localUrl?: string;
   /** Optional path to a spec file to use as context. */
   spec?: string;
@@ -57,7 +64,10 @@ export interface InboxRequest {
    * ignored with a warning; if none match, the job fails with a clear error.
    */
   areas?: string[];
-  /** Optional capture directory (replay). */
+  /**
+   * Optional capture directory. No currently-accepted task type reads this
+   * — it was replay-only, and replay moved to mockify.
+   */
   captureDir?: string;
   /** Output directory; defaults to .specify/<task>/<msgId>. */
   outputDir?: string;
@@ -456,10 +466,8 @@ export class InboxRegistry {
   private persistResult(message: InboxMessage, outputDir: string, result: SdkRunnerResult): string | undefined {
     if (!result.structuredOutput) return undefined;
     const filename =
-      message.request.task === 'compare' ? 'compare-result.json'
-      : message.request.task === 'verify' ? 'verify-result.json'
+      message.request.task === 'verify' ? 'verify-result.json'
       : message.request.task === 'capture' ? 'capture-result.json'
-      : message.request.task === 'replay' ? 'replay-result.json'
       : 'result.json';
     const full = path.join(outputDir, filename);
     fs.mkdirSync(outputDir, { recursive: true });
@@ -494,7 +502,27 @@ interface PromptBundle {
   specPath?: string;
 }
 
+/** Task literals accepted by the daemon inbox up through the removal of
+ *  replay/compare (SP-94z). Callers post untyped JSON, so a legacy request
+ *  can still arrive here with one of the removed literals even though the
+ *  `InboxRequest.task` type no longer allows it — this map is what lets
+ *  buildPrompts() give a specific, actionable error instead of a generic
+ *  one from a switch that no longer has a case for it. */
+const MOCKIFY_EQUIVALENT: Record<string, string> = {
+  replay: 'mockify replay --against <url>',
+  compare: 'mockify compare',
+};
+
 async function buildPrompts(req: InboxRequest, outputDir: string): Promise<PromptBundle> {
+  const rawTask = req.task as string;
+  const mockifyEquivalent = MOCKIFY_EQUIVALENT[rawTask];
+  if (mockifyEquivalent) {
+    throw new Error(
+      `task '${rawTask}' is no longer accepted by the specify daemon — deterministic ` +
+      `replay/compare moved to mockify. Run \`${mockifyEquivalent}\` instead.`,
+    );
+  }
+
   if (req.task === 'verify') {
     const { spec, specPath } = await resolveVerifySpec(req);
 
@@ -564,30 +592,6 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
       userPrompt: req.prompt?.trim()
         ? req.prompt
         : `Explore ${req.url} and generate a comprehensive behavioral spec.`,
-    };
-  }
-
-  if (req.task === 'compare') {
-    if (!req.remoteUrl || !req.localUrl) {
-      throw new Error('compare task requires `remoteUrl` and `localUrl`');
-    }
-    return {
-      systemPrompt: getComparePrompt(req.remoteUrl, req.localUrl, outputDir),
-      userPrompt: req.prompt?.trim()
-        ? req.prompt
-        : `Compare remote ${req.remoteUrl} against local ${req.localUrl}.`,
-    };
-  }
-
-  if (req.task === 'replay') {
-    if (!req.captureDir || !req.url) {
-      throw new Error('replay task requires `captureDir` and `url`');
-    }
-    return {
-      systemPrompt: getReplayPrompt(req.captureDir, req.url),
-      userPrompt: req.prompt?.trim()
-        ? req.prompt
-        : `Replay traffic from ${req.captureDir} against ${req.url}.`,
     };
   }
 
