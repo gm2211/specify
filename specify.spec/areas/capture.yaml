@@ -1,8 +1,7 @@
 id: capture
 name: Capture
 prose: >
-  Agent mode (default) launches an autonomous agent to explore a URL and generate a spec. Human mode (--human) opens a
-  headed browser for manual recording.
+  An autonomous agent explores a URL and generates a spec.
 behaviors:
   - id: capture-requires-url
     description: |
@@ -16,12 +15,6 @@ behaviors:
   - id: capture-headed-mode
     description: |
       --headed runs browser visibly instead of headless
-  - id: capture-no-generate
-    description: |
-      --no-generate skips automatic spec generation
-  - id: capture-human-mode
-    description: |
-      --human opens a headed browser for manual recording with traffic capture
   - id: capture-outputs-json
     description: |
       Outputs JSON to stdout with result, costUsd, outputDir, and area count
@@ -30,8 +23,8 @@ behaviors:
       After success, stderr shows hint about 'specify review --spec <path>'
   - id: capture-storage-state
     description: >
-      --storage-state <path|keychain:name> loads a saved browser session (cookies/localStorage) before capturing, in
-      both agent and --human modes; an unreadable file or invalid JSON fails with a structured error and exits 10
+      --storage-state <path|keychain:name> loads a saved browser session (cookies/localStorage) before capturing; an
+      unreadable file or invalid JSON fails with a structured error and exits 10
   - id: capture-save-storage-state
     description: >
       --save-storage-state <path|keychain:name> persists the browser session at the end of a successful capture, to a

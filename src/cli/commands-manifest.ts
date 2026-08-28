@@ -3,82 +3,21 @@ import type { CommandDefinition } from './types.js';
 /** Command manifest for schema introspection. */
 export const COMMANDS: CommandDefinition[] = [
   {
-    name: 'spec generate',
-    description: 'Generate a spec from capture data',
-    parameters: [
-      { name: '--input', type: 'string', required: true, description: 'Path to capture directory' },
-      { name: '--output', type: 'string', required: false, description: 'Output file path' },
-      { name: '--name', type: 'string', required: false, description: 'Spec name' },
-    ],
-  },
-  {
     name: 'capture',
     description: 'Capture a contract from a live system or codebase',
     parameters: [
-      { name: '--url', type: 'string', required: false, description: 'URL to capture (required unless --human)' },
+      { name: '--url', type: 'string', required: true, description: 'URL to capture' },
       { name: '--output', type: 'string', required: false, description: 'Output directory for capture data' },
       { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly' },
-      { name: '--timeout', type: 'number', required: false, description: 'Navigation timeout in ms (--human only)', default: 30000 },
-      { name: '--no-screenshots', type: 'boolean', required: false, description: 'Disable screenshots (--human only)' },
-      { name: '--no-generate', type: 'boolean', required: false, description: 'Skip automatic spec generation (--human only)' },
       { name: '--spec-output', type: 'string', required: false, description: 'Output path for generated spec (default: <output>/../spec.yaml)' },
       { name: '--spec-name', type: 'string', required: false, description: 'Name for the generated spec (default: hostname)' },
-      { name: '--human', type: 'boolean', required: false, description: 'Open a headed browser for human recording instead of autonomous agent' },
       { name: '--storage-state', type: 'string', required: false, description: 'Playwright storage-state JSON, as a filesystem path or keychain:<name> (macOS Keychain); loaded into the browser context so the run starts authenticated' },
-      { name: '--save-storage-state', type: 'string', required: false, description: 'Where to write the browser context storage state (cookies + localStorage) after the run completes, as a filesystem path or keychain:<name> (macOS Keychain); most useful with --human --headed' },
-    ],
-    modes: [
-      {
-        name: 'agent',
-        description: 'Autonomous agent explores and documents the application using Claude Agent SDK (default)',
-        required_parameters: ['--url'],
-        optional_parameters: ['--output', '--headed', '--spec-output', '--spec-name', '--storage-state', '--save-storage-state'],
-        condition: 'no --human',
-      },
-      {
-        name: 'human',
-        description: 'Open a headed browser for human recording — browse the site and all traffic is captured',
-        required_parameters: ['--url', '--output', '--human'],
-        optional_parameters: ['--headed', '--timeout', '--no-screenshots', '--no-generate', '--spec-output', '--spec-name', '--storage-state', '--save-storage-state'],
-        condition: '--human is set',
-      },
+      { name: '--save-storage-state', type: 'string', required: false, description: 'Where to write the browser context storage state (cookies + localStorage) after the run completes, as a filesystem path or keychain:<name> (macOS Keychain)' },
     ],
     examples: [
       'specify capture --url http://localhost:3000 --output ./captures/my-app',
-      'specify capture --url http://localhost:3000 --output ./cap --human',
-      'specify capture --url https://example.com --output ./cap --no-generate',
-      'specify capture --url http://localhost:3000 --output ./cap --human --headed --save-storage-state .auth/storage-state.json',
       'specify capture --url http://localhost:3000 --output ./cap --storage-state .auth/storage-state.json',
-      'specify capture --url http://localhost:3000 --output ./cap --human --headed --save-storage-state keychain:my-app-session',
-    ],
-  },
-  {
-    name: 'replay',
-    description: 'Replay captured traffic against a target and diff the results',
-    parameters: [
-      { name: '--capture', type: 'string', required: true, description: 'Path to capture directory' },
-      { name: '--url', type: 'string', required: true, description: 'Target URL to replay against' },
-      { name: '--headed', type: 'boolean', required: false, description: 'Run browser visibly' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for diff report' },
-    ],
-    examples: [
-      'specify replay --capture ./captures/baseline --url http://localhost:3000',
-    ],
-  },
-  {
-    name: 'compare',
-    description: 'Live side-by-side comparison of remote and local targets using parallel browser sessions',
-    parameters: [
-      { name: '--remote', type: 'string', required: true, description: 'Remote target URL' },
-      { name: '--local', type: 'string', required: true, description: 'Local target URL' },
-      { name: '--remote-auth', type: 'string', required: false, description: 'HTTP Basic Auth for remote (user:pass)' },
-      { name: '--local-auth', type: 'string', required: false, description: 'HTTP Basic Auth for local (user:pass)' },
-      { name: '--output', type: 'string', required: false, description: 'Output directory for comparison report' },
-      { name: '--headed', type: 'boolean', required: false, description: 'Run browsers visibly' },
-    ],
-    examples: [
-      'specify compare --remote https://prod.example.com --local http://localhost:3000',
-      'specify compare --remote https://staging.example.com --local http://localhost:3000 --headed',
+      'specify capture --url http://localhost:3000 --output ./cap --headed --save-storage-state keychain:my-app-session',
     ],
   },
   {

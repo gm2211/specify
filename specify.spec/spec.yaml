@@ -10,7 +10,6 @@ target:
 areas:
   - areas/overview.yaml
   - areas/spec-lint.yaml
-  - areas/spec-generate.yaml
   - areas/spec-split.yaml
   - areas/spec-guide.yaml
   - areas/spec-migrate-id.yaml
@@ -18,8 +17,6 @@ areas:
   - areas/schema.yaml
   - areas/capture.yaml
   - areas/verify.yaml
-  - areas/replay.yaml
-  - areas/compare.yaml
   - areas/review.yaml
   - areas/create.yaml
   - areas/human-mode.yaml

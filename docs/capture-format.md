@@ -23,10 +23,9 @@ record), or replay will silently misread newer captures.
   these types does so `import type`-only — it reads the shape, never
   constructs or serializes it: `src/model/endpoint-map.ts`,
   `src/model/nav-model.ts`, `src/model/runner-hooks.ts`,
-  `src/monitor/predicates.ts`, `src/monitor/verdict-merge.ts`, and
-  `src/spec/generator.ts` (plus their `*.test.ts` files). None of
-  specify's verification core depends on recorder code — only on this
-  shape.
+  `src/monitor/predicates.ts`, and `src/monitor/verdict-merge.ts`
+  (plus their `*.test.ts` files). None of specify's verification core
+  depends on recorder code — only on this shape.
 - **mockify** is the producer/consumer of record for replay: its mock
   server reads `traffic.json` to serve recorded responses back to a
   client, using the same field names described below.
