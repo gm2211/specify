@@ -66,6 +66,9 @@ specify verify --spec app.spec.yaml --url http://localhost:3000
 
 # 3. Review results in the browser — flag what looks wrong, the next run remembers
 specify review --spec app.spec.yaml
+
+# 4. Produce a shareable proof — one self-contained HTML file, no server needed
+specify prove --spec app.spec.yaml
 ```
 
 `specify review` opens the webapp shown above. Click any timeline event to flag
@@ -165,6 +168,7 @@ that they were removed), Specify refuses to touch it and writes a reviewable
 | **`capture`** | Agent-driven capture from a live system (`--url`) — writes a spec directly |
 | **`review`** | Browser UI: narrative, activity stream, feedback, skill drafts |
 | **`verify`** | Verify against a live target (`--url`) — emits a structured report |
+| **`prove`** | Turn a verify run into one self-contained `proof.html` — evidence, filmstrip/terminal replay, integrity footer |
 | `spec lint` | Structural validation (no captures needed) |
 | `spec guide` | Authoring guide for LLM spec writers |
 | `spec context` | Regenerate `PRODUCT.md`/`DESIGN.md` from the spec, non-destructively |
@@ -181,6 +185,8 @@ Run `specify <cmd> --help` for full flags. Source: [`src/cli/commands-manifest.t
 Every validation report includes **expected vs actual evidence** for every assertion. No "100% passed, trust me" — you get the raw output, the exact match, and the assertion logic.
 
 Formats: **JSON** (machine), **Markdown** (diff-friendly), **HTML** (interactive, filterable, single file).
+
+`specify prove` writes ONE self-contained HTML file from a verify output directory, with each evidence item badged **runner-recorded** (cross-references the runner's deterministic observation trace) or **agent-reported** (the agent's own testimony, unmatched); web runs get a screenshot filmstrip, CLI runs an animated terminal replay of the recorded `cli_run` steps; the footer carries the sha256, size and mtime of every source file.
 
 ```
 | Status | Type           | Expected          | Actual                              |
