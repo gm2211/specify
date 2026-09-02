@@ -314,7 +314,7 @@ function renderHeader(input: ProofInput): string {
   <dl class="ph-meta">
     <div><dt>Spec</dt><dd>${escapeHtml(spec.name)} <code>v${escapeHtml(spec.version)}</code></dd></div>
     <div><dt>Target</dt><dd><span class="chip chip--${escapeHtml(target.type)}">${escapeHtml(target.type)}</span> <code>${escapeHtml(targetValue)}</code></dd></div>
-    <div><dt>Run</dt><dd><time datetime="${escapeHtml(run.timestamp)}">${escapeHtml(run.timestamp)}</time></dd></div>
+    <div><dt>Run</dt><dd>${run.timestamp ? `<time datetime="${escapeHtml(run.timestamp)}">${escapeHtml(run.timestamp)}</time>` : '<span class="dim">not recorded</span>'}</dd></div>
     <div><dt>Generated</dt><dd>${escapeHtml(generator.generatedAt)} · specify ${escapeHtml(generator.version)}</dd></div>
   </dl>
   <div class="progress" role="img" aria-label="${escapeHtml(ariaLabel)}">${segsHtml}</div>
@@ -445,7 +445,9 @@ function renderActualCol(actual: ProofEvidenceActual): string {
   }
   if (actual.kind === 'screenshot') {
     const stepLabel = actual.step !== undefined ? ` (step ${actual.step})` : '';
-    return `<div class="ev-col"><h4>Actual — runner-recorded screenshot${escapeHtml(stepLabel)}</h4><div class="ev-shot"><img data-key="${escapeHtml(actual.key)}" alt="${escapeHtml(actual.key)}"></div>${actual.url ? `<p class="ev-shot-url">${escapeHtml(actual.url)}</p>` : ''}</div>`;
+    const meta = [actual.step !== undefined ? `step ${actual.step}` : '', actual.url ?? ''].filter((s) => s.length > 0).join(' · ');
+    const caption = `<p class="ev-shot-caption"><code>${escapeHtml(actual.key)}</code>${meta ? ` <span class="dim">${escapeHtml(meta)}</span>` : ''}</p>`;
+    return `<div class="ev-col"><h4>Actual — runner-recorded screenshot${escapeHtml(stepLabel)}</h4><img class="ev-shot" data-key="${escapeHtml(actual.key)}" alt="${escapeHtml(actual.key)}" loading="lazy">${caption}</div>`;
   }
   return `<div class="ev-col"><h4>Actual — scripted replay</h4><p>Produced by the deterministic Playwright replay tier — no LLM in the loop.</p></div>`;
 }
@@ -668,6 +670,9 @@ a{color:var(--accent);}
 .ev-col--single{grid-column:1 / -1;}
 .ev-col h4{margin:0 0 4px;font-size:11px;color:var(--fg-dim);text-transform:uppercase;}
 .ev-col pre{background:var(--panel-2);padding:8px;border-radius:6px;overflow:auto;font-size:12px;margin:0;white-space:pre-wrap;word-break:break-word;}
+.ev-shot{display:block;max-width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel-2);}
+.ev-shot-caption{font-size:12px;margin:4px 0 0;word-break:break-word;}
+.dim{color:var(--fg-dim);}
 .exit{display:inline-block;margin-top:4px;font-size:11px;padding:1px 6px;border-radius:4px;}
 .exit--ok{background:var(--ok-bg);color:var(--ok);}
 .exit--err{background:var(--err-bg);color:var(--err);}
@@ -869,6 +874,16 @@ export const PROOF_JS = `
   function boot() {
     var data = readProofData();
     var shots = buildShotIndex();
+
+    var looseImgs = document.querySelectorAll('img[data-key]');
+    for (var s = 0; s < looseImgs.length; s++) {
+      try {
+        var img = looseImgs[s];
+        if (img.closest('#shot-store')) continue;
+        var looseSrc = shots.get(img.getAttribute('data-key'));
+        if (looseSrc) img.src = looseSrc;
+      } catch (e) { /* ignore */ }
+    }
 
     var filmSections = document.querySelectorAll('.film');
     for (var i = 0; i < filmSections.length; i++) {

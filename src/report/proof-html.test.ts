@@ -134,6 +134,42 @@ test('each unique screenshot basename is emitted exactly once in the shot store'
   assert.equal(occurrences, 1);
 });
 
+test('evidence screenshot renders a keyed ev-shot img (no src) and the run timestamp falls back to "not recorded"', () => {
+  const input = baseInput({
+    run: { timestamp: '', pass: true, summary: { total: 1, passed: 1, failed: 0, skipped: 0, untested: 0 } },
+    screenshots: {
+      '001-home.png': { kind: 'inline', dataUri: 'data:image/png;base64,AAAA', bytes: 10, encodedBytes: 12 },
+    },
+    areas: [
+      {
+        id: 'area-a',
+        name: 'Area A',
+        behaviors: [
+          baseBehavior({
+            evidence: [
+              {
+                type: 'screenshot',
+                label: 'home',
+                content: 'Home page rendered',
+                provenance: 'runner-recorded',
+                observationStep: 2,
+                matchReason: 'matched by step',
+                screenshotKey: '001-home.png',
+                actual: { kind: 'screenshot', key: '001-home.png', step: 2 },
+              },
+            ],
+          }),
+        ],
+      },
+    ],
+  });
+  const html = renderProofHtml(input);
+  assert.ok(html.includes('class="ev-shot" data-key="001-home.png"'));
+  assert.equal(html.split('data:image/png;base64,').length - 1, 1);
+  assert.ok(html.includes('not recorded'));
+  assert.ok(!html.includes('<time datetime=""'));
+});
+
 test('linked screenshots render an href, not a data URI', () => {
   const input = baseInput({
     screenshots: {
