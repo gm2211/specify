@@ -19,6 +19,7 @@ areas:
   - areas/capture.yaml
   - areas/verify.yaml
   - areas/review.yaml
+  - areas/prove.yaml
   - areas/create.yaml
   - areas/human-mode.yaml
   - areas/daemon.yaml

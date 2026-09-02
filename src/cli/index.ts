@@ -22,6 +22,7 @@
  *   specify spec compile     [--spec <path>] [--behavior <fq-id> ...] [--force]
  *   specify capture          --url <url> --output <dir> [--headed] [--spec-output <path>]
  *   specify review           --spec <path> [--report <path>] [--agent-report <path>] [--no-open]
+ *   specify prove            [--spec <path>] [--input <verifyOutputDir>] [--output <path>]
  *   specify create           [--output <path>] [--narrative <path>]
  *   specify schema spec|commands
  *   specify mcp              MCP server for LLM tool integration
@@ -235,6 +236,7 @@ ${c.bold('Primary Flows:')}
   ${c.cyan('capture')}           Capture a contract from a live system or codebase
   ${c.cyan('review')}            Launch the review webapp ${c.dim('(--background to daemonize, --stop to kill)')}
   ${c.cyan('verify')}            Verify an implementation against a contract
+  ${c.cyan('prove')}             Write a self-contained proof.html from a verify run
 
 ${c.bold('Advanced:')}
   ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
@@ -255,6 +257,7 @@ ${c.bold('Common tasks:')}
   ${c.dim('New project:')}       specify create
   ${c.dim('Check it works:')}    specify verify --spec spec.yaml
   ${c.dim('See the contract:')}  specify review --spec spec.yaml
+  ${c.dim('Prove it works:')}    specify prove
 
 ${c.bold('Global Options:')}
   ${c.yellow('--json')}                                        Force JSON output to stdout
@@ -555,6 +558,17 @@ async function main(): Promise<void> {
         noOpen: hasFlag(reviewArgs, '--no-open'),
         background,
         stop,
+      }, ctx);
+
+    } else if (noun === 'prove') {
+      // prove is a standalone command (no verb) — recombine args
+      const proveArgs = verb ? [verb, ...rest] : rest;
+      const { prove: proveCmd } = await import('./commands/prove.js');
+      exitCode = await proveCmd({
+        spec: resolveSpecArg(proveArgs, ctx),
+        input: getArg(proveArgs, '--input'),
+        output: getArg(proveArgs, '--output'),
+        maxScreenshotBytes: getArg(proveArgs, '--max-screenshot-bytes'),
       }, ctx);
 
     } else if (noun === 'create') {

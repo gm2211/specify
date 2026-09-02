@@ -1,0 +1,44 @@
+id: prove
+name: Proof of Validation
+prose: >
+  Turns a completed verify run into one self-contained HTML artifact a reader can open and be convinced by. Every
+  behavior carries its verdict, rationale, and expected-vs-actual evidence, and every evidence item is badged by
+  provenance: runner-recorded when it cross-references the deterministic observation trace, agent-reported when it is
+  only the agent's own testimony. Web runs get a screenshot filmstrip, CLI runs an animated terminal replay, and the
+  footer carries source-file hashes so the artifact can be checked against the run that produced it.
+behaviors:
+  - id: prove-writes-self-contained-html
+    description: >
+      Writes one HTML file (default <input>/proof.html) that opens from file:// with no external requests —
+      screenshots inlined as base64 data URIs, CSS and JS inline
+  - id: prove-requires-verify-output
+    description: |
+      A missing --input directory, or one with no verify-result.json, outputs a structured JSON error and exits 10
+  - id: prove-defaults-input-and-output
+    description: >
+      Without --input, reads .specify/verify; without --output, writes proof.html inside the input directory
+  - id: prove-renders-every-behavior
+    description: >
+      Renders every spec behavior area-by-area with its status, method, rationale, duration, and any verdict_source /
+      monitor / repro / guarantees the run recorded; spec behaviors with no result are shown as untested
+  - id: prove-badges-evidence-provenance
+    description: >
+      Each evidence item is badged runner-recorded when it cross-references a recorded observation — a cli_run step
+      whose stdout/stderr or argv it matches, or a screenshot that exists under capture/screenshots/ — and
+      agent-reported otherwise
+  - id: prove-replays-the-run
+    description: >
+      Web runs render a keyboard-navigable screenshot filmstrip with prev/next and an autoplay toggle; CLI runs render
+      an animated terminal replay per recorded step with a skip control and an exit-code badge
+  - id: prove-integrity-footer
+    description: >
+      The footer records the sha256, size, and mtime of verify-result.json and each observations file, how many
+      screenshots were embedded versus linked, the generator version, the generation timestamp, and the exact command
+      line that regenerates the artifact
+  - id: prove-screenshot-size-guard
+    description: >
+      Total inlined screenshot bytes are capped (40 MiB by default); screenshots past the cap are referenced as
+      relative file:// links instead of inlined, and the footer reports how many
+  - id: prove-succeeds-on-failing-runs
+    description: |
+      A verify run with failing behaviors still produces a proof and exits 0 — prove documents the verdict, it does not adopt it

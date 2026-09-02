@@ -155,6 +155,21 @@ export const COMMANDS: CommandDefinition[] = [
     ],
   },
   {
+    name: 'prove',
+    description: 'Write a self-contained proof.html from a verify run — evidence badged runner-recorded vs agent-reported, filmstrip / terminal replay, integrity footer',
+    parameters: [
+      { name: '--spec', type: 'string', required: false, description: 'Path to spec file (auto-discovered if omitted)' },
+      { name: '--input', type: 'string', required: false, description: 'Verify output directory to read', default: '.specify/verify' },
+      { name: '--output', type: 'string', required: false, description: 'Output path for proof.html', default: '<input>/proof.html' },
+      { name: '--max-screenshot-bytes', type: 'number', required: false, description: 'Base64-encoded screenshot byte budget before falling back to linked files', default: 41943040 },
+    ],
+    examples: [
+      'specify prove',
+      'specify prove --spec specify.spec --input .specify/verify',
+      'specify prove --output ./proof.html --json',
+    ],
+  },
+  {
     name: 'create',
     description: 'Interactive interview that produces a computable spec (YAML) and narrative companion (Markdown)',
     parameters: [
