@@ -42,7 +42,8 @@ npm run typecheck         # TypeScript for CLI, daemon, agent, and scripts
 npm run typecheck:webapp  # TypeScript for the React review UI
 npm run lint              # ESLint with TypeScript, SonarJS, security, Unicorn, and React rules
 npm run format            # Prettier check
-npm run quality           # Typecheck + lint
+npm run validate          # Lint the repo's own spec (specify.spec/)
+npm run quality           # Typecheck + lint + self-spec validate
 ```
 
 Local SonarQube/SonarCloud scanning is configured with
@@ -450,7 +451,7 @@ Full schema: `specify schema spec` (or see [`src/spec/schema.ts`](src/spec/schem
 
 ## Self-verifying
 
-Specify eats its own dogfood. The repo includes [`specify.spec/`](specify.spec/spec.yaml) — a spec for Specify itself — validated on every release.
+Specify eats its own dogfood. The repo includes [`specify.spec/`](specify.spec/spec.yaml) — a spec for Specify itself — linted by the test suite ([`src/spec/self-spec.test.ts`](src/spec/self-spec.test.ts), run via `npm test`) and by `npm run validate`, which `npm run quality` includes.
 
 ## License
 
