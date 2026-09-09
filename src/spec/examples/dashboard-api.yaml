@@ -1,115 +1,22 @@
-version: "1.0"
-name: "Dashboard with API Calls"
-description: "Dashboard page that loads data from multiple API endpoints"
-
-pages:
+version: '2'
+name: Dashboard API
+target:
+  type: api
+  url: http://localhost:3000/api
+assumptions:
+  - description: The verifier has a test user's token and the test account has known activity data.
+areas:
   - id: dashboard
-    path: /dashboard
-    title: "Dashboard"
-
-    visual_assertions:
-      - type: element_exists
-        selector: "[data-testid=welcome-banner]"
-        description: "Welcome banner is displayed"
-      - type: text_contains
-        selector: ".stats-panel"
-        text: "Total Users"
-        description: "Stats panel shows user count label"
-      - type: element_count
-        selector: ".stat-card"
-        min: 3
-        description: "At least 3 stat cards are rendered"
-      - type: screenshot_region
-        selector: ".main-content"
-        description: "Main content area renders correctly"
-
-    expected_requests:
-      - method: GET
-        url_pattern: "/api/dashboard/stats"
-        description: "Fetches dashboard statistics"
-        response:
-          status: 200
-          content_type: "application/json"
-          body_schema:
-            type: object
-            required:
-              - totalUsers
-              - activeUsers
-              - revenue
-            properties:
-              totalUsers:
-                type: number
-              activeUsers:
-                type: number
-              revenue:
-                type: number
-
-      - method: GET
-        url_pattern: "/api/dashboard/recent-activity"
-        description: "Fetches recent activity feed"
-        response:
-          status: 200
-          content_type: "application/json"
-          body_schema:
-            type: object
-            required:
-              - items
-            properties:
-              items:
-                type: array
-                items:
-                  type: object
-                  required:
-                    - id
-                    - type
-                    - timestamp
-
-      - method: GET
-        url_pattern: "/api/notifications"
-        description: "Fetches user notifications"
-        response:
-          status: 200
-
-    console_expectations:
-      - level: error
-        count: 0
-
-    scenarios:
-      - id: filter-by-date
-        description: "User filters dashboard data by date range"
-        steps:
-          - action: click
-            selector: ".date-picker-trigger"
-            description: "Open date picker"
-          - action: fill
-            selector: "#start-date"
-            value: "2024-01-01"
-          - action: fill
-            selector: "#end-date"
-            value: "2024-12-31"
-          - action: click
-            selector: ".apply-filter"
-            description: "Apply the date filter"
-          - action: wait_for_request
-            url_pattern: "/api/dashboard/stats?from=*"
-            description: "Stats reload with date filter"
-          - action: assert_visible
-            selector: ".results-updated"
-            description: "Results update indicator appears"
-
-      - id: export-data
-        description: "User exports dashboard data as CSV"
-        steps:
-          - action: click
-            selector: "[data-testid=export-button]"
-            description: "Click export button"
-          - action: click
-            selector: "[data-testid=export-csv]"
-            description: "Select CSV format"
-          - action: wait_for_request
-            url_pattern: "/api/dashboard/export*"
-            method: GET
-            description: "Export endpoint is called"
-
-variables:
-  base_url: "${TARGET_BASE_URL}"
+    name: Dashboard statistics
+    behaviors:
+      - id: authorized-statistics
+        description:
+          An authenticated request to GET /stats returns HTTP 200 and statistics for the requesting
+          account.
+        details:
+          The response contains numeric totalUsers and activeUsers values; neither can be negative.
+      - id: requires-authentication
+        description:
+          A request to GET /stats without authentication returns HTTP 401 and no account statistics.
+      - id: account-isolation
+        description: Statistics for one account never include activity belonging to another account.

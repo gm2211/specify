@@ -1,29 +1,14 @@
-version: "1.0"
-name: "Requirements Test Spec"
-description: "Minimal spec with a behavioral requirement to test verify cli reporting"
-description_claims:
-  - example-claim
-
-requirements:
-  - id: example-requirement
-    description: "This is an example behavioral requirement for testing"
-    verification: agent
-    validation_plan: "An agent should verify this somehow"
-
-claims:
-  - id: example-claim
-    description: "This example spec includes normative prose grounded by a requirement"
-    grounded_by:
-      requirements: ["example-requirement"]
-
-cli:
-  binary: "echo"
-
-  commands:
-    - id: echo-test
-      description: "Simple echo test"
-      args: ["hello"]
-      expected_exit_code: 0
-      stdout_assertions:
-        - type: text_contains
-          text: "hello"
+version: '2'
+name: Echo contract
+description: Each behavior is a requirement; the verifier records a result against its stable ID.
+target:
+  type: cli
+  binary: echo
+areas:
+  - id: output
+    name: Text output
+    behaviors:
+      - id: echoes-argument
+        description:
+          Running echo with the argument hello exits successfully and prints hello followed by a
+          newline.
