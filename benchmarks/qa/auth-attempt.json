@@ -1,0 +1,26 @@
+{
+  "date": "2026-09-09",
+  "status": "blocked",
+  "completedRuns": 0,
+  "runs": [
+    {
+      "status": "error",
+      "arm": "baseline",
+      "variant": "healthy",
+      "elapsedMs": 1378,
+      "error": "Error: Claude Code returned an error result: Not logged in \u00b7 Please run /login"
+    },
+    {
+      "status": "error",
+      "arm": "specify",
+      "variant": "healthy",
+      "elapsedMs": 1569,
+      "error": "Error: Claude Code returned an error result: Not logged in \u00b7 Please run /login"
+    }
+  ],
+  "fixtureTests": {
+    "passed": 4,
+    "failed": 0
+  },
+  "interpretation": "Authentication failed before QA. No performance comparison is available."
+}

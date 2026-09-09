@@ -1,463 +1,186 @@
-```
+# Specify
 
-   ███████╗██████╗ ███████╗ ██████╗██╗███████╗██╗   ██╗
-   ██╔════╝██╔══██╗██╔════╝██╔════╝██║██╔════╝╚██╗ ██╔╝
-   ███████╗██████╔╝█████╗  ██║     ██║█████╗   ╚████╔╝
-   ╚════██║██╔═══╝ ██╔══╝  ██║     ██║██╔══╝    ╚██╔╝
-   ███████║██║     ███████╗╚██████╗██║██║        ██║
-   ╚══════╝╚═╝     ╚══════╝ ╚═════╝╚═╝╚═╝        ╚═╝
+**Keep a behavioral contract. Check it. Review the evidence.**
 
-   Write specs. Validate behavior. Ship with evidence.
+Specify gives product requirements stable behavior IDs and connects QA results to those behaviors.
+Use its CLI or MCP tools alongside your coding agent, then run its optional QA agent against a live
+web, CLI, or API target. Review what passed, failed, or was skipped, together with the observations
+recorded during the run.
 
-```
+Its value is a reusable contract and inspectable QA output. Better bug detection than a
+general-purpose agent using Playwright is **not established**; the live comparison is currently
+blocked on Claude authentication. See the [comparison protocol and results](docs/qa-comparison.md).
 
-Specify turns functional requirements into machine-verifiable specs and runs an autonomous agent against them. Define what your app should do — pages, flows, assertions, API contracts — and Specify tells you what's met, what's not, and what's untested. Every assertion shows its work: expected value, actual value, raw output.
+## When to reach for it
 
-Cooperative QA: the agent runs, you watch the activity stream in the browser, flag what looks wrong, and the next run remembers. Per-spec memory, session transcripts, and a confidence model accumulate into optional learned skills when explicitly enabled.
+- While building a feature: agree on its intended behavior and update the contract with the code.
+  Keep existing behavior IDs stable so results stay traceable.
+- Before shipping: verify the contract against a test environment and inspect failures, missing
+  checks, and evidence.
+- After deployment: optionally submit the same verification to a background runner.
 
-No opinions about your test framework. No lock-in. Just structured truth.
+For a one-off browser check with no contract to maintain, your existing agent and Playwright may be
+sufficient. Website recording, cloning, replay, and side-by-side comparison belong to Mockify.
 
----
-
-<p align="center">
-  <img src="assets/screenshots/review-overview.png" alt="Specify review webapp — narrative, activity stream, learned skills" width="780"/>
-</p>
-
----
+Specify currently has **no code-change impact analysis or feature-dependency graph**. Areas and tags
+organize requirements; they do not identify everything a change could break. Its experimental
+navigation map describes observed browser transitions, not dependencies between product features.
 
 ## Install
 
 ```bash
 npm install
 npm run build
-(cd webapp && npm install && npm run build)   # builds the review UI into dist/webapp
+npm --prefix webapp install
+npm --prefix webapp run build
 ```
 
-The wrapper script at `./specify` auto-builds on first run.
+From this checkout, use `./specify` (it builds on first run). The examples below use that wrapper. A
+linked or installed CLI can use `specify` instead.
 
-## Quality Gates
+Live agent runs use the Claude Agent SDK and currently select `claude-opus-4-6`. Configure Claude
+authentication (for example, `claude auth login`) or an `ANTHROPIC_API_KEY`, and install the browser
+if needed:
 
 ```bash
-npm run typecheck         # TypeScript for CLI, daemon, agent, and scripts
-npm run typecheck:webapp  # TypeScript for the React review UI
-npm run lint              # ESLint with TypeScript, SonarJS, security, Unicorn, and React rules
-npm run format            # Prettier check
-npm run validate          # Lint the repo's own spec (specify.spec/)
-npm run quality           # Typecheck + lint + self-spec validate
+npx playwright install chromium
 ```
 
-Local SonarQube/SonarCloud scanning is configured with
-`sonar-project.properties`. Start or point at a SonarQube server, ensure a Java
-runtime is installed for `sonar-scanner`, set `SONAR_TOKEN` when required, and
-run:
+Linting, schema output, and report rendering do not require an LLM. Generated browser tests use
+Playwright; this is not a framework-neutral runner.
 
-```bash
-npm run sonar -- -Dsonar.host.url=http://localhost:9000
-```
+## Start with intended behavior
 
-## Quickstart
-
-```bash
-# 1. Capture the app with an autonomous agent — it explores and writes a spec directly
-specify capture --url http://localhost:3000 --spec-output app.spec.yaml
-
-# 2. Verify the implementation
-specify verify --spec app.spec.yaml --url http://localhost:3000
-
-# 3. Review results in the browser — flag what looks wrong, the next run remembers
-specify review --spec app.spec.yaml
-
-# 4. Produce a shareable proof — one self-contained HTML file, no server needed
-specify prove --spec app.spec.yaml
-```
-
-`specify review` opens the webapp shown above. Click any timeline event to flag
-it; flags become observations the agent reads as preamble next run.
-
-## Large Specs
-
-For larger products, `--spec` may point at a directory instead of one YAML file.
-Specify composes the directory into one logical behavioral contract before
-linting, review, verify, daemon runs, and agent memory:
-
-```text
-spec/
-  spec.yaml
-  areas/
-    auth.yaml
-    billing.yaml
-```
-
-`spec/spec.yaml` holds top-level metadata and may declare area order:
+Write `app.spec.yaml` and review it with your coding agent:
 
 ```yaml
-version: "2"
-name: "My App"
+version: '2'
+name: Team workspace
+description: Members have access appropriate to their role.
 target:
   type: web
-  url: "http://localhost:3000"
+  url: http://localhost:3000
 areas:
-  - areas/auth.yaml
-  - areas/billing.yaml
-```
-
-Each area file contains one normal area object:
-
-```yaml
-id: auth
-name: Authentication
-behaviors:
-  - id: login-valid-credentials
-    description: A user with valid credentials can log in and sees the dashboard
-```
-
-When `areas` is omitted from the manifest, `areas/**/*.yaml`, `areas/**/*.yml`,
-and `areas/**/*.json` are composed in sorted path order. Existing commands keep
-the same one-value form:
-
-```bash
-specify spec lint --spec spec/
-specify verify --spec spec/ --url http://localhost:3000
-specify review --spec spec/
-```
-
-`specify spec lint` warns when a single YAML/JSON spec starts getting unwieldy
-(more than about 40 KiB, 800 lines, 12 areas, or 120 behaviors). Split it
-mechanically with:
-
-```bash
-specify spec split --spec spec.yaml --output spec/
-```
-
-The split command writes `spec/spec.yaml` plus one file per area under
-`spec/areas/`. Directory specs do not trigger the single-file size warning.
-
-`specify spec context` regenerates `PRODUCT.md` and `DESIGN.md` straight from
-the composed spec — a deterministic projection, no LLM call, so the spec's own
-area prose and behavior descriptions ARE the content:
-
-```bash
-specify spec context
-specify spec context --spec spec/ --out-dir docs --json
-```
-
-Every claim carries an inline `[area/behavior]` traceability anchor back to
-its source, e.g. `[capture/capture-agent-generates-spec]`. `DESIGN.md` keeps
-two sources separate and clearly labeled: spec-derived "Product Constraints"
-(behaviors tagged `design`, `ui`, `ux`, `visual`, `accessibility`, `a11y`,
-`style`, `layout`, `branding`, or `theme`) and an optional "Visual Tokens"
-pass that extracts real values from code (`tokens.json`/`design-tokens.json`,
-CSS custom properties) — never invented ones. An area with no prose, a spec
-with no design-tagged behaviors, or a codebase with no token sources yields an
-omitted or explicitly-empty section, not fabricated text.
-
-Regeneration is non-destructive: generated content lives inside
-`<!-- specify:begin:product-context -->` / `<!-- specify:end:... -->` marker
-pairs, and only that region is replaced on each run — anything you write
-outside the markers survives every regeneration. If a target file already
-exists but has no markers (hand-authored before this feature, or edited such
-that they were removed), Specify refuses to touch it and writes a reviewable
-`PRODUCT.proposed.md` / `DESIGN.proposed.md` alongside it instead; pass
-`--force` to overwrite in place anyway.
-
-## Commands
-
-| Command | What |
-|---------|------|
-| **`create`** | Interactive interview that writes a starter spec (`--narrative` for a companion doc) |
-| **`capture`** | Agent-driven capture from a live system (`--url`) — writes a spec directly |
-| **`review`** | Browser UI: narrative, activity stream, feedback, skill drafts |
-| **`verify`** | Verify against a live target (`--url`) — emits a structured report |
-| **`prove`** | Turn a verify run into one self-contained `proof.html` — evidence, filmstrip/terminal replay, integrity footer |
-| `spec lint` | Structural validation (no captures needed) |
-| `spec guide` | Authoring guide for LLM spec writers |
-| `spec context` | Regenerate `PRODUCT.md`/`DESIGN.md` from the spec, non-destructively |
-| `schema` | Emit JSON Schema for spec or commands |
-| `mcp` | MCP server — any LLM client can use Specify as a tool |
-| `daemon` | Long-running HTTP inbox; other agents push verify/capture/freeform jobs |
-| `review --background` / `review --stop` | Daemonize or stop the review webapp |
-| `human` | Interactive chat REPL |
-
-Run `specify <cmd> --help` for full flags. Source: [`src/cli/commands-manifest.ts`](src/cli/commands-manifest.ts).
-
-## Reports you can trust
-
-Every validation report includes **expected vs actual evidence** for every assertion. No "100% passed, trust me" — you get the raw output, the exact match, and the assertion logic.
-
-Formats: **JSON** (machine), **Markdown** (diff-friendly), **HTML** (interactive, filterable, single file).
-
-`specify prove` writes ONE self-contained HTML file from a verify output directory, with each evidence item badged **runner-recorded** (cross-references the runner's deterministic observation trace) or **agent-reported** (the agent's own testimony, unmatched); web runs get a screenshot filmstrip, CLI runs an animated terminal replay of the recorded `cli_run` steps; the footer carries the sha256, size and mtime of every source file.
-
-```
-| Status | Type           | Expected          | Actual                              |
-|--------|----------------|-------------------|-------------------------------------|
-| ✅     | text_contains  | spec validate     | ..."name": "spec validate", ...     |
-| ✅     | json_path      | 0.1.0             | 0.1.0                               |
-| ❌     | json_schema    | matches schema    | /items: must have >= 5 items        |
-```
-
-## The learning loop
-
-Specify is more than a one-shot verifier. Every run reads, writes, and refines
-state under `<spec_dir>/.specify/`:
-
-```
-.specify/
-  memory/<spec_id>/<target_key>.json   # learned rows: quirks, playbooks, observations
-  sessions.db                          # SQLite + FTS5 transcripts of every session
-  confidence.json                      # accept/override tally per behavior
-  specify.observations.yaml            # per-spec observations (user feedback + reflection)
-  skill-drafts/<id>.md                 # optional learned-skill drafts
-  skills/<name>/SKILL.md               # approved skills, replayed when enabled
-  verify/verify-result.json            # latest agent run result
-```
-
-**Memory rows** ([`src/agent/memory-provider.ts`](src/agent/memory-provider.ts), [`src/agent/memory.ts`](src/agent/memory.ts))
-persist across runs, scoped strictly by `(spec_id, target_key)` so staging and
-prod never cross-contaminate. The agent injects them into the next prompt as a
-preamble; subsequent runs read/update via `memory_record` + `memory_list` MCP
-tools.
-
-**Three context layers** ([`src/agent/memory-layers.ts`](src/agent/memory-layers.ts))
-are merged into every system prompt: user (`~/.specify/memory.md`), project
-(`SPECIFY.md` or `CLAUDE.md`), and per-spec (`specify.observations.yaml`).
-Missing layers are silently skipped.
-
-**Sessions store** ([`src/agent/session-store.ts`](src/agent/session-store.ts))
-indexes every event in SQLite with FTS5 so the agent (and you) can search prior
-runs by content.
-
-**Confidence model** ([`src/agent/confidence-store.ts`](src/agent/confidence-store.ts))
-tallies accept vs override per behavior id. The autonomy preset
-(`ask_everything` / `ask_uncertain` / `autonomous`) decides whether to ask
-before flagging, run silently, or skip.
-
-**Pattern miner → skill drafts**
-([`src/agent/pattern-miner.ts`](src/agent/pattern-miner.ts),
-[`src/agent/skill-synthesizer.ts`](src/agent/skill-synthesizer.ts))
-is experimental and disabled by default. Set
-`SPECIFY_ENABLE_LEARNED_SKILLS=true` to expose draft review endpoints and inject
-approved `.specify/skills/<name>/SKILL.md` entries into future runs.
-
-**Optional dialectic provider**
-([`src/agent/honcho-provider.ts`](src/agent/honcho-provider.ts)) —
-when `HONCHO_URL` is set, an external dialectic user-model service is used
-instead of the file-backed memory provider. Optional env vars:
-`HONCHO_APP` (default `specify`), `HONCHO_USER` (default `$USER`),
-`HONCHO_TOKEN`. Without those vars, Specify uses the file-backed provider.
-
-## Cooperative QA via the review webapp
-
-`specify review --spec app.spec.yaml` boots a Hono server with a React UI.
-The UI subscribes to a WebSocket of agent events and lets you flag rows inline.
-
-<p align="center">
-  <img src="assets/screenshots/review-activity.png" alt="Activity stream with cooperative-QA feedback form" width="780"/>
-</p>
-
-Each flag is one of: `note`, `important_pattern`, `missed_check`,
-`false_positive`, `ignore_pattern`, `file_bug`. Behaviour
-([`src/agent/feedback.ts`](src/agent/feedback.ts)):
-
-- writes an observation into `specify.observations.yaml` with `source:
-  user_feedback` and the originating session id
-- updates the confidence store (`important_pattern` / `file_bug` reinforce;
-  `missed_check` / `false_positive` / `ignore_pattern` override)
-- on `file_bug`, best-effort spawns `bd create` if available
-- when `SPECIFY_ENABLE_LEARNED_SKILLS=true`, `important_pattern` feedback can
-  prompt the active agent to apply the same check to sibling behaviors
-
-When `SPECIFY_ENABLE_LEARNED_SKILLS=true`, approved skill drafts surface in a
-dedicated panel:
-
-<p align="center">
-  <img src="assets/screenshots/review-skill-drafts.png" alt="Learned skills panel with mined pending draft" width="780"/>
-</p>
-
-## MCP — use Specify from any LLM
-
-```bash
-# Local (stdio)
-specify mcp
-
-# Remote (HTTP)
-specify mcp --http --port 8080
-```
-
-Claude Desktop / Cursor / Claude Code config:
-```json
-{ "mcpServers": { "specify": { "command": "specify", "args": ["mcp"] } } }
-```
-
-Tools exposed include spec authoring helpers and bridge tools for the daemon
-(`daemon_verify`, `daemon_submit`, `daemon_status`).
-
-## Daemon — background agent
-
-Run Specify as a long-lived background process. Idle = 0 tokens. Other agents
-(or chat bots, webhooks, CI runners) push jobs into an HTTP inbox; each job
-spawns an Agent SDK run, streams progress, and writes its structured result
-to disk.
-
-```bash
-specify daemon --port 4100
-# → listens on 127.0.0.1:4100
-# → writes a bearer token to ~/.specify/daemon.token on first start
-```
-
-Submit a verify job from any agent:
-
-```bash
-TOKEN=$(cat ~/.specify/daemon.token)
-
-curl -s -H "Authorization: Bearer $TOKEN" \
-     -H 'Content-Type: application/json' \
-     -d '{"task":"verify","prompt":"Verify http://localhost:3000 against the spec.","spec":"/abs/path/spec.yaml","url":"http://localhost:3000"}' \
-     http://127.0.0.1:4100/inbox
-# → {"id":"msg_ab12","status":"queued","stream":"/inbox/msg_ab12/stream"}
-
-# Stream agent events for this message (SSE)
-curl -N -H "Authorization: Bearer $TOKEN" \
-     http://127.0.0.1:4100/inbox/msg_ab12/stream
-
-# Poll the final result (includes path to on-disk verify-result.json)
-curl -s -H "Authorization: Bearer $TOKEN" \
-     http://127.0.0.1:4100/inbox/msg_ab12
-```
-
-**Endpoints** (all require `Authorization: Bearer <token>` except `/health`):
-
-| Method | Path | Purpose |
-|--------|------|---------|
-| GET | `/health` | Liveness + active session count |
-| POST | `/inbox` | Generic: `{task, prompt, spec?, url?, mode?, session?}` |
-| GET | `/inbox` | Recent messages |
-| GET | `/inbox/:id` | Status + result + `resultPath` |
-| GET | `/inbox/:id/stream` | SSE stream of agent events |
-| GET | `/events/stream` | SSE stream of all daemon events |
-| GET | `/sessions` | Active persistent sessions |
-| POST | `/sessions/:id/close` | Close a persistent session |
-
-**Dispatch modes:**
-- `stateless` (default) — fresh SDK run per message, bounded cost.
-  Concurrent jobs run in forked worker processes up to `--max-workers`
-  (default 2), each with its own Playwright/Chromium.
-- `attach` — injects into a persistent SDK session keyed by `session`.
-  Holds context across messages; idle still uses 0 tokens. Always
-  in-process, serial per session.
-
-**Live inspector:** `GET /` on the daemon serves a zero-build HTML page
-that streams agent events, lists recent messages, and shows structured
-results. Prompts for the token on first load.
-
-## Deploy as a QA agent in Kubernetes
-
-Specify ships a container image and a Terraform module so it can run as a
-long-lived QA agent inside a cluster. One pod per spec, PVC-backed memory
-that survives restarts, and pluggable triggers (k8s informer, webhook, or
-both).
-
-```hcl
-module "qa" {
-  source = "github.com/gm2211/specify//deploy/terraform/modules/specify-qa?ref=main"
-
-  name      = "renzo-qa"
-  namespace = "qa"
-
-  target_url  = "http://renzo.app.svc.cluster.local:8080"
-  spec_inline = file("${path.module}/specify.spec.yaml")
-
-  discovery = { mode = "watch", namespaces = ["app"] }
-
-  report_slack_webhook     = var.slack_webhook_url
-  anthropic_api_key_secret = "anthropic-api-key"
-}
-```
-
-| Group | Pick exactly one |
-|-------|------------------|
-| Target | `target_url` · `target_dns` · `target_cluster_ip` · `target_from_configmap` |
-| Spec | `spec_inline` · `spec_url` (+ optional bearer) · `spec_git` |
-| Discovery | `webhook` (default) · `watch` · `both` · `none` |
-| Reports | `report_file_dir` (default) + optional `report_slack_webhook` |
-
-**Self-describing install for agents.** `specify deploy describe --format=json`
-emits a structured manifest: image coordinates, module ref, oneof groups,
-required Secrets, outputs, and an `agent_install_recipe`. Drop `specify
-deploy print-tf <preset>` into a consumer repo for a working `.tf`
-skeleton (`minimal`, `watch-mode`, `webhook-mode`, `gitops-spec`).
-
-```bash
-specify deploy describe --format=json | jq .
-specify deploy print-tf watch-mode > specify-qa.tf
-```
-
-**Worked examples** live in [`deploy/terraform/examples/`](deploy/terraform/examples):
-[`minimal`](deploy/terraform/examples/minimal),
-[`watch-mode`](deploy/terraform/examples/watch-mode),
-[`gitops-spec`](deploy/terraform/examples/gitops-spec). Each example is a
-runnable `terraform apply` directory with a per-example README.
-
-The pod's `/work` PVC keeps everything the daemon learns:
-
-| Path | Content |
-|------|---------|
-| `/work/.specify/memory/<spec_id>/<target>.json` | learned memory rows |
-| `/work/.specify/sessions.db` | session SQLite + FTS5 |
-| `/work/.specify/skill-drafts/` | optional learned-skill drafts |
-| `/work/.specify/skills/` | active skills replayed when `SPECIFY_ENABLE_LEARNED_SKILLS=true` |
-| `/work/reports/` | per-run JSON reports (file sink) |
-
-See [`deploy/terraform/modules/specify-qa/README.md`](deploy/terraform/modules/specify-qa/README.md)
-for the full input / output reference.
-
-## Spec format
-
-YAML or JSON, both parse the same way. Specs are v2 behavioral contracts:
-areas group behaviors, and each behavior is a plain-language claim about what
-should be true. There are no selectors, no matchers, no step sequences — the
-agent decides how to verify each claim.
-
-```yaml
-version: "2"
-name: "My App"
-description: "Behavioral contract for My App"
-
-target:
-  type: web
-  url: "http://localhost:3000"
-
-variables:
-  admin_email: "admin@example.com"
-
-areas:
-  - id: dashboard
-    name: "Dashboard"
-    prose: >
-      The dashboard is the default landing page after login and summarizes
-      account activity.
+  - id: access
+    name: Access control
     behaviors:
-      - id: shows-nav-sidebar
-        description: >
-          The dashboard renders a navigation sidebar linking to every major
-          section of the app
-        tags: [ui, navigation]
-
-  - id: auth
-    name: "Authentication"
-    behaviors:
-      - id: valid-login-redirects
-        description: >
-          A user who logs in with {{admin_email}} and a valid password is
-          redirected to /dashboard and sees a welcome message
-        details: "Applies to both password and SSO login flows."
+      - id: viewer-cannot-invite
+        description: A viewer cannot invite a new member to the workspace.
+        details: Rejection must leave the member list unchanged.
+        tags: [permissions]
 ```
 
-Full schema: `specify schema spec` (or see [`src/spec/schema.ts`](src/spec/schema.ts)). The repo's own [`specify.spec/`](specify.spec/spec.yaml) is a complete real-world example, split into a directory spec via `specify spec split`.
+Use a disposable test environment with the required users and data. The agent chooses how to check
+each plain-language claim; the spec does not contain selectors, matchers, or step sequences.
 
-## Self-verifying
+```bash
+# Check the contract's structure, not whether the application works.
+./specify spec lint --spec app.spec.yaml
 
-Specify eats its own dogfood. The repo includes [`specify.spec/`](specify.spec/spec.yaml) — a spec for Specify itself — linted by the test suite ([`src/spec/self-spec.test.ts`](src/spec/self-spec.test.ts), run via `npm test`) and by `npm run validate`, which `npm run quality` includes.
+# Check the live target. Use a distinct output directory for each run.
+./specify verify --spec app.spec.yaml --output .specify/runs/check-001
+
+# Inspect behavior results and the agent's account of its checks.
+./specify review --spec app.spec.yaml \
+  --agent-report .specify/runs/check-001/verify-result.json
+
+# Package that completed run as a self-contained HTML evidence report.
+./specify prove --spec app.spec.yaml --input .specify/runs/check-001
+```
+
+`prove` documents a run; it does not independently certify the application. It can successfully
+render a report for a failed verification.
+
+![Current review UI showing Specify's own contract, before verification](assets/screenshots/review-overview.png)
+
+The screenshot shows the current self-spec with no verification report loaded. “Untested” is
+deliberate: a valid contract is not evidence that its behaviors work.
+
+Need help drafting? `./specify create` interviews you, and `./specify spec guide` provides schema
+and examples for an agent. `./specify capture --url ...` explores a live app and writes a
+**candidate** spec. Review that draft against intended requirements: observing an existing bug must
+not make it an accepted requirement.
+
+## What the evidence means
+
+The agent reports a status and may provide evidence, a method, rationale, and an annotated action
+trace for each behavior. These are judgments, not automatically proven assertions. The current
+output schema does not require evidence for every behavior, so inspect missing evidence as well as
+failures.
+
+The runner separately records browser actions, screenshots, and associated observations, or CLI
+invocations and their output. `prove` distinguishes:
+
+- **runner-recorded**: evidence matched to the recorded trace or supported scripted output,
+  according to the report loader's matching rules;
+- **agent-reported**: the agent's account without a matching recorded item.
+
+A recorded screenshot establishes what was captured, not that the agent's entire interpretation is
+correct. The HTML report includes source-file hashes and sizes for inspection; those are not
+independent attestations.
+
+Verification writes structured JSON. `prove` produces portable HTML; `review` provides an
+interactive UI. Keep the spec/code revision and target environment with archived runs when you need
+release-level traceability; behavior IDs alone do not establish freshness or revision identity.
+
+## Reuse checks
+
+```bash
+# Re-run generated Playwright tests from an existing output directory, no LLM.
+./specify verify --spec app.spec.yaml --output .specify/runs/check-001 --mode scripted
+
+# Choose scripted or agent verification per behavior using prior feedback/tests.
+./specify verify --spec app.spec.yaml --output .specify/runs/check-001 --mode auto
+
+# Replay generated tests and report disagreement with the agent.
+./specify verify --spec app.spec.yaml --output .specify/runs/check-002 --cross-check
+```
+
+Generated tests are candidates for review, not guaranteed correct regression coverage. `auto` uses
+feedback confidence, test existence, and the last recorded status; it does not analyze your diff or
+prove tests are current. Scripted failures escalate to the agent, which can recheck or regenerate
+tests. `--cross-check` is report-only: disagreement does **not** change the verification's exit
+status. Archive an output directory before reusing it if you need its previous results.
+
+## Interfaces
+
+| Interface                                       | Role                                                 |
+| ----------------------------------------------- | ---------------------------------------------------- |
+| `spec lint`, `schema`, `spec guide`             | Parse and author contracts                           |
+| `create`, `capture`                             | Draft candidate requirements for review              |
+| `verify`                                        | Run the bundled QA agent or generated tests          |
+| `review`, `prove`                               | Inspect results or package a completed run           |
+| `spec split`, `spec context`, `spec migrate-id` | Maintain larger contracts and derived context        |
+| `mcp`                                           | Authoring helpers and bridges to a running QA daemon |
+| `daemon`                                        | Optional HTTP job runner for CI or other agents      |
+
+Run `./specify <command> --help` or `./specify schema commands` for the complete surface, including
+advanced commands.
+
+The public MCP server exposes `get_authoring_guide`, `lint_spec`, `parse_spec`, `spec_to_yaml`,
+`list_commands`, event/session helpers, and `daemon_verify` / `daemon_submit` / `daemon_status`.
+Calling the daemon delegates to Specify's bundled agent; it does not turn the calling agent's own
+browser session into a recorded Specify verification.
+
+## Optional capabilities
+
+- [Large contracts and generated PRODUCT.md / DESIGN.md](docs/large-specs.md).
+- [Feedback, memory, MCP configuration, background jobs, and Kubernetes deployment](docs/qa-operations.md).
+- Learned skills, navigation-map coverage, temporal monitors, and Quint models are experimental
+  opt-ins. See [feature flags](src/agent/feature-flags.ts). They are not required for the workflow
+  above, and none supplies a feature-impact graph.
+
+## Development
+
+```bash
+npm run quality  # CLI/UI typecheck, lint, self-spec structural validation
+npm test         # automated tests
+npm run format   # Prettier check (repository-wide baseline tracked separately)
+```
+
+The [self-spec](specify.spec/spec.yaml) describes Specify's public behavior. `npm run validate`
+checks its structure; it does **not** run live QA against every self-spec behavior. Optional Sonar
+scanning is configured in `sonar-project.properties` (`SONAR_TOKEN` when required).
 
 ## License
 
