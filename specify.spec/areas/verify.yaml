@@ -2,7 +2,7 @@ id: verify
 name: Agent-Driven Verification
 prose: >
   Runs verification of an implementation against a spec. Reads the spec, determines target type (web/api/cli), and
-  checks each behavior via one of three techniques selected by --mode.
+  checks each behavior via one of four techniques selected by --mode.
 behaviors:
   - id: verify-requires-spec
     description: |
@@ -69,3 +69,19 @@ behaviors:
       Exits 15 instead of 1 when every failed behavior in the run was failed solely because an approved LTLf formula's
       deterministic check overturned an LLM pass/skip verdict; any behavior the LLM itself judged failed keeps exit 1
       regardless of monitor agreement
+
+  - id: formal-checks-owned-by-specify
+    description: >
+      Opt-in formal mode verifies a versioned manifest of standalone Quint models with TLC without opening a browser.
+      Model behavior references must exist in the spec. Exact Quint version, model and manifest hashes, properties,
+      checker arguments, state counts and verdicts accompany each report. Missing tools, timeout, output truncation,
+      malformed input and incomplete checker output fail closed. A positive check needs successful exhaustive completion;
+      a negative control needs a real counterexample, not an arbitrary nonzero exit. Each checker isolates its port and
+      JVM temporary directory and timeout kills its process group. Model checks do not approve draft browser models,
+      prove implementation refinement or claim untested behavior coverage.
+  - id: formal-traces-are-simulation
+    description: >
+      Formal mode can explicitly generate a seeded trace corpus through the shared Quint execution and ITF decoding
+      infrastructure. Trace output is labeled simulation, includes source hashes, rejects malformed or missing traces,
+      and enforces requested finite initial-state coverage. Simulation success is not a proof verdict and does not
+      approve a draft model for browser replay. Models and toolchain remain opt-in project-owned inputs.

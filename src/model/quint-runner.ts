@@ -58,7 +58,7 @@ export interface ExecResult {
 }
 
 /** The subprocess boundary. Injected in tests; defaults to a real `spawn`. */
-export type QuintExec = (argv: string[], opts: { cwd?: string; timeoutMs: number }) => Promise<ExecResult>;
+export type QuintExec = (argv: string[], opts: { cwd?: string; timeoutMs: number; env?: NodeJS.ProcessEnv }) => Promise<ExecResult>;
 
 /**
  * Per-stream output cap: 256 KiB, matching src/agent/cli-mcp.ts's
@@ -111,13 +111,16 @@ export const spawnQuint: QuintExec = (argv, opts) =>
     };
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(argv[0], argv.slice(1), { cwd: opts.cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(argv[0], argv.slice(1), { cwd: opts.cwd, env: { ...process.env, ...opts.env }, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       finish({ code: null, ...snapshot(), spawnError: (err as Error).message });
       return;
     }
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+      try {
+        if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL');
+        else child.kill('SIGKILL');
+      } catch { /* already exited */ }
       finish({ code: null, ...snapshot(), spawnError: `quint timed out after ${opts.timeoutMs}ms` });
     }, opts.timeoutMs);
     child.stdout?.on('data', (d) => {
