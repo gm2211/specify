@@ -143,7 +143,9 @@ export class SubscriptionLimitError extends Error {
     public readonly rateLimitType: string | undefined,
     public readonly resetsAt: number | undefined,
   ) {
-    const resetDesc = resetsAt ? ` — resets at ${new Date(resetsAt).toISOString()}` : '';
+    // SDK rate-limit events use Unix seconds; preserve millisecond callers.
+    const resetMs = resetsAt && resetsAt < 1e12 ? resetsAt * 1000 : resetsAt;
+    const resetDesc = resetMs ? ` — resets at ${new Date(resetMs).toISOString()}` : '';
     super(
       `Claude subscription rate limit reached${rateLimitType ? ` (${rateLimitType})` : ''}${resetDesc}. ` +
       'Aborting immediately instead of waiting for the SDK to stall.',

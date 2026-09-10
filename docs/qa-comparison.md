@@ -2,25 +2,34 @@
 
 ## Status
 
-**Blocked on Claude authentication as of 2026-09-09. No completed agent runs; no bug-detection
-comparison can be reported.**
+**Authentication succeeded on 2026-09-09, but Claude subscription quota blocks the comparison. No
+completed agent runs; no bug-detection comparison can be reported.**
 
-Both the baseline and Specify production runner were attempted against the healthy fixture. Both
-returned exactly:
+After login, the baseline and Specify runner were both retried. The baseline reported:
 
 ```text
-Claude Code returned an error result: Not logged in · Please run /login
+You've hit your limit · resets Sep 13, 2pm (America/New_York)
 ```
+
+Specify received a rejected `seven_day` rate-limit event for the same reset
+(`2026-09-13T18:00:00.000Z`). A minimal Sonnet availability check returned the same limit, so
+switching Claude models did not provide a working fallback. Extra usage, API-key access, or the
+quota reset is required; logging in again will not resolve this blocker.
+
+The retry also reproduced SP-bzl: Specify interpreted Unix seconds as milliseconds and printed a
+1970 reset date. Its error formatter now handles seconds and retains millisecond compatibility;
+regression tests cover both forms. This corrects the message, not the quota itself.
+
+See [authenticated execution record](../benchmarks/qa/quota-attempt.json) and the
+[earlier login failure](../benchmarks/qa/auth-attempt.json). The raw Specify error in the
+authenticated record is intentionally unchanged, including the original 1970 formatting bug. Full
+local retry artifacts remain under `.specify/qa-comparison-authenticated/`.
 
 The independent fixture checks passed: all eight expected outcomes in both builds, a scorer check
 for omitted/duplicated IDs, and browser checks of healthy/defective permission behavior (four
 automated tests total). These establish that the experiment can exercise its target; they do not
-establish either agent's quality.
-
-See [sanitized execution record](../benchmarks/qa/auth-attempt.json). Full local attempt artifacts
-remain under `.specify/qa-comparison-auth-attempt/`; authentication must be configured before
-running the 12-run protocol below. No detection, cost, or superiority claim is inferred from
-authentication failures.
+establish either agent's quality. No performance claim is inferred from authentication or quota
+failures.
 
 ## Question
 

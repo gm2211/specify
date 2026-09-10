@@ -9,7 +9,8 @@ recorded during the run.
 
 Its value is a reusable contract and inspectable QA output. Better bug detection than a
 general-purpose agent using Playwright is **not established**; the live comparison is currently
-blocked on Claude authentication. See the [comparison protocol and results](docs/qa-comparison.md).
+blocked on Claude subscription quota. See the
+[comparison protocol and results](docs/qa-comparison.md).
 
 ## When to reach for it
 
