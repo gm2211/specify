@@ -1,8 +1,9 @@
 id: spec-split
 name: Spec Splitting
 prose: >
-  Converts a single large spec file into a directory spec: a manifest (spec.yaml) plus one YAML file per area under
-  areas/. Directory specs let large specs stay readable and diffable per-area instead of as one growing file.
+  Converts a single large spec file into a directory spec: a manifest (spec.yaml) plus one YAML file
+  per area under areas/. Directory specs let large specs stay readable and diffable per-area instead
+  of as one growing file.
 behaviors:
   - id: split-writes-directory-spec
     description: >
@@ -10,8 +11,8 @@ behaviors:
       <output>/areas/<area-id>.yaml per area
   - id: split-defaults-output-dir
     description: >
-      Without --output, the target directory is the source spec's path with its .yaml/.yml/.json extension stripped, in
-      the same parent directory
+      Without --output, the target directory is the source spec's path with its .yaml/.yml/.json
+      extension stripped, in the same parent directory
   - id: split-requires-empty-output-dir
     description: |
       Fails if the output directory already exists and is non-empty, unless --force is given
@@ -26,5 +27,5 @@ behaviors:
       Fails if --spec already points at a directory (it is already split)
   - id: split-does-not-delete-source
     description: >
-      The original single-file spec is left on disk untouched after a successful split — callers that want a
-      directory-only repo must remove it themselves
+      The original single-file spec is left on disk untouched after a successful split — callers
+      that want a directory-only repo must remove it themselves

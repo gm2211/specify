@@ -39,7 +39,14 @@ test('createBrowserMcpServer with a FaultInjector still returns a valid MCP serv
   const page = mockPage();
   const screenshotFn = async (name: string) => `/tmp/${name}.png`;
   const injector = new FaultInjector({ seed: 1, rules: [] });
-  const server = createBrowserMcpServer(page, screenshotFn, 'browser', undefined, undefined, injector);
+  const server = createBrowserMcpServer(
+    page,
+    screenshotFn,
+    'browser',
+    undefined,
+    undefined,
+    injector,
+  );
 
   assert.ok(server);
   assert.equal(server.type, 'sdk');

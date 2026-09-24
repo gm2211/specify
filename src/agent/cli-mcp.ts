@@ -88,7 +88,13 @@ interface StreamedRunResult extends RunResult {
  */
 function runProcess(
   argv: string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv; timeoutMs: number; stdin?: string; capBytes: number },
+  options: {
+    cwd: string;
+    env: NodeJS.ProcessEnv;
+    timeoutMs: number;
+    stdin?: string;
+    capBytes: number;
+  },
 ): Promise<StreamedRunResult> {
   return new Promise((resolve) => {
     const stdout = new BoundedSink(options.capBytes);
@@ -96,7 +102,10 @@ function runProcess(
     let settled = false;
     let child: ReturnType<typeof spawn>;
 
-    const snapshot = (): Pick<StreamedRunResult, 'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'> => ({
+    const snapshot = (): Pick<
+      StreamedRunResult,
+      'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'
+    > => ({
       stdout: stdout.text,
       stderr: stderr.text,
       stdoutTruncated: stdout.truncated,
@@ -117,7 +126,12 @@ function runProcess(
       } catch {
         // best-effort
       }
-      finish({ ...snapshot(), exitCode: null, signal: 'SIGKILL', error: `timed out after ${options.timeoutMs}ms` });
+      finish({
+        ...snapshot(),
+        exitCode: null,
+        signal: 'SIGKILL',
+        error: `timed out after ${options.timeoutMs}ms`,
+      });
     }, options.timeoutMs);
 
     try {
@@ -128,12 +142,23 @@ function runProcess(
       });
     } catch (err) {
       clearTimeout(timer);
-      resolve({ stdout: '', stderr: '', stdoutTruncated: false, stderrTruncated: false, exitCode: null, error: err instanceof Error ? err.message : String(err) });
+      resolve({
+        stdout: '',
+        stderr: '',
+        stdoutTruncated: false,
+        stderrTruncated: false,
+        exitCode: null,
+        error: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
 
-    child.stdout?.on('data', (d) => { stdout.append(d); });
-    child.stderr?.on('data', (d) => { stderr.append(d); });
+    child.stdout?.on('data', (d) => {
+      stdout.append(d);
+    });
+    child.stderr?.on('data', (d) => {
+      stderr.append(d);
+    });
 
     child.on('error', (err) => {
       finish({ ...snapshot(), exitCode: null, error: err.message });
@@ -164,8 +189,15 @@ function runProcess(
  *    "/usr/bin/git").
  * 3. SPECIFY_CLI_ALLOW_ANY_BINARY=1|true lifts the restriction entirely.
  */
-export function binaryAllowed(requested: string, specBinary: string, cwd: string = process.cwd()): boolean {
-  if (process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === '1' || process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === 'true') {
+export function binaryAllowed(
+  requested: string,
+  specBinary: string,
+  cwd: string = process.cwd(),
+): boolean {
+  if (
+    process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === '1' ||
+    process.env.SPECIFY_CLI_ALLOW_ANY_BINARY === 'true'
+  ) {
     return true;
   }
   if (path.resolve(cwd, requested) === path.resolve(cwd, specBinary)) return true;
@@ -194,9 +226,17 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
           `runner's ground-truth observation trace. This is the ONLY way to execute commands ` +
           `in this session; Bash is unavailable.`,
         {
-          argv: z.array(z.string()).min(1).describe('Full argv, e.g. ["mycli", "--flag", "value"]. argv[0] must be the target binary.'),
+          argv: z
+            .array(z.string())
+            .min(1)
+            .describe(
+              'Full argv, e.g. ["mycli", "--flag", "value"]. argv[0] must be the target binary.',
+            ),
           stdin: z.string().optional().describe('Text to send to the process stdin, if any.'),
-          timeoutMs: z.number().optional().describe('Timeout in milliseconds. Defaults to the spec target.timeout_ms or 30000.'),
+          timeoutMs: z
+            .number()
+            .optional()
+            .describe('Timeout in milliseconds. Defaults to the spec target.timeout_ms or 30000.'),
           cwd: z.string().optional().describe('Working directory. Defaults to the runner cwd.'),
         },
         async (args) => {
@@ -207,7 +247,8 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
 
           if (!binaryAllowed(argv[0], options.binary, cwd)) {
             const tsEnd = Date.now();
-            const errorMsg = `argv[0] "${argv[0]}" does not match the spec's target binary "${options.binary}". ` +
+            const errorMsg =
+              `argv[0] "${argv[0]}" does not match the spec's target binary "${options.binary}". ` +
               `Set SPECIFY_CLI_ALLOW_ANY_BINARY=1 to allow other binaries.`;
             options.recorder.record({
               argv,
@@ -223,13 +264,22 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
               durationMs: tsEnd - tsStart,
               error: errorMsg,
             });
-            return { content: [{ type: 'text' as const, text: JSON.stringify({ error: errorMsg }) }], isError: true };
+            return {
+              content: [{ type: 'text' as const, text: JSON.stringify({ error: errorMsg }) }],
+              isError: true,
+            };
           }
 
           const env = { ...process.env, ...options.env };
           // Output is capped inside runProcess DURING streaming — chunks past
           // the per-stream cap are dropped as they arrive, never buffered.
-          const result = await runProcess(argv, { cwd, env, timeoutMs, stdin: args.stdin, capBytes: OUTPUT_CAP_BYTES });
+          const result = await runProcess(argv, {
+            cwd,
+            env,
+            timeoutMs,
+            stdin: args.stdin,
+            capBytes: OUTPUT_CAP_BYTES,
+          });
           const tsEnd = Date.now();
 
           const observation = options.recorder.record({
@@ -249,20 +299,22 @@ export function createCliMcpServer(options: CliMcpServerOptions) {
           });
 
           return {
-            content: [{
-              type: 'text' as const,
-              text: JSON.stringify({
-                step: observation.step,
-                exitCode: observation.exitCode,
-                signal: observation.signal,
-                stdout: observation.stdout,
-                stdoutTruncated: observation.stdoutTruncated,
-                stderr: observation.stderr,
-                stderrTruncated: observation.stderrTruncated,
-                durationMs: observation.durationMs,
-                error: observation.error,
-              }),
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  step: observation.step,
+                  exitCode: observation.exitCode,
+                  signal: observation.signal,
+                  stdout: observation.stdout,
+                  stdoutTruncated: observation.stdoutTruncated,
+                  stderr: observation.stderr,
+                  stderrTruncated: observation.stderrTruncated,
+                  durationMs: observation.durationMs,
+                  error: observation.error,
+                }),
+              },
+            ],
           };
         },
       ),

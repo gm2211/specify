@@ -1,8 +1,8 @@
 id: overview
 name: Overview & Help
 prose: >
-  Running with no arguments returns a JSON manifest of all commands. Running with --help shows human-readable text.
-  --version shows the semver string.
+  Running with no arguments returns a JSON manifest of all commands. Running with --help shows
+  human-readable text. --version shows the semver string.
 behaviors:
   - id: no-args-returns-json-manifest
     description: |

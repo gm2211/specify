@@ -20,7 +20,13 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-import type { Spec, VerificationReport, BehaviorResult, Evidence, ActionTraceEntry } from '../spec/types.js';
+import type {
+  Spec,
+  VerificationReport,
+  BehaviorResult,
+  Evidence,
+  ActionTraceEntry,
+} from '../spec/types.js';
 import type { StepObservation, CliStepObservation } from '../agent/observation.js';
 import { SCRIPTED_METHOD } from '../agent/scripted-runner.js';
 import type {
@@ -71,7 +77,9 @@ export function matchCliEvidence(
   observations: readonly CliStepObservation[],
 ): { step?: number; reason: string } {
   if (ev.type !== 'command_output') {
-    return { reason: `${ev.type} evidence has no deterministic counterpart in this run's recorded observations` };
+    return {
+      reason: `${ev.type} evidence has no deterministic counterpart in this run's recorded observations`,
+    };
   }
 
   // Rule 1 — explicit "step N" citation.
@@ -125,11 +133,17 @@ export function matchScreenshotEvidence(
   return { reason: `no file named ${name} under capture/screenshots/` };
 }
 
-export function buildRegenerateCommand(specPath: string, inputDir: string, outputPath: string): string {
+export function buildRegenerateCommand(
+  specPath: string,
+  inputDir: string,
+  outputPath: string,
+): string {
   return `specify prove --spec ${specPath} --input ${inputDir} --output ${outputPath}`;
 }
 
-export function readGeneratorVersion(startDir: string = path.dirname(fileURLToPath(import.meta.url))): string {
+export function readGeneratorVersion(
+  startDir: string = path.dirname(fileURLToPath(import.meta.url)),
+): string {
   let dir = startDir;
   for (let i = 0; i < 5; i++) {
     const pkgPath = path.join(dir, 'package.json');
@@ -214,9 +228,18 @@ function sanitizeWebObservations(raw: unknown): StepObservation[] {
       tsEnd: typeof e.tsEnd === 'number' ? e.tsEnd : 0,
       ax: (e.ax as StepObservation['ax']) ?? { error: 'missing from observation record' },
       screenshot: typeof e.screenshot === 'string' ? e.screenshot : undefined,
-      trafficRange: Array.isArray(e.trafficRange) && e.trafficRange.length === 2 ? (e.trafficRange as [number, number]) : [0, 0],
-      consoleRange: Array.isArray(e.consoleRange) && e.consoleRange.length === 2 ? (e.consoleRange as [number, number]) : [0, 0],
-      probes: e.probes && typeof e.probes === 'object' ? (e.probes as Record<string, boolean>) : undefined,
+      trafficRange:
+        Array.isArray(e.trafficRange) && e.trafficRange.length === 2
+          ? (e.trafficRange as [number, number])
+          : [0, 0],
+      consoleRange:
+        Array.isArray(e.consoleRange) && e.consoleRange.length === 2
+          ? (e.consoleRange as [number, number])
+          : [0, 0],
+      probes:
+        e.probes && typeof e.probes === 'object'
+          ? (e.probes as Record<string, boolean>)
+          : undefined,
       probesTruncated: typeof e.probesTruncated === 'boolean' ? e.probesTruncated : undefined,
     });
   }
@@ -264,7 +287,9 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     const raw = fs.readFileSync(verifyResultPath, 'utf-8');
     verifyResultRaw = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`Failed to read/parse ${verifyResultPath}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(
+      `Failed to read/parse ${verifyResultPath}: ${err instanceof Error ? err.message : String(err)}`,
+    );
   }
   const report = unwrapVerificationReport(verifyResultRaw);
 
@@ -366,7 +391,11 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
       for (const e of pb.evidence) noteKey(e.screenshotKey);
       return pb;
     });
-    areas.push({ id: 'unmatched-results', name: 'Results without a matching spec behavior', behaviors });
+    areas.push({
+      id: 'unmatched-results',
+      name: 'Results without a matching spec behavior',
+      behaviors,
+    });
   }
 
   // Full runner-recorded web film, step order.
@@ -400,11 +429,20 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     const b64 = buf.toString('base64');
     const encodedBytes = Buffer.byteLength(b64, 'utf-8');
     if (cumulativeEncodedBytes + encodedBytes <= maxScreenshotBytes) {
-      screenshots[key] = { kind: 'inline', dataUri: `data:image/png;base64,${b64}`, bytes: buf.length, encodedBytes };
+      screenshots[key] = {
+        kind: 'inline',
+        dataUri: `data:image/png;base64,${b64}`,
+        bytes: buf.length,
+        encodedBytes,
+      };
       cumulativeEncodedBytes += encodedBytes;
       embeddedCount++;
     } else {
-      screenshots[key] = { kind: 'link', href: toPosixRelativeHref(outputPath, abs), bytes: buf.length };
+      screenshots[key] = {
+        kind: 'link',
+        href: toPosixRelativeHref(outputPath, abs),
+        bytes: buf.length,
+      };
       linkedCount++;
     }
   }
@@ -443,10 +481,16 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
   }
 
   const targetValue: ProofInput['target'] =
-    spec.target.type === 'cli' ? { type: 'cli', binary: spec.target.binary } : { type: spec.target.type, url: spec.target.url };
+    spec.target.type === 'cli'
+      ? { type: 'cli', binary: spec.target.binary }
+      : { type: spec.target.type, url: spec.target.url };
 
   return {
-    generator: { version: generatorVersion, generatedAt, commandLine: buildRegenerateCommand(specPath, inputDir, outputPath) },
+    generator: {
+      version: generatorVersion,
+      generatedAt,
+      commandLine: buildRegenerateCommand(specPath, inputDir, outputPath),
+    },
     spec: { name: spec.name, version: spec.version, description: spec.description, path: specPath },
     target: targetValue,
     run: { timestamp: report.timestamp, pass: report.pass, summary },
@@ -532,9 +576,16 @@ function buildBehavior(
     .sort((a, b) => a.step - b.step)
     .map((obs) => toProofCliStep(obs));
 
-  const trace: ProofTraceStep[] = (result.action_trace ?? []).map((entry) => buildTraceStep(entry, availableShots));
+  const trace: ProofTraceStep[] = (result.action_trace ?? []).map((entry) =>
+    buildTraceStep(entry, availableShots),
+  );
 
-  const { frames, filmstripNote } = deriveFrames(result.action_trace ?? [], webObservations, availableShots, shotToObservation);
+  const { frames, filmstripNote } = deriveFrames(
+    result.action_trace ?? [],
+    webObservations,
+    availableShots,
+    shotToObservation,
+  );
 
   const counts = evidence.reduce(
     (acc, ev) => {
@@ -595,7 +646,15 @@ function buildEvidenceItem(
     if (step !== undefined) {
       const obs = cliObservations.find((o) => o.step === step);
       const actual: ProofEvidenceActual | undefined = obs
-        ? { kind: 'cli', step: obs.step, argv: obs.argv, stdout: obs.stdout, stderr: obs.stderr, exitCode: obs.exitCode, signal: obs.signal }
+        ? {
+            kind: 'cli',
+            step: obs.step,
+            argv: obs.argv,
+            stdout: obs.stdout,
+            stderr: obs.stderr,
+            exitCode: obs.exitCode,
+            signal: obs.signal,
+          }
         : undefined;
       return {
         type: ev.type,
@@ -607,7 +666,13 @@ function buildEvidenceItem(
         actual,
       };
     }
-    return { type: ev.type, label: ev.label, content: ev.content, provenance: 'agent-reported', matchReason: reason };
+    return {
+      type: ev.type,
+      label: ev.label,
+      content: ev.content,
+      provenance: 'agent-reported',
+      matchReason: reason,
+    };
   }
 
   if (ev.type === 'screenshot' && hasScreenshotEvidence) {
@@ -623,7 +688,13 @@ function buildEvidenceItem(
         actual: { kind: 'screenshot', key },
       };
     }
-    return { type: ev.type, label: ev.label, content: ev.content, provenance: 'agent-reported', matchReason: reason };
+    return {
+      type: ev.type,
+      label: ev.label,
+      content: ev.content,
+      provenance: 'agent-reported',
+      matchReason: reason,
+    };
   }
 
   return {
@@ -631,11 +702,15 @@ function buildEvidenceItem(
     label: ev.label,
     content: ev.content,
     provenance: 'agent-reported',
-    matchReason: 'agent narration; the runner trace records URLs, AX snapshots, traffic and console ranges but not this text',
+    matchReason:
+      'agent narration; the runner trace records URLs, AX snapshots, traffic and console ranges but not this text',
   };
 }
 
-function buildTraceStep(entry: ActionTraceEntry, availableShots: ReadonlySet<string>): ProofTraceStep {
+function buildTraceStep(
+  entry: ActionTraceEntry,
+  availableShots: ReadonlySet<string>,
+): ProofTraceStep {
   const basename = entry.screenshot ? path.basename(entry.screenshot) : undefined;
   const runnerRecorded = !!basename && availableShots.has(basename);
   return {
@@ -682,7 +757,13 @@ function deriveFrames(
     const lo = Math.min(...timestamps) - 2000;
     const hi = Math.max(...timestamps) + 2000;
     const fallback: ProofFrame[] = webObservations
-      .filter((obs) => obs.tsStart >= lo && obs.tsEnd <= hi && obs.screenshot && availableShots.has(path.basename(obs.screenshot)))
+      .filter(
+        (obs) =>
+          obs.tsStart >= lo &&
+          obs.tsEnd <= hi &&
+          obs.screenshot &&
+          availableShots.has(path.basename(obs.screenshot)),
+      )
       .map((obs) => {
         const selector = (obs.args as Record<string, unknown> | undefined)?.selector;
         const selectorSuffix = typeof selector === 'string' ? ` ${selector}` : '';

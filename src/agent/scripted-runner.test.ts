@@ -56,8 +56,17 @@ test('testsToBehaviorResults: drops tests whose title has no parseable behavior 
 
 test('testsToBehaviorResults: a failure anywhere in the group wins over a pass for the same behavior id', () => {
   const tests: FlatTestResult[] = [
-    { title: 'checkout/apply-coupon: applying a valid coupon reduces the total', behaviorId: 'checkout/apply-coupon', status: 'passed' },
-    { title: 'checkout/apply-coupon: applying a valid coupon reduces the total', behaviorId: 'checkout/apply-coupon', status: 'failed', error: 'flaked on webkit' },
+    {
+      title: 'checkout/apply-coupon: applying a valid coupon reduces the total',
+      behaviorId: 'checkout/apply-coupon',
+      status: 'passed',
+    },
+    {
+      title: 'checkout/apply-coupon: applying a valid coupon reduces the total',
+      behaviorId: 'checkout/apply-coupon',
+      status: 'failed',
+      error: 'flaked on webkit',
+    },
   ];
   const results = testsToBehaviorResults(tests);
   assert.equal(results.length, 1);
@@ -100,11 +109,23 @@ test('partitionScriptedResults: passed behaviors stay, failed + untested (skippe
   const results: BehaviorResult[] = [
     { id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD },
     { id: 'a/2', description: 'y', status: 'failed', method: SCRIPTED_METHOD },
-    { id: 'a/3', description: 'z', status: 'skipped', method: SCRIPTED_METHOD, rationale: 'untested: no generated test matched this behavior id' },
+    {
+      id: 'a/3',
+      description: 'z',
+      status: 'skipped',
+      method: SCRIPTED_METHOD,
+      rationale: 'untested: no generated test matched this behavior id',
+    },
   ];
   const { passed, escalate } = partitionScriptedResults(results);
-  assert.deepEqual(passed.map((r) => r.id), ['a/1']);
-  assert.deepEqual(escalate.map((r) => r.id), ['a/2', 'a/3']);
+  assert.deepEqual(
+    passed.map((r) => r.id),
+    ['a/1'],
+  );
+  assert.deepEqual(
+    escalate.map((r) => r.id),
+    ['a/2', 'a/3'],
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -113,28 +134,40 @@ test('partitionScriptedResults: passed behaviors stay, failed + untested (skippe
 
 test('diffCrossCheck: agent passed + test passed → agreement true', () => {
   const agent: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed' }];
-  const scripted: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD }];
+  const scripted: BehaviorResult[] = [
+    { id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD },
+  ];
   const diff = diffCrossCheck(agent, scripted);
-  assert.deepEqual(diff, [{ id: 'a/1', agentStatus: 'passed', testStatus: 'passed', agreement: true }]);
+  assert.deepEqual(diff, [
+    { id: 'a/1', agentStatus: 'passed', testStatus: 'passed', agreement: true },
+  ]);
 });
 
 test('diffCrossCheck: agent failed + test failed → agreement true', () => {
   const agent: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'failed' }];
-  const scripted: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'failed', method: SCRIPTED_METHOD }];
+  const scripted: BehaviorResult[] = [
+    { id: 'a/1', description: 'x', status: 'failed', method: SCRIPTED_METHOD },
+  ];
   const diff = diffCrossCheck(agent, scripted);
   assert.equal(diff[0].agreement, true);
 });
 
 test('diffCrossCheck: agent passed + test failed → mismatch', () => {
   const agent: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed' }];
-  const scripted: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'failed', method: SCRIPTED_METHOD }];
+  const scripted: BehaviorResult[] = [
+    { id: 'a/1', description: 'x', status: 'failed', method: SCRIPTED_METHOD },
+  ];
   const diff = diffCrossCheck(agent, scripted);
-  assert.deepEqual(diff, [{ id: 'a/1', agentStatus: 'passed', testStatus: 'failed', agreement: false }]);
+  assert.deepEqual(diff, [
+    { id: 'a/1', agentStatus: 'passed', testStatus: 'failed', agreement: false },
+  ]);
 });
 
 test('diffCrossCheck: agent failed + test passed → mismatch', () => {
   const agent: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'failed' }];
-  const scripted: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD }];
+  const scripted: BehaviorResult[] = [
+    { id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD },
+  ];
   const diff = diffCrossCheck(agent, scripted);
   assert.equal(diff[0].agreement, false);
 });
@@ -147,7 +180,15 @@ test('diffCrossCheck: no matching scripted test → no entry (nothing to diff ag
 
 test('diffCrossCheck: scripted entry is untested/skipped → no entry (no test outcome to diff)', () => {
   const agent: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed' }];
-  const scripted: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'skipped', method: SCRIPTED_METHOD, rationale: 'untested: no generated test matched this behavior id' }];
+  const scripted: BehaviorResult[] = [
+    {
+      id: 'a/1',
+      description: 'x',
+      status: 'skipped',
+      method: SCRIPTED_METHOD,
+      rationale: 'untested: no generated test matched this behavior id',
+    },
+  ];
   assert.deepEqual(diffCrossCheck(agent, scripted), []);
 });
 
@@ -160,7 +201,9 @@ test('scriptedModeExitCode: matched === 0 → ALL_UNTESTED regardless of results
 });
 
 test('scriptedModeExitCode: matched > 0, no failures → SUCCESS', () => {
-  const results: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD }];
+  const results: BehaviorResult[] = [
+    { id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD },
+  ];
   assert.equal(scriptedModeExitCode(1, results), ExitCode.SUCCESS);
 });
 
@@ -175,7 +218,13 @@ test('scriptedModeExitCode: matched > 0, at least one failure → ASSERTION_FAIL
 test('scriptedModeExitCode: matched > 0 with only untested (skipped) behaviors and no failures → SUCCESS', () => {
   const results: BehaviorResult[] = [
     { id: 'a/1', description: 'x', status: 'passed', method: SCRIPTED_METHOD },
-    { id: 'a/2', description: 'y', status: 'skipped', method: SCRIPTED_METHOD, rationale: 'untested: no generated test matched this behavior id' },
+    {
+      id: 'a/2',
+      description: 'y',
+      status: 'skipped',
+      method: SCRIPTED_METHOD,
+      rationale: 'untested: no generated test matched this behavior id',
+    },
   ];
   assert.equal(scriptedModeExitCode(1, results), ExitCode.SUCCESS);
 });

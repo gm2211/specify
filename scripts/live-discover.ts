@@ -37,7 +37,7 @@ const BASE_URL = process.env.TARGET_BASE_URL ?? '';
 const HOST_FILTER = process.env.CAPTURE_HOST_FILTER ?? '';
 const STORAGE_STATE_PATH = path.resolve(
   process.cwd(),
-  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json'
+  process.env.STORAGE_STATE_PATH ?? '.auth/storage-state.json',
 );
 const OUTPUT_DIR = path.resolve(process.cwd(), process.env.DISCOVER_OUTPUT_DIR ?? 'docs');
 const DELAY_MS = parseInt(process.env.DISCOVER_DELAY_MS ?? '600', 10);
@@ -105,9 +105,17 @@ function isTargetRequest(url: string): boolean {
   const u = url.toLowerCase();
   // Skip analytics, tracking, and well-known third-party services
   const skipList = [
-    'clarity.ms', 'google', 'facebook', 'bing.com',
-    'analytics', 'newrelic', 'sentry', 'amplitude',
-    'statuspage', 'cloudflare', 'doubleclick',
+    'clarity.ms',
+    'google',
+    'facebook',
+    'bing.com',
+    'analytics',
+    'newrelic',
+    'sentry',
+    'amplitude',
+    'statuspage',
+    'cloudflare',
+    'doubleclick',
   ];
   if (skipList.some((s) => u.includes(s))) return false;
   return !HOST_FILTER || u.includes(HOST_FILTER.toLowerCase());
@@ -245,25 +253,20 @@ async function capturePageTraffic(context: BrowserContext, pagePath: string): Pr
     if (response) {
       console.log(`  Status: ${response.status()} ${response.statusText()}`);
       const finalUrl = response.url();
-      if (
-        finalUrl.toLowerCase().includes('login') ||
-        finalUrl.toLowerCase().includes('signin')
-      ) {
+      if (finalUrl.toLowerCase().includes('login') || finalUrl.toLowerCase().includes('signin')) {
         console.log(`  WARNING: Redirected to login — session may be expired`);
         errors.push({ context: pagePath, error: `Redirected to login: ${finalUrl}` });
       }
     }
 
     const scripts = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('script[src]')).map(
-        (s) => (s as HTMLScriptElement).src
-      )
+      Array.from(document.querySelectorAll('script[src]')).map((s) => (s as HTMLScriptElement).src),
     );
     scripts.forEach((s) => allScriptUrls.add(s));
     console.log(`  Found ${scripts.length} script tags`);
 
     const inlineScripts = await page.evaluate(() =>
-      Array.from(document.querySelectorAll('script:not([src])')).map((s) => s.textContent ?? '')
+      Array.from(document.querySelectorAll('script:not([src])')).map((s) => s.textContent ?? ''),
     );
 
     for (const script of inlineScripts) {
@@ -281,13 +284,11 @@ async function capturePageTraffic(context: BrowserContext, pagePath: string): Pr
 
     console.log(`  Captured ${pageExchanges.size} requests`);
 
-    const apiReqs = Array.from(pageExchanges.values()).filter((e) =>
-      isApiEndpoint(e.request.url)
-    );
+    const apiReqs = Array.from(pageExchanges.values()).filter((e) => isApiEndpoint(e.request.url));
     if (apiReqs.length > 0) {
       for (const e of apiReqs) {
         console.log(
-          `    ${e.request.method} ${e.request.url} -> ${e.response?.status ?? 'pending'}`
+          `    ${e.request.method} ${e.request.url} -> ${e.response?.status ?? 'pending'}`,
         );
       }
     }
@@ -305,7 +306,7 @@ async function capturePageTraffic(context: BrowserContext, pagePath: string): Pr
 // ---------------------------------------------------------------------------
 async function analyzeJsBundles(context: BrowserContext): Promise<void> {
   const targetScripts = Array.from(allScriptUrls).filter(
-    (u) => !HOST_FILTER || u.includes(HOST_FILTER)
+    (u) => !HOST_FILTER || u.includes(HOST_FILTER),
   );
   console.log(`\n=== Analyzing ${targetScripts.length} JS bundles ===`);
 
@@ -386,21 +387,24 @@ function generateInterface(data: unknown, name: string, depth = 0): string {
 
   for (const key of keys) {
     const value = (data as Record<string, unknown>)[key];
-    const tsType = inferTsType(value, name + key.charAt(0).toUpperCase() + key.slice(1), depth, subInterfaces);
+    const tsType = inferTsType(
+      value,
+      name + key.charAt(0).toUpperCase() + key.slice(1),
+      depth,
+      subInterfaces,
+    );
     result += `  ${key}: ${tsType};\n`;
   }
   result += `}`;
 
-  return subInterfaces.length > 0
-    ? subInterfaces.join('\n\n') + '\n\n' + result
-    : result;
+  return subInterfaces.length > 0 ? subInterfaces.join('\n\n') + '\n\n' + result : result;
 }
 
 function inferTsType(
   value: unknown,
   suggestedName: string,
   depth: number,
-  subInterfaces: string[]
+  subInterfaces: string[],
 ): string {
   if (value === null) return 'null';
   if (value === undefined) return 'undefined';
@@ -456,7 +460,7 @@ function generateReport(): string {
   }
 
   const sortedApiEndpoints = Array.from(uniqueApiEndpoints.entries()).sort((a, b) =>
-    a[0].localeCompare(b[0])
+    a[0].localeCompare(b[0]),
   );
 
   let report = `# Live API Discovery Report
@@ -525,7 +529,7 @@ function generateReport(): string {
   report += `---\n\n## JS Bundle Analysis\n\n`;
 
   const targetScripts = Array.from(allScriptUrls).filter(
-    (u) => !HOST_FILTER || u.includes(HOST_FILTER)
+    (u) => !HOST_FILTER || u.includes(HOST_FILTER),
   );
   report += `**Target scripts (${targetScripts.length}):**\n`;
   for (const s of targetScripts) {
@@ -622,8 +626,8 @@ async function main(): Promise<void> {
           hostFilter: HOST_FILTER,
         },
         null,
-        2
-      )
+        2,
+      ),
     );
     console.log(`Raw data: ${rawPath}`);
   } catch (e: unknown) {

@@ -36,7 +36,9 @@ test('HonchoMemoryProvider.prefetch: appends dialectic representation when fetch
     const fetchImpl = (async (url: string, init?: RequestInit) => {
       calls.push(`${init?.method ?? 'GET'} ${url}`);
       if (url.includes('/dialectic')) {
-        return new Response(JSON.stringify({ representation: 'User cares about empty states.' }), { status: 200 });
+        return new Response(JSON.stringify({ representation: 'User cares about empty states.' }), {
+          status: 200,
+        });
       }
       return new Response('{}', { status: 200 });
     }) as typeof fetch;
@@ -47,7 +49,11 @@ test('HonchoMemoryProvider.prefetch: appends dialectic representation when fetch
       user: 'gmecocci',
       fetchImpl,
     });
-    const scope: MemoryScope = { specPath, specId: 'demo', target: { type: 'web', url: 'https://x.test' } };
+    const scope: MemoryScope = {
+      specPath,
+      specId: 'demo',
+      target: { type: 'web', url: 'https://x.test' },
+    };
     const prompt = await provider.prefetch(scope);
     assert.match(prompt, /Dialectic user model/);
     assert.match(prompt, /empty states/);
@@ -62,7 +68,11 @@ test('HonchoMemoryProvider.prefetch: silently falls back when Honcho returns non
   try {
     const fetchImpl = (async () => new Response('nope', { status: 500 })) as typeof fetch;
     const provider = new HonchoMemoryProvider({ url: 'http://x', fetchImpl });
-    const scope: MemoryScope = { specPath, specId: 'demo', target: { type: 'web', url: 'https://x.test' } };
+    const scope: MemoryScope = {
+      specPath,
+      specId: 'demo',
+      target: { type: 'web', url: 'https://x.test' },
+    };
     const out = await provider.prefetch(scope);
     assert.equal(out, '', 'with no local rows and Honcho 500, prefetch returns empty');
   } finally {
@@ -82,7 +92,11 @@ test('HonchoMemoryProvider.write: writes locally + posts events; survives Honcho
       return new Response('{}', { status: 200 });
     }) as typeof fetch;
     const provider = new HonchoMemoryProvider({ url: 'http://x', fetchImpl });
-    const scope: MemoryScope = { specPath, specId: 'demo', target: { type: 'web', url: 'https://x.test' } };
+    const scope: MemoryScope = {
+      specPath,
+      specId: 'demo',
+      target: { type: 'web', url: 'https://x.test' },
+    };
     const result = await provider.write(scope, 'run_1', [
       { type: 'observation', content: 'noted something' },
     ]);

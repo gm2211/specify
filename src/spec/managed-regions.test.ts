@@ -4,7 +4,13 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-import { mergeManagedRegion, wrapFreshManagedRegion, writeManagedFile, regionMarkers, proposedPathFor } from './managed-regions.js';
+import {
+  mergeManagedRegion,
+  wrapFreshManagedRegion,
+  writeManagedFile,
+  regionMarkers,
+  proposedPathFor,
+} from './managed-regions.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-managed-regions-'));
@@ -18,8 +24,15 @@ test('regionMarkers produces begin/end HTML comments scoped to the region id', (
 });
 
 test('wrapFreshManagedRegion wraps body between markers under the header', () => {
-  const content = wrapFreshManagedRegion('# Product: Demo', 'product-context', 'Hello [area/behavior]');
-  assert.match(content, /^# Product: Demo\n\n<!-- specify:begin:product-context -->\nHello \[area\/behavior\]\n<!-- specify:end:product-context -->\n$/);
+  const content = wrapFreshManagedRegion(
+    '# Product: Demo',
+    'product-context',
+    'Hello [area/behavior]',
+  );
+  assert.match(
+    content,
+    /^# Product: Demo\n\n<!-- specify:begin:product-context -->\nHello \[area\/behavior\]\n<!-- specify:end:product-context -->\n$/,
+  );
 });
 
 test('mergeManagedRegion replaces only the marked region, preserving surrounding hand edits', () => {
@@ -37,7 +50,11 @@ test('mergeManagedRegion replaces only the marked region, preserving surrounding
     '',
   ].join('\n');
 
-  const { content, hadMarkers } = mergeManagedRegion(existing, 'product-context', 'NEW generated content [new/anchor]');
+  const { content, hadMarkers } = mergeManagedRegion(
+    existing,
+    'product-context',
+    'NEW generated content [new/anchor]',
+  );
 
   assert.equal(hadMarkers, true);
   assert.match(content, /_A hand-written intro the human added\._/);
@@ -63,7 +80,12 @@ test('writeManagedFile creates a fresh managed file when none exists', () => {
   const { dir, cleanup } = tmpDir();
   try {
     const target = path.join(dir, 'PRODUCT.md');
-    const result = writeManagedFile({ targetPath: target, regionId: 'product-context', header: '# Product: Demo', body: 'claim [area/behavior]' });
+    const result = writeManagedFile({
+      targetPath: target,
+      regionId: 'product-context',
+      header: '# Product: Demo',
+      body: 'claim [area/behavior]',
+    });
 
     assert.equal(result.applied, true);
     assert.equal(result.created, true);
@@ -84,13 +106,23 @@ test('writeManagedFile regenerating a managed file preserves content outside the
   const { dir, cleanup } = tmpDir();
   try {
     const target = path.join(dir, 'PRODUCT.md');
-    writeManagedFile({ targetPath: target, regionId: 'product-context', header: '# Product: Demo', body: 'v1 claim [area/b1]' });
+    writeManagedFile({
+      targetPath: target,
+      regionId: 'product-context',
+      header: '# Product: Demo',
+      body: 'v1 claim [area/b1]',
+    });
 
     // Simulate a human hand-edit outside the managed region.
     const withHandEdit = fs.readFileSync(target, 'utf-8') + '\n## Appendix\nHuman note.\n';
     fs.writeFileSync(target, withHandEdit);
 
-    const result = writeManagedFile({ targetPath: target, regionId: 'product-context', header: '# Product: Demo', body: 'v2 claim [area/b2]' });
+    const result = writeManagedFile({
+      targetPath: target,
+      regionId: 'product-context',
+      header: '# Product: Demo',
+      body: 'v2 claim [area/b2]',
+    });
 
     assert.equal(result.applied, true);
     assert.equal(result.hadMarkers, true);
@@ -113,7 +145,12 @@ test('writeManagedFile refuses to overwrite an unmanaged (marker-less) file and 
     const original = '# Hand-authored PRODUCT.md\n\nSomething a human wrote, no markers.\n';
     fs.writeFileSync(target, original);
 
-    const result = writeManagedFile({ targetPath: target, regionId: 'product-context', header: '# Product: Demo', body: 'generated claim [area/behavior]' });
+    const result = writeManagedFile({
+      targetPath: target,
+      regionId: 'product-context',
+      header: '# Product: Demo',
+      body: 'generated claim [area/behavior]',
+    });
 
     assert.equal(result.applied, false);
     assert.equal(result.hadMarkers, false);
@@ -137,7 +174,13 @@ test('writeManagedFile with force=true overwrites an unmanaged file in place', (
     const target = path.join(dir, 'PRODUCT.md');
     fs.writeFileSync(target, '# Hand-authored, no markers\n');
 
-    const result = writeManagedFile({ targetPath: target, regionId: 'product-context', header: '# Product: Demo', body: 'forced claim [area/behavior]', force: true });
+    const result = writeManagedFile({
+      targetPath: target,
+      regionId: 'product-context',
+      header: '# Product: Demo',
+      body: 'forced claim [area/behavior]',
+      force: true,
+    });
 
     assert.equal(result.applied, true);
     assert.equal(result.forced, true);

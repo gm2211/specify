@@ -177,7 +177,10 @@ export interface RecordVerdictResult {
  * the input is never mutated. Callers own persistence (loadFormulaStats /
  * saveFormulaStats) so this stays trivially unit-testable.
  */
-export function recordFormulaVerdict(file: FormulaStatsFile, input: RecordVerdictInput): RecordVerdictResult {
+export function recordFormulaVerdict(
+  file: FormulaStatsFile,
+  input: RecordVerdictInput,
+): RecordVerdictResult {
   const timestamp = input.timestamp ?? new Date().toISOString();
   const prev = file.rows[input.formulaId] ?? defaultRow(input.formulaId);
   const row: FormulaStatsRow = { ...prev, recentVerdicts: [...prev.recentVerdicts] };
@@ -246,7 +249,9 @@ export function recordFormulaVerdict(file: FormulaStatsFile, input: RecordVerdic
   }
   let driftJustDetected = false;
   if (!row.driftFlagged && row.groundedSeen && row.recentVerdicts.length >= DRIFT_WINDOW) {
-    const murky = row.recentVerdicts.filter((v) => v === 'inconclusive' || v === 'unevaluable').length;
+    const murky = row.recentVerdicts.filter(
+      (v) => v === 'inconclusive' || v === 'unevaluable',
+    ).length;
     if (murky / row.recentVerdicts.length >= DRIFT_THRESHOLD) {
       row.driftFlagged = true;
       row.driftDetectedAt = timestamp;

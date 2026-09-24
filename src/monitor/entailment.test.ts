@@ -133,6 +133,9 @@ test('atoms with identical names but different args are distinct alphabet entrie
   const result = checkEntailment(parent, leaves, { maxLen: 3 });
   assert.equal(result.refuted, true);
   if (result.refuted) {
-    assert.ok(result.witness.description.includes('http.response(200)'), result.witness.description);
+    assert.ok(
+      result.witness.description.includes('http.response(200)'),
+      result.witness.description,
+    );
   }
 });

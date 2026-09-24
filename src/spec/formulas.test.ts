@@ -84,7 +84,11 @@ test('loadFormulas throws FormulasLoadError on malformed YAML', () => {
   const { dir, cleanup } = tmpDir();
   try {
     const filePath = path.join(dir, 'specify.formulas.yaml');
-    fs.writeFileSync(filePath, 'formulas: [\n  - id: fml-abc123\n    behavior: [unterminated', 'utf-8');
+    fs.writeFileSync(
+      filePath,
+      'formulas: [\n  - id: fml-abc123\n    behavior: [unterminated',
+      'utf-8',
+    );
     assert.throws(() => loadFormulas(filePath), FormulasLoadError);
   } finally {
     cleanup();
@@ -213,10 +217,7 @@ test('formulaId is stable for the same behavior + formula content', () => {
 });
 
 test('collectPredicateNames walks the full AST', () => {
-  const formula = and(
-    pred('http.response', ['200']),
-    eventually(pred('page.url', ['/dashboard'])),
-  );
+  const formula = and(pred('http.response', ['200']), eventually(pred('page.url', ['/dashboard'])));
   const names = collectPredicateNames(formula);
   assert.deepEqual(new Set(names), new Set(['http.response', 'page.url']));
 });

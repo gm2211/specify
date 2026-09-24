@@ -191,9 +191,7 @@ export class InboxRegistry {
   }
 
   list(): InboxMessage[] {
-    return Array.from(this.history.values()).sort((a, b) =>
-      a.createdAt < b.createdAt ? 1 : -1,
-    );
+    return Array.from(this.history.values()).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
 
   /**
@@ -241,24 +239,27 @@ export class InboxRegistry {
     // ones synthesized by the k8s rollout watcher, which has no URL of
     // its own.
     const envTargetUrl = process.env.SPECIFY_TARGET_URL?.trim();
-    const effectiveReq: InboxRequest = req.url || !envTargetUrl
-      ? req
-      : { ...req, url: envTargetUrl };
+    const effectiveReq: InboxRequest =
+      req.url || !envTargetUrl ? req : { ...req, url: envTargetUrl };
     const message: InboxMessage = {
       id,
       createdAt: new Date().toISOString(),
       status: 'queued',
       request: effectiveReq,
-      session: effectiveReq.mode === 'attach' ? effectiveReq.session ?? 'default' : undefined,
+      session: effectiveReq.mode === 'attach' ? (effectiveReq.session ?? 'default') : undefined,
     };
     this.remember(message);
     this.persist(message);
-    eventBus.send('inbox:received', {
+    eventBus.send(
+      'inbox:received',
+      {
+        id,
+        task: effectiveReq.task,
+        mode: effectiveReq.mode ?? 'stateless',
+        sender: effectiveReq.sender,
+      },
       id,
-      task: effectiveReq.task,
-      mode: effectiveReq.mode ?? 'stateless',
-      sender: effectiveReq.sender,
-    }, id);
+    );
 
     if (effectiveReq.mode === 'attach') {
       this.dispatchAttach(message).catch((err) => this.fail(message, err));
@@ -326,13 +327,17 @@ export class InboxRegistry {
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
       this.persist(message);
-      eventBus.send('inbox:completed', {
-        id: message.id,
-        costUsd: result.costUsd,
-        resultPath: message.resultPath,
-        startedAt: message.startedAt,
-        completedAt: message.completedAt,
-      }, message.id);
+      eventBus.send(
+        'inbox:completed',
+        {
+          id: message.id,
+          costUsd: result.costUsd,
+          resultPath: message.resultPath,
+          startedAt: message.startedAt,
+          completedAt: message.completedAt,
+        },
+        message.id,
+      );
     } catch (err) {
       this.fail(message, err);
     }
@@ -352,13 +357,17 @@ export class InboxRegistry {
       message.result = result;
       message.resultPath = this.persistResult(message, runnerOpts.outputDir, result);
       this.persist(message);
-      eventBus.send('inbox:completed', {
-        id: message.id,
-        costUsd: result.costUsd,
-        resultPath: message.resultPath,
-        startedAt: message.startedAt,
-        completedAt: message.completedAt,
-      }, message.id);
+      eventBus.send(
+        'inbox:completed',
+        {
+          id: message.id,
+          costUsd: result.costUsd,
+          resultPath: message.resultPath,
+          startedAt: message.startedAt,
+          completedAt: message.completedAt,
+        },
+        message.id,
+      );
     } catch (err) {
       this.fail(message, err);
     }
@@ -401,7 +410,11 @@ export class InboxRegistry {
     session.injector.inject(message.request.prompt, 'next');
   }
 
-  private async startSession(sessionKey: string, initial: InboxMessage, injector: MessageInjector): Promise<void> {
+  private async startSession(
+    sessionKey: string,
+    initial: InboxMessage,
+    injector: MessageInjector,
+  ): Promise<void> {
     try {
       const runnerOpts = await this.buildRunnerOptions(initial);
       runnerOpts.messageInjector = injector;
@@ -415,11 +428,15 @@ export class InboxRegistry {
       initial.result = result;
       initial.resultPath = this.persistResult(initial, runnerOpts.outputDir, result);
       this.persist(initial);
-      eventBus.send('inbox:session_ended', {
-        session: sessionKey,
-        costUsd: result.costUsd,
-        resultPath: initial.resultPath,
-      }, initial.id);
+      eventBus.send(
+        'inbox:session_ended',
+        {
+          session: sessionKey,
+          costUsd: result.costUsd,
+          resultPath: initial.resultPath,
+        },
+        initial.id,
+      );
     } catch (err) {
       this.fail(initial, err);
     } finally {
@@ -433,9 +450,7 @@ export class InboxRegistry {
 
   private async buildRunnerOptions(message: InboxMessage): Promise<SdkRunnerOptions> {
     const req = message.request;
-    const outputDir = path.resolve(
-      req.outputDir ?? path.join('.specify', 'inbox', message.id),
-    );
+    const outputDir = path.resolve(req.outputDir ?? path.join('.specify', 'inbox', message.id));
 
     const { systemPrompt, userPrompt, specPath } = await buildPrompts(req, outputDir);
 
@@ -443,8 +458,7 @@ export class InboxRegistry {
     // tools, no structured output schema). 'verify' runner + freeform system
     // prompt gives the agent a web browser + filesystem, which covers the
     // common "go check the site" case.
-    const runnerTask: SdkRunnerOptions['task'] =
-      req.task === 'freeform' ? 'verify' : req.task;
+    const runnerTask: SdkRunnerOptions['task'] = req.task === 'freeform' ? 'verify' : req.task;
 
     const opts: SdkRunnerOptions = {
       task: runnerTask,
@@ -463,19 +477,33 @@ export class InboxRegistry {
 
   /** Persist structured output to disk so external tools can read results
    *  without streaming. Mirrors the shape `specify verify` writes. */
-  private persistResult(message: InboxMessage, outputDir: string, result: SdkRunnerResult): string | undefined {
+  private persistResult(
+    message: InboxMessage,
+    outputDir: string,
+    result: SdkRunnerResult,
+  ): string | undefined {
     if (!result.structuredOutput) return undefined;
     const filename =
-      message.request.task === 'verify' ? 'verify-result.json'
-      : message.request.task === 'capture' ? 'capture-result.json'
-      : 'result.json';
+      message.request.task === 'verify'
+        ? 'verify-result.json'
+        : message.request.task === 'capture'
+          ? 'capture-result.json'
+          : 'result.json';
     const full = path.join(outputDir, filename);
     fs.mkdirSync(outputDir, { recursive: true });
-    fs.writeFileSync(full, JSON.stringify({
-      id: message.id,
-      task: message.request.task,
-      structuredOutput: result.structuredOutput,
-    }, null, 2), 'utf-8');
+    fs.writeFileSync(
+      full,
+      JSON.stringify(
+        {
+          id: message.id,
+          task: message.request.task,
+          structuredOutput: result.structuredOutput,
+        },
+        null,
+        2,
+      ),
+      'utf-8',
+    );
     return full;
   }
 
@@ -519,7 +547,7 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
   if (mockifyEquivalent) {
     throw new Error(
       `task '${rawTask}' is no longer accepted by the specify daemon — deterministic ` +
-      `replay/compare moved to mockify. Run \`${mockifyEquivalent}\` instead.`,
+        `replay/compare moved to mockify. Run \`${mockifyEquivalent}\` instead.`,
     );
   }
 
@@ -547,8 +575,9 @@ async function buildPrompts(req: InboxRequest, outputDir: string): Promise<Promp
     }
 
     const specYaml = specToYaml(specForPrompt);
-    const targetUrl = req.url
-      ?? (spec.target.type === 'web' || spec.target.type === 'api'
+    const targetUrl =
+      req.url ??
+      (spec.target.type === 'web' || spec.target.type === 'api'
         ? (spec.target as { url: string }).url
         : undefined);
     // Exploration hints need a local spec path: the navigation map lives under

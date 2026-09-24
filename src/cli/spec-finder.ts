@@ -9,17 +9,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const SPEC_PATTERNS = [
-  /\.spec\.ya?ml$/i,
-  /\.spec\.json$/i,
-  /^spec\.ya?ml$/i,
-  /^spec\.json$/i,
-];
+const SPEC_PATTERNS = [/\.spec\.ya?ml$/i, /\.spec\.json$/i, /^spec\.ya?ml$/i, /^spec\.json$/i];
 
-const SPEC_DIRECTORY_PATTERNS = [
-  /^specs?$/i,
-  /\.spec$/i,
-];
+const SPEC_DIRECTORY_PATTERNS = [/^specs?$/i, /\.spec$/i];
 
 const SPEC_DIRECTORY_MANIFESTS = [
   'spec.yaml',
@@ -41,16 +33,18 @@ export function findSpecFiles(dir: string = process.cwd()): string[] {
   try {
     const entries = fs.readdirSync(dir);
     return entries
-      .filter(f => {
+      .filter((f) => {
         const full = path.join(dir, f);
         const stat = fs.statSync(full);
         if (stat.isFile()) {
-          return SPEC_PATTERNS.some(p => p.test(f));
+          return SPEC_PATTERNS.some((p) => p.test(f));
         }
-        if (!stat.isDirectory() || !SPEC_DIRECTORY_PATTERNS.some(p => p.test(f))) {
+        if (!stat.isDirectory() || !SPEC_DIRECTORY_PATTERNS.some((p) => p.test(f))) {
           return false;
         }
-        return SPEC_DIRECTORY_MANIFESTS.some(manifest => fs.existsSync(path.join(full, manifest)));
+        return SPEC_DIRECTORY_MANIFESTS.some((manifest) =>
+          fs.existsSync(path.join(full, manifest)),
+        );
       })
       .sort();
   } catch {
@@ -79,7 +73,8 @@ export function resolveSpecPath(provided: string | undefined): {
 
   if (found.length === 0) {
     return {
-      error: 'No spec file found in current directory. Provide --spec <path> or create a spec file (e.g. spec.yaml).',
+      error:
+        'No spec file found in current directory. Provide --spec <path> or create a spec file (e.g. spec.yaml).',
     };
   }
 

@@ -13,13 +13,25 @@ function tmpDir(): string {
 function findHandler(
   server: ReturnType<typeof createCliMcpServer>,
   name: string,
-): (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
+): (
+  args: Record<string, unknown>,
+) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> {
   const anyServer = server as unknown as {
-    instance?: { _registeredTools?: Record<string, { handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> }> };
+    instance?: {
+      _registeredTools?: Record<
+        string,
+        {
+          handler: (
+            args: Record<string, unknown>,
+          ) => Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }>;
+        }
+      >;
+    };
   };
   const tools = anyServer.instance?._registeredTools ?? {};
   const t = tools[name];
-  if (!t) throw new Error(`tool ${name} not found on server (have: ${Object.keys(tools).join(', ')})`);
+  if (!t)
+    throw new Error(`tool ${name} not found on server (have: ${Object.keys(tools).join(', ')})`);
   return t.handler;
 }
 
@@ -43,8 +55,16 @@ test('binaryAllowed: ./variant and absolute path resolve to the same file as the
   delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
   // Spec declares "./mycli", agent passes equivalent path forms.
   assert.equal(binaryAllowed('./mycli', './mycli', '/work'), true);
-  assert.equal(binaryAllowed('mycli', './mycli', '/work'), true, 'bare relative form resolves to the same file');
-  assert.equal(binaryAllowed('/work/mycli', './mycli', '/work'), true, 'absolute path to the same file matches');
+  assert.equal(
+    binaryAllowed('mycli', './mycli', '/work'),
+    true,
+    'bare relative form resolves to the same file',
+  );
+  assert.equal(
+    binaryAllowed('/work/mycli', './mycli', '/work'),
+    true,
+    'absolute path to the same file matches',
+  );
   // Spec declares an absolute path, agent passes relative forms.
   assert.equal(binaryAllowed('./mycli', '/work/mycli', '/work'), true);
   assert.equal(binaryAllowed('/work/mycli', '/work/mycli', '/work'), true);
@@ -61,7 +81,11 @@ test('binaryAllowed: genuinely different binaries are still rejected under norma
   delete process.env.SPECIFY_CLI_ALLOW_ANY_BINARY;
   assert.equal(binaryAllowed('/usr/bin/rm', 'git', '/work'), false);
   assert.equal(binaryAllowed('./othercli', './mycli', '/work'), false);
-  assert.equal(binaryAllowed('/elsewhere/mycli', './mycli', '/work'), false, 'basename fallback does not apply when the spec binary is a path');
+  assert.equal(
+    binaryAllowed('/elsewhere/mycli', './mycli', '/work'),
+    false,
+    'basename fallback does not apply when the spec binary is a path',
+  );
   assert.equal(binaryAllowed('gitx', 'git', '/work'), false);
 });
 
@@ -71,7 +95,9 @@ test('cli_run: executes argv[0] === binary via node, records exit code and outpu
   const server = createCliMcpServer({ binary: process.execPath, recorder, serverName: 'cli' });
   const handler = findHandler(server, 'cli_run');
 
-  const res = await handler({ argv: [process.execPath, '-e', 'console.log("hello"); process.exitCode = 0;'] });
+  const res = await handler({
+    argv: [process.execPath, '-e', 'console.log("hello"); process.exitCode = 0;'],
+  });
   const parsed = JSON.parse(res.content[0].text);
   assert.equal(parsed.exitCode, 0);
   assert.match(parsed.stdout, /hello/);
@@ -103,7 +129,8 @@ test('cli_run: stdin is piped to the process and recorded (length-capped)', asyn
   const server = createCliMcpServer({ binary: process.execPath, recorder });
   const handler = findHandler(server, 'cli_run');
 
-  const script = 'let d=""; process.stdin.on("data", c => d += c); process.stdin.on("end", () => { console.log(d.trim()); });';
+  const script =
+    'let d=""; process.stdin.on("data", c => d += c); process.stdin.on("end", () => { console.log(d.trim()); });';
   const res = await handler({ argv: [process.execPath, '-e', script], stdin: 'ping' });
   const parsed = JSON.parse(res.content[0].text);
   assert.match(parsed.stdout, /ping/);
@@ -158,7 +185,8 @@ test('cli_run: output beyond the cap is truncated during streaming, stored size 
   // enforced as chunks arrive (BoundedSink), so the stored size must be
   // exactly the cap regardless of how much the process printed, and the exit
   // code must still be collected normally after truncation kicks in.
-  const script = 'for (let i = 0; i < 64; i++) process.stdout.write("x".repeat(64 * 1024)); process.exitCode = 3;';
+  const script =
+    'for (let i = 0; i < 64; i++) process.stdout.write("x".repeat(64 * 1024)); process.exitCode = 3;';
   const res = await handler({ argv: [process.execPath, '-e', script] });
   const parsed = JSON.parse(res.content[0].text);
   assert.equal(parsed.stdoutTruncated, true);
@@ -177,7 +205,8 @@ test('cli_run: stderr is capped during streaming independently of stdout', async
   const server = createCliMcpServer({ binary: process.execPath, recorder });
   const handler = findHandler(server, 'cli_run');
 
-  const script = 'process.stdout.write("small"); for (let i = 0; i < 8; i++) process.stderr.write("e".repeat(64 * 1024));';
+  const script =
+    'process.stdout.write("small"); for (let i = 0; i < 8; i++) process.stderr.write("e".repeat(64 * 1024));';
   const res = await handler({ argv: [process.execPath, '-e', script] });
   const parsed = JSON.parse(res.content[0].text);
   assert.equal(parsed.stdoutTruncated, false);
@@ -231,7 +260,9 @@ test('cli_run: uses spec target.env and target.timeout_ms as defaults', async ()
   });
   const handler = findHandler(server, 'cli_run');
 
-  const res = await handler({ argv: [process.execPath, '-e', 'console.log(process.env.SPECIFY_TEST_VAR);'] });
+  const res = await handler({
+    argv: [process.execPath, '-e', 'console.log(process.env.SPECIFY_TEST_VAR);'],
+  });
   const parsed = JSON.parse(res.content[0].text);
   assert.match(parsed.stdout, /from-spec/);
 });

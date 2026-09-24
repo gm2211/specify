@@ -57,7 +57,12 @@ test('canonicalProbeKey maps dom.count positional args to selector/op/n', () => 
 
 test('buildProbePlan extracts dom.* predicate nodes from an approved formula', () => {
   let file = emptyFormulasFile();
-  file = addFormula(file, 'checkout/confirm', globally(pred('dom.visible', ['#toast'])), 'approved');
+  file = addFormula(
+    file,
+    'checkout/confirm',
+    globally(pred('dom.visible', ['#toast'])),
+    'approved',
+  );
 
   const plan = buildProbePlan(file);
 
@@ -132,7 +137,12 @@ test('buildProbePlan collects nested dom.* nodes from nested temporal/boolean op
 
 test('buildProbePlan returns empty plan for a formulas file with no dom.* predicates', () => {
   let file = emptyFormulasFile();
-  file = addFormula(file, 'checkout/confirm', eventually(pred('http.response', ['/api', '200'])), 'approved');
+  file = addFormula(
+    file,
+    'checkout/confirm',
+    eventually(pred('http.response', ['/api', '200'])),
+    'approved',
+  );
 
   const plan = buildProbePlan(file);
 

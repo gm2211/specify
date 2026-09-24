@@ -152,7 +152,13 @@ test('SdkRunnerResult structured output works for compare', () => {
       match: false,
       summary: '3 differences found',
       diffs: [
-        { page: '/dashboard', description: 'Missing chart widget', remote: 'Chart visible', local: 'Chart missing', severity: 'major' },
+        {
+          page: '/dashboard',
+          description: 'Missing chart widget',
+          remote: 'Chart visible',
+          local: 'Chart missing',
+          severity: 'major',
+        },
       ],
     },
   };
@@ -196,7 +202,11 @@ test('envNumber falls back on garbage, empty, zero, and negative values', () => 
   try {
     for (const bad of ['abc', '', '  ', '0', '-3', 'NaN', 'Infinity']) {
       process.env.SPECIFY_TEST_ENV_NUMBER = bad;
-      assert.equal(_internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5), 5, `expected fallback for ${JSON.stringify(bad)}`);
+      assert.equal(
+        _internals.envNumber('SPECIFY_TEST_ENV_NUMBER', 5),
+        5,
+        `expected fallback for ${JSON.stringify(bad)}`,
+      );
     }
   } finally {
     delete process.env.SPECIFY_TEST_ENV_NUMBER;
@@ -236,7 +246,11 @@ test('composeSystemPrompt prepends memory preamble innermost, then skills, then 
 });
 
 test('composeSystemPrompt skips falsy/empty parts', () => {
-  const composed = composeSystemPrompt('BASE', { layeredContext: '', skillsText: undefined, memoryPreamble: 'MEMORY' });
+  const composed = composeSystemPrompt('BASE', {
+    layeredContext: '',
+    skillsText: undefined,
+    memoryPreamble: 'MEMORY',
+  });
   assert.equal(composed, 'MEMORY\n\nBASE');
 });
 

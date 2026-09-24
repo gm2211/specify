@@ -165,8 +165,8 @@ browser session into a recorded Specify verification.
 ## Optional capabilities
 
 - [Large contracts and generated PRODUCT.md / DESIGN.md](docs/large-specs.md).
-- `spec lint` warns when a single file exceeds 40 KiB, 800 lines, 12 areas, or 120 behaviors;
-  it fails above twice those limits. Use `spec split` to make a directory contract.
+- `spec lint` warns when a single file exceeds 40 KiB, 800 lines, 12 areas, or 120 behaviors; it
+  fails above twice those limits. Use `spec split` to make a directory contract.
 - [Feedback, memory, MCP configuration, background jobs, and Kubernetes deployment](docs/qa-operations.md).
 - Learned skills, navigation-map coverage, temporal monitors, and Quint models are experimental
   opt-ins. See [feature flags](src/agent/feature-flags.ts). They are not required for the workflow
@@ -177,7 +177,7 @@ browser session into a recorded Specify verification.
 ```bash
 npm run quality  # CLI/UI typecheck, lint, self-spec structural validation
 npm test         # automated tests
-npm run format   # Prettier check (repository-wide baseline tracked separately)
+npm run format   # Repository-wide Prettier check (also part of npm run quality)
 ```
 
 The [self-spec](specify.spec/spec.yaml) describes Specify's public behavior. `npm run validate`

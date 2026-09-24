@@ -72,7 +72,9 @@ function evalOne(name: string, args: string[], st: TraceState, ctx?: Partial<Pre
 // ================================================================================
 
 test('http.request: positive — matching method + url', () => {
-  const st = state({ events: [httpTraceEvent(traffic({ method: 'GET', url: 'https://x.test/api/session' }))] });
+  const st = state({
+    events: [httpTraceEvent(traffic({ method: 'GET', url: 'https://x.test/api/session' }))],
+  });
   assert.equal(evalOne('http.request', ['GET', '/api/session'], st), true);
 });
 
@@ -153,7 +155,9 @@ test('http.response_json: unevaluable — body unparseable as JSON', () => {
 // ================================================================================
 
 test('http.body_matches: positive/negative/unevaluable', () => {
-  const withBody = state({ events: [httpTraceEvent(traffic({ responseBody: '{"status":"ok"}' }))] });
+  const withBody = state({
+    events: [httpTraceEvent(traffic({ responseBody: '{"status":"ok"}' }))],
+  });
   assert.equal(evalOne('http.body_matches', ['/api/session', '"status":"ok"'], withBody), true);
   assert.equal(evalOne('http.body_matches', ['/api/session', '"status":"fail"'], withBody), false);
 
@@ -162,12 +166,23 @@ test('http.body_matches: positive/negative/unevaluable', () => {
 });
 
 test('http.post_data_matches: positive/negative/unevaluable', () => {
-  const withData = state({ events: [httpTraceEvent(traffic({ url: 'https://x.test/api/checkout', postData: '{"cardType":"visa"}' }))] });
+  const withData = state({
+    events: [
+      httpTraceEvent(
+        traffic({ url: 'https://x.test/api/checkout', postData: '{"cardType":"visa"}' }),
+      ),
+    ],
+  });
   assert.equal(evalOne('http.post_data_matches', ['/api/checkout', 'cardType'], withData), true);
   assert.equal(evalOne('http.post_data_matches', ['/api/checkout', 'amex'], withData), false);
 
-  const noData = state({ events: [httpTraceEvent(traffic({ url: 'https://x.test/api/checkout', postData: null }))] });
-  assert.equal(evalOne('http.post_data_matches', ['/api/checkout', 'cardType'], noData), 'unevaluable');
+  const noData = state({
+    events: [httpTraceEvent(traffic({ url: 'https://x.test/api/checkout', postData: null }))],
+  });
+  assert.equal(
+    evalOne('http.post_data_matches', ['/api/checkout', 'cardType'], noData),
+    'unevaluable',
+  );
 });
 
 // ================================================================================
@@ -194,7 +209,9 @@ test('http.no_request: unevaluable — malformed pattern', () => {
 // ================================================================================
 
 test('console.error: positive/negative/unevaluable', () => {
-  const st = state({ events: [consoleTraceEvent(consoleEntry({ type: 'error', text: 'Uncaught TypeError: boom' }))] });
+  const st = state({
+    events: [consoleTraceEvent(consoleEntry({ type: 'error', text: 'Uncaught TypeError: boom' }))],
+  });
   assert.equal(evalOne('console.error', [], st), true);
   assert.equal(evalOne('console.error', ['TypeError'], st), true);
   assert.equal(evalOne('console.error', ['RangeError'], st), false);
@@ -207,7 +224,9 @@ test('console.error: negative — only non-error entries', () => {
 });
 
 test('console.message: positive/negative/unevaluable', () => {
-  const st = state({ events: [consoleTraceEvent(consoleEntry({ type: 'warn', text: 'deprecated API' }))] });
+  const st = state({
+    events: [consoleTraceEvent(consoleEntry({ type: 'warn', text: 'deprecated API' }))],
+  });
   assert.equal(evalOne('console.message', ['warn', 'deprecated'], st), true);
   assert.equal(evalOne('console.message', ['warn', 'removed'], st), false);
   assert.equal(evalOne('console.message', ['warn', '('], st), 'unevaluable');
@@ -274,7 +293,11 @@ function withAxFile(dir: string, filename: string, yamlText: string): void {
 
 test('ax.role: positive — role + name match in snapshot', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ax-test-'));
-  withAxFile(dir, '000.yaml', '- generic:\n  - heading "Checkout" [level=1]\n  - button "Place order"\n');
+  withAxFile(
+    dir,
+    '000.yaml',
+    '- generic:\n  - heading "Checkout" [level=1]\n  - button "Place order"\n',
+  );
   const st = state({
     index: 0,
     step: stepObservation({ ax: { file: 'observations/ax/000.yaml', digest: 'abc' } }),
@@ -287,7 +310,9 @@ test('ax.role: positive — role + name match in snapshot', () => {
 test('ax.role: negative — role present but no matching node', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ax-test-'));
   withAxFile(dir, '000.yaml', '- generic:\n  - button "Cancel"\n');
-  const st = state({ step: stepObservation({ ax: { file: 'observations/ax/000.yaml', digest: 'abc' } }) });
+  const st = state({
+    step: stepObservation({ ax: { file: 'observations/ax/000.yaml', digest: 'abc' } }),
+  });
   const trace: Trace = [st];
   assert.equal(evalOne('ax.role', ['button', 'Place order'], st, { trace, axBaseDir: dir }), false);
 });
@@ -295,25 +320,39 @@ test('ax.role: negative — role present but no matching node', () => {
 test('ax.role: unevaluable — ax observation is {error}', () => {
   const st = state({ step: stepObservation({ ax: { error: 'ariaSnapshot timed out' } }) });
   const trace: Trace = [st];
-  assert.equal(evalOne('ax.role', ['button'], st, { trace, axBaseDir: '/nonexistent' }), 'unevaluable');
+  assert.equal(
+    evalOne('ax.role', ['button'], st, { trace, axBaseDir: '/nonexistent' }),
+    'unevaluable',
+  );
 });
 
 test('ax.role: resolves {unchanged} chain backward to the last written file', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ax-test-'));
   withAxFile(dir, '000.yaml', '- generic:\n  - button "Place order"\n');
-  const st0 = state({ index: 0, step: stepObservation({ step: 0, ax: { file: 'observations/ax/000.yaml', digest: 'abc' } }) });
-  const st1 = state({ index: 1, step: stepObservation({ step: 1, ax: { unchanged: true, digest: 'abc' } }) });
+  const st0 = state({
+    index: 0,
+    step: stepObservation({ step: 0, ax: { file: 'observations/ax/000.yaml', digest: 'abc' } }),
+  });
+  const st1 = state({
+    index: 1,
+    step: stepObservation({ step: 1, ax: { unchanged: true, digest: 'abc' } }),
+  });
   const trace: Trace = [st0, st1];
   assert.equal(evalOne('ax.role', ['button', 'Place order'], st1, { trace, axBaseDir: dir }), true);
 });
 
 test('ax.role: unevaluable — no step observation at position', () => {
   const st = state({ step: undefined });
-  assert.equal(evalOne('ax.role', ['button'], st, { trace: [st], axBaseDir: '/tmp' }), 'unevaluable');
+  assert.equal(
+    evalOne('ax.role', ['button'], st, { trace: [st], axBaseDir: '/tmp' }),
+    'unevaluable',
+  );
 });
 
 test('parseAriaSnapshot: tolerant matcher extracts role/name pairs', () => {
-  const entries = parseAriaSnapshot('- generic:\n  - heading "Checkout" [level=1]\n  - list:\n    - listitem "Item 1"\n');
+  const entries = parseAriaSnapshot(
+    '- generic:\n  - heading "Checkout" [level=1]\n  - list:\n    - listitem "Item 1"\n',
+  );
   assert.ok(entries.some((e) => e.role === 'heading' && e.name === 'Checkout'));
   assert.ok(entries.some((e) => e.role === 'listitem' && e.name === 'Item 1'));
 });
@@ -323,7 +362,9 @@ test('parseAriaSnapshot: tolerant matcher extracts role/name pairs', () => {
 // ================================================================================
 
 test('escapeRegExp: escapes regex metacharacters for literal matching', () => {
-  const st = state({ events: [httpTraceEvent(traffic({ url: 'https://x.test/api/v1.0/session?x=1' }))] });
+  const st = state({
+    events: [httpTraceEvent(traffic({ url: 'https://x.test/api/v1.0/session?x=1' }))],
+  });
   const escaped = escapeRegExp('/api/v1.0/session?x=1');
   assert.equal(evalOne('http.request', [escaped], st), true);
 });
@@ -348,9 +389,7 @@ test('integration: G(status_class(api,2xx) or console.error absent) over a synth
   });
   const errorButHandledStep: TraceState = state({
     index: 1,
-    events: [
-      httpTraceEvent(traffic({ url: 'https://x.test/api/b', status: 200 })),
-    ],
+    events: [httpTraceEvent(traffic({ url: 'https://x.test/api/b', status: 200 }))],
   });
   const trace: Trace = [okStep, errorButHandledStep];
 
@@ -382,8 +421,14 @@ test('integration: violated when a 5xx occurs alongside a console error (both di
 });
 
 test('integration: F(page.url(confirmation)) is satisfied once the URL is reached', () => {
-  const s0 = state({ index: 0, step: stepObservation({ step: 0, urlAfter: 'https://x.test/cart' }) });
-  const s1 = state({ index: 1, step: stepObservation({ step: 1, urlAfter: 'https://x.test/checkout/confirmation' }) });
+  const s0 = state({
+    index: 0,
+    step: stepObservation({ step: 0, urlAfter: 'https://x.test/cart' }),
+  });
+  const s1 = state({
+    index: 1,
+    step: stepObservation({ step: 1, urlAfter: 'https://x.test/checkout/confirmation' }),
+  });
   const trace: Trace = [s0, s1];
   const evaluator = createRegistryEvaluator(trace);
   const result = evaluate(eventually(pred('page.url', ['/confirmation$'])), trace, evaluator, {
@@ -397,9 +442,14 @@ test('integration: and(step predicate, event predicate) unevaluable propagates p
   const s0 = state({ index: 0, step: undefined, events: [] });
   const trace: Trace = [s0];
   const evaluator = createRegistryEvaluator(trace);
-  const result = evaluate(and(pred('page.url', ['/x']), pred('http.no_request', ['/y'])), trace, evaluator, {
-    traceComplete: true,
-  });
+  const result = evaluate(
+    and(pred('page.url', ['/x']), pred('http.no_request', ['/y'])),
+    trace,
+    evaluator,
+    {
+      traceComplete: true,
+    },
+  );
   // page.url is unevaluable (no step); http.no_request is a definite `true` (nothing matched).
   // AND precedence: violated > unevaluable > inconclusive > satisfied -> unevaluable wins.
   assert.equal(result.verdict, 'unevaluable');
@@ -498,7 +548,9 @@ test('integration: G(dom.visible(#toast)) satisfied over a synthetic trace with 
   const s1 = state({ index: 1, step: stepObservation({ step: 1, probes: { [key]: true } }) });
   const trace: Trace = [s0, s1];
   const evaluator = createRegistryEvaluator(trace);
-  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, { traceComplete: true });
+  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, {
+    traceComplete: true,
+  });
   assert.equal(result.verdict, 'satisfied');
 });
 
@@ -508,7 +560,9 @@ test('integration: G(dom.visible(#toast)) violated when a step recorded false', 
   const s1 = state({ index: 1, step: stepObservation({ step: 1, probes: { [key]: false } }) });
   const trace: Trace = [s0, s1];
   const evaluator = createRegistryEvaluator(trace);
-  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, { traceComplete: true });
+  const result = evaluate(globally(pred('dom.visible', ['#toast'])), trace, evaluator, {
+    traceComplete: true,
+  });
   assert.equal(result.verdict, 'violated');
   assert.equal(result.witnessStep, 1);
 });

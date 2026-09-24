@@ -39,10 +39,34 @@ function fullWalk(ref: string): SessionTrace {
   return {
     ref,
     steps: [
-      step({ step: 0, action: 'browser_goto', urlBefore: '', urlAfter: 'http://app/', args: { url: 'http://app/' } }),
-      step({ step: 1, action: 'browser_click', urlBefore: 'http://app/', urlAfter: 'http://app/users', args: { selector: '#users-link' } }),
-      step({ step: 2, action: 'browser_click', urlBefore: 'http://app/users', urlAfter: 'http://app/users/1', args: { selector: '.row' } }),
-      step({ step: 3, action: 'browser_click', urlBefore: 'http://app/users/1', urlAfter: 'http://app/settings', args: { selector: '#settings' } }),
+      step({
+        step: 0,
+        action: 'browser_goto',
+        urlBefore: '',
+        urlAfter: 'http://app/',
+        args: { url: 'http://app/' },
+      }),
+      step({
+        step: 1,
+        action: 'browser_click',
+        urlBefore: 'http://app/',
+        urlAfter: 'http://app/users',
+        args: { selector: '#users-link' },
+      }),
+      step({
+        step: 2,
+        action: 'browser_click',
+        urlBefore: 'http://app/users',
+        urlAfter: 'http://app/users/1',
+        args: { selector: '.row' },
+      }),
+      step({
+        step: 3,
+        action: 'browser_click',
+        urlBefore: 'http://app/users/1',
+        urlAfter: 'http://app/settings',
+        args: { selector: '#settings' },
+      }),
     ],
   };
 }
@@ -52,8 +76,20 @@ function shallowWalk(ref: string): SessionTrace {
   return {
     ref,
     steps: [
-      step({ step: 0, action: 'browser_goto', urlBefore: '', urlAfter: 'http://app/', args: { url: 'http://app/' } }),
-      step({ step: 1, action: 'browser_click', urlBefore: 'http://app/', urlAfter: 'http://app/users', args: { selector: '#users-link' } }),
+      step({
+        step: 0,
+        action: 'browser_goto',
+        urlBefore: '',
+        urlAfter: 'http://app/',
+        args: { url: 'http://app/' },
+      }),
+      step({
+        step: 1,
+        action: 'browser_click',
+        urlBefore: 'http://app/',
+        urlAfter: 'http://app/users',
+        args: { selector: '#users-link' },
+      }),
     ],
   };
 }
@@ -143,7 +179,9 @@ test('renderCoverageSummary flags a predicate-extractor mismatch as advisory', (
   assert.ok(line.includes('predicate-extractor mismatch'));
   assert.ok(line.includes('advisory'));
   // A matching extractor produces no warning text.
-  const ok = renderCoverageSummary(computeCoverage(model, [fullWalk('r1')], { predicates: extractor }));
+  const ok = renderCoverageSummary(
+    computeCoverage(model, [fullWalk('r1')], { predicates: extractor }),
+  );
   assert.ok(!ok.includes('mismatch'));
 });
 
@@ -224,8 +262,20 @@ test('page-derived strings in hint labels are sanitized (backticks, newlines, le
   const run: SessionTrace = {
     ref: 'evil',
     steps: [
-      step({ step: 0, action: 'browser_goto', urlBefore: '', urlAfter: 'http://app/', args: { url: 'http://app/' } }),
-      step({ step: 1, action: 'browser_click', urlBefore: 'http://app/', urlAfter: 'http://app/users', args: { selector: evilSelector } }),
+      step({
+        step: 0,
+        action: 'browser_goto',
+        urlBefore: '',
+        urlAfter: 'http://app/',
+        args: { url: 'http://app/' },
+      }),
+      step({
+        step: 1,
+        action: 'browser_click',
+        urlBefore: 'http://app/',
+        urlAfter: 'http://app/users',
+        args: { selector: evilSelector },
+      }),
     ],
   };
   const model = learn('spec', 'target', [run]);

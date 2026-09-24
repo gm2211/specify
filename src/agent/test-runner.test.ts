@@ -64,7 +64,9 @@ test('flattenReporterSpecs: flattens nested suites and maps behavior ids', () =>
                 tests: [
                   {
                     status: 'unexpected',
-                    results: [{ status: 'failed', error: { message: 'expect(received).toBe(expected)' } }],
+                    results: [
+                      { status: 'failed', error: { message: 'expect(received).toBe(expected)' } },
+                    ],
                   },
                 ],
               },

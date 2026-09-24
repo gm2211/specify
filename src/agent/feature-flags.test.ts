@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { envFlag, learnedSkillsEnabled, monitorVerdictsEnabled, faultInjectionEnabled } from './feature-flags.js';
+import {
+  envFlag,
+  learnedSkillsEnabled,
+  monitorVerdictsEnabled,
+  faultInjectionEnabled,
+} from './feature-flags.js';
 
 test('envFlag defaults to false', () => {
   const prev = process.env.SPECIFY_TEST_FLAG;

@@ -24,7 +24,11 @@ function tmpFile(): string {
   return path.join(dir, 'specify.quint.yaml');
 }
 
-const PROV: QuintSpecProvenance = { drafted_by: 'llm', drafted_at: '2026-07-18T00:00:00Z', model: 'test-model' };
+const PROV: QuintSpecProvenance = {
+  drafted_by: 'llm',
+  drafted_at: '2026-07-18T00:00:00Z',
+  model: 'test-model',
+};
 
 function draft(flow: string, specText: string): Parameters<typeof addQuintDraft>[1] {
   return {
@@ -55,7 +59,10 @@ test('quintSpecId: stable and content-derived', () => {
 // ---------------------------------------------------------------------------
 
 test('addQuintDraft: appends a new draft with draft status', () => {
-  const { file, entry, deduped } = addQuintDraft(emptyQuintSpecsFile(), draft('auth/login', 'module auth {}'));
+  const { file, entry, deduped } = addQuintDraft(
+    emptyQuintSpecsFile(),
+    draft('auth/login', 'module auth {}'),
+  );
   assert.equal(deduped, false);
   assert.equal(entry.status, 'draft');
   assert.equal(entry.flow, 'auth/login');
@@ -106,7 +113,10 @@ test('addQuintDraft: an id collision between DIFFERENT content throws, never ali
 // ---------------------------------------------------------------------------
 
 test('setQuintSpecStatus: flips status; approvedQuintSpecs filters', () => {
-  const { file, entry } = addQuintDraft(emptyQuintSpecsFile(), draft('auth/login', 'module auth {}'));
+  const { file, entry } = addQuintDraft(
+    emptyQuintSpecsFile(),
+    draft('auth/login', 'module auth {}'),
+  );
   assert.equal(approvedQuintSpecs(file).length, 0);
   const approved = setQuintSpecStatus(file, entry.id, 'approved');
   assert.equal(approvedQuintSpecs(approved).length, 1);

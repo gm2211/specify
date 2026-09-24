@@ -90,7 +90,11 @@ export interface WatcherDeps {
    * calls inbox.findActiveVerify() — which is correct in-process but cannot
    * be used in unit tests that don't spin up the daemon.
    */
-  findActiveVerify?: (target: { namespace: string; name: string; image?: string }) => Promise<ActiveVerifyResult | undefined | null> | ActiveVerifyResult | undefined | null;
+  findActiveVerify?: (target: {
+    namespace: string;
+    name: string;
+    image?: string;
+  }) => Promise<ActiveVerifyResult | undefined | null> | ActiveVerifyResult | undefined | null;
   /**
    * Clock override for deterministic tests. Defaults to Date.now.
    */
@@ -101,7 +105,9 @@ export interface WatcherImpl {
   start(handler: (ev: RolloutEvent) => void): Promise<() => Promise<void>>;
 }
 
-export function watcherConfigFromEnv(env: Record<string, string | undefined> = process.env): WatcherConfig {
+export function watcherConfigFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): WatcherConfig {
   const enabled = env.SPECIFY_K8S_WATCH === 'true' || env.SPECIFY_K8S_WATCH === '1';
   const namespaces = (env.SPECIFY_K8S_NAMESPACES ?? '')
     .split(',')
@@ -112,8 +118,9 @@ export function watcherConfigFromEnv(env: Record<string, string | undefined> = p
     .split(',')
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
-  const resources = rawResources
-    .filter((r): r is 'deployment' | 'statefulset' => r === 'deployment' || r === 'statefulset');
+  const resources = rawResources.filter(
+    (r): r is 'deployment' | 'statefulset' => r === 'deployment' || r === 'statefulset',
+  );
   const inboxUrl = env.SPECIFY_K8S_LOCAL_INBOX_URL ?? 'http://127.0.0.1:4100/inbox';
   const inboxBearer = env.SPECIFY_INBOX_TOKEN;
   const specPath = env.SPECIFY_SPEC_INLINE_PATH;
@@ -124,10 +131,19 @@ export function watcherConfigFromEnv(env: Record<string, string | undefined> = p
     debounceMs = 10 * 60_000;
   } else {
     const parsed = parseFloat(env.SPECIFY_K8S_VERIFY_DEBOUNCE_MINUTES);
-    debounceMs = (!isNaN(parsed) && parsed > 0) ? parsed * 60_000 : 0;
+    debounceMs = !isNaN(parsed) && parsed > 0 ? parsed * 60_000 : 0;
   }
 
-  return { enabled, namespaces, labelSelector, resources, inboxUrl, inboxBearer, specPath, debounceMs };
+  return {
+    enabled,
+    namespaces,
+    labelSelector,
+    resources,
+    inboxUrl,
+    inboxBearer,
+    specPath,
+    debounceMs,
+  };
 }
 
 /**
@@ -205,12 +221,14 @@ export async function startK8sWatcher(
   // rnz-ukd9: surface watcher config + lifecycle so silent-failure modes
   // (RBAC missing, informer.start hanging, isReady() filtering everything
   // out) are visible in pod logs.
-  log(`[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl} specPath=${config.specPath ?? 'none'} debounceMs=${config.debounceMs}\n`);
+  log(
+    `[k8s-watcher] enabled namespaces=[${config.namespaces.join(',')}] selector=${config.labelSelector} resources=[${config.resources.join(',')}] inboxUrl=${config.inboxUrl} specPath=${config.specPath ?? 'none'} debounceMs=${config.debounceMs}\n`,
+  );
 
   const fetchImpl = deps.fetchImpl ?? globalThis.fetch;
   const now = deps.now ?? (() => Date.now());
-  const findActiveVerify = deps.findActiveVerify ??
-    ((target) => defaultFindActiveVerify(target, log));
+  const findActiveVerify =
+    deps.findActiveVerify ?? ((target) => defaultFindActiveVerify(target, log));
 
   let watcher: WatcherImpl;
   try {
@@ -225,7 +243,9 @@ export async function startK8sWatcher(
 
   const stop = await watcher.start(async (ev) => {
     // Log the rollout detection and emit observability event unconditionally.
-    log(`[k8s-watcher] rollout detected ${ev.namespace}/${ev.name} kind=${ev.kind} image=${ev.image ?? 'unknown'} rv=${ev.resourceVersion ?? '?'}\n`);
+    log(
+      `[k8s-watcher] rollout detected ${ev.namespace}/${ev.name} kind=${ev.kind} image=${ev.image ?? 'unknown'} rv=${ev.resourceVersion ?? '?'}\n`,
+    );
     eventBus.send('k8s:rollout', {
       kind: ev.kind,
       namespace: ev.namespace,
@@ -251,7 +271,9 @@ export async function startK8sWatcher(
         const elapsedMs = nowMs - lastTs;
         if (elapsedMs < config.debounceMs) {
           const elapsedSec = Math.round(elapsedMs / 1000);
-          log(`[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=debounce, last posted ${elapsedSec}s ago)\n`);
+          log(
+            `[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=debounce, last posted ${elapsedSec}s ago)\n`,
+          );
           return;
         }
       }
@@ -263,10 +285,16 @@ export async function startK8sWatcher(
     lastPosted.set(targetKey, nowMs);
 
     // --- Active-job check (always runs, even when debounce is disabled) ---
-    const active = await findActiveVerify({ namespace: ev.namespace, name: ev.name, image: ev.image });
+    const active = await findActiveVerify({
+      namespace: ev.namespace,
+      name: ev.name,
+      image: ev.image,
+    });
     if (active) {
       lastPosted.delete(targetKey);
-      log(`[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=active-job ${active.id} status=${active.status})\n`);
+      log(
+        `[k8s-watcher] duplicate verify suppressed for ${ev.namespace}/${ev.name} (image=${ev.image ?? 'unknown'}, reason=active-job ${active.id} status=${active.status})\n`,
+      );
       return;
     }
 
@@ -277,7 +305,9 @@ export async function startK8sWatcher(
     } catch (err) {
       // On failure, clear the debounce entry so the next event retries.
       lastPosted.delete(targetKey);
-      log(`[k8s-watcher] inbox post failed for ${ev.namespace}/${ev.name}: ${(err as Error).message}\n`);
+      log(
+        `[k8s-watcher] inbox post failed for ${ev.namespace}/${ev.name}: ${(err as Error).message}\n`,
+      );
     }
   });
 
@@ -305,7 +335,8 @@ function isTransientStreamClose(err: Error): boolean {
   // Node undici / fetch-level socket EOF
   if (msg.includes('UND_ERR_SOCKET') || msg.includes('socket hang up')) return true;
   // HTTP/2 stream reset when apiserver sends RST_STREAM on idle timeout
-  if (msg.includes('ERR_HTTP2_STREAM_CANCEL') || msg.includes('ERR_HTTP2_SESSION_ERROR')) return true;
+  if (msg.includes('ERR_HTTP2_STREAM_CANCEL') || msg.includes('ERR_HTTP2_SESSION_ERROR'))
+    return true;
   return false;
 }
 
@@ -342,7 +373,9 @@ function makeFireGate(log: (line: string) => void) {
       const key = `${kind}:${ns}/${name}`;
 
       if (!ready) {
-        log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → skip\n`);
+        log(
+          `[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → skip\n`,
+        );
         return;
       }
 
@@ -363,7 +396,9 @@ function makeFireGate(log: (line: string) => void) {
         decision = 'no-change';
       }
 
-      log(`[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → ${decision}\n`);
+      log(
+        `[k8s-watcher] event=${event} kind=${kind} ${ns}/${name} desired=${desired} ready=${status.readyReplicas ?? 0} updated=${status.updatedReplicas ?? 0} repl=${status.replicas ?? 0} obsGen=${status.observedGeneration ?? '?'}/gen=${obj.metadata?.generation ?? '?'} → ${decision}\n`,
+      );
 
       if (decision === 'FIRE') {
         handler(toRollout(kind, obj));
@@ -378,7 +413,10 @@ function makeFireGate(log: (line: string) => void) {
  * Kept lazy-imported so the kubernetes client doesn't load (and try to read
  * cluster config) when watch mode is disabled.
  */
-async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => void): Promise<WatcherImpl> {
+async function defaultK8sWatcher(
+  config: WatcherConfig,
+  log: (line: string) => void,
+): Promise<WatcherImpl> {
   const k8s = await import('@kubernetes/client-node');
   const kc = new k8s.KubeConfig();
   // Tries the in-cluster service account first; falls back to ~/.kube/config
@@ -428,16 +466,22 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
           const apiPath = namespace
             ? `/apis/apps/v1/namespaces/${namespace}/${isDeploy ? 'deployments' : 'statefulsets'}`
             : `/apis/apps/v1/${isDeploy ? 'deployments' : 'statefulsets'}`;
-          log(`[k8s-watcher] starting informer ns=${namespace || 'all'} resource=${resource} path=${apiPath}\n`);
+          log(
+            `[k8s-watcher] starting informer ns=${namespace || 'all'} resource=${resource} path=${apiPath}\n`,
+          );
           const lister = () => {
             if (isDeploy) {
-              return (namespace
-                ? apps.listNamespacedDeployment({ namespace, labelSelector })
-                : apps.listDeploymentForAllNamespaces({ labelSelector })) as Promise<{ items: AppsResource[] }>;
+              return (
+                namespace
+                  ? apps.listNamespacedDeployment({ namespace, labelSelector })
+                  : apps.listDeploymentForAllNamespaces({ labelSelector })
+              ) as Promise<{ items: AppsResource[] }>;
             }
-            return (namespace
-              ? apps.listNamespacedStatefulSet({ namespace, labelSelector })
-              : apps.listStatefulSetForAllNamespaces({ labelSelector })) as Promise<{ items: AppsResource[] }>;
+            return (
+              namespace
+                ? apps.listNamespacedStatefulSet({ namespace, labelSelector })
+                : apps.listStatefulSetForAllNamespaces({ labelSelector })
+            ) as Promise<{ items: AppsResource[] }>;
           };
           const informer = k8s.makeInformer(kc, apiPath, lister, labelSelector);
 
@@ -460,31 +504,49 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
               lastEventTs = Date.now(); // reset so watchdog doesn't immediately re-trigger
               try {
                 await informer.start();
-                log(`[k8s-watcher] informer reconnected ns=${namespace || 'all'} resource=${resource}\n`);
+                log(
+                  `[k8s-watcher] informer reconnected ns=${namespace || 'all'} resource=${resource}\n`,
+                );
               } catch (restartErr) {
-                log(`[k8s-watcher] informer restart failed ns=${namespace || 'all'} resource=${resource}: ${(restartErr as Error).message}\n`);
+                log(
+                  `[k8s-watcher] informer restart failed ns=${namespace || 'all'} resource=${resource}: ${(restartErr as Error).message}\n`,
+                );
                 // Back off and try again rather than going silent.
                 scheduleRestart('restart-failed');
               }
             }, delayMs);
             if (delayMs > 0) {
-              log(`[k8s-watcher] informer ${reason} (${namespace || 'all'}/${resource}) — scheduling restart in ${delayMs / 1000}s\n`);
+              log(
+                `[k8s-watcher] informer ${reason} (${namespace || 'all'}/${resource}) — scheduling restart in ${delayMs / 1000}s\n`,
+              );
             }
           };
 
-          const touchEvent = () => { lastEventTs = Date.now(); };
+          const touchEvent = () => {
+            lastEventTs = Date.now();
+          };
 
-          informer.on('add', (obj) => { touchEvent(); fire(resource, 'add', obj); });
-          informer.on('update', (obj) => { touchEvent(); fire(resource, 'update', obj); });
+          informer.on('add', (obj) => {
+            touchEvent();
+            fire(resource, 'add', obj);
+          });
+          informer.on('update', (obj) => {
+            touchEvent();
+            fire(resource, 'update', obj);
+          });
           informer.on('error', (err: Error) => {
             touchEvent();
             if (isTransientStreamClose(err)) {
               // Normal apiserver stream EOF (idle timeout, EPIPE, connection reset).
               // Reconnect immediately and quietly — no backoff, no noise.
-              log(`[k8s-watcher] informer stream closed (${namespace || 'all'}/${resource}): ${err.message} — reconnecting\n`);
+              log(
+                `[k8s-watcher] informer stream closed (${namespace || 'all'}/${resource}): ${err.message} — reconnecting\n`,
+              );
               scheduleRestart(`stream-close: ${err.message}`, 0);
             } else {
-              log(`[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message} — scheduling restart in 5s\n`);
+              log(
+                `[k8s-watcher] informer error (${namespace || 'all'}/${resource}): ${err.message} — scheduling restart in 5s\n`,
+              );
               scheduleRestart(`error: ${err.message}`);
             }
           });
@@ -493,7 +555,9 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
             await informer.start();
             log(`[k8s-watcher] informer started ns=${namespace || 'all'} resource=${resource}\n`);
           } catch (err) {
-            log(`[k8s-watcher] informer.start failed ns=${namespace || 'all'} resource=${resource}: ${(err as Error).message}\n`);
+            log(
+              `[k8s-watcher] informer.start failed ns=${namespace || 'all'} resource=${resource}: ${(err as Error).message}\n`,
+            );
             throw err;
           }
 
@@ -503,13 +567,20 @@ async function defaultK8sWatcher(config: WatcherConfig, log: (line: string) => v
           const watchdog = setInterval(() => {
             const idleMs = Date.now() - lastEventTs;
             if (idleMs > IDLE_THRESHOLD_MS) {
-              log(`[k8s-watcher] watchdog: ns=${namespace || 'all'} resource=${resource} idle ${Math.round(idleMs / 1000)}s — scheduling restart\n`);
+              log(
+                `[k8s-watcher] watchdog: ns=${namespace || 'all'} resource=${resource} idle ${Math.round(idleMs / 1000)}s — scheduling restart\n`,
+              );
               scheduleRestart('watchdog-idle');
             }
           }, 60_000);
           watchdogTimers.push(watchdog);
 
-          informers.push({ stop: () => { clearTimeout(restartTimer ?? undefined); informer.stop(); } });
+          informers.push({
+            stop: () => {
+              clearTimeout(restartTimer ?? undefined);
+              informer.stop();
+            },
+          });
         }
       }
 
@@ -532,7 +603,10 @@ interface AppsResource {
   };
 }
 
-interface SeenState { image?: string; generation?: number }
+interface SeenState {
+  image?: string;
+  generation?: number;
+}
 
 /**
  * Returns true only when the deployment's observable identity changed since
@@ -559,9 +633,11 @@ function isReady(obj: AppsResource): boolean {
   if (status.observedGeneration != null && obj.metadata?.generation != null) {
     if (status.observedGeneration < obj.metadata.generation) return false;
   }
-  return (status.readyReplicas ?? 0) >= desired
-    && (status.updatedReplicas ?? 0) >= desired
-    && (status.replicas ?? 0) === desired;
+  return (
+    (status.readyReplicas ?? 0) >= desired &&
+    (status.updatedReplicas ?? 0) >= desired &&
+    (status.replicas ?? 0) === desired
+  );
 }
 
 function toRollout(kind: string, obj: AppsResource): RolloutEvent {
@@ -575,4 +651,10 @@ function toRollout(kind: string, obj: AppsResource): RolloutEvent {
 }
 
 // Exposed for tests.
-export const _internals = { isReady, toRollout, isTransientStreamClose, rolloutChanged, makeFireGate };
+export const _internals = {
+  isReady,
+  toRollout,
+  isTransientStreamClose,
+  rolloutChanged,
+  makeFireGate,
+};

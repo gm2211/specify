@@ -161,7 +161,13 @@ export function markdownToNarrative(md: string): NarrativeDocument {
   }
 
   // Parse sections
-  type PendingSection = { title: string; depth: number; specRefs: string[]; bodyLines: string[]; children: NarrativeSection[] };
+  type PendingSection = {
+    title: string;
+    depth: number;
+    specRefs: string[];
+    bodyLines: string[];
+    children: NarrativeSection[];
+  };
   const stack: PendingSection[] = [];
   let inOverview = false;
   const overviewLines: string[] = [];
@@ -229,7 +235,16 @@ export function markdownToNarrative(md: string): NarrativeDocument {
   return { title, overview, sections, specPath };
 }
 
-function finalizeTop(stack: Array<{ title: string; depth: number; specRefs: string[]; bodyLines: string[]; children: NarrativeSection[] }>, topLevel: NarrativeSection[]): void {
+function finalizeTop(
+  stack: Array<{
+    title: string;
+    depth: number;
+    specRefs: string[];
+    bodyLines: string[];
+    children: NarrativeSection[];
+  }>,
+  topLevel: NarrativeSection[],
+): void {
   const item = stack.pop()!;
   const section: NarrativeSection = {
     title: item.title,

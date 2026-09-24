@@ -42,27 +42,36 @@ test('isReady: false when desired replicas is 0', () => {
 });
 
 test('isReady: false when observedGeneration < generation', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 4 },
-    spec: { replicas: 2 },
-    status: { observedGeneration: 3, readyReplicas: 2, updatedReplicas: 2, replicas: 2 },
-  }), false);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 4 },
+      spec: { replicas: 2 },
+      status: { observedGeneration: 3, readyReplicas: 2, updatedReplicas: 2, replicas: 2 },
+    }),
+    false,
+  );
 });
 
 test('isReady: true when ready/updated/replicas all match desired', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 5 },
-    spec: { replicas: 3 },
-    status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 3, replicas: 3 },
-  }), true);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 5 },
+      spec: { replicas: 3 },
+      status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 3, replicas: 3 },
+    }),
+    true,
+  );
 });
 
 test('isReady: false when partial rollout (updatedReplicas < desired)', () => {
-  assert.equal(_internals.isReady({
-    metadata: { generation: 5 },
-    spec: { replicas: 3 },
-    status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 2, replicas: 3 },
-  }), false);
+  assert.equal(
+    _internals.isReady({
+      metadata: { generation: 5 },
+      spec: { replicas: 3 },
+      status: { observedGeneration: 5, readyReplicas: 3, updatedReplicas: 2, replicas: 3 },
+    }),
+    false,
+  );
 });
 
 test('toRollout: extracts namespace, name, image, resourceVersion', () => {
@@ -133,7 +142,10 @@ test('startK8sWatcher: disabled config returns no-op stop', async () => {
 
 test('startK8sWatcher: rollout event triggers inbox post', async () => {
   let posted = false;
-  const fetchImpl = (async () => { posted = true; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    posted = true;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   const watcherImpl: WatcherImpl = {
     async start(handler) {
       // Synthesize one rollout shortly after start.
@@ -180,9 +192,11 @@ test('isTransientStreamClose: auth error is NOT transient', () => {
 });
 
 test('isTransientStreamClose: DNS error is NOT transient', () => {
-  assert.equal(_internals.isTransientStreamClose(new Error('getaddrinfo ENOTFOUND kubernetes.default.svc')), false);
+  assert.equal(
+    _internals.isTransientStreamClose(new Error('getaddrinfo ENOTFOUND kubernetes.default.svc')),
+    false,
+  );
 });
-
 
 test("startK8sWatcher: inbox failure logged but doesn't throw", async () => {
   const fetchImpl = (async () => new Response('nope', { status: 503 })) as typeof fetch;
@@ -203,7 +217,14 @@ test("startK8sWatcher: inbox failure logged but doesn't throw", async () => {
       specPath: '/work/specify.spec.yaml',
       debounceMs: 0,
     },
-    { fetchImpl, watcherImpl, log: (line) => { logged += line; }, findActiveVerify: async () => undefined },
+    {
+      fetchImpl,
+      watcherImpl,
+      log: (line) => {
+        logged += line;
+      },
+      findActiveVerify: async () => undefined,
+    },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
@@ -230,7 +251,11 @@ test('triggerVerifyForRollout: includes spec in posted body when specPath set', 
   };
   await triggerVerifyForRollout(
     ev,
-    { inboxUrl: 'http://127.0.0.1:4100/inbox', inboxBearer: 'tok', specPath: '/work/specify.spec.yaml' },
+    {
+      inboxUrl: 'http://127.0.0.1:4100/inbox',
+      inboxBearer: 'tok',
+      specPath: '/work/specify.spec.yaml',
+    },
     fetchImpl,
   );
   const body = JSON.parse(captured.init?.body as string);
@@ -244,11 +269,7 @@ test('triggerVerifyForRollout: omits spec key entirely when specPath unset', asy
     return new Response('ok', { status: 200 });
   }) as typeof fetch;
   const ev: RolloutEvent = { kind: 'deployment', namespace: 'staging', name: 'api' };
-  await triggerVerifyForRollout(
-    ev,
-    { inboxUrl: 'http://127.0.0.1:4100/inbox' },
-    fetchImpl,
-  );
+  await triggerVerifyForRollout(ev, { inboxUrl: 'http://127.0.0.1:4100/inbox' }, fetchImpl);
   const body = JSON.parse(captured.init?.body as string);
   assert.equal('spec' in body, false);
 });
@@ -275,7 +296,14 @@ test('startK8sWatcher: no specPath posts rollout verify for inbox env fallback',
       inboxUrl: 'http://127.0.0.1:4100/inbox',
       debounceMs: 0,
     },
-    { fetchImpl, watcherImpl, log: (line) => { logged += line; }, findActiveVerify: async () => undefined },
+    {
+      fetchImpl,
+      watcherImpl,
+      log: (line) => {
+        logged += line;
+      },
+      findActiveVerify: async () => undefined,
+    },
   );
   await new Promise((r) => setTimeout(r, 30));
   await stop();
@@ -289,7 +317,9 @@ test('startK8sWatcher: no specPath posts rollout verify for inbox env fallback',
 // ---------------------------------------------------------------------------
 
 /** Helper: build a minimal enabled WatcherConfig. */
-function cfg(overrides: Partial<{ debounceMs: number }> = {}): Parameters<typeof startK8sWatcher>[0] {
+function cfg(
+  overrides: Partial<{ debounceMs: number }> = {},
+): Parameters<typeof startK8sWatcher>[0] {
   return {
     enabled: true,
     namespaces: [],
@@ -302,7 +332,10 @@ function cfg(overrides: Partial<{ debounceMs: number }> = {}): Parameters<typeof
 
 test('debounce: two back-to-back events for same workload → exactly one POST, suppression logged', async () => {
   let postCount = 0;
-  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    postCount++;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   let logged = '';
   let fireHandler: ((ev: RolloutEvent) => void) | undefined;
   const watcherImpl: WatcherImpl = {
@@ -315,12 +348,19 @@ test('debounce: two back-to-back events for same workload → exactly one POST, 
   const stop = await startK8sWatcher(cfg({ debounceMs: 60_000 }), {
     fetchImpl,
     watcherImpl,
-    log: (line) => { logged += line; },
+    log: (line) => {
+      logged += line;
+    },
     now: () => fakeNow,
     findActiveVerify: async () => undefined,
   });
 
-  const ev: RolloutEvent = { kind: 'deployment', namespace: 'staging', name: 'api', image: 'api:1' };
+  const ev: RolloutEvent = {
+    kind: 'deployment',
+    namespace: 'staging',
+    name: 'api',
+    image: 'api:1',
+  };
   fireHandler!(ev);
   // Second event arrives 5 seconds later — well within debounce window.
   fakeNow += 5_000;
@@ -336,7 +376,10 @@ test('debounce: two back-to-back events for same workload → exactly one POST, 
 
 test('debounce: second event after window elapsed → second POST allowed', async () => {
   let postCount = 0;
-  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    postCount++;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   let fireHandler: ((ev: RolloutEvent) => void) | undefined;
   const watcherImpl: WatcherImpl = {
     async start(handler) {
@@ -368,7 +411,10 @@ test('debounce: second event after window elapsed → second POST allowed', asyn
 
 test('debounce: different image → both events POST (no suppression)', async () => {
   let postCount = 0;
-  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    postCount++;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   let fireHandler: ((ev: RolloutEvent) => void) | undefined;
   const watcherImpl: WatcherImpl = {
     async start(handler) {
@@ -397,7 +443,10 @@ test('debounce: different image → both events POST (no suppression)', async ()
 
 test('active-job: findActiveVerify returns active job → no POST, suppression logged', async () => {
   let postCount = 0;
-  const fetchImpl = (async () => { postCount++; return new Response('ok', { status: 200 }); }) as typeof fetch;
+  const fetchImpl = (async () => {
+    postCount++;
+    return new Response('ok', { status: 200 });
+  }) as typeof fetch;
   let logged = '';
   let fireHandler: ((ev: RolloutEvent) => void) | undefined;
   const watcherImpl: WatcherImpl = {
@@ -409,7 +458,9 @@ test('active-job: findActiveVerify returns active job → no POST, suppression l
   const stop = await startK8sWatcher(cfg({ debounceMs: 0 }), {
     fetchImpl,
     watcherImpl,
-    log: (line) => { logged += line; },
+    log: (line) => {
+      logged += line;
+    },
     findActiveVerify: async () => ({ id: 'msg_abc123', status: 'running' }),
   });
 
@@ -486,15 +537,24 @@ test('rolloutChanged: undefined prev → false (first sight)', () => {
 });
 
 test('rolloutChanged: same image + generation → false (no change)', () => {
-  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 5 }), false);
+  assert.equal(
+    _internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 5 }),
+    false,
+  );
 });
 
 test('rolloutChanged: different image → true', () => {
-  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:2', generation: 5 }), true);
+  assert.equal(
+    _internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:2', generation: 5 }),
+    true,
+  );
 });
 
 test('rolloutChanged: different generation → true', () => {
-  assert.equal(_internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 6 }), true);
+  assert.equal(
+    _internals.rolloutChanged({ image: 'web:1', generation: 5 }, { image: 'web:1', generation: 6 }),
+    true,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -522,7 +582,11 @@ function notReadyObj(ns: string, name: string, image: string, generation: number
 test('makeFireGate: first ready add → handler NOT called, log contains SEED', () => {
   let handlerCalled = false;
   let logged = '';
-  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { handlerCalled = true; });
+  const gate = _internals.makeFireGate((line) => {
+    logged += line;
+  })(() => {
+    handlerCalled = true;
+  });
 
   gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
 
@@ -533,7 +597,11 @@ test('makeFireGate: first ready add → handler NOT called, log contains SEED', 
 test('makeFireGate: second event same state → handler NOT called, log contains no-change', () => {
   let callCount = 0;
   let logged = '';
-  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { callCount++; });
+  const gate = _internals.makeFireGate((line) => {
+    logged += line;
+  })(() => {
+    callCount++;
+  });
 
   gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
   logged = '';
@@ -546,7 +614,11 @@ test('makeFireGate: second event same state → handler NOT called, log contains
 test('makeFireGate: third event new image → handler called once, log contains FIRE', () => {
   let callCount = 0;
   let logged = '';
-  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { callCount++; });
+  const gate = _internals.makeFireGate((line) => {
+    logged += line;
+  })(() => {
+    callCount++;
+  });
 
   gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
   gate('deployment', 'add', readyObj('staging', 'api', 'api:1', 5));
@@ -560,7 +632,11 @@ test('makeFireGate: third event new image → handler called once, log contains 
 test('makeFireGate: not-ready event does NOT seed the map (map stays empty)', () => {
   let handlerCalled = false;
   let logged = '';
-  const gate = _internals.makeFireGate((line) => { logged += line; })(() => { handlerCalled = true; });
+  const gate = _internals.makeFireGate((line) => {
+    logged += line;
+  })(() => {
+    handlerCalled = true;
+  });
 
   // Send a not-ready event first — must not seed the map.
   gate('deployment', 'add', notReadyObj('staging', 'api', 'api:1', 5));

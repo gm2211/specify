@@ -30,7 +30,12 @@ async function loadPredicateRegistry(): Promise<ReadonlySet<string> | undefined>
     // this path — src/monitor/predicates.ts may not exist on every branch.
     const predicatesModulePath = '../../monitor/predicates.js';
     const mod = (await import(predicatesModulePath)) as Record<string, unknown>;
-    const candidates = [mod.PREDICATE_NAMES, mod.predicateNames, mod.KNOWN_PREDICATES, mod.predicateRegistry];
+    const candidates = [
+      mod.PREDICATE_NAMES,
+      mod.predicateNames,
+      mod.KNOWN_PREDICATES,
+      mod.predicateRegistry,
+    ];
     for (const c of candidates) {
       if (c instanceof Set) return c as Set<string>;
       if (Array.isArray(c)) return new Set(c as string[]);
@@ -69,8 +74,8 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
   }
 
   if (!ctx.quiet) {
-    const errorCount = result.errors.filter(e => e.severity === 'error').length;
-    const warnCount = result.errors.filter(e => e.severity === 'warning').length;
+    const errorCount = result.errors.filter((e) => e.severity === 'error').length;
+    const warnCount = result.errors.filter((e) => e.severity === 'warning').length;
 
     if (result.valid) {
       process.stderr.write(c.boldGreen('✓ Spec is valid'));
@@ -78,18 +83,24 @@ export async function specLint(options: SpecLintOptions, ctx: CliContext): Promi
         process.stderr.write(c.yellow(` (${warnCount} warning${warnCount !== 1 ? 's' : ''})`));
       }
       process.stderr.write('\n');
-      for (const err of result.errors.filter(e => e.severity === 'warning')) {
-        process.stderr.write(`  ${c.yellow('⚠')} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`);
+      for (const err of result.errors.filter((e) => e.severity === 'warning')) {
+        process.stderr.write(
+          `  ${c.yellow('⚠')} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`,
+        );
       }
     } else {
-      process.stderr.write(c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`));
+      process.stderr.write(
+        c.boldRed(`✗ Spec has ${errorCount} error${errorCount !== 1 ? 's' : ''}`),
+      );
       if (warnCount > 0) {
         process.stderr.write(c.yellow(` and ${warnCount} warning${warnCount !== 1 ? 's' : ''}`));
       }
       process.stderr.write('\n');
       for (const err of result.errors) {
         const icon = err.severity === 'error' ? c.red('✗') : c.yellow('⚠');
-        process.stderr.write(`  ${icon} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`);
+        process.stderr.write(
+          `  ${icon} ${c.dim(err.path + ':')} ${err.message} ${c.dim(`(${err.rule})`)}\n`,
+        );
       }
     }
   }

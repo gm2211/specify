@@ -170,14 +170,22 @@ export async function runPlaywrightTests(
       } catch {
         // best-effort
       }
-      finish({ ok: false, reason: 'timeout', message: `playwright test timed out after ${timeoutMs}ms` });
+      finish({
+        ok: false,
+        reason: 'timeout',
+        message: `playwright test timed out after ${timeoutMs}ms`,
+      });
     }, timeoutMs);
 
     try {
       child = spawn('npx', args, { cwd: path.resolve(cwd), stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       clearTimeout(timer);
-      resolve({ ok: false, reason: 'error', message: err instanceof Error ? err.message : String(err) });
+      resolve({
+        ok: false,
+        reason: 'error',
+        message: err instanceof Error ? err.message : String(err),
+      });
       return;
     }
 
@@ -195,7 +203,11 @@ export async function runPlaywrightTests(
     child.on('close', () => {
       const combined = `${stdout}\n${stderr}`;
       if (UNRESOLVABLE_PATTERNS.some((re) => re.test(combined))) {
-        finish({ ok: false, reason: 'playwright_unresolvable', message: stderr.trim() || stdout.trim() });
+        finish({
+          ok: false,
+          reason: 'playwright_unresolvable',
+          message: stderr.trim() || stdout.trim(),
+        });
         return;
       }
       try {
@@ -240,10 +252,16 @@ export interface ConfirmBehaviorResult {
  * decision logic is unit-testable without spawning a real playwright
  * process.
  */
-export function decideConfirmation(tests: FlatTestResult[], behaviorId: string): ConfirmBehaviorResult {
+export function decideConfirmation(
+  tests: FlatTestResult[],
+  behaviorId: string,
+): ConfirmBehaviorResult {
   const match = tests.find((t) => t.behaviorId === behaviorId) ?? tests[0];
   if (!match) {
-    return { confirmed: false, output: 'unconfirmable: no generated test matched this behavior id' };
+    return {
+      confirmed: false,
+      output: 'unconfirmable: no generated test matched this behavior id',
+    };
   }
 
   if (match.status === 'failed') {
@@ -257,7 +275,8 @@ export function decideConfirmation(tests: FlatTestResult[], behaviorId: string):
   return {
     confirmed: false,
     test: match.title,
-    output: 'generated test passed, but the behavior was reported as failed — test does not reproduce the failure',
+    output:
+      'generated test passed, but the behavior was reported as failed — test does not reproduce the failure',
   };
 }
 
@@ -275,7 +294,10 @@ export async function confirmBehavior(
         // not worth recording as "unconfirmable" noise.
         return undefined;
       case 'playwright_unresolvable':
-        return { confirmed: false, output: `unconfirmable: @playwright/test not resolvable in output dir (${result.message})` };
+        return {
+          confirmed: false,
+          output: `unconfirmable: @playwright/test not resolvable in output dir (${result.message})`,
+        };
       case 'timeout':
         return { confirmed: false, output: `unconfirmable: ${result.message}` };
       case 'error':

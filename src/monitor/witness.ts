@@ -111,18 +111,30 @@ function humanizeAtom(atom: Atom, value: boolean): string {
         ? neg(`a ${a0} request to ${a1} occurs`, `no ${a0} request to ${a1} occurs`)
         : neg(`a request to ${a0} occurs`, `no request to ${a0} occurs`);
     case 'http.response':
-      return neg(`a response from ${a0} has status ${a1}`, `no response from ${a0} has status ${a1}`);
+      return neg(
+        `a response from ${a0} has status ${a1}`,
+        `no response from ${a0} has status ${a1}`,
+      );
     case 'http.status_class':
-      return neg(`a response from ${a0} is in the ${a1} class`, `no response from ${a0} is in the ${a1} class`);
+      return neg(
+        `a response from ${a0} is in the ${a1} class`,
+        `no response from ${a0} is in the ${a1} class`,
+      );
     case 'http.response_json':
       return neg(
         `a response from ${a0} has JSON field "${a1}" equal to "${a2}"`,
         `no response from ${a0} has JSON field "${a1}" equal to "${a2}"`,
       );
     case 'http.body_matches':
-      return neg(`a response body from ${a0} matches /${a1}/`, `no response body from ${a0} matches /${a1}/`);
+      return neg(
+        `a response body from ${a0} matches /${a1}/`,
+        `no response body from ${a0} matches /${a1}/`,
+      );
     case 'http.post_data_matches':
-      return neg(`a request body to ${a0} matches /${a1}/`, `no request body to ${a0} matches /${a1}/`);
+      return neg(
+        `a request body to ${a0} matches /${a1}/`,
+        `no request body to ${a0} matches /${a1}/`,
+      );
     case 'http.no_request':
       return neg(`no request to ${a0} occurs`, `a request to ${a0} occurs`);
     case 'console.error':
@@ -130,7 +142,10 @@ function humanizeAtom(atom: Atom, value: boolean): string {
         ? neg(`a console error matching /${a0}/ occurs`, `no console error matching /${a0}/ occurs`)
         : neg(`a console error occurs`, `no console error occurs`);
     case 'console.message':
-      return neg(`a console "${a0}" message matching /${a1}/ occurs`, `no console "${a0}" message matching /${a1}/ occurs`);
+      return neg(
+        `a console "${a0}" message matching /${a1}/ occurs`,
+        `no console "${a0}" message matching /${a1}/ occurs`,
+      );
     case 'step.action':
       return atom.args.length >= 2
         ? neg(`a "${a0}" step on ${a1} happens`, `no "${a0}" step on ${a1} happens`)
@@ -141,7 +156,10 @@ function humanizeAtom(atom: Atom, value: boolean): string {
       return neg(`the page title matches /${a0}/`, `the page title does not match /${a0}/`);
     case 'ax.role':
       return atom.args.length >= 2
-        ? neg(`the accessibility tree has a ${a0} named "${a1}"`, `the accessibility tree has no ${a0} named "${a1}"`)
+        ? neg(
+            `the accessibility tree has a ${a0} named "${a1}"`,
+            `the accessibility tree has no ${a0} named "${a1}"`,
+          )
         : neg(`the accessibility tree has a ${a0}`, `the accessibility tree has no ${a0}`);
     default: {
       const call = atom.args.length > 0 ? `${atom.name}(${atom.args.join(', ')})` : atom.name;
@@ -156,7 +174,8 @@ function renderNarrative(atoms: Atom[], assignment: Assignment, accepting: boole
     const trueClauses = atoms
       .map((a, j) => (row[j] ? humanizeAtom(a, true) : null))
       .filter((s): s is string => s !== null);
-    const body = trueClauses.length > 0 ? trueClauses.join('; ') : '(nothing observed at this step)';
+    const body =
+      trueClauses.length > 0 ? trueClauses.join('; ') : '(nothing observed at this step)';
     return `step ${i + 1}: ${body}`;
   });
   const tag = accepting ? 'PASSES' : 'FAILS';
@@ -292,6 +311,9 @@ export function generateWitnesses(formula: Formula, opts: WitnessOptions = {}): 
 }
 
 /** Convenience: pretty-print the formula alongside its witness set (used by the review server / CLI). */
-export function describeFormula(formula: Formula, opts: WitnessOptions = {}): { formula: string; witnesses: WitnessResult } {
+export function describeFormula(
+  formula: Formula,
+  opts: WitnessOptions = {},
+): { formula: string; witnesses: WitnessResult } {
   return { formula: render(formula), witnesses: generateWitnesses(formula, opts) };
 }

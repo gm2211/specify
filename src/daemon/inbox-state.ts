@@ -17,8 +17,9 @@ import * as path from 'node:path';
 import type { InboxMessage } from './inbox.js';
 
 export function stateDir(): string {
-  return process.env.SPECIFY_INBOX_STATE_DIR?.trim() ||
-    path.resolve('.specify', 'inbox', '_registry');
+  return (
+    process.env.SPECIFY_INBOX_STATE_DIR?.trim() || path.resolve('.specify', 'inbox', '_registry')
+  );
 }
 
 export function saveMessage(msg: InboxMessage): void {

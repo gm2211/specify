@@ -31,23 +31,35 @@ export async function specSplit(options: SpecSplitOptions, ctx: CliContext): Pro
     });
 
     if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-      process.stdout.write(JSON.stringify({
-        outputDir: result.outputDir,
-        manifest: result.manifestPath,
-        areas: result.areaPaths,
-      }, null, 2) + '\n');
+      process.stdout.write(
+        JSON.stringify(
+          {
+            outputDir: result.outputDir,
+            manifest: result.manifestPath,
+            areas: result.areaPaths,
+          },
+          null,
+          2,
+        ) + '\n',
+      );
     }
 
     if (!ctx.quiet) {
       process.stderr.write(`${c.boldGreen('✓ Split spec into directory')}\n`);
       process.stderr.write(`  ${c.cyan('Manifest:')} ${result.manifestPath}\n`);
-      process.stderr.write(`  ${c.cyan('Areas:')} ${result.areaPaths.length} file${result.areaPaths.length === 1 ? '' : 's'}\n`);
-      process.stderr.write(`  ${c.dim(`Use --spec ${path.relative(process.cwd(), result.outputDir) || result.outputDir}`)}\n`);
+      process.stderr.write(
+        `  ${c.cyan('Areas:')} ${result.areaPaths.length} file${result.areaPaths.length === 1 ? '' : 's'}\n`,
+      );
+      process.stderr.write(
+        `  ${c.dim(`Use --spec ${path.relative(process.cwd(), result.outputDir) || result.outputDir}`)}\n`,
+      );
     }
 
     return ExitCode.SUCCESS;
   } catch (err) {
-    process.stderr.write(`Spec split failed: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `Spec split failed: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     return ExitCode.PARSE_ERROR;
   }
 }

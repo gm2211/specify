@@ -92,7 +92,7 @@ async function main(): Promise<void> {
     console.log('');
     console.log('='.repeat(70));
     console.log('Please log in in the browser window.');
-    console.log('If the app opens a new tab after login, that\'s fine — we capture all tabs.');
+    console.log("If the app opens a new tab after login, that's fine — we capture all tabs.");
     console.log('Press Enter in this terminal when you are on the post-login dashboard.');
     console.log('='.repeat(70));
     console.log('');
@@ -141,7 +141,7 @@ async function main(): Promise<void> {
         console.log(`  Domain:  ${authCookie.domain}`);
         console.log(`  Secure:  ${authCookie.secure}`);
         console.log(
-          `  Expires: ${authCookie.expires > 0 ? new Date(authCookie.expires * 1000).toISOString() : 'session'}`
+          `  Expires: ${authCookie.expires > 0 ? new Date(authCookie.expires * 1000).toISOString() : 'session'}`,
         );
 
         // Attempt JWT payload decode (works for JWT cookies)
@@ -164,7 +164,7 @@ async function main(): Promise<void> {
       } else {
         console.log('');
         console.log(
-          `WARNING: None of the expected auth cookies found (${AUTH_COOKIE_NAMES.join(', ')}).`
+          `WARNING: None of the expected auth cookies found (${AUTH_COOKIE_NAMES.join(', ')}).`,
         );
         console.log('You may not be fully logged in yet, or AUTH_COOKIE_NAMES needs updating.');
       }

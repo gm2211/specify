@@ -175,7 +175,9 @@ function validateEntry(raw: unknown, index: number, filePath: string): QuintSpec
     drafted_by: draftedBy,
     drafted_at: draftedAt,
     ...(typeof provenanceObj.model === 'string' ? { model: provenanceObj.model } : {}),
-    ...(typeof provenanceObj.session_id === 'string' ? { session_id: provenanceObj.session_id } : {}),
+    ...(typeof provenanceObj.session_id === 'string'
+      ? { session_id: provenanceObj.session_id }
+      : {}),
   };
 
   return {
@@ -202,7 +204,11 @@ export function loadQuintSpecs(filePath: string): QuintSpecsFile | null {
   try {
     raw = yaml.load(fs.readFileSync(filePath, 'utf-8'));
   } catch (err) {
-    throw new QuintSpecsLoadError(`Failed to parse ${filePath} as YAML: ${(err as Error).message}`, filePath, err);
+    throw new QuintSpecsLoadError(
+      `Failed to parse ${filePath} as YAML: ${(err as Error).message}`,
+      filePath,
+      err,
+    );
   }
 
   if (!raw || typeof raw !== 'object') {
@@ -211,7 +217,10 @@ export function loadQuintSpecs(filePath: string): QuintSpecsFile | null {
   const data = raw as Record<string, unknown>;
 
   if (data.version !== 1) {
-    throw new QuintSpecsLoadError(`${filePath} has unsupported version "${String(data.version)}" (expected 1)`, filePath);
+    throw new QuintSpecsLoadError(
+      `${filePath} has unsupported version "${String(data.version)}" (expected 1)`,
+      filePath,
+    );
   }
   if (!Array.isArray(data.specs)) {
     throw new QuintSpecsLoadError(`${filePath} is missing a "specs" array`, filePath);
@@ -246,7 +255,9 @@ function orderEntry(entry: QuintSpecEntry): Record<string, unknown> {
     provenance: {
       drafted_by: entry.provenance.drafted_by,
       ...(entry.provenance.model !== undefined ? { model: entry.provenance.model } : {}),
-      ...(entry.provenance.session_id !== undefined ? { session_id: entry.provenance.session_id } : {}),
+      ...(entry.provenance.session_id !== undefined
+        ? { session_id: entry.provenance.session_id }
+        : {}),
       drafted_at: entry.provenance.drafted_at,
     },
   };
@@ -308,7 +319,11 @@ export function addQuintDraft(
 }
 
 /** Update the status of a spec by id. Throws if no spec has that id. */
-export function setQuintSpecStatus(file: QuintSpecsFile, id: string, status: QuintSpecStatus): QuintSpecsFile {
+export function setQuintSpecStatus(
+  file: QuintSpecsFile,
+  id: string,
+  status: QuintSpecStatus,
+): QuintSpecsFile {
   const idx = file.specs.findIndex((s) => s.id === id);
   if (idx === -1) {
     throw new Error(`No Quint spec with id "${id}"`);

@@ -31,10 +31,13 @@ test('extractDesignTokens returns an empty result when no token sources exist', 
 test('extractDesignTokens reads a nested tokens.json, naming tokens by dotted key path', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'design-tokens.json'), JSON.stringify({
-      color: { primary: '#0af', secondary: '#f0a' },
-      spacing: { sm: '4px' },
-    }));
+    writeFile(
+      path.join(dir, 'design-tokens.json'),
+      JSON.stringify({
+        color: { primary: '#0af', secondary: '#f0a' },
+        spacing: { sm: '4px' },
+      }),
+    );
 
     const result = extractDesignTokens(dir);
     const names = result.tokens.map((t) => t.name).sort();
@@ -57,13 +60,10 @@ test('extractDesignTokens reads a nested tokens.json, naming tokens by dotted ke
 test('extractDesignTokens reads CSS custom properties', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'src', 'theme.css'), [
-      ':root {',
-      '  --color-brand: #123456;',
-      '  --radius-lg: 12px;',
-      '}',
-      '',
-    ].join('\n'));
+    writeFile(
+      path.join(dir, 'src', 'theme.css'),
+      [':root {', '  --color-brand: #123456;', '  --radius-lg: 12px;', '}', ''].join('\n'),
+    );
 
     const result = extractDesignTokens(dir);
     const names = result.tokens.map((t) => t.name).sort();
@@ -84,15 +84,18 @@ test('extractDesignTokens reads CSS custom properties', () => {
 test('extractDesignTokens does not mistake a "--modifier" class selector for a custom property', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'src', 'theme.css'), [
-      ':root {',
-      '  --accent: #58a6ff;',
-      '}',
-      '.btn--primary:hover:not(:disabled) {',
-      '  background: rgba(88, 166, 255, 0.25);',
-      '}',
-      '',
-    ].join('\n'));
+    writeFile(
+      path.join(dir, 'src', 'theme.css'),
+      [
+        ':root {',
+        '  --accent: #58a6ff;',
+        '}',
+        '.btn--primary:hover:not(:disabled) {',
+        '  background: rgba(88, 166, 255, 0.25);',
+        '}',
+        '',
+      ].join('\n'),
+    );
 
     const result = extractDesignTokens(dir);
     const names = result.tokens.map((t) => t.name);
@@ -118,7 +121,10 @@ test('extractDesignTokens matches back-to-back declarations with no separating w
 test('extractDesignTokens skips node_modules and other ignored directories', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'node_modules', 'some-pkg', 'tokens.json'), JSON.stringify({ color: { primary: '#fff' } }));
+    writeFile(
+      path.join(dir, 'node_modules', 'some-pkg', 'tokens.json'),
+      JSON.stringify({ color: { primary: '#fff' } }),
+    );
     const result = extractDesignTokens(dir);
     assert.deepEqual(result.tokens, []);
   } finally {

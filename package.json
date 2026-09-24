@@ -18,7 +18,7 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier . --check",
     "format:write": "prettier . --write",
-    "quality": "npm run typecheck && npm run typecheck:webapp && npm run lint && npm run validate",
+    "quality": "npm run typecheck && npm run typecheck:webapp && npm run lint && npm run validate && npm run format",
     "sonar": "sonar-scanner",
     "validate": "npx tsx src/cli/index.ts spec lint --spec specify.spec",
     "agent": "npx tsx src/cli/index.ts capture",

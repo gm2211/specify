@@ -119,9 +119,7 @@ test('mid-run fault activation routes memory writes to the +faults scope, not th
 
     // Before any fault activation: writes land in the healthy scope.
     assert.equal(scopeTargetKey(scope), 'web_app.example.com');
-    await provider.write(scope, 'r1', [
-      { type: 'playbook', content: 'Healthy-run lesson.' },
-    ]);
+    await provider.write(scope, 'r1', [{ type: 'playbook', content: 'Healthy-run lesson.' }]);
     const beforeActivation = await provider.read(healthyScope);
     assert.equal(beforeActivation.rows.length, 1);
 
@@ -129,7 +127,11 @@ test('mid-run fault activation routes memory writes to the +faults scope, not th
     injector.addRule({ urlPattern: '/api/', fault: '500', rate: 1.0 });
     assert.equal(scopeTargetKey(scope), 'web_app.example.com+faults');
     await provider.write(scope, 'r1', [
-      { type: 'quirk', content: 'Shows raw 500 JSON instead of a friendly error.', severity: 'major' },
+      {
+        type: 'quirk',
+        content: 'Shows raw 500 JSON instead of a friendly error.',
+        severity: 'major',
+      },
     ]);
 
     // The healthy target's memory file must be untouched by the fault-run write.
@@ -156,7 +158,11 @@ test('mid-run fault activation routes memory writes to the +faults scope, not th
     ]);
     const healthyAfterClear = await provider.read(healthyScope);
     const faultedAfterClear = await provider.read(faultScope);
-    assert.equal(healthyAfterClear.rows.length, 1, 'post-clear writes must stay in the +faults scope');
+    assert.equal(
+      healthyAfterClear.rows.length,
+      1,
+      'post-clear writes must stay in the +faults scope',
+    );
     assert.equal(faultedAfterClear.rows.length, 2);
   } finally {
     cleanup();

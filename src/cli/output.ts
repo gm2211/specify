@@ -17,7 +17,7 @@ export function formatOutput(data: unknown, ctx: CliContext): string {
       return JSON.stringify(result, null, 2);
     case 'ndjson':
       if (Array.isArray(result)) {
-        return result.map(item => JSON.stringify(item)).join('\n');
+        return result.map((item) => JSON.stringify(item)).join('\n');
       }
       return JSON.stringify(result);
     case 'markdown':
@@ -43,11 +43,15 @@ export function writeProgressLine(event: Record<string, unknown>): void {
 
 /** Write a color-coded behavior progress line to stderr. */
 export function writeBehaviorProgress(progress: BehaviorProgress): void {
-  const icon = progress.status === 'passed' ? c.green('✓')
-    : progress.status === 'failed' ? c.red('✗')
-    : c.yellow('-');
+  const icon =
+    progress.status === 'passed'
+      ? c.green('✓')
+      : progress.status === 'failed'
+        ? c.red('✗')
+        : c.yellow('-');
   const id = progress.status === 'failed' ? c.red(progress.id) : c.dim(progress.id);
-  const time = progress.duration_ms != null ? c.dim(` (${(progress.duration_ms / 1000).toFixed(1)}s)`) : '';
+  const time =
+    progress.duration_ms != null ? c.dim(` (${(progress.duration_ms / 1000).toFixed(1)}s)`) : '';
   const desc = progress.description ? `  ${progress.description}` : '';
   process.stderr.write(`  ${icon} ${id}${time}${desc}\n`);
 }

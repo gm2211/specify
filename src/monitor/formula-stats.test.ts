@@ -71,7 +71,11 @@ test('shadow-mode agreement streak: promote suggestion fires exactly when the st
     lastResult = record(file, { verdict: 'satisfied', llmStatus: 'passed' });
     file = lastResult.file;
     if (i < PROMOTION_STREAK - 1) {
-      assert.equal(lastResult.promotionJustSuggested, false, `should not fire before streak ${i + 1}`);
+      assert.equal(
+        lastResult.promotionJustSuggested,
+        false,
+        `should not fire before streak ${i + 1}`,
+      );
     }
   }
   assert.equal(lastResult!.promotionJustSuggested, true, 'fires exactly on the crossing run');
@@ -134,10 +138,18 @@ test('drift: a formula that was grounded then goes mostly unevaluable gets flagg
   }
   assert.equal(result!.row.driftFlagged, true);
   assert.ok(result!.row.driftDetectedAt);
-  assert.equal(result!.driftJustDetected, true, 'fires on the exact run that crosses the window/threshold');
+  assert.equal(
+    result!.driftJustDetected,
+    true,
+    'fires on the exact run that crosses the window/threshold',
+  );
 
   // Further unevaluable runs don't re-fire "just detected" (sticky flag).
-  const again = record(file, { formulaId: 'fml-drift', verdict: 'unevaluable', llmStatus: 'passed' });
+  const again = record(file, {
+    formulaId: 'fml-drift',
+    verdict: 'unevaluable',
+    llmStatus: 'passed',
+  });
   assert.equal(again.driftJustDetected, false);
   assert.equal(again.row.driftFlagged, true);
 });
@@ -146,11 +158,19 @@ test('drift: never-grounded formula does not flag drift merely for being unevalu
   let file = emptyFormulaStatsFile();
   let result;
   for (let i = 0; i < DRIFT_WINDOW + 2; i++) {
-    result = record(file, { formulaId: 'fml-never-grounded', verdict: 'unevaluable', llmStatus: 'passed' });
+    result = record(file, {
+      formulaId: 'fml-never-grounded',
+      verdict: 'unevaluable',
+      llmStatus: 'passed',
+    });
     file = result.file;
   }
   assert.equal(result!.row.groundedSeen, false);
-  assert.equal(result!.row.driftFlagged, false, 'never having produced a determinate verdict is not drift');
+  assert.equal(
+    result!.row.driftFlagged,
+    false,
+    'never having produced a determinate verdict is not drift',
+  );
 });
 
 test('drift: a healthy mix of satisfied/violated below the threshold does not flag', () => {
@@ -200,7 +220,11 @@ test('recompile flag: violated while the LLM passed does NOT flag — the asymme
     verdict: 'violated',
     llmStatus: 'passed',
   });
-  assert.equal(result.row.recompileFlagged, false, 'a violation the LLM missed is the formula WORKING, not drifting');
+  assert.equal(
+    result.row.recompileFlagged,
+    false,
+    'a violation the LLM missed is the formula WORKING, not drifting',
+  );
   assert.equal(result.recompileJustFlagged, false);
   assert.equal(result.row.disagreements, 1, 'still a disagreement for streak purposes');
   assert.equal(result.row.consecutiveAgreements, 0);

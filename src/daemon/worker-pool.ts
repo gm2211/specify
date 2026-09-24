@@ -54,7 +54,13 @@ function resolveWorkerPath(): string {
 
 /** Functions in SdkRunnerOptions cannot cross IPC — strip them before sending. */
 function serializableOpts(opts: SdkRunnerOptions): SdkRunnerOptions {
-  const { onBehaviorProgress: _1, askUserHandler: _2, messageInjector: _3, abortSignal: _4, ...rest } = opts;
+  const {
+    onBehaviorProgress: _1,
+    askUserHandler: _2,
+    messageInjector: _3,
+    abortSignal: _4,
+    ...rest
+  } = opts;
   return rest as SdkRunnerOptions;
 }
 
@@ -84,7 +90,10 @@ export interface WorkerHandle {
   kill(signal?: NodeJS.Signals): unknown;
   on(event: 'message', listener: (msg: unknown) => void): unknown;
   on(event: 'error', listener: (err: Error) => void): unknown;
-  on(event: 'exit', listener: (code: number | null, signal: NodeJS.Signals | null) => void): unknown;
+  on(
+    event: 'exit',
+    listener: (code: number | null, signal: NodeJS.Signals | null) => void,
+  ): unknown;
 }
 
 function forkWorker(): WorkerHandle {
@@ -104,7 +113,10 @@ function forkWorker(): WorkerHandle {
 
 /** Thrown by dispatch() when the wait queue is already at its bound. */
 export class WorkerPoolQueueFullError extends Error {
-  constructor(public readonly queued: number, public readonly maxQueueLength: number) {
+  constructor(
+    public readonly queued: number,
+    public readonly maxQueueLength: number,
+  ) {
     super(`daemon worker queue is full (${queued}/${maxQueueLength} waiting) — try again later`);
     this.name = 'WorkerPoolQueueFullError';
   }
@@ -112,7 +124,10 @@ export class WorkerPoolQueueFullError extends Error {
 
 /** Thrown by dispatch() when a job exceeds its per-job timeout. */
 export class WorkerJobTimeoutError extends Error {
-  constructor(public readonly jobId: string, public readonly timeoutMs: number) {
+  constructor(
+    public readonly jobId: string,
+    public readonly timeoutMs: number,
+  ) {
     super(`job ${jobId} exceeded the ${timeoutMs}ms worker timeout and was aborted`);
     this.name = 'WorkerJobTimeoutError';
   }
@@ -170,7 +185,10 @@ export class WorkerPool {
   readonly maxQueueLength: number;
   private readonly spawnWorker: () => WorkerHandle;
 
-  constructor(public readonly maxConcurrent: number, options: WorkerPoolOptions = {}) {
+  constructor(
+    public readonly maxConcurrent: number,
+    options: WorkerPoolOptions = {},
+  ) {
     if (maxConcurrent < 1) throw new Error('maxConcurrent must be >= 1');
     this.jobTimeoutMs = options.jobTimeoutMs ?? DEFAULT_JOB_TIMEOUT_MS;
     this.killGraceMs = options.killGraceMs ?? DEFAULT_KILL_GRACE_MS;
@@ -280,12 +298,22 @@ export class WorkerPool {
           if (child.pid) process.kill(-child.pid, 'SIGKILL');
           else child.kill('SIGKILL');
         } catch {
-          try { child.kill('SIGKILL'); } catch { /* already gone */ }
+          try {
+            child.kill('SIGKILL');
+          } catch {
+            /* already gone */
+          }
         }
       };
 
       child.on('message', (raw: unknown) => {
-        const msg = raw as { kind: string; jobId?: string; event?: unknown; result?: SdkRunnerResult; message?: string };
+        const msg = raw as {
+          kind: string;
+          jobId?: string;
+          event?: unknown;
+          result?: SdkRunnerResult;
+          message?: string;
+        };
         if (msg.kind === 'event' && msg.event) {
           // Re-publish on the parent eventBus. The SSE streams filter by
           // event.sessionId === jobId.
@@ -311,7 +339,11 @@ export class WorkerPool {
           this.killing.add(jobId);
           eventBus.send('daemon:job_timeout', { jobId, timeoutMs: this.jobTimeoutMs });
           // Graceful: ask the worker to abort its SDK query and exit cleanly.
-          try { child.send({ kind: 'cancel', jobId }); } catch { /* best effort */ }
+          try {
+            child.send({ kind: 'cancel', jobId });
+          } catch {
+            /* best effort */
+          }
           graceTimer = setTimeout(() => {
             graceTimer = undefined;
             if (childExited) return;

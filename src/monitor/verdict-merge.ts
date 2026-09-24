@@ -111,11 +111,16 @@ export function buildVerifyTrace(
     const trafficStart = step.trafficRange[0];
     const trafficEnd = index + 1 < steps.length ? steps[index + 1].trafficRange[0] : traffic.length;
     const consoleStart = step.consoleRange[0];
-    const consoleEnd = index + 1 < steps.length ? steps[index + 1].consoleRange[0] : consoleLogs.length;
+    const consoleEnd =
+      index + 1 < steps.length ? steps[index + 1].consoleRange[0] : consoleLogs.length;
 
     const events: TraceEvent[] = [
-      ...traffic.slice(trafficStart, Math.max(trafficStart, trafficEnd)).map((t) => httpTraceEvent(t)),
-      ...consoleLogs.slice(consoleStart, Math.max(consoleStart, consoleEnd)).map((c) => consoleTraceEvent(c)),
+      ...traffic
+        .slice(trafficStart, Math.max(trafficStart, trafficEnd))
+        .map((t) => httpTraceEvent(t)),
+      ...consoleLogs
+        .slice(consoleStart, Math.max(consoleStart, consoleEnd))
+        .map((c) => consoleTraceEvent(c)),
     ].sort((a, b) => a.ts - b.ts);
 
     return { index, events, step };
@@ -158,7 +163,10 @@ export function describeWitnessState(ctx: WitnessContext): string {
   }
   const events = ctx.state.events;
   if (events.length > 0) {
-    const shown = events.slice(0, 3).map((ev) => describeEvent(ev)).join('; ');
+    const shown = events
+      .slice(0, 3)
+      .map((ev) => describeEvent(ev))
+      .join('; ');
     const more = events.length > 3 ? ` (+${events.length - 3} more)` : '';
     parts.push(`events: ${shown}${more}`);
   }
@@ -227,11 +235,7 @@ export interface MergeMonitorResult {
 }
 
 function hasResultsArray(output: unknown): output is VerifyOutput {
-  return (
-    !!output &&
-    typeof output === 'object' &&
-    Array.isArray((output as VerifyOutput).results)
-  );
+  return !!output && typeof output === 'object' && Array.isArray((output as VerifyOutput).results);
 }
 
 /**
@@ -313,7 +317,9 @@ export function mergeMonitorVerdicts(
         status: entry.status as 'draft' | 'approved',
         verdict: evaluated.verdict,
         ...(evaluated.witnessStep !== undefined ? { witness_step: evaluated.witnessStep } : {}),
-        ...(evaluated.witnessDetail !== undefined ? { witness_detail: evaluated.witnessDetail } : {}),
+        ...(evaluated.witnessDetail !== undefined
+          ? { witness_detail: evaluated.witnessDetail }
+          : {}),
         trace_length: trace.length,
         ...(vacuous ? { vacuous: true } : {}),
       };
@@ -396,7 +402,10 @@ export function mergeMonitorVerdicts(
       merged.verdict_source = flipped ? 'monitor' : 'monitor+llm';
       if (flipped) monitorForcedFailures.push(result.id);
       const details = approvedViolations
-        .map((v) => `[monitor] Formula ${v.formula_id} violated${v.witness_detail ? `: ${v.witness_detail}` : ''}`)
+        .map(
+          (v) =>
+            `[monitor] Formula ${v.formula_id} violated${v.witness_detail ? `: ${v.witness_detail}` : ''}`,
+        )
         .join(' ');
       merged.rationale = result.rationale ? `${result.rationale} ${details}` : details;
     } else if (approvedSatisfied && result.status === 'passed') {

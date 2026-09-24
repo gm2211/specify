@@ -229,7 +229,11 @@ function distinctValuesByPosition(group: Observation[], count: number): Set<stri
 }
 
 /** Fixed-point resolution of which positions in a segment-count group are parameters. */
-function resolveParamPositions(group: Observation[], count: number, opts: Required<InferOptions>): boolean[] {
+function resolveParamPositions(
+  group: Observation[],
+  count: number,
+  opts: Required<InferOptions>,
+): boolean[] {
   const perPosition = distinctValuesByPosition(group, count);
   const isParam: boolean[] = Array.from({ length: count }, () => false);
 
@@ -292,7 +296,8 @@ function renderTemplatesForGroup(group: Observation[], isParam: boolean[]): UrlT
         segments.push({ kind: 'literal', value: obs.segments[i] });
       }
     }
-    const template = '/' + segments.map((s) => (s.kind === 'literal' ? s.value : `:${s.name}`)).join('/');
+    const template =
+      '/' + segments.map((s) => (s.kind === 'literal' ? s.value : `:${s.name}`)).join('/');
 
     const existing = byTemplate.get(template);
     if (existing) {
@@ -301,7 +306,9 @@ function renderTemplatesForGroup(group: Observation[], isParam: boolean[]): UrlT
       byTemplate.set(template, {
         template,
         segments,
-        paramNames: segments.filter((s): s is Extract<TemplateSegment, { kind: 'param' }> => s.kind === 'param').map((s) => s.name),
+        paramNames: segments
+          .filter((s): s is Extract<TemplateSegment, { kind: 'param' }> => s.kind === 'param')
+          .map((s) => s.name),
         observationCount: 1,
       });
     }
@@ -319,7 +326,11 @@ export class TemplateSet {
   private readonly sourceUrls: string[];
   private readonly opts: Required<InferOptions>;
 
-  constructor(templates: UrlTemplate[], sourceUrls: string[], opts: Required<InferOptions> = DEFAULT_OPTS) {
+  constructor(
+    templates: UrlTemplate[],
+    sourceUrls: string[],
+    opts: Required<InferOptions> = DEFAULT_OPTS,
+  ) {
     this.templates = templates;
     this.sourceUrls = sourceUrls;
     this.opts = opts;
@@ -327,7 +338,11 @@ export class TemplateSet {
 
   /** All inferred templates, sorted deterministically by template string. */
   list(): UrlTemplate[] {
-    return this.templates.map((t) => ({ ...t, segments: [...t.segments], paramNames: [...t.paramNames] }));
+    return this.templates.map((t) => ({
+      ...t,
+      segments: [...t.segments],
+      paramNames: [...t.paramNames],
+    }));
   }
 
   /**
@@ -394,7 +409,9 @@ export class TemplateSet {
 
   static fromJSON(data: SerializedTemplateSet): TemplateSet {
     if (data.version !== 1) {
-      throw new Error(`Unsupported TemplateSet JSON version: ${String((data as { version?: unknown }).version)}`);
+      throw new Error(
+        `Unsupported TemplateSet JSON version: ${String((data as { version?: unknown }).version)}`,
+      );
     }
     const templates = data.templates.map((t) => ({
       ...t,

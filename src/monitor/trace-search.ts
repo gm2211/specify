@@ -13,7 +13,12 @@
  */
 
 import { evaluate } from './evaluate.js';
-import { predicateEvaluator, type PredicateRef, type PredicateVerdict, type Trace } from './trace.js';
+import {
+  predicateEvaluator,
+  type PredicateRef,
+  type PredicateVerdict,
+  type Trace,
+} from './trace.js';
 import type { Formula } from './formula.js';
 
 // ---------------------------------------------------------------------------

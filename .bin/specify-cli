@@ -54,7 +54,7 @@ function loadBeadsItems() {
   return readFileSync(BEADS_FILE, 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map(l => JSON.parse(l));
+    .map((l) => JSON.parse(l));
 }
 
 function loadAddressed() {
@@ -63,7 +63,7 @@ function loadAddressed() {
     readFileSync(ADDRESSED_FILE, 'utf8')
       .split('\n')
       .filter(Boolean)
-      .map(l => JSON.parse(l).id)
+      .map((l) => JSON.parse(l).id),
   );
 }
 
@@ -103,9 +103,9 @@ function cmdStatus() {
     mode: 'local',
     specPath: SPEC_PATH,
     lastVerifyAt: existsSync(resolve(SPECIFY_DIR, 'verify/verify-result.json'))
-      ? readFileSync(resolve(SPECIFY_DIR, 'verify/verify-result.json'), 'utf8')
-          .match(/"updatedAt"\s*:\s*"([^"]+)"/)
-          ?.[1] ?? null
+      ? (readFileSync(resolve(SPECIFY_DIR, 'verify/verify-result.json'), 'utf8').match(
+          /"updatedAt"\s*:\s*"([^"]+)"/,
+        )?.[1] ?? null)
       : null,
   });
 }
@@ -116,13 +116,13 @@ function cmdListFlagged(flags) {
 
   const addressed = loadAddressed();
   let items = loadBeadsItems()
-    .filter(i => i._type === 'issue' && i.status === 'open')
-    .filter(i => !addressed.has(i.id))
+    .filter((i) => i._type === 'issue' && i.status === 'open')
+    .filter((i) => !addressed.has(i.id))
     .map(issueToFlaggedItem);
 
   // Cursor-based pagination (cursor = last id seen)
   if (since) {
-    const idx = items.findIndex(i => i.id === since);
+    const idx = items.findIndex((i) => i.id === since);
     if (idx !== -1) items = items.slice(idx + 1);
   }
 
@@ -146,13 +146,16 @@ function cmdMarkAddressed(flags) {
   }
 
   const allItems = loadBeadsItems();
-  const found = allItems.find(i => i.id === id);
+  const found = allItems.find((i) => i.id === id);
   if (!found) {
     // Check if it was ever an open issue
     die(`item not found: ${id}`, 4);
   }
 
-  appendFileSync(ADDRESSED_FILE, JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n');
+  appendFileSync(
+    ADDRESSED_FILE,
+    JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n',
+  );
   appendActivity('addressed', id, `Addressed: ${found.title}`);
   process.exit(0);
 }
@@ -166,10 +169,10 @@ function cmdVerify(flags) {
   try {
     const result = JSON.parse(readFileSync(verifyResultPath, 'utf8'));
     const so = result.structuredOutput || {};
-    const failed = (so.results || []).filter(r => r.status === 'failed');
+    const failed = (so.results || []).filter((r) => r.status === 'failed');
     out({
       verified: so.pass === true,
-      missingMarkers: failed.map(r => ({
+      missingMarkers: failed.map((r) => ({
         section: r.id.split('/')[0] || r.id,
         expectedMarker: r.id,
       })),
@@ -247,6 +250,6 @@ switch (subcmd) {
     die(
       `Usage: specify-cli <subcommand> [flags]\n` +
         `Subcommands: status, list-flagged, mark-addressed, verify, activity, open, flag`,
-      1
+      1,
     );
 }

@@ -119,7 +119,9 @@ export function buildProbePlan(file: FormulasFile): ProbePlan {
 export function buildProbePlanWithLog(file: FormulasFile): ProbePlan {
   const plan = buildProbePlan(file);
   if (plan.length > 0) {
-    process.stderr.write(`  \x1b[2mProbe plan: ${plan.length} live DOM probe(s) per step.\x1b[0m\n`);
+    process.stderr.write(
+      `  \x1b[2mProbe plan: ${plan.length} live DOM probe(s) per step.\x1b[0m\n`,
+    );
   }
   return plan;
 }

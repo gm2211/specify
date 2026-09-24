@@ -58,15 +58,17 @@ export async function create(options: CreateOptions): Promise<number> {
     const name = await ask('App name', 'my-app');
     const description = await ask('Description', `Behavioral contract for ${name}`);
     const targetType = await ask('Target type (web/cli/api)', 'web');
-    const targetValue = targetType === 'cli'
-      ? await ask('Binary path', './my-app')
-      : await ask('URL', 'http://localhost:3000');
+    const targetValue =
+      targetType === 'cli'
+        ? await ask('Binary path', './my-app')
+        : await ask('URL', 'http://localhost:3000');
 
-    const target = targetType === 'cli'
-      ? { type: 'cli' as const, binary: targetValue }
-      : targetType === 'api'
-        ? { type: 'api' as const, url: targetValue }
-        : { type: 'web' as const, url: targetValue };
+    const target =
+      targetType === 'cli'
+        ? { type: 'cli' as const, binary: targetValue }
+        : targetType === 'api'
+          ? { type: 'api' as const, url: targetValue }
+          : { type: 'web' as const, url: targetValue };
 
     const spec: Spec = {
       version: '2',

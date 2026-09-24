@@ -179,12 +179,20 @@ export function validateCompileResult(
     return { ok: false, behavior: '(missing)', reason: 'Missing or non-string "behavior" field' };
   }
   if (!validBehaviors.has(behavior)) {
-    return { ok: false, behavior, reason: `"behavior" does not resolve to a behavior in the compiled spec` };
+    return {
+      ok: false,
+      behavior,
+      reason: `"behavior" does not resolve to a behavior in the compiled spec`,
+    };
   }
 
   const { valid, errors } = validateFormula(raw.formula);
   if (!valid) {
-    return { ok: false, behavior, reason: `formula failed schema validation: ${errors.join('; ')}` };
+    return {
+      ok: false,
+      behavior,
+      reason: `formula failed schema validation: ${errors.join('; ')}`,
+    };
   }
   const formula = raw.formula as Formula;
 
@@ -250,7 +258,11 @@ export function mergeCompiledResults(
       ...(provenanceBase.model !== undefined ? { model: provenanceBase.model } : {}),
       ...(provenanceBase.session_id !== undefined ? { session_id: provenanceBase.session_id } : {}),
     };
-    const { file: nextFile, entry, deduped: wasDeduped } = addDraft(current, {
+    const {
+      file: nextFile,
+      entry,
+      deduped: wasDeduped,
+    } = addDraft(current, {
       behavior: r.behavior,
       formula: r.formula,
       description_hash: hashDescription(r.description),
@@ -306,11 +318,17 @@ function coerceAgentOutput(structuredOutput: unknown): CompileAgentOutput {
  * than hard-coded here) so provenance always reflects the model actually
  * used, even if sdk-runner.ts's default changes.
  */
-export async function defaultCompileAgentRunner(params: CompileAgentParams): Promise<CompileAgentRunResult> {
+export async function defaultCompileAgentRunner(
+  params: CompileAgentParams,
+): Promise<CompileAgentRunResult> {
   const { runSpecifyAgent } = await import('../../agent/sdk-runner.js');
   const { getCompilePrompt } = await import('../../agent/prompts.js');
 
-  const systemPrompt = getCompilePrompt(params.specYaml, params.predicateDocs, params.existingFormulasYaml);
+  const systemPrompt = getCompilePrompt(
+    params.specYaml,
+    params.predicateDocs,
+    params.existingFormulasYaml,
+  );
 
   const { costUsd, structuredOutput, sessionId } = await runSpecifyAgent({
     task: 'compile',
@@ -359,7 +377,9 @@ export async function specCompile(
   deps: SpecCompileDeps = {},
 ): Promise<number> {
   if (!options.spec) {
-    process.stderr.write('Missing --spec (or run from a directory with an auto-discoverable spec)\n');
+    process.stderr.write(
+      'Missing --spec (or run from a directory with an auto-discoverable spec)\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
   const resolvedSpec = path.resolve(options.spec);
@@ -395,12 +415,18 @@ export async function specCompile(
     const specFqIds = new Set(allBehaviors.map((b) => b.fqId));
     const unmatched = options.behavior.filter((id) => !specFqIds.has(id));
     for (const id of unmatched) {
-      process.stderr.write(`${c.yellow('Warning:')} --behavior "${id}" does not match any behavior in the spec\n`);
+      process.stderr.write(
+        `${c.yellow('Warning:')} --behavior "${id}" does not match any behavior in the spec\n`,
+      );
     }
     if (unmatched.length === options.behavior.length) {
-      process.stderr.write('None of the provided --behavior ids match a behavior in the spec — nothing to compile.\n');
+      process.stderr.write(
+        'None of the provided --behavior ids match a behavior in the spec — nothing to compile.\n',
+      );
       if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-        process.stdout.write(JSON.stringify({ error: 'unknown_behavior_filter', unmatched }, null, 2) + '\n');
+        process.stdout.write(
+          JSON.stringify({ error: 'unknown_behavior_filter', unmatched }, null, 2) + '\n',
+        );
       }
       return ExitCode.PARSE_ERROR;
     }
@@ -413,11 +439,26 @@ export async function specCompile(
   if (candidates.length === 0) {
     if (!ctx.quiet) {
       process.stderr.write(
-        c.dim('Nothing to compile — all matching behaviors already have a formula entry (use --force to recompile).\n'),
+        c.dim(
+          'Nothing to compile — all matching behaviors already have a formula entry (use --force to recompile).\n',
+        ),
       );
     }
     if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-      process.stdout.write(JSON.stringify({ ...summaryBase, compiled: [], deduped: [], skipped: [], rejected: [], lint: { valid: true, errors: [] } }, null, 2) + '\n');
+      process.stdout.write(
+        JSON.stringify(
+          {
+            ...summaryBase,
+            compiled: [],
+            deduped: [],
+            skipped: [],
+            rejected: [],
+            lint: { valid: true, errors: [] },
+          },
+          null,
+          2,
+        ) + '\n',
+      );
     }
     return ExitCode.SUCCESS;
   }
@@ -438,10 +479,10 @@ export async function specCompile(
 
   const specYaml = specToYaml(filteredSpec);
   const predicateDocs = generatePredicateDocs(predicateRegistry);
-  const existingFormulasYaml = yaml.dump(
-    existing ?? emptyFormulasFile(),
-    { sortKeys: false, lineWidth: 120 },
-  );
+  const existingFormulasYaml = yaml.dump(existing ?? emptyFormulasFile(), {
+    sortKeys: false,
+    lineWidth: 120,
+  });
 
   const outputDir = path.join(path.dirname(formulasPath), '.specify', 'compile');
 
@@ -478,7 +519,7 @@ export async function specCompile(
         const { declared, actual } = validated.misreportedPredicates;
         process.stderr.write(
           `${c.yellow('Note:')} ${validated.behavior}: model misreported predicates_used ` +
-          `(declared: [${declared.join(', ')}], actual from formula: [${actual.join(', ')}]) — writing the AST-derived set\n`,
+            `(declared: [${declared.join(', ')}], actual from formula: [${actual.join(', ')}]) — writing the AST-derived set\n`,
         );
       }
       compiledOk.push(validated);
@@ -514,7 +555,9 @@ export async function specCompile(
   const lintValid = !lintErrors.some((e) => e.severity === 'error');
 
   if (!ctx.quiet) {
-    process.stderr.write(`${c.bold('Compile')} ${c.cyan(spec.name)} — ${candidates.length} candidate behavior(s)\n`);
+    process.stderr.write(
+      `${c.bold('Compile')} ${c.cyan(spec.name)} — ${candidates.length} candidate behavior(s)\n`,
+    );
     process.stderr.write(`  ${c.green('compiled:')} ${merge.added.length}\n`);
     for (const e of merge.added) {
       process.stderr.write(`    ${c.dim('+')} ${e.id} ${c.dim(e.behavior)}\n`);
@@ -528,30 +571,42 @@ export async function specCompile(
       process.stderr.write(`    ${c.dim('x')} ${r.behavior}: ${r.reason}\n`);
     }
     if (merge.deduped.length > 0) {
-      process.stderr.write(`  ${c.dim('deduped (identical formula already present):')} ${merge.deduped.length}\n`);
+      process.stderr.write(
+        `  ${c.dim('deduped (identical formula already present):')} ${merge.deduped.length}\n`,
+      );
     }
     if (lintErrors.length > 0) {
       process.stderr.write(`  ${c.bold('Self-check (spec lint):')}\n`);
       for (const le of lintErrors) {
         const icon = le.severity === 'error' ? c.red('✗') : c.yellow('⚠');
-        process.stderr.write(`    ${icon} ${c.dim(le.path + ':')} ${le.message} ${c.dim(`(${le.rule})`)}\n`);
+        process.stderr.write(
+          `    ${icon} ${c.dim(le.path + ':')} ${le.message} ${c.dim(`(${le.rule})`)}\n`,
+        );
       }
     } else if (merge.added.length > 0) {
       process.stderr.write(`  ${c.green('✓ lint clean')}\n`);
     }
-    process.stderr.write(`\n  ${c.dim('Formulas written as drafts — review and approve in ' + formulasPath)}\n`);
+    process.stderr.write(
+      `\n  ${c.dim('Formulas written as drafts — review and approve in ' + formulasPath)}\n`,
+    );
   }
 
   if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-    process.stdout.write(JSON.stringify({
-      ...summaryBase,
-      compiled: merge.added.map((e) => ({ id: e.id, behavior: e.behavior })),
-      deduped: merge.deduped,
-      skipped,
-      rejected,
-      lint: { valid: lintValid, errors: lintErrors },
-      cost_usd: agentResult.costUsd,
-    }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify(
+        {
+          ...summaryBase,
+          compiled: merge.added.map((e) => ({ id: e.id, behavior: e.behavior })),
+          deduped: merge.deduped,
+          skipped,
+          rejected,
+          lint: { valid: lintValid, errors: lintErrors },
+          cost_usd: agentResult.costUsd,
+        },
+        null,
+        2,
+      ) + '\n',
+    );
   }
 
   return lintValid ? ExitCode.SUCCESS : ExitCode.ASSERTION_FAILURE;

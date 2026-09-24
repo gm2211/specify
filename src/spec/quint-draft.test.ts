@@ -34,7 +34,11 @@ function sampleSpec(): Spec {
           { id: 'logout', description: 'User can log out' },
         ],
       },
-      { id: 'dashboard', name: 'Dashboard', behaviors: [{ id: 'layout', description: 'Dashboard looks clean' }] },
+      {
+        id: 'dashboard',
+        name: 'Dashboard',
+        behaviors: [{ id: 'layout', description: 'Dashboard looks clean' }],
+      },
     ],
   };
 }
@@ -121,7 +125,12 @@ test('validateDraftResult: accepts a valid module, filters ungrounded predicate 
   const valid = new Set(['auth/login']);
   const preds = new Set(['page.url', 'http.response']);
   const v = validateDraftResult(
-    { flow: 'auth/login', spec_text: 'module auth { var url: str }', predicates_used: ['page.url', 'bogus.pred'], rationale: 'r' },
+    {
+      flow: 'auth/login',
+      spec_text: 'module auth { var url: str }',
+      predicates_used: ['page.url', 'bogus.pred'],
+      rationale: 'r',
+    },
     valid,
     preds,
   );
@@ -135,19 +144,37 @@ test('validateDraftResult: accepts a valid module, filters ungrounded predicate 
 test('validateDraftResult: rejects unknown flow, empty text, and non-module text', () => {
   const valid = new Set(['auth/login']);
   const preds = new Set(['page.url']);
-  assert.equal(validateDraftResult({ flow: 'nope/x', spec_text: 'module x {}' }, valid, preds).ok, false);
+  assert.equal(
+    validateDraftResult({ flow: 'nope/x', spec_text: 'module x {}' }, valid, preds).ok,
+    false,
+  );
   assert.equal(validateDraftResult({ flow: 'auth/login', spec_text: '' }, valid, preds).ok, false);
-  assert.equal(validateDraftResult({ flow: 'auth/login', spec_text: 'not a spec' }, valid, preds).ok, false);
+  assert.equal(
+    validateDraftResult({ flow: 'auth/login', spec_text: 'not a spec' }, valid, preds).ok,
+    false,
+  );
 });
 
 test('normalizeSkippedFlow tolerates malformed entries', () => {
-  assert.deepEqual(normalizeSkippedFlow({ flow: 'a/b', reason: 'x' }), { flow: 'a/b', reason: 'x' });
-  assert.deepEqual(normalizeSkippedFlow({ flow: 'a/b' }), { flow: 'a/b', reason: '(no reason given)' });
+  assert.deepEqual(normalizeSkippedFlow({ flow: 'a/b', reason: 'x' }), {
+    flow: 'a/b',
+    reason: 'x',
+  });
+  assert.deepEqual(normalizeSkippedFlow({ flow: 'a/b' }), {
+    flow: 'a/b',
+    reason: '(no reason given)',
+  });
   assert.equal(normalizeSkippedFlow({}), null);
 });
 
 test('mergeDraftResults dedupes identical specs', () => {
-  const r = { flow: 'auth/login', specText: 'module auth {}', predicatesUsed: ['page.url'], rationale: 'r', description: 'd' };
+  const r = {
+    flow: 'auth/login',
+    specText: 'module auth {}',
+    predicatesUsed: ['page.url'],
+    rationale: 'r',
+    description: 'd',
+  };
   const first = mergeDraftResults(emptyQuintSpecsFile(), [r], { drafted_by: 'llm' });
   assert.equal(first.added.length, 1);
   const second = mergeDraftResults(first.file, [r], { drafted_by: 'llm' });
@@ -164,7 +191,14 @@ test('draftQuintSpecs: no-op with a clear reason when the flag is off', async ()
     const { dir, cleanup } = tmpDir();
     try {
       const specPath = writeSpecFixture(dir);
-      const summary = await draftQuintSpecs({ spec: specPath }, { agentRunner: async () => { throw new Error('should not run'); } });
+      const summary = await draftQuintSpecs(
+        { spec: specPath },
+        {
+          agentRunner: async () => {
+            throw new Error('should not run');
+          },
+        },
+      );
       assert.ok(summary.skippedReason && summary.skippedReason.includes('opt-in'));
       assert.equal(summary.added.length, 0);
     } finally {
@@ -184,8 +218,18 @@ test('draftQuintSpecs: writes valid drafts, rejects invalid, records skips (stub
         costUsd: 0.02,
         output: {
           results: [
-            { flow: 'auth/login', spec_text: 'module auth { var url: str }', predicates_used: ['page.url'], rationale: 'models the login flow' },
-            { flow: 'auth/logout', spec_text: 'garbage text with no declaration', predicates_used: [], rationale: 'bad' },
+            {
+              flow: 'auth/login',
+              spec_text: 'module auth { var url: str }',
+              predicates_used: ['page.url'],
+              rationale: 'models the login flow',
+            },
+            {
+              flow: 'auth/logout',
+              spec_text: 'garbage text with no declaration',
+              predicates_used: [],
+              rationale: 'bad',
+            },
           ],
           skipped: [{ flow: 'dashboard/layout', reason: 'subjective' }],
         },
@@ -196,7 +240,10 @@ test('draftQuintSpecs: writes valid drafts, rejects invalid, records skips (stub
 
       const summary = await draftQuintSpecs({ spec: specPath }, { agentRunner: stub });
       assert.equal(summary.skippedReason, undefined);
-      assert.deepEqual(summary.added.map((a) => a.flow), ['auth/login']);
+      assert.deepEqual(
+        summary.added.map((a) => a.flow),
+        ['auth/login'],
+      );
       assert.equal(summary.rejected.length, 1);
       assert.equal(summary.rejected[0].flow, 'auth/logout');
 
@@ -221,7 +268,14 @@ test('draftQuintSpecs: idempotent re-run drafts nothing new', async () => {
         model: 'stub-model',
         costUsd: 0,
         output: {
-          results: [{ flow: 'auth/login', spec_text: 'module auth {}', predicates_used: [], rationale: 'r' }],
+          results: [
+            {
+              flow: 'auth/login',
+              spec_text: 'module auth {}',
+              predicates_used: [],
+              rationale: 'r',
+            },
+          ],
           skipped: [],
         },
       });
@@ -246,7 +300,12 @@ test('draftQuintSpecs: surfaces ungrounded predicates from a valid draft', async
         costUsd: 0,
         output: {
           results: [
-            { flow: 'auth/login', spec_text: 'module auth {}', predicates_used: ['page.url', 'made.up.pred'], rationale: 'r' },
+            {
+              flow: 'auth/login',
+              spec_text: 'module auth {}',
+              predicates_used: ['page.url', 'made.up.pred'],
+              rationale: 'r',
+            },
           ],
           skipped: [],
         },

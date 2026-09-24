@@ -33,25 +33,36 @@ function pickPort(): number {
   return 5000 + Math.floor(Math.random() * 4000);
 }
 
-function request(port: number, path: string, init: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<{ status: number; json: unknown; text: string }> {
+function request(
+  port: number,
+  path: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+): Promise<{ status: number; json: unknown; text: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      host: '127.0.0.1',
-      port,
-      path,
-      method: init.method ?? 'GET',
-      headers: init.headers ?? {},
-    }, (res) => {
-      let buf = '';
-      res.on('data', (chunk) => {
-        buf += chunk;
-      });
-      res.on('end', () => {
-        let json: unknown = null;
-        try { json = JSON.parse(buf); } catch { /* not json */ }
-        resolve({ status: res.statusCode ?? 0, json, text: buf });
-      });
-    });
+    const req = http.request(
+      {
+        host: '127.0.0.1',
+        port,
+        path,
+        method: init.method ?? 'GET',
+        headers: init.headers ?? {},
+      },
+      (res) => {
+        let buf = '';
+        res.on('data', (chunk) => {
+          buf += chunk;
+        });
+        res.on('end', () => {
+          let json: unknown = null;
+          try {
+            json = JSON.parse(buf);
+          } catch {
+            /* not json */
+          }
+          resolve({ status: res.statusCode ?? 0, json, text: buf });
+        });
+      },
+    );
     req.on('error', reject);
     if (init.body) req.write(init.body);
     req.end();
@@ -64,7 +75,9 @@ async function waitForHealth(port: number, timeoutMs = 3000): Promise<void> {
     try {
       const res = await request(port, '/health');
       if (res.status === 200) return;
-    } catch { /* not ready */ }
+    } catch {
+      /* not ready */
+    }
     await new Promise((r) => setTimeout(r, 25));
   }
   throw new Error('daemon never came up');
@@ -81,7 +94,11 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
     else process.env.SPECIFY_INBOX_TOKEN = original;
     __setRunnerForTesting(prev);
@@ -94,7 +111,11 @@ test('daemon HTTP: /health no auth, /inbox requires bearer', async (t) => {
   assert.equal(health.status, 200);
   assert.equal((health.json as { ok: boolean }).ok, true);
 
-  const unauth = await request(port, '/inbox', { method: 'POST', body: '{}', headers: { 'content-type': 'application/json' } });
+  const unauth = await request(port, '/inbox', {
+    method: 'POST',
+    body: '{}',
+    headers: { 'content-type': 'application/json' },
+  });
   assert.equal(unauth.status, 401);
 
   const token = resolveToken();
@@ -156,7 +177,11 @@ test('daemon HTTP: /decisions endpoints require bearer and behave correctly', as
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
     else process.env.SPECIFY_INBOX_TOKEN = original;
     __setRunnerForTesting(prev);
@@ -244,7 +269,11 @@ test('daemon HTTP: GET /inbox/:id for a restored interrupted record returns 200 
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0 });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     if (original === undefined) delete process.env.SPECIFY_INBOX_TOKEN;
     else process.env.SPECIFY_INBOX_TOKEN = original;
     __setRunnerForTesting(prev);
@@ -297,7 +326,8 @@ class FakeWorker {
 async function waitUntil(predicate: () => boolean, timeoutMs = 3000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (!predicate()) {
-    if (Date.now() >= deadline) throw new Error(`waitUntil: condition not met within ${timeoutMs}ms`);
+    if (Date.now() >= deadline)
+      throw new Error(`waitUntil: condition not met within ${timeoutMs}ms`);
     await new Promise((r) => setTimeout(r, 5));
   }
 }
@@ -314,7 +344,11 @@ test('daemon HTTP: /health surfaces pool saturation and wedged workers instead o
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0, noAuth: true });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     __resetPoolForTesting();
     inbox.reset();
   });
@@ -323,7 +357,10 @@ test('daemon HTTP: /health surfaces pool saturation and wedged workers instead o
 
   const idleHealth = await request(port, '/health');
   assert.equal(idleHealth.status, 200);
-  const idleBody = idleHealth.json as { degraded: boolean; pool: { active: number; wedged: number } | null };
+  const idleBody = idleHealth.json as {
+    degraded: boolean;
+    pool: { active: number; wedged: number } | null;
+  };
   assert.equal(idleBody.degraded, false, 'an idle pool must not be reported as degraded');
   assert.equal(idleBody.pool?.active, 0);
 
@@ -340,13 +377,21 @@ test('daemon HTTP: /health surfaces pool saturation and wedged workers instead o
   await waitUntil(() => (getPool()?.stats().wedged ?? 0) > 0, 2000);
 
   const degradedHealth = await request(port, '/health');
-  assert.equal(degradedHealth.status, 200, '/health must stay a 200 liveness probe even when the pool is degraded');
+  assert.equal(
+    degradedHealth.status,
+    200,
+    '/health must stay a 200 liveness probe even when the pool is degraded',
+  );
   const degradedBody = degradedHealth.json as {
     ok: boolean;
     degraded: boolean;
     pool: { wedged: number; active: number; maxConcurrent: number } | null;
   };
-  assert.equal(degradedBody.ok, true, 'basic process liveness is unaffected — only the pool section reports trouble');
+  assert.equal(
+    degradedBody.ok,
+    true,
+    'basic process liveness is unaffected — only the pool section reports trouble',
+  );
   assert.equal(degradedBody.degraded, true, 'a wedged worker must flip the degraded flag');
   assert.ok(degradedBody.pool, 'pool telemetry must be present once a pool is configured');
   assert.ok(degradedBody.pool!.wedged > 0);
@@ -364,18 +409,23 @@ test('daemon HTTP: POST /inbox sheds new stateless jobs with 429 once the worker
   const serverPromise = startDaemonServer({ port, host: '127.0.0.1', maxWorkers: 0, noAuth: true });
   t.after(async () => {
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     __resetPoolForTesting();
     inbox.reset();
   });
 
   await waitForHealth(port);
 
-  const submit = (prompt: string) => request(port, '/inbox', {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ task: 'freeform', prompt }),
-  });
+  const submit = (prompt: string) =>
+    request(port, '/inbox', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ task: 'freeform', prompt }),
+    });
 
   const a = await submit('A occupies the only slot');
   assert.equal(a.status, 202);
@@ -386,7 +436,11 @@ test('daemon HTTP: POST /inbox sheds new stateless jobs with 429 once the worker
   await waitUntil(() => (getPool()?.stats().queued ?? 0) === 1);
 
   const c = await submit('C should be shed');
-  assert.equal(c.status, 429, 'a third job must be rejected once active + queue are both at their bound');
+  assert.equal(
+    c.status,
+    429,
+    'a third job must be rejected once active + queue are both at their bound',
+  );
   const cBody = c.json as { error: string; queued: number; maxQueueLength: number };
   assert.equal(cBody.error, 'queue_full');
   assert.equal(cBody.queued, 1);

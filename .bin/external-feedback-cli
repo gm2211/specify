@@ -59,7 +59,7 @@ function loadBeadsItems() {
   return readFileSync(BEADS_FILE, 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map(l => JSON.parse(l));
+    .map((l) => JSON.parse(l));
 }
 
 function loadSeedItems() {
@@ -67,7 +67,7 @@ function loadSeedItems() {
   return readFileSync(FEEDBACK_ITEMS_FILE, 'utf8')
     .split('\n')
     .filter(Boolean)
-    .map(l => JSON.parse(l));
+    .map((l) => JSON.parse(l));
 }
 
 function loadAddressed() {
@@ -76,7 +76,7 @@ function loadAddressed() {
     readFileSync(EF_ADDRESSED_FILE, 'utf8')
       .split('\n')
       .filter(Boolean)
-      .map(l => JSON.parse(l).id)
+      .map((l) => JSON.parse(l).id),
   );
 }
 
@@ -124,24 +124,25 @@ function cmdList(flags) {
     if (item.id) itemMap.set(item.id, item);
   }
 
-  let items = Array.from(itemMap.values())
-    .filter(i => !addressed.has(i.id));
+  let items = Array.from(itemMap.values()).filter((i) => !addressed.has(i.id));
 
   // Apply vetted-only filter
   if (vettedOnly) {
-    items = items.filter(i => i.vetted === true);
+    items = items.filter((i) => i.vetted === true);
   }
 
   // Cursor-based pagination (cursor = last id seen)
   if (since) {
-    const idx = items.findIndex(i => i.id === since);
+    const idx = items.findIndex((i) => i.id === since);
     if (idx !== -1) items = items.slice(idx + 1);
   }
 
   const page = items.slice(0, limit);
   const cursor = page.length >= limit && items.length > limit ? page[page.length - 1].id : '';
 
-  const clean = page.map((it) => Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null && v !== undefined)));
+  const clean = page.map((it) =>
+    Object.fromEntries(Object.entries(it).filter(([, v]) => v !== null && v !== undefined)),
+  );
   out({ items: clean, cursor });
 }
 
@@ -160,15 +161,18 @@ function cmdMarkAddressed(flags) {
   const beadsItems = loadBeadsItems();
   const seedItems = loadSeedItems();
   const allIds = new Set([
-    ...beadsItems.filter(i => i._type === 'issue' && i.status === 'open').map(i => i.id),
-    ...seedItems.map(i => i.id),
+    ...beadsItems.filter((i) => i._type === 'issue' && i.status === 'open').map((i) => i.id),
+    ...seedItems.map((i) => i.id),
   ]);
 
   if (!allIds.has(id)) {
     die(`item not found: ${id}`, 4);
   }
 
-  appendFileSync(EF_ADDRESSED_FILE, JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n');
+  appendFileSync(
+    EF_ADDRESSED_FILE,
+    JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n',
+  );
   process.exit(0);
 }
 
@@ -186,8 +190,7 @@ switch (subcmd) {
     break;
   default:
     die(
-      `Usage: external-feedback-cli <subcommand> [flags]\n` +
-        `Subcommands: list, mark-addressed`,
-      1
+      `Usage: external-feedback-cli <subcommand> [flags]\n` + `Subcommands: list, mark-addressed`,
+      1,
     );
 }

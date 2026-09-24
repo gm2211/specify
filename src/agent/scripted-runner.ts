@@ -18,7 +18,11 @@
 
 import { ExitCode, type ExitCodeValue } from '../cli/exit-codes.js';
 import type { BehaviorResult, Spec } from '../spec/types.js';
-import { runPlaywrightTests, type FlatTestResult, type RunPlaywrightTestsOptions } from './test-runner.js';
+import {
+  runPlaywrightTests,
+  type FlatTestResult,
+  type RunPlaywrightTestsOptions,
+} from './test-runner.js';
 
 /** `BehaviorResult.method` value used for every result this module produces. */
 export const SCRIPTED_METHOD = 'scripted-replay';
@@ -115,7 +119,10 @@ export function testsToBehaviorResults(tests: FlatTestResult[]): BehaviorResult[
  * that says so explicitly; callers that need to distinguish "untested" from
  * an agent-produced skip should check `rationale`.
  */
-export function untestedBehaviorResults(spec: Spec, matchedIds: ReadonlySet<string>): BehaviorResult[] {
+export function untestedBehaviorResults(
+  spec: Spec,
+  matchedIds: ReadonlySet<string>,
+): BehaviorResult[] {
   const out: BehaviorResult[] = [];
   for (const area of spec.areas ?? []) {
     for (const behavior of area.behaviors ?? []) {
@@ -202,7 +209,10 @@ export interface CrossCheckEntry {
  * (passed or failed — untested/skipped scripted entries carry no test
  * outcome to diff against) produce an entry.
  */
-export function diffCrossCheck(agentResults: BehaviorResult[], scriptedResults: BehaviorResult[]): CrossCheckEntry[] {
+export function diffCrossCheck(
+  agentResults: BehaviorResult[],
+  scriptedResults: BehaviorResult[],
+): CrossCheckEntry[] {
   const scriptedById = new Map(scriptedResults.map((r) => [r.id, r]));
   const out: CrossCheckEntry[] = [];
   for (const agent of agentResults) {

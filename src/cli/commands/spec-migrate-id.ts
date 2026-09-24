@@ -26,7 +26,11 @@ import type { CliContext } from '../types.js';
 import { c } from '../colors.js';
 import { specRootDir } from '../../spec/paths.js';
 import { ConfidenceStore, defaultConfidencePath } from '../../agent/confidence-store.js';
-import { defaultObservationsPath, type Observation, type ObservationsFile } from '../../agent/memory-layers.js';
+import {
+  defaultObservationsPath,
+  type Observation,
+  type ObservationsFile,
+} from '../../agent/memory-layers.js';
 import type { MemoryFile, MemoryRow } from '../../agent/memory.js';
 
 export interface SpecMigrateIdOptions {
@@ -77,9 +81,14 @@ function safeIsDirectory(p: string): boolean {
   }
 }
 
-export async function specMigrateId(options: SpecMigrateIdOptions, ctx: CliContext): Promise<number> {
+export async function specMigrateId(
+  options: SpecMigrateIdOptions,
+  ctx: CliContext,
+): Promise<number> {
   if (!options.spec) {
-    process.stderr.write('Missing --spec (or run from a directory with an auto-discoverable spec)\n');
+    process.stderr.write(
+      'Missing --spec (or run from a directory with an auto-discoverable spec)\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
   if (!options.oldId || !options.newId) {
@@ -90,7 +99,9 @@ export async function specMigrateId(options: SpecMigrateIdOptions, ctx: CliConte
   const oldParsed = parseFqId(options.oldId);
   const newParsed = parseFqId(options.newId);
   if (!oldParsed || !newParsed) {
-    process.stderr.write('Both <old-fq-id> and <new-fq-id> must be fully-qualified "area/behavior" ids.\n');
+    process.stderr.write(
+      'Both <old-fq-id> and <new-fq-id> must be fully-qualified "area/behavior" ids.\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
 
@@ -120,7 +131,9 @@ export async function specMigrateId(options: SpecMigrateIdOptions, ctx: CliConte
   if (fs.existsSync(observationsPath)) {
     summary.observations.path = observationsPath;
     try {
-      const raw = yaml.load(fs.readFileSync(observationsPath, 'utf-8')) as Partial<ObservationsFile> | null;
+      const raw = yaml.load(
+        fs.readFileSync(observationsPath, 'utf-8'),
+      ) as Partial<ObservationsFile> | null;
       if (raw && Array.isArray(raw.observations)) {
         let migrated = 0;
         const observations = raw.observations.map((o: Observation) => {
@@ -136,7 +149,9 @@ export async function specMigrateId(options: SpecMigrateIdOptions, ctx: CliConte
         summary.observations.migrated = migrated;
       }
     } catch (err) {
-      process.stderr.write(`Warning: could not parse ${observationsPath}, skipping: ${(err as Error).message}\n`);
+      process.stderr.write(
+        `Warning: could not parse ${observationsPath}, skipping: ${(err as Error).message}\n`,
+      );
     }
   }
 
@@ -166,21 +181,33 @@ export async function specMigrateId(options: SpecMigrateIdOptions, ctx: CliConte
             summary.memory.files += 1;
           }
         } catch (err) {
-          process.stderr.write(`Warning: could not parse ${filePath}, skipping: ${(err as Error).message}\n`);
+          process.stderr.write(
+            `Warning: could not parse ${filePath}, skipping: ${(err as Error).message}\n`,
+          );
         }
       }
     }
   }
 
   if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-    process.stdout.write(JSON.stringify({ oldId: options.oldId, newId: options.newId, ...summary }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify({ oldId: options.oldId, newId: options.newId, ...summary }, null, 2) + '\n',
+    );
   }
 
   if (!ctx.quiet) {
-    process.stderr.write(`${c.boldGreen('✓ Migrated learned state')} ${options.oldId} → ${options.newId}\n`);
-    process.stderr.write(`  ${c.cyan('confidence.json:')} ${summary.confidence.migrated ? '1 row' : '0 rows'}\n`);
-    process.stderr.write(`  ${c.cyan('observations:')} ${summary.observations.migrated} row${summary.observations.migrated === 1 ? '' : 's'}\n`);
-    process.stderr.write(`  ${c.cyan('memory:')} ${summary.memory.migrated} row${summary.memory.migrated === 1 ? '' : 's'} across ${summary.memory.files} file${summary.memory.files === 1 ? '' : 's'}\n`);
+    process.stderr.write(
+      `${c.boldGreen('✓ Migrated learned state')} ${options.oldId} → ${options.newId}\n`,
+    );
+    process.stderr.write(
+      `  ${c.cyan('confidence.json:')} ${summary.confidence.migrated ? '1 row' : '0 rows'}\n`,
+    );
+    process.stderr.write(
+      `  ${c.cyan('observations:')} ${summary.observations.migrated} row${summary.observations.migrated === 1 ? '' : 's'}\n`,
+    );
+    process.stderr.write(
+      `  ${c.cyan('memory:')} ${summary.memory.migrated} row${summary.memory.migrated === 1 ? '' : 's'} across ${summary.memory.files} file${summary.memory.files === 1 ? '' : 's'}\n`,
+    );
   }
 
   return ExitCode.SUCCESS;

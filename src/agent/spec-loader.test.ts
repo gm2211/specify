@@ -45,18 +45,21 @@ test('specSourceFromEnv: url with bearer', () => {
 });
 
 test('specSourceFromEnv: git requires ref + path', () => {
-  assert.throws(() =>
-    specSourceFromEnv({ SPECIFY_SPEC_GIT_REPO: 'git@x:y/z.git' })
-  , /requires SPECIFY_SPEC_GIT_REF/);
+  assert.throws(
+    () => specSourceFromEnv({ SPECIFY_SPEC_GIT_REPO: 'git@x:y/z.git' }),
+    /requires SPECIFY_SPEC_GIT_REF/,
+  );
 });
 
 test('specSourceFromEnv: rejects multiple sources', () => {
-  assert.throws(() =>
-    specSourceFromEnv({
-      SPECIFY_SPEC_INLINE_PATH: '/a',
-      SPECIFY_SPEC_URL: 'https://x',
-    })
-  , /Multiple spec sources/);
+  assert.throws(
+    () =>
+      specSourceFromEnv({
+        SPECIFY_SPEC_INLINE_PATH: '/a',
+        SPECIFY_SPEC_URL: 'https://x',
+      }),
+    /Multiple spec sources/,
+  );
 });
 
 test('resolveSpec: inline reads file + hashes content', async () => {
@@ -78,20 +81,26 @@ test('resolveSpec: inline composes directory spec', async () => {
   try {
     const specDir = path.join(dir, 'spec');
     fs.mkdirSync(path.join(specDir, 'areas'), { recursive: true });
-    fs.writeFileSync(path.join(specDir, 'spec.yaml'), `version: "2"
+    fs.writeFileSync(
+      path.join(specDir, 'spec.yaml'),
+      `version: "2"
 name: SplitSpec
 target:
   type: web
   url: https://example.test
 areas:
   - areas/home.yaml
-`);
-    fs.writeFileSync(path.join(specDir, 'areas', 'home.yaml'), `id: home
+`,
+    );
+    fs.writeFileSync(
+      path.join(specDir, 'areas', 'home.yaml'),
+      `id: home
 name: Home
 behaviors:
   - id: loads
     description: Home page renders
-`);
+`,
+    );
     const r = await resolveSpec({ kind: 'inline', path: specDir });
     assert.equal(r.spec.name, 'SplitSpec');
     assert.equal(r.spec.areas[0]?.id, 'home');
@@ -164,20 +173,26 @@ test('resolveSpec: git path may point at a directory spec', async () => {
     const execImpl: RunGitClone = async ({ destDir }) => {
       const specDir = path.join(destDir, 'spec');
       fs.mkdirSync(path.join(specDir, 'areas'), { recursive: true });
-      fs.writeFileSync(path.join(specDir, 'spec.yaml'), `version: "2"
+      fs.writeFileSync(
+        path.join(specDir, 'spec.yaml'),
+        `version: "2"
 name: GitSplitSpec
 target:
   type: web
   url: https://example.test
 areas:
   - areas/home.yaml
-`);
-      fs.writeFileSync(path.join(specDir, 'areas', 'home.yaml'), `id: home
+`,
+      );
+      fs.writeFileSync(
+        path.join(specDir, 'areas', 'home.yaml'),
+        `id: home
 name: Home
 behaviors:
   - id: loads
     description: Home page renders
-`);
+`,
+      );
     };
     const r = await resolveSpec(
       { kind: 'git', repo: 'git@x:y/z.git', ref: 'main', path: 'spec' },

@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { decodeItfValue, parseItfTrace, parseItfJson, MAX_ITF_DEPTH, type ItfMap } from './quint-itf.js';
+import {
+  decodeItfValue,
+  parseItfTrace,
+  parseItfJson,
+  MAX_ITF_DEPTH,
+  type ItfMap,
+} from './quint-itf.js';
 
 // ---------------------------------------------------------------------------
 // decodeItfValue
@@ -21,7 +27,10 @@ test('decodeItfValue: #bigint small values become numbers, huge stay strings', (
   assert.equal(decodeItfValue({ '#bigint': '42' }, onErr), 42);
   assert.equal(decodeItfValue({ '#bigint': '-7' }, onErr), -7);
   // Beyond MAX_SAFE_INTEGER — kept as exact string.
-  assert.equal(decodeItfValue({ '#bigint': '99999999999999999999' }, onErr), '99999999999999999999');
+  assert.equal(
+    decodeItfValue({ '#bigint': '99999999999999999999' }, onErr),
+    '99999999999999999999',
+  );
 });
 
 test('decodeItfValue: #set and #tup decode to arrays, recursively', () => {
@@ -33,20 +42,33 @@ test('decodeItfValue: #set and #tup decode to arrays, recursively', () => {
 test('decodeItfValue: #map decodes to ordered pair list', () => {
   const onErr = (): void => {};
   const decoded = decodeItfValue(
-    { '#map': [['http.response', true], ['page.url', false]] },
+    {
+      '#map': [
+        ['http.response', true],
+        ['page.url', false],
+      ],
+    },
     onErr,
   ) as ItfMap;
-  assert.deepEqual(decoded.map, [['http.response', true], ['page.url', false]]);
+  assert.deepEqual(decoded.map, [
+    ['http.response', true],
+    ['page.url', false],
+  ]);
 });
 
 test('decodeItfValue: #unserializable surfaces the sentinel, not a crash', () => {
   const onErr = (): void => {};
-  assert.deepEqual(decodeItfValue({ '#unserializable': '1 to Nat' }, onErr), { unserializable: '1 to Nat' });
+  assert.deepEqual(decodeItfValue({ '#unserializable': '1 to Nat' }, onErr), {
+    unserializable: '1 to Nat',
+  });
 });
 
 test('decodeItfValue: nested #meta inside a record is stripped', () => {
   const onErr = (): void => {};
-  const decoded = decodeItfValue({ '#meta': { index: 3 }, url: '/x' }, onErr) as Record<string, unknown>;
+  const decoded = decodeItfValue({ '#meta': { index: 3 }, url: '/x' }, onErr) as Record<
+    string,
+    unknown
+  >;
   assert.deepEqual(decoded, { url: '/x' });
 });
 
@@ -87,8 +109,18 @@ test('parseItfTrace: parses a well-formed document', () => {
     '#meta': { format: 'ITF', source: 'auth.qnt' },
     vars: ['url', 'action'],
     states: [
-      { '#meta': { index: 0 }, url: '/login', action: 'init', predicates: { '#map': [['page.url', true]] } },
-      { '#meta': { index: 1 }, url: '/dashboard', action: 'browser_click', predicates: { '#map': [['page.url', true]] } },
+      {
+        '#meta': { index: 0 },
+        url: '/login',
+        action: 'init',
+        predicates: { '#map': [['page.url', true]] },
+      },
+      {
+        '#meta': { index: 1 },
+        url: '/dashboard',
+        action: 'browser_click',
+        predicates: { '#map': [['page.url', true]] },
+      },
     ],
   };
   const { trace, errors } = parseItfTrace(doc);

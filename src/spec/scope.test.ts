@@ -53,15 +53,21 @@ test('mergeResultsById: overrides replace base entries by id, preserving base or
   ];
   const overrides: BehaviorResult[] = [{ id: 'a/2', description: 'y', status: 'failed' }];
   const merged = mergeResultsById(base, overrides);
-  assert.deepEqual(merged.map((r) => [r.id, r.status]), [
-    ['a/1', 'passed'],
-    ['a/2', 'failed'],
-  ]);
+  assert.deepEqual(
+    merged.map((r) => [r.id, r.status]),
+    [
+      ['a/1', 'passed'],
+      ['a/2', 'failed'],
+    ],
+  );
 });
 
 test('mergeResultsById: overrides for new ids are appended', () => {
   const base: BehaviorResult[] = [{ id: 'a/1', description: 'x', status: 'passed' }];
   const overrides: BehaviorResult[] = [{ id: 'a/2', description: 'y', status: 'failed' }];
   const merged = mergeResultsById(base, overrides);
-  assert.deepEqual(merged.map((r) => r.id), ['a/1', 'a/2']);
+  assert.deepEqual(
+    merged.map((r) => r.id),
+    ['a/1', 'a/2'],
+  );
 });

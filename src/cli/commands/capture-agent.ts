@@ -88,7 +88,9 @@ export async function executeCommand(
         break;
 
       case 'type':
-        await page.locator(cmd.selector).pressSequentially(cmd.text, { delay: cmd.options?.delay ?? 50 });
+        await page
+          .locator(cmd.selector)
+          .pressSequentially(cmd.text, { delay: cmd.options?.delay ?? 50 });
         break;
 
       case 'selectOption':
@@ -150,17 +152,29 @@ export async function executeCommand(
     }
 
     // Auto-screenshot after every mutating action (deterministic evidence capture)
-    const MUTATING_ACTIONS = new Set(['goto', 'click', 'fill', 'type', 'selectOption', 'check', 'uncheck', 'hover', 'press']);
+    const MUTATING_ACTIONS = new Set([
+      'goto',
+      'click',
+      'fill',
+      'type',
+      'selectOption',
+      'check',
+      'uncheck',
+      'hover',
+      'press',
+    ]);
     const urlAfter = page.url();
     if (screenshotFn && cmd.action !== 'screenshot' && MUTATING_ACTIONS.has(cmd.action)) {
-      const label = urlBefore !== urlAfter
-        ? `nav-${slugifyUrl(urlAfter)}`
-        : `${cmd.action}-${'selector' in cmd ? slugifyUrl(cmd.selector) : slugifyUrl(urlAfter)}`;
+      const label =
+        urlBefore !== urlAfter
+          ? `nav-${slugifyUrl(urlAfter)}`
+          : `${cmd.action}-${'selector' in cmd ? slugifyUrl(cmd.selector) : slugifyUrl(urlAfter)}`;
       screenshot = await screenshotFn(label);
     }
 
     if (recorder) {
-      const sampled = probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
+      const sampled =
+        probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
       await recorder.endStep({
         success: true,
         screenshot,
@@ -180,7 +194,8 @@ export async function executeCommand(
     const errorMessage = err instanceof Error ? err.message : String(err);
 
     if (recorder) {
-      const sampled = probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
+      const sampled =
+        probePlan && probePlan.length > 0 ? await sampleProbes(page, probePlan) : undefined;
       await recorder.endStep({
         success: false,
         error: errorMessage,
@@ -200,7 +215,14 @@ export async function executeCommand(
 
 function slugifyUrl(url: string): string {
   try {
-    return new URL(url).pathname.replace(/^\//, '').replace(/[/?&#=.]/g, '_').replace(/_+/g, '_').replace(/_$/, '').substring(0, 60) || 'root';
+    return (
+      new URL(url).pathname
+        .replace(/^\//, '')
+        .replace(/[/?&#=.]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/_$/, '')
+        .substring(0, 60) || 'root'
+    );
   } catch {
     return 'page';
   }
@@ -306,7 +328,10 @@ async function evalProbe(page: Page, spec: ProbeSpec): Promise<boolean> {
  * simply skipped and `truncated` is set — recorded onto the step so it's
  * visible in observations.json, not silently dropped.
  */
-async function sampleProbes(page: Page, plan: ProbePlan): Promise<{ probes: Record<string, boolean>; truncated: boolean }> {
+async function sampleProbes(
+  page: Page,
+  plan: ProbePlan,
+): Promise<{ probes: Record<string, boolean>; truncated: boolean }> {
   const probes: Record<string, boolean> = {};
   const budgetStart = Date.now();
   let truncated = false;

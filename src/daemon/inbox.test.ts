@@ -34,7 +34,12 @@ function makeFakeRunner(onCall?: (opts: SdkRunnerOptions) => void) {
     return {
       result: 'ok',
       costUsd: 0.01,
-      structuredOutput: { pass: true, summary: { total: 0, passed: 0, failed: 0, skipped: 0 }, results: [], test_files: [] },
+      structuredOutput: {
+        pass: true,
+        summary: { total: 0, passed: 0, failed: 0, skipped: 0 },
+        results: [],
+        test_files: [],
+      },
     };
   };
   return { runner, calls };
@@ -95,51 +100,57 @@ afterEach(() => {
 
 function writeMinimalSpec(dir: string, targetUrl = 'http://localhost:3000'): string {
   const specPath = path.join(dir, 'spec.yaml');
-  fs.writeFileSync(specPath, [
-    'version: "2"',
-    'name: Test',
-    'description: Test spec.',
-    'target:',
-    '  type: web',
-    `  url: ${targetUrl}`,
-    'areas:',
-    '  - id: home',
-    '    name: Home',
-    '    behaviors:',
-    '      - id: loads',
-    '        description: Page loads.',
-    '',
-  ].join('\n'));
+  fs.writeFileSync(
+    specPath,
+    [
+      'version: "2"',
+      'name: Test',
+      'description: Test spec.',
+      'target:',
+      '  type: web',
+      `  url: ${targetUrl}`,
+      'areas:',
+      '  - id: home',
+      '    name: Home',
+      '    behaviors:',
+      '      - id: loads',
+      '        description: Page loads.',
+      '',
+    ].join('\n'),
+  );
   return specPath;
 }
 
 function writeMultiAreaSpec(dir: string, targetUrl = 'http://localhost:3000'): string {
   const specPath = path.join(dir, 'spec.yaml');
-  fs.writeFileSync(specPath, [
-    'version: "2"',
-    'name: Test',
-    'description: Test spec.',
-    'target:',
-    '  type: web',
-    `  url: ${targetUrl}`,
-    'areas:',
-    '  - id: home',
-    '    name: Home',
-    '    behaviors:',
-    '      - id: loads',
-    '        description: Page loads.',
-    '  - id: checkout',
-    '    name: Checkout',
-    '    behaviors:',
-    '      - id: pays',
-    '        description: User can pay.',
-    '  - id: search',
-    '    name: Search',
-    '    behaviors:',
-    '      - id: finds',
-    '        description: Search returns results.',
-    '',
-  ].join('\n'));
+  fs.writeFileSync(
+    specPath,
+    [
+      'version: "2"',
+      'name: Test',
+      'description: Test spec.',
+      'target:',
+      '  type: web',
+      `  url: ${targetUrl}`,
+      'areas:',
+      '  - id: home',
+      '    name: Home',
+      '    behaviors:',
+      '      - id: loads',
+      '        description: Page loads.',
+      '  - id: checkout',
+      '    name: Checkout',
+      '    behaviors:',
+      '      - id: pays',
+      '        description: User can pay.',
+      '  - id: search',
+      '    name: Search',
+      '    behaviors:',
+      '      - id: finds',
+      '        description: Search returns results.',
+      '',
+    ].join('\n'),
+  );
   return specPath;
 }
 
@@ -295,7 +306,10 @@ test('inbox.submit verify without request spec falls back to SPECIFY_SPEC_INLINE
     assert.equal(calls.length, 1);
     assert.equal(calls[0].spec, path.resolve(specPath));
     assert.match(calls[0].systemPrompt, /from-inline-spec/);
-    assert.equal(calls[0].userPrompt, 'Verify http://from-inline-spec:3000 against the behavioral spec.');
+    assert.equal(
+      calls[0].userPrompt,
+      'Verify http://from-inline-spec:3000 against the behavioral spec.',
+    );
   } finally {
     __setRunnerForTesting(prev);
     inbox.reset();
@@ -330,7 +344,10 @@ test('inbox.submit verify without request spec resolves SPECIFY_SPEC_URL', async
     assert.equal(calls.length, 1);
     assert.equal(calls[0].spec, undefined);
     assert.match(calls[0].systemPrompt, /UrlSpec/);
-    assert.equal(calls[0].userPrompt, 'Verify http://from-url-spec:3000 against the behavioral spec.');
+    assert.equal(
+      calls[0].userPrompt,
+      'Verify http://from-url-spec:3000 against the behavioral spec.',
+    );
   } finally {
     globalThis.fetch = prevFetch;
     __setRunnerForTesting(prev);
@@ -360,10 +377,11 @@ test('inbox.submit stateless: serializes concurrent submits', async () => {
     // Deterministic sync: wait for all three to reach a terminal status
     // rather than a fixed sleep guessing how long 3x20ms serialized runs
     // plus dispatch overhead takes on whatever machine is running the test.
-    await waitUntil(() =>
-      ['completed', 'failed'].includes(inbox.get(a.id)?.status ?? '') &&
-      ['completed', 'failed'].includes(inbox.get(b.id)?.status ?? '') &&
-      ['completed', 'failed'].includes(inbox.get(c.id)?.status ?? ''),
+    await waitUntil(
+      () =>
+        ['completed', 'failed'].includes(inbox.get(a.id)?.status ?? '') &&
+        ['completed', 'failed'].includes(inbox.get(b.id)?.status ?? '') &&
+        ['completed', 'failed'].includes(inbox.get(c.id)?.status ?? ''),
     );
     assert.equal(inbox.get(a.id)?.status, 'completed');
     assert.equal(inbox.get(b.id)?.status, 'completed');
@@ -385,20 +403,23 @@ test('inbox.submit: SPECIFY_TARGET_URL fills in url when caller omits it', async
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
     const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'target:',
-      '  type: web',
-      '  url: http://spec-default:3000',
-      'areas:',
-      '  - id: home',
-      '    name: Home',
-      '    behaviors:',
-      '      - id: loads',
-      '        description: Loads.',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      specPath,
+      [
+        'version: "2"',
+        'name: Test',
+        'target:',
+        '  type: web',
+        '  url: http://spec-default:3000',
+        'areas:',
+        '  - id: home',
+        '    name: Home',
+        '    behaviors:',
+        '      - id: loads',
+        '        description: Loads.',
+        '',
+      ].join('\n'),
+    );
     inbox.submit({
       task: 'verify',
       prompt: 'Verify after rollout.',
@@ -426,13 +447,16 @@ test('inbox.submit: explicit url wins over SPECIFY_TARGET_URL', async () => {
   try {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-inbox-env-'));
     const specPath = path.join(tmpDir, 'spec.yaml');
-    fs.writeFileSync(specPath, [
-      'version: "2"',
-      'name: Test',
-      'target: { type: web, url: http://spec:3000 }',
-      'areas: [{ id: home, name: Home, behaviors: [{ id: loads, description: Loads. }] }]',
-      '',
-    ].join('\n'));
+    fs.writeFileSync(
+      specPath,
+      [
+        'version: "2"',
+        'name: Test',
+        'target: { type: web, url: http://spec:3000 }',
+        'areas: [{ id: home, name: Home, behaviors: [{ id: loads, description: Loads. }] }]',
+        '',
+      ].join('\n'),
+    );
     inbox.submit({
       task: 'verify',
       prompt: 'Verify explicit url.',
@@ -676,7 +700,11 @@ test('findActiveVerify: queued verify with matching metadata → found', async (
     await flush();
 
     // After completion, it should NOT be found.
-    const notFound = inbox.findActiveVerify({ namespace: 'staging', name: 'api', image: 'api:1.2.3' });
+    const notFound = inbox.findActiveVerify({
+      namespace: 'staging',
+      name: 'api',
+      image: 'api:1.2.3',
+    });
     assert.equal(notFound, undefined, 'completed verify should not be returned');
   } finally {
     __setRunnerForTesting(prev);
@@ -944,8 +972,18 @@ test('inbox.submit verify with request spec loads exploration hints from a persi
     // spec: specRoot = dirname(specPath), specId = 'Test' (spec name),
     // targetKey = 'web_' + safe host of http://localhost:3000.
     const { ModelStore } = await import('../model/nav-model.js');
-    const store = new ModelStore({ specRootDir: tmpDir, specId: 'Test', targetKey: 'web_localhost_3000' });
-    const mkStep = (i: number, action: string, urlBefore: string, urlAfter: string, args: Record<string, unknown>) => ({
+    const store = new ModelStore({
+      specRootDir: tmpDir,
+      specId: 'Test',
+      targetKey: 'web_localhost_3000',
+    });
+    const mkStep = (
+      i: number,
+      action: string,
+      urlBefore: string,
+      urlAfter: string,
+      args: Record<string, unknown>,
+    ) => ({
       step: i,
       action,
       args,
@@ -962,8 +1000,12 @@ test('inbox.submit verify with request spec loads exploration hints from a persi
       {
         ref: 'seed-run',
         steps: [
-          mkStep(0, 'browser_goto', '', 'http://localhost:3000/', { url: 'http://localhost:3000/' }),
-          mkStep(1, 'browser_click', 'http://localhost:3000/', 'http://localhost:3000/about', { selector: '#about' }),
+          mkStep(0, 'browser_goto', '', 'http://localhost:3000/', {
+            url: 'http://localhost:3000/',
+          }),
+          mkStep(1, 'browser_click', 'http://localhost:3000/', 'http://localhost:3000/about', {
+            selector: '#about',
+          }),
         ],
       },
     ]);
@@ -1051,12 +1093,24 @@ test('inbox.submit via pool: stays queued behind a saturated pool, flips to runn
     );
 
     // Free A's slot; B should now be granted it.
-    workers[0].emit('message', { kind: 'result', jobId: a.id, result: { result: 'ok', costUsd: 0 } });
+    workers[0].emit('message', {
+      kind: 'result',
+      jobId: a.id,
+      result: { result: 'ok', costUsd: 0 },
+    });
     await flush();
     assert.equal(inbox.get(a.id)?.status, 'completed');
-    assert.equal(inbox.get(b.id)?.status, 'running', 'B should flip to running once granted a slot');
+    assert.equal(
+      inbox.get(b.id)?.status,
+      'running',
+      'B should flip to running once granted a slot',
+    );
 
-    workers[1].emit('message', { kind: 'result', jobId: b.id, result: { result: 'ok', costUsd: 0 } });
+    workers[1].emit('message', {
+      kind: 'result',
+      jobId: b.id,
+      result: { result: 'ok', costUsd: 0 },
+    });
     await flush();
     assert.equal(inbox.get(b.id)?.status, 'completed');
   } finally {

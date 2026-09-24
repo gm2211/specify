@@ -52,7 +52,11 @@ export function setActiveInjector(injector: MessageInjector | null): void {
 const witnessCache = new Map<string, WitnessResult>();
 
 function witnessCacheKey(entry: FormulaEntry): string {
-  const contentHash = crypto.createHash('sha256').update(JSON.stringify(entry.formula)).digest('hex').slice(0, 16);
+  const contentHash = crypto
+    .createHash('sha256')
+    .update(JSON.stringify(entry.formula))
+    .digest('hex')
+    .slice(0, 16);
   return `${entry.id}:${contentHash}`;
 }
 
@@ -88,7 +92,9 @@ export type FormulaListEntry = FormulaEntry & {
  * testable without spinning up the HTTP server. The routes are thin
  * adapters over these.
  */
-export async function listFormulas(resolvedSpec: string): Promise<{ formulas: FormulaListEntry[] }> {
+export async function listFormulas(
+  resolvedSpec: string,
+): Promise<{ formulas: FormulaListEntry[] }> {
   const { loadSpec } = await import('../spec/parser.js');
   const spec = loadSpec(resolvedSpec);
   const descriptionByBehavior = new Map<string, string>();
@@ -164,7 +170,10 @@ export function setFormulaStatus(
       base = loadFormulas(filePath);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return { error: 'conflict', message: `Formulas file changed concurrently and could not be reloaded: ${msg}` };
+      return {
+        error: 'conflict',
+        message: `Formulas file changed concurrently and could not be reloaded: ${msg}`,
+      };
     }
   }
   if (!base || !base.formulas.some((f) => f.id === id)) return { error: 'not_found' };
@@ -280,7 +289,7 @@ function mergeScopedResult(
   scope: { areaId: string; behaviorId: string },
 ): Record<string, unknown> {
   const freshResults = Array.isArray((fresh as { results?: unknown })?.results)
-    ? ((fresh as { results: Array<Record<string, unknown>> }).results)
+    ? (fresh as { results: Array<Record<string, unknown>> }).results
     : [];
   const targetId = `${scope.areaId}/${scope.behaviorId}`;
   const incoming = freshResults.find((r) => r.id === targetId);
@@ -363,9 +372,10 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       }
       const raw = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
       // CLI writes { structuredOutput: {...} }; unwrap for the webapp.
-      const data = raw && typeof raw === 'object' && 'structuredOutput' in raw
-        ? (raw as { structuredOutput: unknown }).structuredOutput
-        : raw;
+      const data =
+        raw && typeof raw === 'object' && 'structuredOutput' in raw
+          ? (raw as { structuredOutput: unknown }).structuredOutput
+          : raw;
       return c.json(data ?? {});
     } catch {
       return c.json({});
@@ -396,7 +406,8 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     try {
       const { loadSpec } = await import('../spec/parser.js');
       const spec = loadSpec(resolvedSpec);
-      const isDirectorySpec = fs.existsSync(resolvedSpec) && fs.statSync(resolvedSpec).isDirectory();
+      const isDirectorySpec =
+        fs.existsSync(resolvedSpec) && fs.statSync(resolvedSpec).isDirectory();
       const baseName = isDirectorySpec
         ? 'spec.narrative.md'
         : path.basename(resolvedSpec).replace(/\.(ya?ml|json)$/, '.narrative.md');
@@ -421,10 +432,13 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       const { parseSpec } = await import('../spec/parser.js');
       parseSpec(body.yaml, resolvedSpec);
       if (fs.existsSync(resolvedSpec) && fs.statSync(resolvedSpec).isDirectory()) {
-        return c.json({
-          error: 'unsupported_write',
-          message: 'Directory specs cannot be overwritten with a flattened YAML document.',
-        }, 409);
+        return c.json(
+          {
+            error: 'unsupported_write',
+            message: 'Directory specs cannot be overwritten with a flattened YAML document.',
+          },
+          409,
+        );
       }
       // Write to disk
       fs.writeFileSync(resolvedSpec, body.yaml, 'utf-8');
@@ -451,7 +465,9 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
     if (verifyInFlight) return c.json({ error: 'busy' }, 409);
     const { areaId, behaviorId } = c.req.param();
     runVerifyInBackground(resolvedSpec, resultsDir, { areaId, behaviorId }).catch((err) => {
-      process.stderr.write(`Scoped verify failed: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `Scoped verify failed: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     });
     return c.json({ started: true, areaId, behaviorId });
   });
@@ -485,7 +501,7 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   });
@@ -524,7 +540,11 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       const draft = listDrafts(resolvedSpec).find((d) => d.id === id);
       if (!draft) return c.json({ error: 'not_found' }, 404);
       const result = promoteDraft(draft.filePath, { specPath: resolvedSpec });
-      eventBus.send('skill:approved', { id, skillName: result.skillName, skillPath: result.skillPath });
+      eventBus.send('skill:approved', {
+        id,
+        skillName: result.skillName,
+        skillPath: result.skillPath,
+      });
       return c.json(result);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -634,9 +654,22 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       if (!body.kind || !body.text) {
         return c.json({ error: 'invalid_body', message: 'Expected { kind, text, ... }' }, 400);
       }
-      const allowed = new Set(['note', 'important_pattern', 'missed_check', 'false_positive', 'ignore_pattern', 'file_bug']);
+      const allowed = new Set([
+        'note',
+        'important_pattern',
+        'missed_check',
+        'false_positive',
+        'ignore_pattern',
+        'file_bug',
+      ]);
       if (!allowed.has(body.kind)) {
-        return c.json({ error: 'invalid_kind', message: `kind must be one of: ${Array.from(allowed).join(', ')}` }, 400);
+        return c.json(
+          {
+            error: 'invalid_kind',
+            message: `kind must be one of: ${Array.from(allowed).join(', ')}`,
+          },
+          400,
+        );
       }
       const { ingestFeedback } = await import('../agent/feedback.js');
       const result = await ingestFeedback(
@@ -797,12 +830,8 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
   if (shouldOpen) {
     const { execFile } = await import('child_process');
     const platform = process.platform;
-    const openCmd = platform === 'darwin' ? 'open'
-      : platform === 'win32' ? 'cmd'
-      : 'xdg-open';
-    const openArgs = platform === 'win32'
-      ? ['/c', 'start', '', url]
-      : [url];
+    const openCmd = platform === 'darwin' ? 'open' : platform === 'win32' ? 'cmd' : 'xdg-open';
+    const openArgs = platform === 'win32' ? ['/c', 'start', '', url] : [url];
     execFile(openCmd, openArgs, (err) => {
       if (err) {
         process.stderr.write(`Could not auto-open browser: ${err.message}\n`);
@@ -817,7 +846,11 @@ export async function startReviewServer(options: ServeOptions): Promise<void> {
       unsubEvents();
       for (const w of watchers) w.close();
       wss.close();
-      try { (server as unknown as { close?: () => void }).close?.(); } catch { /* best effort */ }
+      try {
+        (server as unknown as { close?: () => void }).close?.();
+      } catch {
+        /* best effort */
+      }
       resolve();
     };
     process.on('SIGINT', cleanup);

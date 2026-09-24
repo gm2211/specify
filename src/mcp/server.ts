@@ -51,7 +51,8 @@ async function startStdioTransport(server: McpServer): Promise<void> {
 
 async function startHttpTransport(server: McpServer, options: McpServerOptions): Promise<void> {
   const { createServer } = await import('http');
-  const { StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
+  const { StreamableHTTPServerTransport } =
+    await import('@modelcontextprotocol/sdk/server/streamableHttp.js');
   const { randomUUID } = await import('crypto');
 
   const port = options.port ?? 8080;
@@ -138,7 +139,9 @@ async function startHttpTransport(server: McpServer, options: McpServerOptions):
   httpServer.listen(port, host, () => {
     process.stderr.write(`Specify MCP server started (HTTP)\n`);
     process.stderr.write(`  Endpoint: http://${host}:${port}/mcp\n`);
-    process.stderr.write(`  Config:   { "mcpServers": { "specify": { "url": "http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/mcp" } } }\n`);
+    process.stderr.write(
+      `  Config:   { "mcpServers": { "specify": { "url": "http://${host === '0.0.0.0' ? 'localhost' : host}:${port}/mcp" } } }\n`,
+    );
   });
 
   // Graceful shutdown

@@ -4,12 +4,15 @@ This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get sta
 
 ## Quick Reference
 
-See the Quick Reference in Beads Issue Tracker below. Also available: `bd update <id> --status in_progress` (alternate claim syntax) and `bd sync` (sync with git).
+See the Quick Reference in Beads Issue Tracker below. Also available:
+`bd update <id> --status in_progress` (alternate claim syntax) and `bd sync` (sync with git).
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
+
 ## Beads Issue Tracker
 
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and
+commands.
 
 ### Quick Reference
 
@@ -28,7 +31,8 @@ bd close <id>         # Complete work
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until
+`git push` succeeds.
 
 **MANDATORY WORKFLOW:**
 
@@ -47,6 +51,7 @@ bd close <id>         # Complete work
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
@@ -55,7 +60,8 @@ bd close <id>         # Complete work
 
 ## Landing the Plane (Session Completion)
 
-Same mandatory workflow as **Session Completion** above. Step 4 may alternatively run `bd sync` instead of `bd dolt push`.
+Same mandatory workflow as **Session Completion** above. Step 4 may alternatively run `bd sync`
+instead of `bd dolt push`.
 
 ## Build & Test
 

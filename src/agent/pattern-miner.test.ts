@@ -44,7 +44,12 @@ test('minePatterns: returns recurring n-grams above thresholds', () => {
       ['user', 'browser:click', 'click logo'],
     ]);
 
-    const patterns = minePatterns(store, { minLen: 2, maxLen: 3, minOccurrences: 2, minSessions: 2 });
+    const patterns = minePatterns(store, {
+      minLen: 2,
+      maxLen: 3,
+      minOccurrences: 2,
+      minSessions: 2,
+    });
     assert.ok(patterns.length > 0);
     const first = patterns[0];
     assert.match(first.signature, /click.*input/);
@@ -102,7 +107,10 @@ test('minePatterns: scoring prefers sessionCount over raw count', () => {
   withStore((store) => {
     // Pattern A appears 3 times in 3 different sessions.
     for (let i = 0; i < 3; i++) {
-      fakeSession(store, [['user', 'a:1', '_'], ['user', 'a:2', '_']]);
+      fakeSession(store, [
+        ['user', 'a:1', '_'],
+        ['user', 'a:2', '_'],
+      ]);
     }
     // Pattern B appears 5 times in a single session.
     const sid = newSessionId();

@@ -46,9 +46,8 @@ export interface AttachedSession {
 }
 
 export function defaultCdpEndpoint(port?: number): string {
-  const resolved = port
-    ?? (process.env.CHROME_CDP_PORT ? Number(process.env.CHROME_CDP_PORT) : undefined)
-    ?? 9222;
+  const resolved =
+    port ?? (process.env.CHROME_CDP_PORT ? Number(process.env.CHROME_CDP_PORT) : undefined) ?? 9222;
   return `http://localhost:${resolved}`;
 }
 
@@ -63,7 +62,7 @@ export async function attachToUserChrome(opts: AttachOptions = {}): Promise<Atta
     const msg = err instanceof Error ? err.message : String(err);
     throw new Error(
       `Failed to connect to Chrome at ${endpoint}: ${msg}. ` +
-      `Start Chrome with --remote-debugging-port=${opts.port ?? 9222} or set CHROME_CDP_PORT.`,
+        `Start Chrome with --remote-debugging-port=${opts.port ?? 9222} or set CHROME_CDP_PORT.`,
     );
   }
 
@@ -89,16 +88,28 @@ export async function attachToUserChrome(opts: AttachOptions = {}): Promise<Atta
     detach: () => {
       while (detachers.length) {
         const d = detachers.pop();
-        try { d?.(); } catch { /* noop */ }
+        try {
+          d?.();
+        } catch {
+          /* noop */
+        }
       }
     },
     disconnect: async () => {
-      try { await browser.close(); } catch { /* noop — browser may have been disconnected */ }
+      try {
+        await browser.close();
+      } catch {
+        /* noop — browser may have been disconnected */
+      }
     },
   };
 }
 
-function instrumentPage(page: Page, sessionId: string | undefined, detachers: Array<() => void>): void {
+function instrumentPage(
+  page: Page,
+  sessionId: string | undefined,
+  detachers: Array<() => void>,
+): void {
   const onFrameNavigated = (frame: { url(): string; parentFrame(): unknown | null }): void => {
     if (frame.parentFrame()) return; // top-frame only
     eventBus.send('browser:navigation', { url: frame.url() }, sessionId);
@@ -137,7 +148,17 @@ function instrumentPage(page: Page, sessionId: string | undefined, detachers: Ar
     // Binding may already be registered if attach is called twice. Ignore.
   });
   detachers.push(() => {
-    void page.evaluate((name) => { try { (window as unknown as Record<string, unknown>)[name] = undefined; } catch { /* noop */ } }, bindingName).catch(() => { /* noop */ });
+    void page
+      .evaluate((name) => {
+        try {
+          (window as unknown as Record<string, unknown>)[name] = undefined;
+        } catch {
+          /* noop */
+        }
+      }, bindingName)
+      .catch(() => {
+        /* noop */
+      });
   });
 }
 
@@ -147,12 +168,19 @@ function instrumentPage(page: Page, sessionId: string | undefined, detachers: Ar
  * runs in the page's JS context.
  */
 function installInPageObserver(): void {
-  const w = window as unknown as { __specify_user_event__?: (payload: unknown) => void; __specify_observer_installed__?: boolean };
+  const w = window as unknown as {
+    __specify_user_event__?: (payload: unknown) => void;
+    __specify_observer_installed__?: boolean;
+  };
   if (w.__specify_observer_installed__) return;
   w.__specify_observer_installed__ = true;
 
   const send = (payload: unknown): void => {
-    try { w.__specify_user_event__?.(payload); } catch { /* noop */ }
+    try {
+      w.__specify_user_event__?.(payload);
+    } catch {
+      /* noop */
+    }
   };
 
   const describe = (el: Element | null): { tag: string; id: string; cls: string; text: string } => {
@@ -165,14 +193,27 @@ function installInPageObserver(): void {
     };
   };
 
-  document.addEventListener('click', (e) => {
-    const target = e.target as Element | null;
-    send({ kind: 'click', element: describe(target), x: (e as MouseEvent).clientX, y: (e as MouseEvent).clientY });
-  }, true);
+  document.addEventListener(
+    'click',
+    (e) => {
+      const target = e.target as Element | null;
+      send({
+        kind: 'click',
+        element: describe(target),
+        x: (e as MouseEvent).clientX,
+        y: (e as MouseEvent).clientY,
+      });
+    },
+    true,
+  );
 
-  document.addEventListener('input', (e) => {
-    const target = e.target as HTMLInputElement | HTMLTextAreaElement | null;
-    if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
-    send({ kind: 'input', element: describe(target), valueLen: (target.value ?? '').length });
-  }, true);
+  document.addEventListener(
+    'input',
+    (e) => {
+      const target = e.target as HTMLInputElement | HTMLTextAreaElement | null;
+      if (!target || (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA')) return;
+      send({ kind: 'input', element: describe(target), valueLen: (target.value ?? '').length });
+    },
+    true,
+  );
 }

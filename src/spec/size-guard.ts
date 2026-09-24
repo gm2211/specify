@@ -110,7 +110,10 @@ export interface SplitSpecResult {
   areaPaths: string[];
 }
 
-export function splitSpecFileToDirectory(specPath: string, options: SplitSpecOptions = {}): SplitSpecResult {
+export function splitSpecFileToDirectory(
+  specPath: string,
+  options: SplitSpecOptions = {},
+): SplitSpecResult {
   const inputPath = path.resolve(specPath);
   if (!fs.existsSync(inputPath)) {
     throw new Error(`Spec file not found: ${inputPath}`);

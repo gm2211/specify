@@ -3,11 +3,23 @@ import { postFeedback, type FeedbackInput, type FeedbackKind } from '../api';
 
 const KINDS: { value: FeedbackKind; label: string; hint: string }[] = [
   { value: 'note', label: 'Note', hint: 'observation worth keeping; no action' },
-  { value: 'important_pattern', label: 'Important pattern', hint: 'check this everywhere; agent will propagate to siblings' },
+  {
+    value: 'important_pattern',
+    label: 'Important pattern',
+    hint: 'check this everywhere; agent will propagate to siblings',
+  },
   { value: 'missed_check', label: 'Missed check', hint: 'agent should have checked this' },
-  { value: 'false_positive', label: 'False positive', hint: 'agent flagged something that is not a problem' },
+  {
+    value: 'false_positive',
+    label: 'False positive',
+    hint: 'agent flagged something that is not a problem',
+  },
   { value: 'ignore_pattern', label: 'Ignore pattern', hint: 'skip this kind of finding next time' },
-  { value: 'file_bug', label: 'File bug', hint: 'creates a beads issue and records the observation' },
+  {
+    value: 'file_bug',
+    label: 'File bug',
+    hint: 'creates a beads issue and records the observation',
+  },
 ];
 
 export interface FeedbackFormProps {
@@ -58,7 +70,10 @@ export default function FeedbackForm(props: FeedbackFormProps) {
   };
 
   return (
-    <form className={`feedback-form ${props.compact ? 'feedback-form--compact' : ''}`} onSubmit={submit}>
+    <form
+      className={`feedback-form ${props.compact ? 'feedback-form--compact' : ''}`}
+      onSubmit={submit}
+    >
       <div className="feedback-form-row">
         <select
           className="feedback-kind"
@@ -68,7 +83,9 @@ export default function FeedbackForm(props: FeedbackFormProps) {
           title={KINDS.find((k) => k.value === kind)?.hint}
         >
           {KINDS.map((k) => (
-            <option key={k.value} value={k.value} title={k.hint}>{k.label}</option>
+            <option key={k.value} value={k.value} title={k.hint}>
+              {k.label}
+            </option>
           ))}
         </select>
         <textarea
@@ -85,7 +102,12 @@ export default function FeedbackForm(props: FeedbackFormProps) {
           {busy ? 'Sending…' : 'Send'}
         </button>
         {props.onCancel && (
-          <button type="button" className="feedback-cancel" onClick={props.onCancel} disabled={busy}>
+          <button
+            type="button"
+            className="feedback-cancel"
+            onClick={props.onCancel}
+            disabled={busy}
+          >
             Cancel
           </button>
         )}

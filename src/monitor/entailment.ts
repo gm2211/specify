@@ -98,7 +98,9 @@ function describeCounterexample(
   const n = assignment.length;
   const leafList = leaves.map((l) => render(l)).join(' and ');
   const leafClause =
-    leaves.length === 1 ? `the sub-check ${leafList} passes` : `every sub-check (${leafList}) passes`;
+    leaves.length === 1
+      ? `the sub-check ${leafList} passes`
+      : `every sub-check (${leafList}) passes`;
 
   const step = parentWitnessStep ?? n - 1;
   const stepClause =
@@ -180,7 +182,10 @@ export function checkEntailment(
   }
 
   let tracesChecked = 0;
-  const refutedResult = (assignment: Assignment, parentWitnessStep: number | undefined): EntailmentResult => ({
+  const refutedResult = (
+    assignment: Assignment,
+    parentWitnessStep: number | undefined,
+  ): EntailmentResult => ({
     refuted: true,
     witness: {
       trace: renderTraceTable(atoms, assignment),

@@ -26,7 +26,11 @@ import {
 // the semantic-signal operators have something to bite on.
 // ---------------------------------------------------------------------------
 
-function state(id: string, urlTemplate: string, predicates: Record<string, boolean> = {}): ModelState {
+function state(
+  id: string,
+  urlTemplate: string,
+  predicates: Record<string, boolean> = {},
+): ModelState {
   return { id, urlTemplate, predicates, seenCount: 1, examples: [] };
 }
 
@@ -50,7 +54,11 @@ function edge(from: string, action: string, to: string, opts: EdgeOpts = {}): Mo
   };
 }
 
-function sig(method: string, urlTemplate: string, statusClass: NetworkSignatureEntry['statusClass']): NetworkSignatureEntry {
+function sig(
+  method: string,
+  urlTemplate: string,
+  statusClass: NetworkSignatureEntry['statusClass'],
+): NetworkSignatureEntry {
   return { method, urlTemplate, statusClass };
 }
 
@@ -112,8 +120,14 @@ function checkoutModel(): NavModel {
  * LOGIN → DASH → CHECKOUT → DONE, then DASH → LOGIN (logout). Using a fixed
  * trace keeps operator assertions precise regardless of walker heuristics.
  */
-function manualSuite(model: NavModel, transitionsSpec: Array<[string, string, string]>): TraceSuite {
-  const byArc = new Map<string, { actionKey: string; recipe: Recipe; signature: NetworkSignatureEntry[] }>();
+function manualSuite(
+  model: NavModel,
+  transitionsSpec: Array<[string, string, string]>,
+): TraceSuite {
+  const byArc = new Map<
+    string,
+    { actionKey: string; recipe: Recipe; signature: NetworkSignatureEntry[] }
+  >();
   for (const tr of model.transitions) {
     for (const t of tr.targets) {
       byArc.set(`${tr.from}->${t.to}`, {
@@ -206,7 +220,8 @@ test('double-submit inserts the duplicate immediately after the original', () =>
   const suite = mutateSuite(fullCheckoutSuite(model), model);
   // The variant duplicating the first arc (LOGIN->DASH) has one extra step.
   const first = byOperator(suite, 'double-submit').find(
-    (m) => m.contract.check.kind === 'no-repeated-write' && m.contract.check.injectedStepIndex === 1,
+    (m) =>
+      m.contract.check.kind === 'no-repeated-write' && m.contract.check.injectedStepIndex === 1,
   )!;
   assert.ok(first);
   assert.equal(first.steps.length, 4); // 3 originals + 1 duplicate
@@ -248,7 +263,9 @@ test('session-clear-midflow injects a cookie clear before a later auth page', ()
     assert.equal(m.contract.outcome, 'reject');
     assert.equal(m.contract.check.kind, 'expect-auth-redirect');
     assert.equal(m.wellFormed, false);
-    const clears = m.steps.filter((s) => s.kind === 'synthetic' && s.action === 'browser_clear_cookies');
+    const clears = m.steps.filter(
+      (s) => s.kind === 'synthetic' && s.action === 'browser_clear_cookies',
+    );
     assert.equal(clears.length, 1);
   }
 });
@@ -290,7 +307,10 @@ test('every operator is represented on a rich fixture (coverage matrix)', () => 
   const model = checkoutModel();
   // Combine both fixtures into one suite so the auth-exit operator has a target.
   const base = fullCheckoutSuite(model);
-  const withLogout: TraceSuite = { ...base, traces: [...base.traces, ...logoutSuite(model).traces] };
+  const withLogout: TraceSuite = {
+    ...base,
+    traces: [...base.traces, ...logoutSuite(model).traces],
+  };
   // Re-id the second trace so ids stay unique.
   withLogout.traces[1] = { ...withLogout.traces[1], id: 't1' };
   const suite = mutateSuite(withLogout, model);
@@ -373,7 +393,10 @@ function assertExecutable(m: MutatedTrace, model: NavModel): void {
         step.transition.from === cursor ||
         step.transition.from === prevModelFrom || // re-fire (double-submit)
         afterSynthetic; // a synthetic step preceded it (back/clear/goto)
-      assert.ok(reachable, `${m.id}: model step from ${step.transition.from} not reachable at ${cursor}`);
+      assert.ok(
+        reachable,
+        `${m.id}: model step from ${step.transition.from} not reachable at ${cursor}`,
+      );
       prevModelFrom = step.transition.from;
       cursor = step.transition.to;
       afterSynthetic = false;
@@ -387,7 +410,10 @@ function assertExecutable(m: MutatedTrace, model: NavModel): void {
 test('wellFormed mirrors the contract outcome (tolerate ⇔ well-formed)', () => {
   const model = checkoutModel();
   const base = fullCheckoutSuite(model);
-  const withLogout: TraceSuite = { ...base, traces: [...base.traces, ...logoutSuite(model).traces] };
+  const withLogout: TraceSuite = {
+    ...base,
+    traces: [...base.traces, ...logoutSuite(model).traces],
+  };
   withLogout.traces[1] = { ...withLogout.traces[1], id: 't1' };
   const suite = mutateSuite(withLogout, model);
   for (const m of suite.mutations) {
@@ -532,12 +558,24 @@ test('a model with no auth labels reports the auth operators as skipped, with th
       edge('B', 'browser_click', 'C', { signature: [sig('POST', '/c', '2xx')] }),
     ],
   );
-  const suite = mutateSuite(manualSuite(model, [['A', 'x', 'B'], ['B', 'x', 'C']]), model);
+  const suite = mutateSuite(
+    manualSuite(model, [
+      ['A', 'x', 'B'],
+      ['B', 'x', 'C'],
+    ]),
+    model,
+  );
   const byOp = new Map(suite.applicability.map((a) => [a.operator, a]));
   assert.equal(byOp.get('back-nav-after-auth-exit')!.variants, 0);
-  assert.match(byOp.get('back-nav-after-auth-exit')!.skippedReason!, /no authenticated-labeled states/);
+  assert.match(
+    byOp.get('back-nav-after-auth-exit')!.skippedReason!,
+    /no authenticated-labeled states/,
+  );
   assert.equal(byOp.get('session-clear-midflow')!.variants, 0);
-  assert.match(byOp.get('session-clear-midflow')!.skippedReason!, /no authenticated-labeled states/);
+  assert.match(
+    byOp.get('session-clear-midflow')!.skippedReason!,
+    /no authenticated-labeled states/,
+  );
 });
 
 test('a model with no write arcs names that gap for double-submit', () => {
@@ -581,9 +619,13 @@ test('mutates a real walker-generated suite end-to-end', () => {
   assert.equal(suite.modelHash, walkerSuite.modelHash);
   assert.equal(suite.sourceSeed, walkerSuite.seed);
   // Determinism carries through the walker → mutator pipeline.
-  const again = mutateSuite(generateTraceSuite(model, { seed: 2, criteria: ['all-transitions'] }), model, {
-    seed: 2,
-  });
+  const again = mutateSuite(
+    generateTraceSuite(model, { seed: 2, criteria: ['all-transitions'] }),
+    model,
+    {
+      seed: 2,
+    },
+  );
   assert.deepEqual(again, suite);
 });
 

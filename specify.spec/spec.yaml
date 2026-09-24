@@ -1,9 +1,9 @@
-version: "2"
+version: '2'
 name: Specify CLI
 description: >
-  Behavioral contract for the Specify CLI: author and maintain product requirements,
-  verify them against live targets or generated tests, and inspect recorded QA evidence.
-  The bundled QA agent and background runner are optional execution interfaces.
+  Behavioral contract for the Specify CLI: author and maintain product requirements, verify them
+  against live targets or generated tests, and inspect recorded QA evidence. The bundled QA agent
+  and background runner are optional execution interfaces.
 target:
   type: cli
   binary: ./specify

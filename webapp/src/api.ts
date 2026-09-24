@@ -23,10 +23,14 @@ export async function fetchNarrative(): Promise<string | null> {
   return typeof body?.content === 'string' && body.content.length > 0 ? body.content : null;
 }
 
-export async function triggerVerify(areaId?: string, behaviorId?: string): Promise<{ started: boolean; busy?: boolean }> {
-  const url = areaId && behaviorId
-    ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
-    : `${BASE}/api/verify`;
+export async function triggerVerify(
+  areaId?: string,
+  behaviorId?: string,
+): Promise<{ started: boolean; busy?: boolean }> {
+  const url =
+    areaId && behaviorId
+      ? `${BASE}/api/verify/${encodeURIComponent(areaId)}/${encodeURIComponent(behaviorId)}`
+      : `${BASE}/api/verify`;
   const res = await fetch(url, { method: 'POST' });
   if (res.status === 409) return { started: false, busy: true };
   if (!res.ok) throw new Error(`Failed to trigger verify: ${res.status}`);
@@ -85,8 +89,12 @@ export async function fetchSkillDrafts(): Promise<SkillDraft[]> {
   return Array.isArray(body?.drafts) ? body.drafts : [];
 }
 
-export async function approveSkillDraft(id: string): Promise<{ skillName: string; skillPath: string }> {
-  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+export async function approveSkillDraft(
+  id: string,
+): Promise<{ skillName: string; skillPath: string }> {
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `approve failed: ${res.status}`);
@@ -95,7 +103,9 @@ export async function approveSkillDraft(id: string): Promise<{ skillName: string
 }
 
 export async function rejectSkillDraft(id: string): Promise<{ ok: true }> {
-  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+  const res = await fetch(`${BASE}/api/skill-drafts/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `reject failed: ${res.status}`);
@@ -103,7 +113,9 @@ export async function rejectSkillDraft(id: string): Promise<{ ok: true }> {
   return res.json();
 }
 
-export async function fetchActiveSkills(): Promise<Array<{ name: string; filePath: string; description: string }>> {
+export async function fetchActiveSkills(): Promise<
+  Array<{ name: string; filePath: string; description: string }>
+> {
   const res = await fetch(`${BASE}/api/skills/active`);
   if (!res.ok) return [];
   const body = await res.json();
@@ -117,8 +129,12 @@ export async function fetchFormulas(): Promise<FormulaReviewEntry[]> {
   return Array.isArray(body?.formulas) ? body.formulas : [];
 }
 
-export async function approveFormula(id: string): Promise<{ ok: true; id: string; status: 'approved' }> {
-  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/approve`, { method: 'POST' });
+export async function approveFormula(
+  id: string,
+): Promise<{ ok: true; id: string; status: 'approved' }> {
+  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/approve`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `approve failed: ${res.status}`);
@@ -126,8 +142,12 @@ export async function approveFormula(id: string): Promise<{ ok: true; id: string
   return res.json();
 }
 
-export async function rejectFormula(id: string): Promise<{ ok: true; id: string; status: 'rejected' }> {
-  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+export async function rejectFormula(
+  id: string,
+): Promise<{ ok: true; id: string; status: 'rejected' }> {
+  const res = await fetch(`${BASE}/api/formulas/${encodeURIComponent(id)}/reject`, {
+    method: 'POST',
+  });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.message ?? `reject failed: ${res.status}`);

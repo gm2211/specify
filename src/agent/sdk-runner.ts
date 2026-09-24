@@ -8,7 +8,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { McpServerConfig, Options, JsonSchemaOutputFormat, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  McpServerConfig,
+  Options,
+  JsonSchemaOutputFormat,
+  SDKUserMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { eventBus } from './event-bus.js';
 import type { MessageInjector } from './message-injector.js';
 import { defaultMemoryProvider, type MemoryProvider, type MemoryScope } from './memory-provider.js';
@@ -148,7 +153,7 @@ export class SubscriptionLimitError extends Error {
     const resetDesc = resetMs ? ` — resets at ${new Date(resetMs).toISOString()}` : '';
     super(
       `Claude subscription rate limit reached${rateLimitType ? ` (${rateLimitType})` : ''}${resetDesc}. ` +
-      'Aborting immediately instead of waiting for the SDK to stall.',
+        'Aborting immediately instead of waiting for the SDK to stall.',
     );
     this.name = 'SubscriptionLimitError';
   }
@@ -175,11 +180,23 @@ function classifyError(err: unknown): ErrorClass {
 
   // Transient network/connection errors
   const transientPatterns = [
-    'ebadf', 'econnreset', 'econnrefused', 'etimedout', 'epipe',
-    'socket hang up', 'network error', 'fetch failed',
-    'overloaded', '529', '500', '502', '503', '504', '429',
+    'ebadf',
+    'econnreset',
+    'econnrefused',
+    'etimedout',
+    'epipe',
+    'socket hang up',
+    'network error',
+    'fetch failed',
+    'overloaded',
+    '529',
+    '500',
+    '502',
+    '503',
+    '504',
+    '429',
   ];
-  if (transientPatterns.some(p => lower.includes(p))) return 'transient';
+  if (transientPatterns.some((p) => lower.includes(p))) return 'transient';
 
   // Auth errors
   if (lower.includes('401') || lower.includes('authentication') || lower.includes('unauthorized')) {
@@ -190,7 +207,7 @@ function classifyError(err: unknown): ErrorClass {
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // ---------------------------------------------------------------------------
@@ -305,7 +322,9 @@ export function writeRunContextBundle(outputDir: string, bundle: RunContextBundl
     const filePath = path.join(outputDir, 'run-context.json');
     fs.writeFileSync(filePath, JSON.stringify(bundle, null, 2), 'utf-8');
   } catch (err) {
-    process.stderr.write(`  Failed to write run-context.json: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `  Failed to write run-context.json: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   }
 }
 
@@ -350,7 +369,9 @@ async function launchBrowserSession(
   };
   if (storageState) {
     const { resolveStorageStateInput } = await import('./storage-state.js');
-    const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
+    const resolved = await resolveStorageStateInput(storageState, (msg) =>
+      process.stderr.write(msg + '\n'),
+    );
     if (!resolved.ok) {
       throw new Error(`${resolved.error.error}: ${resolved.error.hint} (${resolved.error.target})`);
     }
@@ -375,7 +396,9 @@ async function launchBrowserSession(
   if (faultInjector) collector.setInjector(faultInjector);
 
   const browser = await chromium.launch({ headless: !headed });
-  const context = await browser.newContext(contextOptions as Parameters<typeof browser.newContext>[0]);
+  const context = await browser.newContext(
+    contextOptions as Parameters<typeof browser.newContext>[0],
+  );
   await collector.attachToContext(context);
   const page = await context.newPage();
   collector.attachToPage(page);
@@ -408,12 +431,18 @@ async function launchBrowserSession(
 
 function browserToolNames(serverName: string, includeFaultTools: boolean): string[] {
   return [
-    `mcp__${serverName}__browser_goto`, `mcp__${serverName}__browser_click`,
-    `mcp__${serverName}__browser_fill`, `mcp__${serverName}__browser_type`,
-    `mcp__${serverName}__browser_select`, `mcp__${serverName}__browser_hover`,
-    `mcp__${serverName}__browser_press`, `mcp__${serverName}__browser_screenshot`,
-    `mcp__${serverName}__browser_content`, `mcp__${serverName}__browser_evaluate`,
-    `mcp__${serverName}__browser_url`, `mcp__${serverName}__browser_title`,
+    `mcp__${serverName}__browser_goto`,
+    `mcp__${serverName}__browser_click`,
+    `mcp__${serverName}__browser_fill`,
+    `mcp__${serverName}__browser_type`,
+    `mcp__${serverName}__browser_select`,
+    `mcp__${serverName}__browser_hover`,
+    `mcp__${serverName}__browser_press`,
+    `mcp__${serverName}__browser_screenshot`,
+    `mcp__${serverName}__browser_content`,
+    `mcp__${serverName}__browser_evaluate`,
+    `mcp__${serverName}__browser_url`,
+    `mcp__${serverName}__browser_title`,
     `mcp__${serverName}__browser_wait_for`,
     ...(includeFaultTools
       ? [`mcp__${serverName}__browser_inject_fault`, `mcp__${serverName}__browser_clear_faults`]
@@ -490,7 +519,10 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                   items: {
                     type: 'object',
                     properties: {
-                      type: { type: 'string', enum: ['screenshot', 'text', 'network_log', 'command_output', 'file'] },
+                      type: {
+                        type: 'string',
+                        enum: ['screenshot', 'text', 'network_log', 'command_output', 'file'],
+                      },
                       label: { type: 'string' },
                       content: { type: 'string' },
                     },
@@ -499,13 +531,32 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
                 },
                 action_trace: {
                   type: 'array',
-                  description: 'Ordered, human-readable log of the steps the agent performed to verify this behavior. Each entry describes one action (navigate, click, observe, assert, ...) and may reference a screenshot file captured during that step.',
+                  description:
+                    'Ordered, human-readable log of the steps the agent performed to verify this behavior. Each entry describes one action (navigate, click, observe, assert, ...) and may reference a screenshot file captured during that step.',
                   items: {
                     type: 'object',
                     properties: {
-                      type: { type: 'string', enum: ['navigation', 'click', 'fill', 'screenshot', 'observation', 'assertion', 'wait', 'other'] },
-                      description: { type: 'string', description: 'One-sentence plain-language description of the step' },
-                      screenshot: { type: 'string', description: 'Absolute path to a screenshot captured at this step, if any' },
+                      type: {
+                        type: 'string',
+                        enum: [
+                          'navigation',
+                          'click',
+                          'fill',
+                          'screenshot',
+                          'observation',
+                          'assertion',
+                          'wait',
+                          'other',
+                        ],
+                      },
+                      description: {
+                        type: 'string',
+                        description: 'One-sentence plain-language description of the step',
+                      },
+                      screenshot: {
+                        type: 'string',
+                        description: 'Absolute path to a screenshot captured at this step, if any',
+                      },
                       timestamp: { type: 'string', description: 'ISO timestamp, optional' },
                     },
                     required: ['type', 'description'],
@@ -568,30 +619,43 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
         properties: {
           results: {
             type: 'array',
-            description: 'One entry per behavior successfully compiled into a formula. Skipping is correct — do not force a formula onto a behavior that doesn\'t warrant one.',
+            description:
+              "One entry per behavior successfully compiled into a formula. Skipping is correct — do not force a formula onto a behavior that doesn't warrant one.",
             items: {
               type: 'object',
               properties: {
-                behavior: { type: 'string', description: 'Fully-qualified area-id/behavior-id this formula compiles' },
+                behavior: {
+                  type: 'string',
+                  description: 'Fully-qualified area-id/behavior-id this formula compiles',
+                },
                 formula: { $ref: '#/definitions/formula' },
                 predicates_used: {
                   type: 'array',
                   items: { type: 'string' },
                   description: 'Every distinct predicate name actually referenced in `formula`',
                 },
-                rationale: { type: 'string', description: 'Why this is a faithful, machine-checkable consequence of the behavior claim' },
+                rationale: {
+                  type: 'string',
+                  description:
+                    'Why this is a faithful, machine-checkable consequence of the behavior claim',
+                },
               },
               required: ['behavior', 'formula', 'predicates_used', 'rationale'],
             },
           },
           skipped: {
             type: 'array',
-            description: 'One entry per behavior that could not be compiled faithfully. This is the expected outcome for most behaviors.',
+            description:
+              'One entry per behavior that could not be compiled faithfully. This is the expected outcome for most behaviors.',
             items: {
               type: 'object',
               properties: {
                 behavior: { type: 'string', description: 'Fully-qualified area-id/behavior-id' },
-                reason: { type: 'string', description: 'Why this behavior cannot be compiled faithfully over the available predicates' },
+                reason: {
+                  type: 'string',
+                  description:
+                    'Why this behavior cannot be compiled faithfully over the available predicates',
+                },
               },
               required: ['behavior', 'reason'],
             },
@@ -614,30 +678,46 @@ function getOutputFormat(task: string): JsonSchemaOutputFormat | undefined {
         properties: {
           results: {
             type: 'array',
-            description: 'One entry per critical flow successfully modeled as a Quint spec. Modeling only 1-2 flows is the expected, correct outcome — do not model a flow whose logic does not warrant a hand-written formal model.',
+            description:
+              'One entry per critical flow successfully modeled as a Quint spec. Modeling only 1-2 flows is the expected, correct outcome — do not model a flow whose logic does not warrant a hand-written formal model.',
             items: {
               type: 'object',
               properties: {
-                flow: { type: 'string', description: 'Fully-qualified area-id/behavior-id this Quint spec models' },
-                spec_text: { type: 'string', description: 'The complete Quint (.qnt) module source' },
+                flow: {
+                  type: 'string',
+                  description: 'Fully-qualified area-id/behavior-id this Quint spec models',
+                },
+                spec_text: {
+                  type: 'string',
+                  description: 'The complete Quint (.qnt) module source',
+                },
                 predicates_used: {
                   type: 'array',
                   items: { type: 'string' },
-                  description: 'Every grounded predicate name the model is written over (from the shared vocabulary)',
+                  description:
+                    'Every grounded predicate name the model is written over (from the shared vocabulary)',
                 },
-                rationale: { type: 'string', description: 'Why this flow is worth a hand-modeled formal spec and what the model asserts' },
+                rationale: {
+                  type: 'string',
+                  description:
+                    'Why this flow is worth a hand-modeled formal spec and what the model asserts',
+                },
               },
               required: ['flow', 'spec_text', 'predicates_used', 'rationale'],
             },
           },
           skipped: {
             type: 'array',
-            description: 'One entry per flow that should NOT be hand-modeled. This is the expected outcome for most behaviors — a formal model is only worth it for the 2-3 flows whose business logic outlives UI redesigns.',
+            description:
+              'One entry per flow that should NOT be hand-modeled. This is the expected outcome for most behaviors — a formal model is only worth it for the 2-3 flows whose business logic outlives UI redesigns.',
             items: {
               type: 'object',
               properties: {
                 flow: { type: 'string', description: 'Fully-qualified area-id/behavior-id' },
-                reason: { type: 'string', description: 'Why this flow does not warrant a hand-modeled formal spec' },
+                reason: {
+                  type: 'string',
+                  description: 'Why this flow does not warrant a hand-modeled formal spec',
+                },
               },
               required: ['flow', 'reason'],
             },
@@ -778,11 +858,18 @@ async function executeQuery(
         continue;
       }
 
-      if (message.type === 'system' && 'subtype' in message && message.subtype === 'init' && 'session_id' in message) {
+      if (
+        message.type === 'system' &&
+        'subtype' in message &&
+        message.subtype === 'init' &&
+        'session_id' in message
+      ) {
         sessionId = message.session_id as string;
         eventBus.send('agent:started', { task: opts.task }, sessionId);
       } else if (message.type === 'assistant') {
-        const textBlocks = message.message.content.filter((b: { type: string }) => b.type === 'text');
+        const textBlocks = message.message.content.filter(
+          (b: { type: string }) => b.type === 'text',
+        );
         for (const block of textBlocks) {
           const text = (block as { type: 'text'; text: string }).text;
           if (opts.debug) {
@@ -803,46 +890,72 @@ async function executeQuery(
         // query can stall from here (no further assistant messages) rather
         // than throwing, so we throw ourselves instead of waiting to find
         // out. 'allowed' / 'allowed_warning' are just informational.
-        const info = (message as { rate_limit_info: { status: string; rateLimitType?: string; resetsAt?: number } }).rate_limit_info;
-        eventBus.send('agent:rate_limit', { status: info.status, rateLimitType: info.rateLimitType, resetsAt: info.resetsAt }, sessionId);
+        const info = (
+          message as {
+            rate_limit_info: { status: string; rateLimitType?: string; resetsAt?: number };
+          }
+        ).rate_limit_info;
+        eventBus.send(
+          'agent:rate_limit',
+          { status: info.status, rateLimitType: info.rateLimitType, resetsAt: info.resetsAt },
+          sessionId,
+        );
         if (info.status === 'rejected') {
           throw new SubscriptionLimitError(info.rateLimitType, info.resetsAt);
         }
       } else if (message.type === 'result') {
-      if (message.subtype === 'success') {
-        finalResult = message.result;
-        costUsd = message.total_cost_usd;
-        structuredOutput = message.structured_output;
-        eventBus.send('agent:completed', {
-          task: opts.task,
-          costUsd,
-          pass: extractBool(structuredOutput, 'pass'),
-        }, sessionId);
+        if (message.subtype === 'success') {
+          finalResult = message.result;
+          costUsd = message.total_cost_usd;
+          structuredOutput = message.structured_output;
+          eventBus.send(
+            'agent:completed',
+            {
+              task: opts.task,
+              costUsd,
+              pass: extractBool(structuredOutput, 'pass'),
+            },
+            sessionId,
+          );
 
-        // Emit per-behavior progress from structured output
-        if (structuredOutput && typeof structuredOutput === 'object' && 'results' in structuredOutput) {
-          const results = (structuredOutput as { results: Array<{ id: string; description?: string; status: string; duration_ms?: number; rationale?: string }> }).results;
-          if (Array.isArray(results)) {
-            for (const r of results) {
-              const status = r.status as BehaviorProgress['status'];
-              const progress: BehaviorProgress = {
-                id: r.id,
-                description: r.description,
-                status,
-                duration_ms: r.duration_ms,
-                rationale: r.rationale,
-              };
-              eventBus.send(`behavior:${status}`, { ...progress }, sessionId);
-              opts.onBehaviorProgress?.(progress);
+          // Emit per-behavior progress from structured output
+          if (
+            structuredOutput &&
+            typeof structuredOutput === 'object' &&
+            'results' in structuredOutput
+          ) {
+            const results = (
+              structuredOutput as {
+                results: Array<{
+                  id: string;
+                  description?: string;
+                  status: string;
+                  duration_ms?: number;
+                  rationale?: string;
+                }>;
+              }
+            ).results;
+            if (Array.isArray(results)) {
+              for (const r of results) {
+                const status = r.status as BehaviorProgress['status'];
+                const progress: BehaviorProgress = {
+                  id: r.id,
+                  description: r.description,
+                  status,
+                  duration_ms: r.duration_ms,
+                  rationale: r.rationale,
+                };
+                eventBus.send(`behavior:${status}`, { ...progress }, sessionId);
+                opts.onBehaviorProgress?.(progress);
+              }
             }
           }
+        } else {
+          costUsd = message.total_cost_usd;
+          eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
+          throw wrapWithStderr(new AgentError(message.subtype, costUsd), stderrBuf);
         }
-      } else {
-        costUsd = message.total_cost_usd;
-        eventBus.send('agent:error', { subtype: message.subtype, costUsd }, sessionId);
-        throw wrapWithStderr(new AgentError(message.subtype, costUsd), stderrBuf);
       }
-    }
     }
   } catch (err) {
     // Wrap any error that bubbles out of the query iteration with the captured
@@ -881,7 +994,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
   // hasEverActivated() flag is sticky (never reset by clear()) — once a
   // session has been exposed to injected faults, everything it learns is
   // suspect and stays in the '+faults' scope.
-  const staticFaultsActive = faultInjectionEnabled() && !!opts.faultPlan && opts.faultPlan.rules.length > 0;
+  const staticFaultsActive =
+    faultInjectionEnabled() && !!opts.faultPlan && opts.faultPlan.rules.length > 0;
   const faultsEverActive = (): boolean =>
     staticFaultsActive || sessions.some((s) => s.faultInjector?.hasEverActivated() ?? false);
 
@@ -899,7 +1013,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     });
   } catch (err) {
     // Indexer is best-effort; never break the run.
-    process.stderr.write(`  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `  Session indexer unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
   }
 
   // Confidence store: tally per-behavior accept/override stats from feedback
@@ -910,7 +1026,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       confidenceStore = new ConfidenceStore(defaultConfidencePath(opts.spec));
       confidenceStore.attachToEventBus();
     } catch (err) {
-      process.stderr.write(`  Confidence store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `  Confidence store unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
   }
 
@@ -937,13 +1055,18 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       const { loadFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
       formulasForMerge = loadFormulas(defaultFormulasPath(path.resolve(opts.spec)));
       if (formulasForMerge && formulasForMerge.formulas.length > 0) {
-        process.stderr.write(`  Monitor: loaded ${formulasForMerge.formulas.length} compiled formula(s).\n`);
+        process.stderr.write(
+          `  Monitor: loaded ${formulasForMerge.formulas.length} compiled formula(s).\n`,
+        );
         try {
-          const { loadFormulaStats, defaultFormulaStatsPath } = await import('../monitor/formula-stats.js');
+          const { loadFormulaStats, defaultFormulaStatsPath } =
+            await import('../monitor/formula-stats.js');
           formulaStatsPath = defaultFormulaStatsPath(path.resolve(opts.spec));
           formulaStatsForMerge = loadFormulaStats(formulaStatsPath);
         } catch (err) {
-          process.stderr.write(`  Formula stats unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.stderr.write(
+            `  Formula stats unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+          );
         }
       }
       if (formulasForMerge) {
@@ -959,9 +1082,21 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         throw new Error('compare task requires both remoteUrl and localUrl');
       }
       process.stderr.write('  Launching browsers...\n');
-      const remoteSession = await launchBrowserSession(opts.remoteUrl, path.join(opts.outputDir, 'remote'), !!opts.headed, 'remote', opts.askUserHandler);
+      const remoteSession = await launchBrowserSession(
+        opts.remoteUrl,
+        path.join(opts.outputDir, 'remote'),
+        !!opts.headed,
+        'remote',
+        opts.askUserHandler,
+      );
       sessions.push(remoteSession);
-      const localSession = await launchBrowserSession(opts.localUrl, path.join(opts.outputDir, 'local'), !!opts.headed, 'local', opts.askUserHandler);
+      const localSession = await launchBrowserSession(
+        opts.localUrl,
+        path.join(opts.outputDir, 'local'),
+        !!opts.headed,
+        'local',
+        opts.askUserHandler,
+      );
       sessions.push(localSession);
       mcpServers.remote = remoteSession.mcpServer;
       mcpServers.local = localSession.mcpServer;
@@ -998,14 +1133,20 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         const spec = loadSpec(opts.spec);
         if (spec.target.type === 'cli') {
           process.stderr.write('  Launching CLI command channel...\n');
-          const cliSession = await launchCliSession(spec.target, path.join(opts.outputDir, 'cli'), opts.cwd);
+          const cliSession = await launchCliSession(
+            spec.target,
+            path.join(opts.outputDir, 'cli'),
+            opts.cwd,
+          );
           mcpServers.cli = cliSession.mcpServer;
           allowedCliTools.push(...cliToolNames('cli'));
           cliRecorder = cliSession.recorder;
           process.stderr.write('  CLI channel ready.\n');
         }
       } catch (err) {
-        process.stderr.write(`  CLI channel unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  CLI channel unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 
@@ -1035,9 +1176,10 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     // allowed, so it's the mechanism that actually restricts the channel.
     const hasBrowserSession = sessions.length > 0;
     const hasCliSession = cliRecorder !== undefined;
-    const disallowedTools: string[] = (hasBrowserSession || hasCliSession)
-      ? ['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch']
-      : [];
+    const disallowedTools: string[] =
+      hasBrowserSession || hasCliSession
+        ? ['Bash', 'BashOutput', 'KillShell', 'WebFetch', 'WebSearch']
+        : [];
 
     // Learned memory: only verify tasks participate. Read the store and
     // prepend the summary to the system prompt so the agent starts with
@@ -1066,7 +1208,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
           ? opts.contextOverride.layeredContext
           : renderLayeredPrompt(loadLayeredContext(opts.spec));
       } catch (err) {
-        process.stderr.write(`  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Layered context unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
 
       // Active learned skills are experimental. Keep them out of the default
@@ -1077,7 +1221,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
             ? opts.contextOverride.skillsText
             : renderActiveSkillsPrompt(opts.spec);
         } catch (err) {
-          process.stderr.write(`  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+          process.stderr.write(
+            `  Active skills unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+          );
         }
       }
     }
@@ -1118,7 +1264,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         memoryTools.push('mcp__memory__memory_record', 'mcp__memory__memory_list');
       } catch (err) {
         // Non-fatal: memory is a learning aid, not a correctness requirement.
-        process.stderr.write(`  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Memory store unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
 
       // Outbound ticket-filing tool. Default sink is `bd`; flip to HTTP by
@@ -1135,7 +1283,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         mcpServers.feedback = feedbackServer;
         feedbackTools.push('mcp__feedback__file_ticket');
       } catch (err) {
-        process.stderr.write(`  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Feedback tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 
@@ -1179,7 +1329,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         mcpServers.decisions = decisionsServer;
         decisionTools.push('mcp__decisions__file_decision');
       } catch (err) {
-        process.stderr.write(`  Decisions tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `  Decisions tool unavailable: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
 
@@ -1243,12 +1395,13 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       });
       writeRunContextBundle(opts.outputDir, runContextBundle);
     } catch (err) {
-      process.stderr.write(`  Failed to build run-context.json: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.stderr.write(
+        `  Failed to build run-context.json: ${err instanceof Error ? err.message : String(err)}\n`,
+      );
     }
 
     // Use message injector if provided, otherwise plain string prompt
-    const prompt: string | AsyncIterable<SDKUserMessage> =
-      opts.messageInjector ?? opts.userPrompt;
+    const prompt: string | AsyncIterable<SDKUserMessage> = opts.messageInjector ?? opts.userPrompt;
 
     // Wire the in-session sibling-check propagator to the injector for the
     // lifetime of this run. When user feedback fires
@@ -1269,7 +1422,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
       try {
         if (attempt > 1) {
           const delayMs = 1000 * Math.pow(2, attempt - 1); // 2s, 4s
-          process.stderr.write(`  Retrying in ${delayMs / 1000}s (attempt ${attempt}/${maxRetries})...\n`);
+          process.stderr.write(
+            `  Retrying in ${delayMs / 1000}s (attempt ${attempt}/${maxRetries})...\n`,
+          );
           eventBus.send('agent:retry', { attempt, maxRetries, delayMs });
           await sleep(delayMs);
         }
@@ -1326,8 +1481,12 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
                   );
                   if (monitorAutoDemoteEnabled()) {
                     const { applyRecompileDemotions } = await import('../monitor/formula-stats.js');
-                    const { saveFormulas, defaultFormulasPath } = await import('../spec/formulas.js');
-                    const demotion = applyRecompileDemotions(formulasForMerge, merged.formulaStats.file);
+                    const { saveFormulas, defaultFormulasPath } =
+                      await import('../spec/formulas.js');
+                    const demotion = applyRecompileDemotions(
+                      formulasForMerge,
+                      merged.formulaStats.file,
+                    );
                     if (demotion.demoted.length > 0 && opts.spec) {
                       saveFormulas(defaultFormulasPath(path.resolve(opts.spec)), demotion.file);
                       process.stderr.write(
@@ -1351,7 +1510,9 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
             }
           } catch (err) {
             // The merge must never lose a completed agent run's output.
-            process.stderr.write(`  Monitor verdict merge failed: ${err instanceof Error ? err.message : String(err)}\n`);
+            process.stderr.write(
+              `  Monitor verdict merge failed: ${err instanceof Error ? err.message : String(err)}\n`,
+            );
           }
         }
         // --- end monitor verdict merge ---------------------------------
@@ -1365,7 +1526,11 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
         // lands in verify-result.json and the webapp for free via every caller.
         // Web targets only: the navigation map is keyed on URL states, so a CLI
         // run (no browser session) has nothing to fold.
-        if (navMapCoverageEnabled() && opts.spec && (opts.task === 'verify' || opts.task === 'capture')) {
+        if (
+          navMapCoverageEnabled() &&
+          opts.spec &&
+          (opts.task === 'verify' || opts.task === 'capture')
+        ) {
           try {
             const session = sessions[0];
             if (session) {
@@ -1394,7 +1559,8 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
                 result.structuredOutput &&
                 typeof result.structuredOutput === 'object'
               ) {
-                (result.structuredOutput as Record<string, unknown>).navMapCoverage = navMapCoverage;
+                (result.structuredOutput as Record<string, unknown>).navMapCoverage =
+                  navMapCoverage;
               }
               process.stderr.write(`  ${navMapCoverage.summary}\n`);
             }
@@ -1447,13 +1613,13 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     if (opts.task === 'capture' && opts.saveStorageState && sessions.length === 1) {
       try {
         const { saveStorageStateOutput } = await import('./storage-state.js');
-        await saveStorageStateOutput(
-          opts.saveStorageState,
-          sessions[0].page.context(),
-          (msg) => process.stderr.write(msg + '\n'),
+        await saveStorageStateOutput(opts.saveStorageState, sessions[0].page.context(), (msg) =>
+          process.stderr.write(msg + '\n'),
         );
       } catch (err) {
-        process.stderr.write(`Warning: failed to save storage state: ${err instanceof Error ? err.message : String(err)}\n`);
+        process.stderr.write(
+          `Warning: failed to save storage state: ${err instanceof Error ? err.message : String(err)}\n`,
+        );
       }
     }
     for (const session of sessions) {
@@ -1482,10 +1648,18 @@ export async function runSpecifyAgent(opts: SdkRunnerOptions): Promise<SdkRunner
     }
     if (detachStore) detachStore();
     if (sessionStore) {
-      try { sessionStore.close(); } catch { /* noop */ }
+      try {
+        sessionStore.close();
+      } catch {
+        /* noop */
+      }
     }
     if (confidenceStore) {
-      try { confidenceStore.close(); } catch { /* noop */ }
+      try {
+        confidenceStore.close();
+      } catch {
+        /* noop */
+      }
     }
     setActivePropagator(null);
   }
