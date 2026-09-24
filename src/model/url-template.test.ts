@@ -53,7 +53,10 @@ test('distinct-count trigger: 9 distinct slugs at a position parameterizes it', 
 test('below distinct-count threshold stays literal', () => {
   const urls = WORD_SLUGS.slice(0, 8).map((slug) => `/blog/${slug}`);
   const set = inferTemplates(urls);
-  const templates = set.list().map((t) => t.template).sort();
+  const templates = set
+    .list()
+    .map((t) => t.template)
+    .sort();
 
   assert.equal(templates.length, 8);
   assert.ok(templates.every((t) => !t.includes(':')));
@@ -81,7 +84,10 @@ test('stability: shuffled input corpus yields identical templates', () => {
 test('no false positives: static marketing pages stay literal', () => {
   const urls = ['/', '/about', '/pricing', '/contact', '/careers', '/blog'];
   const set = inferTemplates(urls);
-  const templates = set.list().map((t) => t.template).sort();
+  const templates = set
+    .list()
+    .map((t) => t.template)
+    .sort();
 
   assert.deepEqual(templates, ['/', '/about', '/blog', '/careers', '/contact', '/pricing']);
 });
@@ -112,7 +118,12 @@ test('match(): correctness including trailing slash and query stripping', () => 
   assert.equal(trailingSlash!.template, '/users/:id');
 
   const nested = set.match('/users/7/orders/123');
-  assert.deepEqual(nested, { template: '/users/:id/orders/:id2', params: { id: '7', id2: '123' }, query: '', hash: '' });
+  assert.deepEqual(nested, {
+    template: '/users/:id/orders/:id2',
+    params: { id: '7', id2: '123' },
+    query: '',
+    hash: '',
+  });
 
   assert.equal(set.match('/nonexistent/path/here'), null);
 });

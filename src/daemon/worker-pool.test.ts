@@ -1,11 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { TestContext } from 'node:test';
-import {
-  WorkerPool,
-  WorkerJobTimeoutError,
-  WorkerPoolQueueFullError,
-} from './worker-pool.js';
+import { WorkerPool, WorkerJobTimeoutError, WorkerPoolQueueFullError } from './worker-pool.js';
 import type { WorkerHandle } from './worker-pool.js';
 import type { SdkRunnerOptions, SdkRunnerResult } from '../agent/sdk-runner.js';
 
@@ -149,7 +145,11 @@ test('a second job queues behind a saturated pool and only acquires its slot onc
   assert.equal(workers.length, 1, 'A should spawn immediately (free slot)');
 
   let bAcquired = false;
-  const pB = pool.dispatch('B', baseOpts, { onSlotAcquired: () => { bAcquired = true; } });
+  const pB = pool.dispatch('B', baseOpts, {
+    onSlotAcquired: () => {
+      bAcquired = true;
+    },
+  });
   await tick();
 
   assert.equal(bAcquired, false, 'B must not acquire a slot while A holds the only one');
@@ -187,11 +187,17 @@ test('a stalled job times out, releases its slot immediately for the next waiter
   assert.equal(workers.length, 1);
 
   let stalledError: unknown;
-  pStalled.catch((e) => { stalledError = e; });
+  pStalled.catch((e) => {
+    stalledError = e;
+  });
 
   // A second job queues right behind the stalled one.
   let secondAcquired = false;
-  const pSecond = pool.dispatch('second', baseOpts, { onSlotAcquired: () => { secondAcquired = true; } });
+  const pSecond = pool.dispatch('second', baseOpts, {
+    onSlotAcquired: () => {
+      secondAcquired = true;
+    },
+  });
   await tick();
   assert.equal(pool.stats().queued, 1);
 
@@ -199,14 +205,37 @@ test('a stalled job times out, releases its slot immediately for the next waiter
   t.mock.timers.tick(1000);
   await tick(4);
 
-  assert.ok(stalledError instanceof WorkerJobTimeoutError, 'stalled job should reject with a timeout error');
-  assert.equal(pool.stats().active, 1, 'the freed slot should already be handed to the next waiter');
-  assert.equal(secondAcquired, true, 'the next waiter should run as soon as the timeout frees the slot');
-  assert.equal(pool.stats().wedged, 1, 'the timed-out job should still show up as wedged until confirmed dead');
+  assert.ok(
+    stalledError instanceof WorkerJobTimeoutError,
+    'stalled job should reject with a timeout error',
+  );
+  assert.equal(
+    pool.stats().active,
+    1,
+    'the freed slot should already be handed to the next waiter',
+  );
+  assert.equal(
+    secondAcquired,
+    true,
+    'the next waiter should run as soon as the timeout frees the slot',
+  );
+  assert.equal(
+    pool.stats().wedged,
+    1,
+    'the timed-out job should still show up as wedged until confirmed dead',
+  );
 
   const cancelMsg = workers[0].sent.find((m) => m.kind === 'cancel');
-  assert.deepEqual(cancelMsg, { kind: 'cancel', jobId: 'stalled' }, 'timeout should send a graceful cancel first');
-  assert.equal(workers[0].killedWith.length, 0, 'must not force-kill before the grace period elapses');
+  assert.deepEqual(
+    cancelMsg,
+    { kind: 'cancel', jobId: 'stalled' },
+    'timeout should send a graceful cancel first',
+  );
+  assert.equal(
+    workers[0].killedWith.length,
+    0,
+    'must not force-kill before the grace period elapses',
+  );
 
   // Let the second job finish so its promise doesn't dangle.
   assert.equal(workers.length, 2);
@@ -229,7 +258,9 @@ test('a job that never exits after a graceful cancel is force-killed once the gr
 
   const p = pool.dispatch('stalled', baseOpts);
   await tick();
-  p.catch(() => { /* expected timeout rejection, asserted below via stats */ });
+  p.catch(() => {
+    /* expected timeout rejection, asserted below via stats */
+  });
 
   t.mock.timers.tick(1000); // fires the job timeout -> sends cancel, arms grace timer
   await tick(4);
@@ -238,7 +269,11 @@ test('a job that never exits after a graceful cancel is force-killed once the gr
   t.mock.timers.tick(500); // grace period elapses without the worker exiting
   await tick(4);
 
-  assert.equal(workers[0].killedWith[0], 'SIGKILL', 'must force-kill after the grace period if the worker never exited');
+  assert.equal(
+    workers[0].killedWith[0],
+    'SIGKILL',
+    'must force-kill after the grace period if the worker never exited',
+  );
   assert.equal(pool.stats().wedged, 1, 'still wedged until the OS actually reaps the process');
 
   // Simulate the OS finally reporting the killed worker as exited.
@@ -261,7 +296,9 @@ test('a worker that exits gracefully after cancel is not force-killed', async (t
 
   const p = pool.dispatch('stalled', baseOpts);
   await tick();
-  p.catch(() => { /* expected */ });
+  p.catch(() => {
+    /* expected */
+  });
 
   t.mock.timers.tick(1000);
   await tick(4);
@@ -269,11 +306,19 @@ test('a worker that exits gracefully after cancel is not force-killed', async (t
   // Worker honors the graceful cancel and exits cleanly before the grace
   // period is up.
   workers[0].emit('exit', 0, null);
-  assert.equal(pool.stats().wedged, 0, 'a clean exit before the grace deadline should clear wedged immediately');
+  assert.equal(
+    pool.stats().wedged,
+    0,
+    'a clean exit before the grace deadline should clear wedged immediately',
+  );
 
   t.mock.timers.tick(500);
   await tick(2);
-  assert.equal(workers[0].killedWith.length, 0, 'must not force-kill a worker that already exited gracefully');
+  assert.equal(
+    workers[0].killedWith.length,
+    0,
+    'must not force-kill a worker that already exited gracefully',
+  );
 });
 
 test('dispatch() rejects immediately once the wait queue is full, without spawning a worker', async () => {
@@ -326,5 +371,9 @@ test('stats() reports growing oldestActiveMs while a job is in flight', async (t
 
   workers[0].emit('message', { kind: 'result', jobId: 'job1', result: okResult('ok') });
   await p;
-  assert.equal(pool.stats().oldestActiveMs, null, 'completed job should no longer count toward active age');
+  assert.equal(
+    pool.stats().oldestActiveMs,
+    null,
+    'completed job should no longer count toward active age',
+  );
 });

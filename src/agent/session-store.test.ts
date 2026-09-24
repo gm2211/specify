@@ -62,12 +62,39 @@ test('SessionStore: FTS5 MATCH search returns hits ranked', () => {
   withStore((store) => {
     const s1 = newSessionId();
     const s2 = newSessionId();
-    store.recordSession({ sessionId: s1, specId: 'demo', targetKey: 'web_a', task: 'verify', startedAt: '2026-04-27T10:00:00Z' });
-    store.recordSession({ sessionId: s2, specId: 'demo', targetKey: 'web_b', task: 'verify', startedAt: '2026-04-27T11:00:00Z' });
+    store.recordSession({
+      sessionId: s1,
+      specId: 'demo',
+      targetKey: 'web_a',
+      task: 'verify',
+      startedAt: '2026-04-27T10:00:00Z',
+    });
+    store.recordSession({
+      sessionId: s2,
+      specId: 'demo',
+      targetKey: 'web_b',
+      task: 'verify',
+      startedAt: '2026-04-27T11:00:00Z',
+    });
 
-    store.recordEvent({ sessionId: s1, role: 'agent', kind: 'message', content: 'Empty state on the search bar was missing.' });
-    store.recordEvent({ sessionId: s1, role: 'agent', kind: 'message', content: 'Header navigation works as expected.' });
-    store.recordEvent({ sessionId: s2, role: 'agent', kind: 'message', content: 'Login redirect to dashboard succeeded.' });
+    store.recordEvent({
+      sessionId: s1,
+      role: 'agent',
+      kind: 'message',
+      content: 'Empty state on the search bar was missing.',
+    });
+    store.recordEvent({
+      sessionId: s1,
+      role: 'agent',
+      kind: 'message',
+      content: 'Header navigation works as expected.',
+    });
+    store.recordEvent({
+      sessionId: s2,
+      role: 'agent',
+      kind: 'message',
+      content: 'Login redirect to dashboard succeeded.',
+    });
 
     const hits = store.search('"empty state"');
     assert.ok(hits.length >= 1);
@@ -84,7 +111,13 @@ test('SessionStore: attachToEventBus indexes published events', async () => {
     const sessionId = newSessionId();
     const detach = store.attachToEventBus({
       sessionId,
-      ensureSession: { sessionId, specId: 'demo', targetKey: 'web_x', task: 'verify', startedAt: new Date().toISOString() },
+      ensureSession: {
+        sessionId,
+        specId: 'demo',
+        targetKey: 'web_x',
+        task: 'verify',
+        startedAt: new Date().toISOString(),
+      },
     });
     try {
       eventBus.send('agent:thinking', { content: 'Considering empty state coverage' }, sessionId);
@@ -103,7 +136,12 @@ test('SessionStore: events delete cleanly cascades and FTS stays consistent', ()
   withStore((store) => {
     const sessionId = newSessionId();
     store.recordSession({ sessionId, specId: 'demo', startedAt: new Date().toISOString() });
-    store.recordEvent({ sessionId, role: 'agent', kind: 'message', content: 'gizmo flux capacitor calibrated' });
+    store.recordEvent({
+      sessionId,
+      role: 'agent',
+      kind: 'message',
+      content: 'gizmo flux capacitor calibrated',
+    });
     const before = store.search('gizmo');
     assert.equal(before.length, 1);
   });

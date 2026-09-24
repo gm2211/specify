@@ -206,10 +206,7 @@ export async function resolveDecision(
   throw new Error(`Decision not found: ${id}`);
 }
 
-export function registerAwaiter(
-  id: string,
-  timeoutMs: number,
-): Promise<PendingDecision> {
+export function registerAwaiter(id: string, timeoutMs: number): Promise<PendingDecision> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       awaiters.delete(id);

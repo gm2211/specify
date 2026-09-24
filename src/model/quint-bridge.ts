@@ -196,7 +196,7 @@ export function bridgeItfTrace(
     index: -1,
     source: 'entry',
     action: 'browser_goto',
-    value: initial ? readString(initial, conv.url) ?? '/' : '/',
+    value: initial ? (readString(initial, conv.url) ?? '/') : '/',
     intendedLandsOn: initial ? readString(initial, conv.url) : undefined,
     note: 'enter at initial state',
   };
@@ -222,7 +222,11 @@ export function bridgeItfTrace(
   if (finalState) {
     const finalUrl = readString(finalState, conv.url);
     if (finalUrl) {
-      assertions.push({ kind: 'url-template', stateId: `state-${states.length - 1}`, urlTemplate: finalUrl });
+      assertions.push({
+        kind: 'url-template',
+        stateId: `state-${states.length - 1}`,
+        urlTemplate: finalUrl,
+      });
     }
     const finalBits = readPredicateBits(finalState, conv.predicates);
     // Only ground predicate names survive into an assertion; ungrounded names
@@ -232,7 +236,11 @@ export function bridgeItfTrace(
       if (name in predicateRegistry) grounded[name] = val;
     }
     if (Object.keys(grounded).length > 0) {
-      assertions.push({ kind: 'predicate', stateId: `state-${states.length - 1}`, predicates: grounded });
+      assertions.push({
+        kind: 'predicate',
+        stateId: `state-${states.length - 1}`,
+        predicates: grounded,
+      });
     }
   }
 
@@ -274,7 +282,7 @@ export class QuintSpecNotApprovedError extends Error {
       status === undefined
         ? `Quint spec "${specId}" not found in specify.quint.yaml — cannot bridge traces for an unknown spec`
         : `Quint spec "${specId}" has status "${status}" — only an APPROVED spec's traces may be bridged into ` +
-          'the executable pipeline. Review the draft in specify.quint.yaml and approve it first (mandatory human review).',
+            'the executable pipeline. Review the draft in specify.quint.yaml and approve it first (mandatory human review).',
     );
     this.name = 'QuintSpecNotApprovedError';
   }
@@ -316,7 +324,9 @@ export function bridgeApprovedSpecTrace(
  * so a Quint-sourced test reads identically to an inferred-model one.
  */
 export function renderQuintPlaywright(script: QuintTraceScript): string {
-  const needsContext = [script.entry, ...script.steps].some((s) => s.action === 'browser_clear_cookies');
+  const needsContext = [script.entry, ...script.steps].some(
+    (s) => s.action === 'browser_clear_cookies',
+  );
   const fixtures = needsContext ? '{ page, context }' : '{ page }';
   const title = `${script.id}: ${script.flow}`;
 

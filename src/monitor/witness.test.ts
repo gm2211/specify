@@ -63,8 +63,14 @@ test('generateWitnesses is deterministic given the same seed (sampled path, larg
   const r2 = generateWitnesses(formula, { maxLen: 4, seed: 7 });
 
   assert.equal(r1.coverage, 'sampled');
-  assert.deepEqual(r1.accepting.map((w) => w.trace), r2.accepting.map((w) => w.trace));
-  assert.deepEqual(r1.rejecting.map((w) => w.trace), r2.rejecting.map((w) => w.trace));
+  assert.deepEqual(
+    r1.accepting.map((w) => w.trace),
+    r2.accepting.map((w) => w.trace),
+  );
+  assert.deepEqual(
+    r1.rejecting.map((w) => w.trace),
+    r2.rejecting.map((w) => w.trace),
+  );
 });
 
 test('unknown predicate names still render (generic fallback), never throw', () => {

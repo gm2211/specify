@@ -6,7 +6,11 @@ import * as path from 'node:path';
 import { saveMessage, loadMessages, pruneMessages, stateDir } from './inbox-state.js';
 import type { InboxMessage } from './inbox.js';
 
-function makeMsg(id: string, status: InboxMessage['status'] = 'completed', createdAt?: string): InboxMessage {
+function makeMsg(
+  id: string,
+  status: InboxMessage['status'] = 'completed',
+  createdAt?: string,
+): InboxMessage {
   return {
     id,
     createdAt: createdAt ?? new Date().toISOString(),
@@ -85,8 +89,11 @@ test('inbox-state: pruneMessages caps the number of records to max', () => {
   try {
     const base = Date.now();
     for (let i = 0; i < 10; i++) {
-      const msg = makeMsg(`msg_${String(i).padStart(8, '0')}`, 'completed',
-        new Date(base + i * 1000).toISOString());
+      const msg = makeMsg(
+        `msg_${String(i).padStart(8, '0')}`,
+        'completed',
+        new Date(base + i * 1000).toISOString(),
+      );
       saveMessage(msg);
     }
 

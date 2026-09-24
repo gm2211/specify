@@ -49,7 +49,17 @@ export function createBrowserMcpServer(
         'Navigate to a URL',
         { url: z.string(), waitUntil: z.string().optional(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'goto', url: args.url, options: { waitUntil: args.waitUntil, timeout: args.timeout } }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            {
+              action: 'goto',
+              url: args.url,
+              options: { waitUntil: args.waitUntil, timeout: args.timeout },
+            },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -58,7 +68,13 @@ export function createBrowserMcpServer(
         'Click an element by CSS selector',
         { selector: z.string(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'click', selector: args.selector, options: { timeout: args.timeout } }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'click', selector: args.selector, options: { timeout: args.timeout } },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -67,7 +83,13 @@ export function createBrowserMcpServer(
         'Fill an input element by CSS selector',
         { selector: z.string(), value: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'fill', selector: args.selector, value: args.value }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'fill', selector: args.selector, value: args.value },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -76,7 +98,18 @@ export function createBrowserMcpServer(
         'Type text character by character into an element',
         { selector: z.string(), text: z.string(), delay: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'type', selector: args.selector, text: args.text, options: { delay: args.delay } }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            {
+              action: 'type',
+              selector: args.selector,
+              text: args.text,
+              options: { delay: args.delay },
+            },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -85,7 +118,13 @@ export function createBrowserMcpServer(
         'Select an option from a dropdown by CSS selector',
         { selector: z.string(), value: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'selectOption', selector: args.selector, value: args.value }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'selectOption', selector: args.selector, value: args.value },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -94,7 +133,13 @@ export function createBrowserMcpServer(
         'Hover over an element by CSS selector',
         { selector: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'hover', selector: args.selector }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'hover', selector: args.selector },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -103,7 +148,13 @@ export function createBrowserMcpServer(
         'Press a key on an element by CSS selector',
         { selector: z.string(), key: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'press', selector: args.selector, key: args.key }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'press', selector: args.selector, key: args.key },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -112,52 +163,77 @@ export function createBrowserMcpServer(
         'Take a manual screenshot with an optional name',
         { name: z.string().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'screenshot', name: args.name }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'screenshot', name: args.name },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
-      tool(
-        'browser_content',
-        'Get the current page HTML content',
-        {},
-        async () => {
-          const result = await executeCommand(page, { action: 'content' }, screenshotFn, recorder, probePlan);
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-        },
-      ),
+      tool('browser_content', 'Get the current page HTML content', {}, async () => {
+        const result = await executeCommand(
+          page,
+          { action: 'content' },
+          screenshotFn,
+          recorder,
+          probePlan,
+        );
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      }),
       tool(
         'browser_evaluate',
         'Execute JavaScript in the page context',
         { expression: z.string() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'evaluate', expression: args.expression }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            { action: 'evaluate', expression: args.expression },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
-      tool(
-        'browser_url',
-        'Get the current page URL',
-        {},
-        async () => {
-          const result = await executeCommand(page, { action: 'url' }, screenshotFn, recorder, probePlan);
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-        },
-      ),
-      tool(
-        'browser_title',
-        'Get the current page title',
-        {},
-        async () => {
-          const result = await executeCommand(page, { action: 'title' }, screenshotFn, recorder, probePlan);
-          return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-        },
-      ),
+      tool('browser_url', 'Get the current page URL', {}, async () => {
+        const result = await executeCommand(
+          page,
+          { action: 'url' },
+          screenshotFn,
+          recorder,
+          probePlan,
+        );
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      }),
+      tool('browser_title', 'Get the current page title', {}, async () => {
+        const result = await executeCommand(
+          page,
+          { action: 'title' },
+          screenshotFn,
+          recorder,
+          probePlan,
+        );
+        return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+      }),
       tool(
         'browser_wait_for',
         'Wait for a CSS selector to appear on the page',
         { selector: z.string(), state: z.string().optional(), timeout: z.number().optional() },
         async (args) => {
-          const result = await executeCommand(page, { action: 'waitForSelector', selector: args.selector, options: { state: args.state, timeout: args.timeout } }, screenshotFn, recorder, probePlan);
+          const result = await executeCommand(
+            page,
+            {
+              action: 'waitForSelector',
+              selector: args.selector,
+              options: { state: args.state, timeout: args.timeout },
+            },
+            screenshotFn,
+            recorder,
+            probePlan,
+          );
           return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
         },
       ),
@@ -173,14 +249,37 @@ export function createBrowserMcpServer(
               'browser_inject_fault',
               "Scope a seeded fault to matching requests for the rest of this session (until cleared). Use it to deliberately break one endpoint (e.g. urlPattern '/api/orders', fault '500') so you can verify the app's degraded-mode behavior, then call browser_clear_faults when you're done with that behavior. Faults are applied before the request reaches the real server — the target never sees the faulted request.",
               {
-                urlPattern: z.string().describe("Substring or '*'-wildcard pattern matched against the full request URL"),
-                fault: z.enum(['500', 'timeout', 'abort', 'empty']).describe('500 = fulfilled with a 500 error body; timeout = delayed abort; abort = immediate connection abort; empty = 200 with an empty body'),
-                method: z.string().optional().describe('Restrict to one HTTP method, e.g. "POST" (default: any method)'),
-                rate: z.number().min(0).max(1).optional().describe('Fire probability, 0.0-1.0 (default: 1.0 — always fire when matched)'),
+                urlPattern: z
+                  .string()
+                  .describe(
+                    "Substring or '*'-wildcard pattern matched against the full request URL",
+                  ),
+                fault: z
+                  .enum(['500', 'timeout', 'abort', 'empty'])
+                  .describe(
+                    '500 = fulfilled with a 500 error body; timeout = delayed abort; abort = immediate connection abort; empty = 200 with an empty body',
+                  ),
+                method: z
+                  .string()
+                  .optional()
+                  .describe('Restrict to one HTTP method, e.g. "POST" (default: any method)'),
+                rate: z
+                  .number()
+                  .min(0)
+                  .max(1)
+                  .optional()
+                  .describe('Fire probability, 0.0-1.0 (default: 1.0 — always fire when matched)'),
               },
               async (args) => {
                 if (!isFaultType(args.fault)) {
-                  return { content: [{ type: 'text' as const, text: JSON.stringify({ error: `unknown fault type: ${args.fault}` }) }] };
+                  return {
+                    content: [
+                      {
+                        type: 'text' as const,
+                        text: JSON.stringify({ error: `unknown fault type: ${args.fault}` }),
+                      },
+                    ],
+                  };
                 }
                 faultInjector.addRule({
                   urlPattern: args.urlPattern,
@@ -188,7 +287,17 @@ export function createBrowserMcpServer(
                   method: args.method,
                   rate: args.rate ?? 1.0,
                 });
-                return { content: [{ type: 'text' as const, text: JSON.stringify({ ok: true, activeRules: faultInjector.getPlan().rules.length }) }] };
+                return {
+                  content: [
+                    {
+                      type: 'text' as const,
+                      text: JSON.stringify({
+                        ok: true,
+                        activeRules: faultInjector.getPlan().rules.length,
+                      }),
+                    },
+                  ],
+                };
               },
             ),
             tool(

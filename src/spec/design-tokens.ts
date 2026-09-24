@@ -36,7 +36,16 @@ export interface DesignTokenExtraction {
   sources: string[];
 }
 
-const IGNORE_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.specify', 'coverage', '.next', '.turbo']);
+const IGNORE_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.specify',
+  'coverage',
+  '.next',
+  '.turbo',
+]);
 const TOKENS_FILE_NAMES = new Set(['design-tokens.json', 'tokens.json']);
 const MAX_FILES_SCANNED = 2000;
 const MAX_DEPTH = 6;
@@ -95,7 +104,12 @@ function findCandidateFiles(rootDir: string): string[] {
   return results;
 }
 
-function collectFromTokensFile(file: string, rootDir: string, tokens: DesignToken[], sources: Set<string>): void {
+function collectFromTokensFile(
+  file: string,
+  rootDir: string,
+  tokens: DesignToken[],
+  sources: Set<string>,
+): void {
   let data: unknown;
   try {
     data = JSON.parse(fs.readFileSync(file, 'utf-8'));
@@ -108,7 +122,12 @@ function collectFromTokensFile(file: string, rootDir: string, tokens: DesignToke
   if (tokens.length > before) sources.add(relSource);
 }
 
-function collectJsonLeaves(node: unknown, keyPath: string[], source: string, tokens: DesignToken[]): void {
+function collectJsonLeaves(
+  node: unknown,
+  keyPath: string[],
+  source: string,
+  tokens: DesignToken[],
+): void {
   if (tokens.length >= MAX_TOKENS) return;
   if (node !== null && typeof node === 'object' && !Array.isArray(node)) {
     for (const [key, value] of Object.entries(node as Record<string, unknown>)) {
@@ -131,7 +150,12 @@ function collectJsonLeaves(node: unknown, keyPath: string[], source: string, tok
 // runaway match can never swallow an entire following rule block.
 const CSS_CUSTOM_PROP_RE = /(?:^|(?<=[{;\s]))--([a-zA-Z][a-zA-Z0-9_-]*)\s*:\s*([^;{}]+);/g;
 
-function collectFromCssFile(file: string, rootDir: string, tokens: DesignToken[], sources: Set<string>): void {
+function collectFromCssFile(
+  file: string,
+  rootDir: string,
+  tokens: DesignToken[],
+  sources: Set<string>,
+): void {
   let content: string;
   try {
     content = fs.readFileSync(file, 'utf-8');
@@ -141,7 +165,11 @@ function collectFromCssFile(file: string, rootDir: string, tokens: DesignToken[]
   const relSource = path.relative(rootDir, file);
   const before = tokens.length;
   CSS_CUSTOM_PROP_RE.lastIndex = 0;
-  for (let match = CSS_CUSTOM_PROP_RE.exec(content); match !== null && tokens.length < MAX_TOKENS; match = CSS_CUSTOM_PROP_RE.exec(content)) {
+  for (
+    let match = CSS_CUSTOM_PROP_RE.exec(content);
+    match !== null && tokens.length < MAX_TOKENS;
+    match = CSS_CUSTOM_PROP_RE.exec(content)
+  ) {
     const name = match[1].trim();
     const value = match[2].trim();
     tokens.push({ name, value, category: inferCategory(name), source: relSource });

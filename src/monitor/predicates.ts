@@ -67,7 +67,14 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { CapturedConsoleEntry, CapturedTraffic } from '../capture/types.js';
 import type { AxObservation, StepObservation } from '../agent/observation.js';
-import type { PredicateEvaluator, PredicateRef, PredicateVerdict, Trace, TraceEvent, TraceState } from './trace.js';
+import type {
+  PredicateEvaluator,
+  PredicateRef,
+  PredicateVerdict,
+  Trace,
+  TraceEvent,
+  TraceState,
+} from './trace.js';
 
 // ==============================================================================
 // Event shapes carried on TraceState.events
@@ -135,7 +142,10 @@ function statusInClass(status: number, cls: string): boolean | 'unevaluable' {
 }
 
 /** Get a dotted path (e.g. "user.id" or "items.0.name") out of a parsed JSON value. */
-function getPath(value: unknown, dottedPath: string): { found: true; value: unknown } | { found: false } {
+function getPath(
+  value: unknown,
+  dottedPath: string,
+): { found: true; value: unknown } | { found: false } {
   const parts = dottedPath.split('.').filter((p) => p.length > 0);
   let cur = value;
   for (const part of parts) {
@@ -198,9 +208,9 @@ const httpRequest: PredicateDefinition = {
     'True iff a captured HTTP request whose URL matches `urlPattern` (and, if given, whose ' +
     "method equals `method` case-insensitively) occurred in this position's event window. " +
     'Args: `[urlPattern]` (any method) or `[method, urlPattern]`. `urlPattern` is a regex source ' +
-    "string tested against the request URL (see module doc for the regex convention). " +
+    'string tested against the request URL (see module doc for the regex convention). ' +
     "'unevaluable' iff `urlPattern` fails to compile as a regex; never unevaluable merely because " +
-    'no request occurred (that is a genuine `false`, distinct from http.no_request\'s success case).',
+    "no request occurred (that is a genuine `false`, distinct from http.no_request's success case).",
   examples: [['GET', '/api/session'], ['/api/session']],
   evalFn(state, args) {
     const [method, urlPattern] = args.length >= 2 ? [args[0], args[1]] : [undefined, args[0]];
@@ -219,7 +229,7 @@ const httpResponse: PredicateDefinition = {
   requires: 'events',
   doc:
     'True iff a captured HTTP response whose request URL matches `urlPattern` has status ' +
-    '(exactly) equal to `status`. Args: `[urlPattern, status]`. \'unevaluable\' iff `urlPattern` ' +
+    "(exactly) equal to `status`. Args: `[urlPattern, status]`. 'unevaluable' iff `urlPattern` " +
     'fails to compile, `status` is not a valid integer, or no matching-URL response exists in the ' +
     'window at all (we cannot say a specific status did NOT occur if we never observed the URL — ' +
     'contrast with http.no_request, which is the deliberate absence predicate). If a matching-URL ' +
@@ -240,11 +250,14 @@ const httpResponse: PredicateDefinition = {
 const httpStatusClass: PredicateDefinition = {
   requires: 'events',
   doc:
-    "True iff a captured response for a matching URL has a status in the given class. Args: " +
+    'True iff a captured response for a matching URL has a status in the given class. Args: ' +
     "`[urlPattern, class]`, class in `'2xx'|'3xx'|'4xx'|'5xx'`. Same absence handling as " +
     "http.response: no matching-URL response observed at all => 'unevaluable'; matching-URL " +
-    "response observed but in a different class => `false`.",
-  examples: [['/api/', '2xx'], ['/api/', '5xx']],
+    'response observed but in a different class => `false`.',
+  examples: [
+    ['/api/', '2xx'],
+    ['/api/', '5xx'],
+  ],
   evalFn(state, args) {
     const [urlPattern, cls] = args;
     if (urlPattern === undefined || cls === undefined) return 'unevaluable';
@@ -272,15 +285,19 @@ const httpResponseJson: PredicateDefinition = {
     'dotted `path` (e.g. `user.id`, `items.0.name`) resolves to a value equal to `value` ' +
     '(numbers/booleans/null compared by string form; objects/arrays by JSON deep-equality). ' +
     'Args: `[urlPattern, path, value]`. ASYMMETRY (documented deliberately): if the response body ' +
-    'is absent or fails to parse as JSON, the verdict is \'unevaluable\' — we cannot rule on a ' +
+    "is absent or fails to parse as JSON, the verdict is 'unevaluable' — we cannot rule on a " +
     'path we could not read. If the body DID parse but `path` does not resolve to anything in it, ' +
     'the verdict is `false` — a present, well-formed document that lacks the field is a genuine ' +
     'negative, not a data-collection failure. No matching-URL response observed at all => ' +
     "'unevaluable' (mirrors http.response).",
-  examples: [['/api/session', 'user.id', '42'], ['/api/cart', 'items.0.sku', 'ABC123']],
+  examples: [
+    ['/api/session', 'user.id', '42'],
+    ['/api/cart', 'items.0.sku', 'ABC123'],
+  ],
   evalFn(state, args) {
     const [urlPattern, path, expected] = args;
-    if (urlPattern === undefined || path === undefined || expected === undefined) return 'unevaluable';
+    if (urlPattern === undefined || path === undefined || expected === undefined)
+      return 'unevaluable';
     const re = safeRegex(urlPattern);
     if (!re) return 'unevaluable';
     const matches = httpEvents(state).filter((e) => re.test(e.traffic.url));
@@ -308,8 +325,8 @@ const httpBodyMatches: PredicateDefinition = {
   requires: 'events',
   doc:
     'True iff a captured response for a matching URL has a body (string) that matches `regex`. ' +
-    'Args: `[urlPattern, regex]`. \'unevaluable\' iff urlPattern/regex fail to compile, no ' +
-    "matching-URL response was observed, or every matching-URL response has a null/absent body. " +
+    "Args: `[urlPattern, regex]`. 'unevaluable' iff urlPattern/regex fail to compile, no " +
+    'matching-URL response was observed, or every matching-URL response has a null/absent body. ' +
     'If at least one matching-URL response has a captured (non-null) body, the verdict is a ' +
     'definite true/false over those bodies.',
   examples: [['/api/session', '"status"\\s*:\\s*"ok"']],
@@ -321,7 +338,9 @@ const httpBodyMatches: PredicateDefinition = {
     if (!urlRe || !bodyRe) return 'unevaluable';
     const matches = httpEvents(state).filter((e) => urlRe.test(e.traffic.url));
     if (matches.length === 0) return 'unevaluable';
-    const withBody = matches.filter((e) => e.traffic.responseBody !== null && e.traffic.responseBody !== undefined);
+    const withBody = matches.filter(
+      (e) => e.traffic.responseBody !== null && e.traffic.responseBody !== undefined,
+    );
     if (withBody.length === 0) return 'unevaluable';
     return withBody.some((e) => bodyRe.test(e.traffic.responseBody as string));
   },
@@ -332,7 +351,7 @@ const httpPostDataMatches: PredicateDefinition = {
   doc:
     'True iff a captured request for a matching URL has POST body data matching `regex`. Args: ' +
     "`[urlPattern, regex]`. 'unevaluable' iff urlPattern/regex fail to compile, no matching-URL " +
-    "request was observed, or every matching-URL request has null postData. Otherwise a definite " +
+    'request was observed, or every matching-URL request has null postData. Otherwise a definite ' +
     'true/false over the requests that do have postData.',
   examples: [['/api/checkout', '"cardType"']],
   evalFn(state, args) {
@@ -343,7 +362,9 @@ const httpPostDataMatches: PredicateDefinition = {
     if (!urlRe || !dataRe) return 'unevaluable';
     const matches = httpEvents(state).filter((e) => urlRe.test(e.traffic.url));
     if (matches.length === 0) return 'unevaluable';
-    const withData = matches.filter((e) => e.traffic.postData !== null && e.traffic.postData !== undefined);
+    const withData = matches.filter(
+      (e) => e.traffic.postData !== null && e.traffic.postData !== undefined,
+    );
     if (withData.length === 0) return 'unevaluable';
     return withData.some((e) => dataRe.test(e.traffic.postData as string));
   },
@@ -353,9 +374,9 @@ const httpNoRequest: PredicateDefinition = {
   requires: 'events',
   doc:
     'ABSENCE predicate: true iff NO captured request in this window has a URL matching ' +
-    "`urlPattern`. Args: `[urlPattern]`. Unlike the other http.* predicates, this one is defined " +
-    "over the empty case by design (its entire purpose is to assert non-occurrence), so it never " +
-    "returns 'unevaluable' for \"no matching request\" — only for a malformed `urlPattern`.",
+    '`urlPattern`. Args: `[urlPattern]`. Unlike the other http.* predicates, this one is defined ' +
+    'over the empty case by design (its entire purpose is to assert non-occurrence), so it never ' +
+    'returns \'unevaluable\' for "no matching request" — only for a malformed `urlPattern`.',
   examples: [['/api/legacy-endpoint']],
   evalFn(state, args) {
     const [urlPattern] = args;
@@ -381,7 +402,9 @@ const consoleError: PredicateDefinition = {
       re = safeRegex(pattern);
       if (!re) return 'unevaluable';
     }
-    return consoleEvents(state).some((e) => e.entry.type === 'error' && (!re || re.test(e.entry.text)));
+    return consoleEvents(state).some(
+      (e) => e.entry.type === 'error' && (!re || re.test(e.entry.text)),
+    );
   },
 };
 
@@ -389,8 +412,8 @@ const consoleMessage: PredicateDefinition = {
   requires: 'events',
   doc:
     'True iff a console entry of the given `type` (exact match, e.g. `log`, `warn`, `error`, ' +
-    '`info`, `debug`) occurred whose text matches `regex`. Args: `[type, regex]`. \'unevaluable\' ' +
-    "iff `regex` fails to compile; never unevaluable merely because no matching entry occurred.",
+    "`info`, `debug`) occurred whose text matches `regex`. Args: `[type, regex]`. 'unevaluable' " +
+    'iff `regex` fails to compile; never unevaluable merely because no matching entry occurred.',
   examples: [['warn', 'deprecated']],
   evalFn(state, args) {
     const [type, pattern] = args;
@@ -419,7 +442,7 @@ const stepAction: PredicateDefinition = {
     'recorded `args.selector` matches `selectorPattern`. Args: `[type]` or `[type, selectorPattern]`. ' +
     "'unevaluable' iff the position has no step observation, or `selectorPattern` is given but the " +
     'step has no recorded selector arg (we cannot rule on a selector we never captured) or the ' +
-    "pattern fails to compile. If the step exists and action does not match, verdict is `false`.",
+    'pattern fails to compile. If the step exists and action does not match, verdict is `false`.',
   examples: [['click'], ['fill', '#email']],
   evalFn(state, args) {
     const step = asStepObservation(state);
@@ -458,7 +481,7 @@ const pageTitle: PredicateDefinition = {
   doc:
     "True iff this position's step observation's `title` matches `regex`. Args: `[regex]`. " +
     "'unevaluable' iff the position has no step observation, `title` was not captured for this " +
-    "step (best-effort field — see observation.ts), or `regex` fails to compile.",
+    'step (best-effort field — see observation.ts), or `regex` fails to compile.',
   examples: [['^Order Confirmed']],
   evalFn(state, args) {
     const step = asStepObservation(state);
@@ -546,7 +569,11 @@ export function parseAriaSnapshot(snapshotYaml: string): Array<{ role: string; n
 }
 
 /** Resolve an AxObservation to snapshot YAML text, walking `{unchanged}` chains backward through the trace. Returns undefined if unresolvable. */
-function resolveAxSnapshot(trace: Trace, position: number, axBaseDir: string | undefined): string | undefined {
+function resolveAxSnapshot(
+  trace: Trace,
+  position: number,
+  axBaseDir: string | undefined,
+): string | undefined {
   if (!axBaseDir) return undefined;
 
   for (let i = position; i >= 0; i--) {
@@ -570,11 +597,11 @@ const axRole: PredicateDefinition = {
   requires: 'step',
   doc:
     "True iff this position's resolved AX snapshot (ariaSnapshot YAML, resolving `{unchanged}` " +
-    "chains backward through the trace to the last position that actually wrote a snapshot file — " +
-    'see observation.ts\'s AxObservation) contains at least one node whose role equals `role` ' +
+    'chains backward through the trace to the last position that actually wrote a snapshot file — ' +
+    "see observation.ts's AxObservation) contains at least one node whose role equals `role` " +
     '(case-insensitive) and, if given, whose accessible name matches `namePattern`. Args: `[role]` ' +
     "or `[role, namePattern]`. 'unevaluable' iff the position has no step observation, the step's " +
-    "AxObservation is `{error}`, the snapshot file cannot be resolved/read (requires the " +
+    'AxObservation is `{error}`, the snapshot file cannot be resolved/read (requires the ' +
     "PredicateContext's `axBaseDir` — the capture outputDir), or `namePattern` is given but fails " +
     'to compile. If the snapshot resolves and parses but no node matches, verdict is `false`.',
   examples: [['button'], ['heading', 'Checkout']],
@@ -692,7 +719,7 @@ const domExists = domProbeDefinition(
   1,
   'LIVE PROBE. True iff a live DOM probe recorded at this step found at least one element ' +
     "matching the CSS `selector` (Playwright locator count > 0). Args: `[selector]`. 'unevaluable' " +
-    "iff the position has no step observation, or no probe for this exact (selector) was sampled at " +
+    'iff the position has no step observation, or no probe for this exact (selector) was sampled at ' +
     'this step (formula compiled after the run, sampling timed out/errored, or the run predates live ' +
     'probe sampling — see module notes above). Never unevaluable merely because the element was ' +
     'genuinely absent (that is a recorded `false`).',
@@ -703,7 +730,7 @@ const domVisible = domProbeDefinition(
   'dom.visible',
   1,
   'LIVE PROBE. True iff a live DOM probe recorded at this step found the first element matching ' +
-    "the CSS `selector` to be visible (Playwright locator `isVisible()`). Args: `[selector]`. " +
+    'the CSS `selector` to be visible (Playwright locator `isVisible()`). Args: `[selector]`. ' +
     "'unevaluable' iff the position has no step observation or no probe for this exact (selector) " +
     'was sampled at this step. A selector that matched no element, or matched one that is hidden, ' +
     'is a recorded `false`, not unevaluable.',
@@ -714,9 +741,9 @@ const domText = domProbeDefinition(
   'dom.text',
   2,
   'LIVE PROBE. True iff a live DOM probe recorded at this step found the first element matching ' +
-    "the CSS `selector` to have text content matching `regex`. Args: `[selector, regex]`. " +
+    'the CSS `selector` to have text content matching `regex`. Args: `[selector, regex]`. ' +
     "'unevaluable' iff `regex` fails to compile as a regex (checked here, independent of sampling), " +
-    "the position has no step observation, or no probe for this exact (selector, regex) was sampled " +
+    'the position has no step observation, or no probe for this exact (selector, regex) was sampled ' +
     'at this step. An element that matched but whose text does not satisfy `regex` (or that has no ' +
     'text content) is a recorded `false`.',
   [['#status', 'Order placed']],
@@ -727,12 +754,15 @@ const domCount = domProbeDefinition(
   'dom.count',
   3,
   'LIVE PROBE. True iff a live DOM probe recorded at this step found the number of elements ' +
-    "matching the CSS `selector` to satisfy `count <op> n`, `op` one of `eq|gte|lte|gt|lt`. Args: " +
+    'matching the CSS `selector` to satisfy `count <op> n`, `op` one of `eq|gte|lte|gt|lt`. Args: ' +
     "`[selector, op, n]`. 'unevaluable' iff `op` is not one of the five comparators or `n` does not " +
-    "parse as a finite number (checked here, independent of sampling), the position has no step " +
+    'parse as a finite number (checked here, independent of sampling), the position has no step ' +
     'observation, or no probe for this exact (selector, op, n) was sampled at this step. A count ' +
     'that fails the comparison is a recorded `false`.',
-  [['.cart-item', 'gte', '1'], ['.error-banner', 'eq', '0']],
+  [
+    ['.cart-item', 'gte', '1'],
+    ['.error-banner', 'eq', '0'],
+  ],
   (args) => DOM_COUNT_OPS.has(args[1]) && Number.isFinite(Number(args[2])),
 );
 

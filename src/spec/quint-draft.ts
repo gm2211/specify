@@ -149,7 +149,11 @@ export function validateDraftResult(
     return { ok: false, flow, reason: 'Missing or empty "spec_text"' };
   }
   if (!/\bmodule\b/.test(specText)) {
-    return { ok: false, flow, reason: 'spec_text does not look like a Quint module (no "module" declaration)' };
+    return {
+      ok: false,
+      flow,
+      reason: 'spec_text does not look like a Quint module (no "module" declaration)',
+    };
   }
 
   const declared = Array.isArray(raw.predicates_used)
@@ -205,7 +209,11 @@ export function mergeDraftResults(
       ...(provenanceBase.model !== undefined ? { model: provenanceBase.model } : {}),
       ...(provenanceBase.session_id !== undefined ? { session_id: provenanceBase.session_id } : {}),
     };
-    const { file: nextFile, entry, deduped: wasDeduped } = addQuintDraft(current, {
+    const {
+      file: nextFile,
+      entry,
+      deduped: wasDeduped,
+    } = addQuintDraft(current, {
       flow: r.flow,
       spec_text: r.specText,
       description_hash: hashNarrative(r.description),
@@ -256,11 +264,17 @@ function coerceAgentOutput(structuredOutput: unknown): DraftAgentOutput {
  * with `getQuintDraftPrompt`'s system prompt. The model string is read back
  * from run-context.json so provenance reflects the model actually used.
  */
-export async function defaultDraftAgentRunner(params: DraftAgentParams): Promise<DraftAgentRunResult> {
+export async function defaultDraftAgentRunner(
+  params: DraftAgentParams,
+): Promise<DraftAgentRunResult> {
   const { runSpecifyAgent } = await import('../agent/sdk-runner.js');
   const { getQuintDraftPrompt } = await import('../agent/prompts.js');
 
-  const systemPrompt = getQuintDraftPrompt(params.specYaml, params.predicateDocs, params.existingQuintYaml);
+  const systemPrompt = getQuintDraftPrompt(
+    params.specYaml,
+    params.predicateDocs,
+    params.existingQuintYaml,
+  );
 
   const { costUsd, structuredOutput, sessionId } = await runSpecifyAgent({
     task: 'quint-draft',
@@ -339,7 +353,10 @@ export async function draftQuintSpecs(
   };
 
   if (!quintSpecsEnabled()) {
-    return { ...base, skippedReason: 'SPECIFY_ENABLE_QUINT_SPECS is not set — Quint integration is opt-in' };
+    return {
+      ...base,
+      skippedReason: 'SPECIFY_ENABLE_QUINT_SPECS is not set — Quint integration is opt-in',
+    };
   }
   if (!fs.existsSync(resolvedSpec)) {
     return { ...base, skippedReason: `Spec source not found: ${resolvedSpec}` };
@@ -363,7 +380,11 @@ export async function draftQuintSpecs(
   const allFlows = collectAllFlows(spec);
   const candidates = selectFlowCandidates(allFlows, existing, options.flow, !!options.force);
   if (candidates.length === 0) {
-    return { ...base, skippedReason: 'Nothing to draft — all matching flows already have a Quint spec entry (use force to re-draft)' };
+    return {
+      ...base,
+      skippedReason:
+        'Nothing to draft — all matching flows already have a Quint spec entry (use force to re-draft)',
+    };
   }
 
   // Send ONLY the candidate flows to the drafter.
@@ -380,15 +401,29 @@ export async function draftQuintSpecs(
 
   const specYaml = specToYaml(filteredSpec);
   const predicateDocs = generatePredicateDocs(predicateRegistry);
-  const existingQuintYaml = yaml.dump(existing ?? emptyQuintSpecsFile(), { sortKeys: false, lineWidth: 120 });
+  const existingQuintYaml = yaml.dump(existing ?? emptyQuintSpecsFile(), {
+    sortKeys: false,
+    lineWidth: 120,
+  });
   const outputDir = path.join(path.dirname(quintPath), '.specify', 'quint-draft');
 
   const agentRunner = deps.agentRunner ?? defaultDraftAgentRunner;
   let agentResult: DraftAgentRunResult;
   try {
-    agentResult = await agentRunner({ specYaml, predicateDocs, existingQuintYaml, spec: resolvedSpec, outputDir, debug: options.debug });
+    agentResult = await agentRunner({
+      specYaml,
+      predicateDocs,
+      existingQuintYaml,
+      spec: resolvedSpec,
+      outputDir,
+      debug: options.debug,
+    });
   } catch (err) {
-    return { ...base, candidates: candidates.length, skippedReason: `Draft agent failed: ${err instanceof Error ? err.message : String(err)}` };
+    return {
+      ...base,
+      candidates: candidates.length,
+      skippedReason: `Draft agent failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
   }
 
   const predicateNames = new Set(Object.keys(predicateRegistry));

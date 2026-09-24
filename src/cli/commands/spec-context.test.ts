@@ -84,11 +84,19 @@ test('specContext regeneration preserves hand-written content outside the manage
     await specContext({ spec: specPath, outDir: dir }, quietCtx());
 
     const productPath = path.join(dir, 'PRODUCT.md');
-    const withHandEdit = fs.readFileSync(productPath, 'utf-8') + '\n## Team Notes\nThis paragraph was added by hand and must survive regeneration.\n';
+    const withHandEdit =
+      fs.readFileSync(productPath, 'utf-8') +
+      '\n## Team Notes\nThis paragraph was added by hand and must survive regeneration.\n';
     fs.writeFileSync(productPath, withHandEdit);
 
     // Change the spec so the regenerated content actually differs.
-    writeFile(specPath, fixtureSpecYaml().replace('The primary action uses the brand accent color.', 'The primary action uses the brand accent color, updated.'));
+    writeFile(
+      specPath,
+      fixtureSpecYaml().replace(
+        'The primary action uses the brand accent color.',
+        'The primary action uses the brand accent color, updated.',
+      ),
+    );
 
     const exitCode = await specContext({ spec: specPath, outDir: dir }, quietCtx());
     assert.equal(exitCode, 0);
@@ -109,7 +117,8 @@ test('specContext refuses to clobber an unmanaged PRODUCT.md and writes a review
     writeFile(specPath, fixtureSpecYaml());
 
     const productPath = path.join(dir, 'PRODUCT.md');
-    const handAuthored = '# Hand-authored PRODUCT.md\n\nNo specify markers here — predates the feature.\n';
+    const handAuthored =
+      '# Hand-authored PRODUCT.md\n\nNo specify markers here — predates the feature.\n';
     fs.writeFileSync(productPath, handAuthored);
 
     const exitCode = await specContext({ spec: specPath, outDir: dir }, quietCtx());
@@ -153,7 +162,15 @@ test('specContext honors --product/--design filename overrides', async () => {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, fixtureSpecYaml());
 
-    const exitCode = await specContext({ spec: specPath, outDir: dir, product: 'docs/PRODUCT_CONTEXT.md', design: 'docs/DESIGN_CONTEXT.md' }, quietCtx());
+    const exitCode = await specContext(
+      {
+        spec: specPath,
+        outDir: dir,
+        product: 'docs/PRODUCT_CONTEXT.md',
+        design: 'docs/DESIGN_CONTEXT.md',
+      },
+      quietCtx(),
+    );
     assert.equal(exitCode, 0);
     assert.ok(fs.existsSync(path.join(dir, 'docs', 'PRODUCT_CONTEXT.md')));
     assert.ok(fs.existsSync(path.join(dir, 'docs', 'DESIGN_CONTEXT.md')));
@@ -170,7 +187,10 @@ test('specContext JSON output emits the structured projection with per-file appl
 
     const chunks: string[] = [];
     const originalWrite = process.stdout.write.bind(process.stdout);
-    (process.stdout.write as unknown) = (chunk: string) => { chunks.push(chunk); return true; };
+    (process.stdout.write as unknown) = (chunk: string) => {
+      chunks.push(chunk);
+      return true;
+    };
     try {
       const exitCode = await specContext({ spec: specPath, outDir: dir }, quietCtx('json'));
       assert.equal(exitCode, 0);
@@ -181,7 +201,9 @@ test('specContext JSON output emits the structured projection with per-file appl
     const output = JSON.parse(chunks.join(''));
     assert.equal(output.spec.name, 'Demo App');
     assert.ok(Array.isArray(output.product.areas));
-    const captureArea = output.product.areas.find((a: { areaId: string }) => a.areaId === 'capture');
+    const captureArea = output.product.areas.find(
+      (a: { areaId: string }) => a.areaId === 'capture',
+    );
     assert.equal(captureArea.behaviorClaims[0].anchor, 'capture/capture-agent-generates-spec');
     assert.equal(output.files.product.applied, true);
     assert.equal(output.files.product.created, true);
@@ -199,7 +221,10 @@ test('specContext fails cleanly when --spec cannot be resolved', async () => {
 test('specContext fails cleanly when the spec file does not exist', async () => {
   const { dir, cleanup } = tmpDir();
   try {
-    const exitCode = await specContext({ spec: path.join(dir, 'missing.yaml'), outDir: dir }, quietCtx());
+    const exitCode = await specContext(
+      { spec: path.join(dir, 'missing.yaml'), outDir: dir },
+      quietCtx(),
+    );
     assert.notEqual(exitCode, 0);
   } finally {
     cleanup();

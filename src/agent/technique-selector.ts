@@ -100,10 +100,15 @@ export function selectTechnique(
  * rather than an actual playwright run: existence-checking shouldn't cost a
  * process spawn per behavior.
  */
-export function findGeneratedTest(outputDir: string, behaviorFqId: string): { exists: boolean; mtimeMs?: number } {
+export function findGeneratedTest(
+  outputDir: string,
+  behaviorFqId: string,
+): { exists: boolean; mtimeMs?: number } {
   let files: string[];
   try {
-    files = fs.readdirSync(outputDir).filter((f) => f.endsWith('.spec.ts') || f.endsWith('.spec.js'));
+    files = fs
+      .readdirSync(outputDir)
+      .filter((f) => f.endsWith('.spec.ts') || f.endsWith('.spec.js'));
   } catch {
     return { exists: false };
   }

@@ -31,13 +31,20 @@ process.on('uncaughtException', (err: NodeJS.ErrnoException) => {
     // Write directly to fd 2 — process.stderr.write itself could EPIPE.
     try {
       if (process.stderr.fd !== undefined) {
-        (require as NodeRequire)('fs').writeSync(process.stderr.fd, '[worker] swallowed EPIPE — continuing\n');
+        (require as NodeRequire)('fs').writeSync(
+          process.stderr.fd,
+          '[worker] swallowed EPIPE — continuing\n',
+        );
       }
-    } catch { /* best-effort log */ }
+    } catch {
+      /* best-effort log */
+    }
     return;
   }
   // Re-throw on next tick so Node's unhandled-exception mechanism sees it.
-  setImmediate(() => { throw err; });
+  setImmediate(() => {
+    throw err;
+  });
 });
 
 function send(msg: Record<string, unknown>): void {

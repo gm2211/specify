@@ -46,7 +46,11 @@ export default function App() {
             refreshSpec();
             refreshNarrative();
           }
-          if (msg.type === 'results:updated' || msg.type === 'results-updated' || msg.type === 'verify-complete') {
+          if (
+            msg.type === 'results:updated' ||
+            msg.type === 'results-updated' ||
+            msg.type === 'verify-complete'
+          ) {
             refreshResults();
           }
           if (msg.type === 'agent:event' && msg.event?.type === 'verify:completed') {
@@ -82,9 +86,7 @@ export default function App() {
   const allTags = useMemo(() => {
     if (!spec) return [];
     const tags = new Set<string>();
-    spec.areas.forEach((a) =>
-      a.behaviors.forEach((b) => b.tags?.forEach((t) => tags.add(t)))
-    );
+    spec.areas.forEach((a) => a.behaviors.forEach((b) => b.tags?.forEach((t) => tags.add(t))));
     return Array.from(tags).sort();
   }, [spec]);
 
@@ -92,7 +94,11 @@ export default function App() {
     setSelectedArea(id);
     setExpandedAreas((prev) => new Set(prev).add(id));
     const el = document.getElementById(`area-${id}`);
-    if (el) (el as unknown as { scrollIntoView: (opts: ScrollIntoViewOptions) => void }).scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (el)
+      (el as unknown as { scrollIntoView: (opts: ScrollIntoViewOptions) => void }).scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
   }, []);
 
   const handleToggleArea = useCallback((id: string) => {
@@ -109,7 +115,7 @@ export default function App() {
       await verifyBehavior(areaId, behaviorId);
       refreshResults();
     },
-    [verifyBehavior, refreshResults]
+    [verifyBehavior, refreshResults],
   );
 
   if (specLoading) {
@@ -137,9 +143,7 @@ export default function App() {
     <div className="header-content">
       <div className="header-left">
         <h1 className="header-title">{spec.name}</h1>
-        {spec.description && (
-          <span className="header-description">{spec.description}</span>
-        )}
+        {spec.description && <span className="header-description">{spec.description}</span>}
       </div>
       <div className="header-right">
         <Summary spec={spec} results={results} />

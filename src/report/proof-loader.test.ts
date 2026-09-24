@@ -72,7 +72,11 @@ function buildCliFixture(): { dir: string; cleanup: () => void; spec: Spec } {
             content: 'I ran the linter and it was happy and it printed a long confirmation',
           },
           { type: 'command_output', label: 'invocation', content: '$ ./specify spec lint' },
-          { type: 'command_output', label: 'step 0', content: 'a summary unrelated to the recorded output' },
+          {
+            type: 'command_output',
+            label: 'step 0',
+            content: 'a summary unrelated to the recorded output',
+          },
           { type: 'command_output', label: 'short', content: 'ok' },
         ],
       },
@@ -107,7 +111,9 @@ test('CLI evidence: explicit output text matches its recorded step', () => {
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior');
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    );
     assert.ok(behavior);
     const ev = behavior!.evidence.find((e) => e.label === 'lint output');
     assert.ok(ev);
@@ -129,7 +135,9 @@ test('CLI evidence: unrelated narration is agent-reported', () => {
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
     const ev = behavior.evidence.find((e) => e.label === 'narration')!;
     assert.equal(ev.provenance, 'agent-reported');
     assert.equal(ev.observationStep, undefined);
@@ -148,7 +156,9 @@ test('CLI evidence: argv-naming rule matches "$ argv..." content', () => {
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
     const ev = behavior.evidence.find((e) => e.label === 'invocation')!;
     assert.equal(ev.provenance, 'runner-recorded');
   } finally {
@@ -166,7 +176,9 @@ test('CLI evidence: explicit "step N" label wins even without output overlap', (
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
     const ev = behavior.evidence.find((e) => e.label === 'step 0')!;
     assert.equal(ev.provenance, 'runner-recorded');
     assert.equal(ev.observationStep, 0);
@@ -185,7 +197,9 @@ test('CLI evidence: short content below MIN_MATCH_CHARS stays agent-reported', (
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
     const ev = behavior.evidence.find((e) => e.label === 'short')!;
     assert.equal(ev.provenance, 'agent-reported');
   } finally {
@@ -223,7 +237,9 @@ test('cliSession carries every recorded step, and matched steps surface in the b
       generatorVersion: '0.0.0-test',
     });
     assert.equal(input.cliSession.length, 1);
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-evidence-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
     assert.ok(behavior.cliSteps.some((s) => s.step === 0));
   } finally {
     cleanup();
@@ -268,7 +284,9 @@ test('a cli-target spec with a recorded browser session gets runner-recorded scr
           description: 'a cli-target behavior whose agent also drove a browser',
           status: 'passed',
           method: 'agent',
-          action_trace: [{ type: 'screenshot', description: 'Captured home page', screenshot: shot }],
+          action_trace: [
+            { type: 'screenshot', description: 'Captured home page', screenshot: shot },
+          ],
           evidence: [{ type: 'screenshot', label: 'home shot', content: shot }],
         },
       ],
@@ -292,7 +310,9 @@ test('a cli-target spec with a recorded browser session gets runner-recorded scr
       outputPath: path.join(dir, 'proof.html'),
       generatorVersion: '0.0.0-test',
     });
-    const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/cli-target-screenshot-behavior')!;
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-target-screenshot-behavior',
+    )!;
     assert.ok(behavior);
     assert.equal(behavior.evidence[0].provenance, 'runner-recorded');
     assert.equal(behavior.evidence[0].screenshotKey, '001-home.png');
@@ -358,7 +378,11 @@ function buildWebFixture(): { dir: string; cleanup: () => void; spec: Spec } {
         method: 'agent',
         action_trace: [
           { type: 'screenshot', description: 'Captured home page', screenshot: shot1 },
-          { type: 'screenshot', description: 'Captured a missing page', screenshot: '/nowhere/999-missing.png' },
+          {
+            type: 'screenshot',
+            description: 'Captured a missing page',
+            screenshot: '/nowhere/999-missing.png',
+          },
         ],
         evidence: [{ type: 'screenshot', label: 'home shot', content: shot1 }],
       },
@@ -396,7 +420,9 @@ test('web frames: one frame per on-disk trace screenshot; missing files are drop
     const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/web-behavior')!;
     assert.equal(behavior.frames.length, 1);
     assert.equal(behavior.frames[0].key, '001-home.png');
-    const missingTraceStep = behavior.trace.find((t) => t.description === 'Captured a missing page')!;
+    const missingTraceStep = behavior.trace.find(
+      (t) => t.description === 'Captured a missing page',
+    )!;
     assert.equal(missingTraceStep.provenance, 'agent-reported');
   } finally {
     cleanup();

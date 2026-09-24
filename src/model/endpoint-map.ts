@@ -168,10 +168,19 @@ export function endpointMapPath(specDir: string): string {
 /** Preferred marker-field names, in priority order: a writable free-text-ish
  * field is the safest place to stamp a probe marker without violating a
  * constraint. */
-const MARKER_FIELD_PREFERENCES = ['name', 'title', 'label', 'description', 'text', 'content', 'slug'];
+const MARKER_FIELD_PREFERENCES = [
+  'name',
+  'title',
+  'label',
+  'description',
+  'text',
+  'content',
+  'slug',
+];
 
 /** Fields that look like server-owned identity/metadata, never a marker. */
-const NON_MARKER_FIELD_RE = /^(_?id|uuid|guid|.*_id|created_at|updated_at|createdAt|updatedAt|timestamp|_.*|href|url|self|links?)$/i;
+const NON_MARKER_FIELD_RE =
+  /^(_?id|uuid|guid|.*_id|created_at|updated_at|createdAt|updatedAt|timestamp|_.*|href|url|self|links?)$/i;
 
 /** Body field names that commonly carry a freshly-minted entity id. */
 const ID_FIELD_CANDIDATES = ['id', '_id', 'uuid', 'guid'];
@@ -202,7 +211,9 @@ interface TemplateSetSegmentInfo {
 function parseTemplate(template: string): TemplateSetSegmentInfo {
   const raw = template === '/' ? [] : template.replace(/^\//, '').split('/');
   const parts = raw.map((seg) =>
-    seg.startsWith(':') ? ({ kind: 'param', name: seg.slice(1) } as const) : ({ kind: 'literal', value: seg } as const),
+    seg.startsWith(':')
+      ? ({ kind: 'param', name: seg.slice(1) } as const)
+      : ({ kind: 'literal', value: seg } as const),
   );
   const last = parts[parts.length - 1];
   const endsWithParam = last?.kind === 'param';
@@ -225,7 +236,9 @@ export function singularize(word: string): string {
  * singularized. Falls back to the whole path when no literal exists. */
 export function entityFromTemplate(template: string): string {
   const { parts } = parseTemplate(template);
-  const literals = parts.filter((p): p is { kind: 'literal'; value: string } => p.kind === 'literal');
+  const literals = parts.filter(
+    (p): p is { kind: 'literal'; value: string } => p.kind === 'literal',
+  );
   if (literals.length === 0) return template === '/' ? 'root' : 'resource';
   // Walk from the end: the resource is the last literal in the path.
   const resource = literals[literals.length - 1].value;
@@ -254,7 +267,9 @@ function asObject(body: unknown): Record<string, unknown> | null {
 export function pickMarkerField(requestBody: unknown): string | null {
   const obj = asObject(requestBody);
   if (!obj) return null;
-  const stringKeys = Object.keys(obj).filter((k) => typeof obj[k] === 'string' && !NON_MARKER_FIELD_RE.test(k));
+  const stringKeys = Object.keys(obj).filter(
+    (k) => typeof obj[k] === 'string' && !NON_MARKER_FIELD_RE.test(k),
+  );
   if (stringKeys.length === 0) return null;
   for (const pref of MARKER_FIELD_PREFERENCES) {
     const hit = stringKeys.find((k) => k.toLowerCase() === pref);
@@ -297,9 +312,10 @@ export function classifyEndpoint(
   const seg = parseTemplate(template);
   const entity = entityFromTemplate(template);
   const endsWithParam = seg.endsWithParam;
-  const pathId: IdLocation = endsWithParam && seg.lastParamName
-    ? { kind: 'path', param: seg.lastParamName }
-    : { kind: 'none' };
+  const pathId: IdLocation =
+    endsWithParam && seg.lastParamName
+      ? { kind: 'path', param: seg.lastParamName }
+      : { kind: 'none' };
 
   let operation: EndpointOperation;
   let confidence: Confidence;
@@ -420,7 +436,10 @@ export function endpointId(method: string, template: string): string {
  * `draft`. Requests are grouped by (method, inferred URL template); each group
  * is classified by the heuristic above.
  */
-export function deriveEndpointMap(traffic: CapturedTraffic[], opts: DeriveOptions = {}): EndpointMapFile {
+export function deriveEndpointMap(
+  traffic: CapturedTraffic[],
+  opts: DeriveOptions = {},
+): EndpointMapFile {
   const maxSamples = opts.maxSampleUrls ?? 3;
   const templateSet = inferTemplates(
     traffic.map((t) => t.url),
@@ -495,7 +514,10 @@ export function deriveEndpointMap(traffic: CapturedTraffic[], opts: DeriveOption
   return {
     version: 1,
     ...(opts.targetKey ? { target_key: opts.targetKey } : {}),
-    templates: templateSet.list().map((t) => t.template).sort(),
+    templates: templateSet
+      .list()
+      .map((t) => t.template)
+      .sort(),
     endpoints,
   };
 }
@@ -574,7 +596,9 @@ export function mergeEndpointMap(existing: EndpointMapFile, fresh: EndpointMapFi
       });
       preserved.push(key);
     } else {
-      const reason: StaleReason = freshTemplates.has(entry.template) ? 'not-observed' : 'template-drift';
+      const reason: StaleReason = freshTemplates.has(entry.template)
+        ? 'not-observed'
+        : 'template-drift';
       merged.push({ ...entry, stale: reason });
       drifted.push(key);
     }
@@ -598,7 +622,9 @@ export function mergeEndpointMap(existing: EndpointMapFile, fresh: EndpointMapFi
   return {
     file: {
       version: 1,
-      ...(fresh.target_key ?? existing.target_key ? { target_key: fresh.target_key ?? existing.target_key } : {}),
+      ...((fresh.target_key ?? existing.target_key)
+        ? { target_key: fresh.target_key ?? existing.target_key }
+        : {}),
       templates,
       endpoints: merged,
     },
@@ -635,10 +661,19 @@ export function regenerateEndpointMap(
 // ---------------------------------------------------------------------------
 
 export function emptyEndpointMapFile(targetKey?: string): EndpointMapFile {
-  return { version: 1, ...(targetKey ? { target_key: targetKey } : {}), templates: [], endpoints: [] };
+  return {
+    version: 1,
+    ...(targetKey ? { target_key: targetKey } : {}),
+    templates: [],
+    endpoints: [],
+  };
 }
 
-export function findEndpoint(file: EndpointMapFile, method: string, template: string): EndpointEntry | undefined {
+export function findEndpoint(
+  file: EndpointMapFile,
+  method: string,
+  template: string,
+): EndpointEntry | undefined {
   const m = method.toUpperCase();
   return file.endpoints.find((e) => e.method === m && e.template === template);
 }
@@ -649,7 +684,11 @@ export function approvedEndpoints(file: EndpointMapFile): EndpointEntry[] {
 }
 
 /** Set the review status of an endpoint by id. Throws if none matches. */
-export function setEndpointStatus(file: EndpointMapFile, id: string, status: EndpointStatus): EndpointMapFile {
+export function setEndpointStatus(
+  file: EndpointMapFile,
+  id: string,
+  status: EndpointStatus,
+): EndpointMapFile {
   const idx = file.endpoints.findIndex((e) => e.id === id);
   if (idx === -1) throw new Error(`No endpoint with id "${id}"`);
   const endpoints = file.endpoints.slice();
@@ -661,7 +700,14 @@ export function setEndpointStatus(file: EndpointMapFile, id: string, status: End
 // Persistence
 // ---------------------------------------------------------------------------
 
-const VALID_OPERATIONS: EndpointOperation[] = ['create', 'read', 'update', 'delete', 'list', 'other'];
+const VALID_OPERATIONS: EndpointOperation[] = [
+  'create',
+  'read',
+  'update',
+  'delete',
+  'list',
+  'other',
+];
 const VALID_STATUSES: EndpointStatus[] = ['draft', 'approved', 'rejected'];
 const VALID_CONFIDENCE: Confidence[] = ['high', 'medium', 'low'];
 
@@ -678,14 +724,21 @@ export function loadEndpointMap(filePath: string): EndpointMapFile | null {
   try {
     raw = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   } catch (err) {
-    throw new EndpointMapLoadError(`Failed to parse ${filePath} as JSON: ${(err as Error).message}`, filePath, err);
+    throw new EndpointMapLoadError(
+      `Failed to parse ${filePath} as JSON: ${(err as Error).message}`,
+      filePath,
+      err,
+    );
   }
   if (!raw || typeof raw !== 'object') {
     throw new EndpointMapLoadError(`${filePath} must contain a JSON object`, filePath);
   }
   const data = raw as Record<string, unknown>;
   if (data.version !== 1) {
-    throw new EndpointMapLoadError(`${filePath} has unsupported version "${String(data.version)}" (expected 1)`, filePath);
+    throw new EndpointMapLoadError(
+      `${filePath} has unsupported version "${String(data.version)}" (expected 1)`,
+      filePath,
+    );
   }
   if (!Array.isArray(data.endpoints)) {
     throw new EndpointMapLoadError(`${filePath} is missing an "endpoints" array`, filePath);
@@ -716,15 +769,24 @@ function validateEntry(raw: unknown, index: number, filePath: string): EndpointE
 
   const operation = e.operation;
   if (typeof operation !== 'string' || !VALID_OPERATIONS.includes(operation as EndpointOperation)) {
-    throw new EndpointMapLoadError(`Endpoint "${id}" has invalid operation "${String(operation)}"`, filePath);
+    throw new EndpointMapLoadError(
+      `Endpoint "${id}" has invalid operation "${String(operation)}"`,
+      filePath,
+    );
   }
   const status = e.status;
   if (typeof status !== 'string' || !VALID_STATUSES.includes(status as EndpointStatus)) {
-    throw new EndpointMapLoadError(`Endpoint "${id}" has invalid status "${String(status)}"`, filePath);
+    throw new EndpointMapLoadError(
+      `Endpoint "${id}" has invalid status "${String(status)}"`,
+      filePath,
+    );
   }
   const confidence = e.confidence;
   if (typeof confidence !== 'string' || !VALID_CONFIDENCE.includes(confidence as Confidence)) {
-    throw new EndpointMapLoadError(`Endpoint "${id}" has invalid confidence "${String(confidence)}"`, filePath);
+    throw new EndpointMapLoadError(
+      `Endpoint "${id}" has invalid confidence "${String(confidence)}"`,
+      filePath,
+    );
   }
 
   const idLocation = validateIdLocation(e.idLocation, id, filePath);
@@ -741,16 +803,20 @@ function validateEntry(raw: unknown, index: number, filePath: string): EndpointE
     ...(typeof prov.session_id === 'string' ? { session_id: prov.session_id } : {}),
   };
 
-  const markerField = e.markerField === null || e.markerField === undefined
-    ? null
-    : typeof e.markerField === 'string'
-      ? e.markerField
-      : null;
+  const markerField =
+    e.markerField === null || e.markerField === undefined
+      ? null
+      : typeof e.markerField === 'string'
+        ? e.markerField
+        : null;
 
   let stale: StaleReason | undefined;
   if (e.stale !== undefined) {
     if (e.stale !== 'template-drift' && e.stale !== 'not-observed') {
-      throw new EndpointMapLoadError(`Endpoint "${id}" has invalid stale reason "${String(e.stale)}"`, filePath);
+      throw new EndpointMapLoadError(
+        `Endpoint "${id}" has invalid stale reason "${String(e.stale)}"`,
+        filePath,
+      );
     }
     stale = e.stale;
   }
@@ -768,7 +834,9 @@ function validateEntry(raw: unknown, index: number, filePath: string): EndpointE
     status: status as EndpointStatus,
     needs_review: e.needs_review === true,
     observationCount: typeof e.observationCount === 'number' ? e.observationCount : 0,
-    sampleUrls: Array.isArray(e.sampleUrls) ? e.sampleUrls.filter((u): u is string => typeof u === 'string') : [],
+    sampleUrls: Array.isArray(e.sampleUrls)
+      ? e.sampleUrls.filter((u): u is string => typeof u === 'string')
+      : [],
     ...(stale !== undefined ? { stale } : {}),
     provenance,
   };
@@ -787,7 +855,10 @@ function validateIdLocation(raw: unknown, id: string, filePath: string): IdLocat
     case 'none':
       return { kind: 'none' };
     default:
-      throw new EndpointMapLoadError(`Endpoint "${id}" has invalid idLocation.kind "${String(loc.kind)}"`, filePath);
+      throw new EndpointMapLoadError(
+        `Endpoint "${id}" has invalid idLocation.kind "${String(loc.kind)}"`,
+        filePath,
+      );
   }
 }
 

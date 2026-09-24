@@ -134,5 +134,12 @@ export function writeManagedFile(params: WriteManagedFileParams): WriteManagedFi
   const proposedPath = proposedPathFor(targetPath);
   const content = wrapFreshManagedRegion(header, regionId, body);
   fs.writeFileSync(proposedPath, content, 'utf-8');
-  return { applied: false, path: targetPath, created: false, hadMarkers: false, forced: false, proposedPath };
+  return {
+    applied: false,
+    path: targetPath,
+    created: false,
+    hadMarkers: false,
+    forced: false,
+    proposedPath,
+  };
 }

@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react';
 import { approveFormula, fetchFormulas, rejectFormula } from '../api';
 import type { FormulaReviewEntry, FormulaWitness } from '../types';
 
-function WitnessBlock({ title, className, witnesses, vacuous, vacuousLabel }: {
+function WitnessBlock({
+  title,
+  className,
+  witnesses,
+  vacuous,
+  vacuousLabel,
+}: {
   title: string;
   className: string;
   witnesses: FormulaWitness[];
@@ -22,7 +28,9 @@ function WitnessBlock({ title, className, witnesses, vacuous, vacuousLabel }: {
     <div className={`formula-witnesses ${className}`}>
       <h5 className="formula-witnesses-title">{title}</h5>
       {witnesses.map((w, i) => (
-        <pre key={i} className="formula-witness">{w.narrative}</pre>
+        <pre key={i} className="formula-witness">
+          {w.narrative}
+        </pre>
       ))}
     </div>
   );
@@ -47,7 +55,9 @@ export default function FormulaPanel() {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => { void refresh(); }, 15000);
+    const t = setInterval(() => {
+      void refresh();
+    }, 15000);
     return () => clearInterval(t);
   }, []);
 
@@ -92,7 +102,8 @@ export default function FormulaPanel() {
       >
         <span className="formula-review-title">Formula review</span>
         <span className="formula-review-count">
-          {pending.length} pending · {decided.filter((e) => e.status === 'approved').length} approved · {decided.filter((e) => e.status === 'rejected').length} rejected
+          {pending.length} pending · {decided.filter((e) => e.status === 'approved').length}{' '}
+          approved · {decided.filter((e) => e.status === 'rejected').length} rejected
         </span>
         <span className="formula-review-toggle">{expanded ? '−' : '+'}</span>
       </button>
@@ -100,8 +111,9 @@ export default function FormulaPanel() {
         <div className="formula-review-body">
           <p className="formula-review-risk-note">
             Approved formulas gate verify verdicts: an approved formula that is violated can force a
-            behavior to fail. Review the <strong>examples</strong> below, not the formula&apos;s logic —
-            each accepting/rejecting trace shows a plain-English run that this formula would pass or fail.
+            behavior to fail. Review the <strong>examples</strong> below, not the formula&apos;s
+            logic — each accepting/rejecting trace shows a plain-English run that this formula would
+            pass or fail.
           </p>
           {error && <div className="formula-review-error">{error}</div>}
           {entries.map((entry) => (
@@ -119,7 +131,10 @@ export default function FormulaPanel() {
                   {entry.status}
                 </span>
                 {entry.witnesses.vacuousRejecting && (
-                  <span className="formula-vacuity-badge" title="This formula can never fail — likely vacuous">
+                  <span
+                    className="formula-vacuity-badge"
+                    title="This formula can never fail — likely vacuous"
+                  >
                     vacuous
                   </span>
                 )}

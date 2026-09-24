@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { approveSkillDraft, fetchActiveSkills, fetchSkillDrafts, rejectSkillDraft, type SkillDraft } from '../api';
+import {
+  approveSkillDraft,
+  fetchActiveSkills,
+  fetchSkillDrafts,
+  rejectSkillDraft,
+  type SkillDraft,
+} from '../api';
 
 interface ActiveSkill {
   name: string;
@@ -28,7 +34,9 @@ export default function SkillDraftsPanel() {
 
   useEffect(() => {
     void refresh();
-    const t = setInterval(() => { void refresh(); }, 15000);
+    const t = setInterval(() => {
+      void refresh();
+    }, 15000);
     return () => clearInterval(t);
   }, []);
 
@@ -91,7 +99,9 @@ export default function SkillDraftsPanel() {
                       {openId === d.id ? '▼' : '▶'}
                     </button>
                     <span className="skill-draft-name">{d.skill.name}</span>
-                    <span className="skill-draft-meta">{d.pattern.sessionCount}× sessions, {d.pattern.occurrences}× occurrences</span>
+                    <span className="skill-draft-meta">
+                      {d.pattern.sessionCount}× sessions, {d.pattern.occurrences}× occurrences
+                    </span>
                     <button
                       type="button"
                       className="skill-draft-approve"

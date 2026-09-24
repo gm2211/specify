@@ -16,10 +16,7 @@ export interface DaemonCliOptions {
   maxWorkers?: string;
 }
 
-export async function daemonCommand(
-  opts: DaemonCliOptions,
-  _ctx: CliContext,
-): Promise<number> {
+export async function daemonCommand(opts: DaemonCliOptions, _ctx: CliContext): Promise<number> {
   const port = opts.port ? parseInt(opts.port, 10) : 4100;
   if (!Number.isFinite(port) || port <= 0) {
     process.stdout.write(JSON.stringify({ error: 'invalid_port', port: opts.port }) + '\n');
@@ -27,7 +24,9 @@ export async function daemonCommand(
   }
   const maxWorkers = opts.maxWorkers ? parseInt(opts.maxWorkers, 10) : 2;
   if (!Number.isFinite(maxWorkers) || maxWorkers <= 0) {
-    process.stdout.write(JSON.stringify({ error: 'invalid_max_workers', value: opts.maxWorkers }) + '\n');
+    process.stdout.write(
+      JSON.stringify({ error: 'invalid_max_workers', value: opts.maxWorkers }) + '\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
   await startDaemonServer({

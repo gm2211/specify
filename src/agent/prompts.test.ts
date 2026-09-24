@@ -99,10 +99,14 @@ test('getVerifyPrompt: no exploration hints leaves the prompt unchanged', () => 
 
 test('getVerifyPrompt: exploration hints coexist with an active fault plan', () => {
   const hints = '## Coverage-directed exploration hints\n\n- [never visited] state `/settings`';
-  const prompt = getVerifyPrompt('version: "2"\nname: test', {
-    seed: 1,
-    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
-  }, hints);
+  const prompt = getVerifyPrompt(
+    'version: "2"\nname: test',
+    {
+      seed: 1,
+      rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+    },
+    hints,
+  );
   assert.ok(prompt.includes('Fault injection is active'));
   assert.ok(prompt.includes('Coverage-directed exploration hints'));
 });
@@ -118,4 +122,3 @@ test('getCapturePrompt tells the agent to split oversized specs', () => {
   assert.ok(prompt.includes('directory spec'));
   assert.ok(prompt.includes('40 KiB'));
 });
-

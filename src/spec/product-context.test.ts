@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildProductContext, buildDesignContext, renderProductMarkdown, renderDesignMarkdown } from './product-context.js';
+import {
+  buildProductContext,
+  buildDesignContext,
+  renderProductMarkdown,
+  renderDesignMarkdown,
+} from './product-context.js';
 import type { Spec } from './types.js';
 
 function fixtureSpec(): Spec {
@@ -16,8 +21,15 @@ function fixtureSpec(): Spec {
         name: 'Capture',
         prose: 'Capture drives a live browser to record behavior.',
         behaviors: [
-          { id: 'capture-agent-generates-spec', description: 'The capture agent generates a spec from observed behavior.' },
-          { id: 'capture-writes-output', description: 'Capture writes output to the requested directory.', tags: ['io'] },
+          {
+            id: 'capture-agent-generates-spec',
+            description: 'The capture agent generates a spec from observed behavior.',
+          },
+          {
+            id: 'capture-writes-output',
+            description: 'Capture writes output to the requested directory.',
+            tags: ['io'],
+          },
         ],
       },
       {
@@ -25,7 +37,11 @@ function fixtureSpec(): Spec {
         name: 'User Interface',
         prose: 'The interface favors a light, minimal aesthetic.',
         behaviors: [
-          { id: 'primary-button-style', description: 'The primary action uses the brand accent color.', tags: ['design', 'ui'] },
+          {
+            id: 'primary-button-style',
+            description: 'The primary action uses the brand accent color.',
+            tags: ['design', 'ui'],
+          },
           { id: 'unrelated-behavior', description: 'Something with no design tag.' },
         ],
       },
@@ -48,7 +64,9 @@ test('buildProductContext includes every area and behavior, verbatim, with fully
   assert.equal(capture.proseClaim?.anchor, 'capture');
   assert.equal(capture.proseClaim?.text, 'Capture drives a live browser to record behavior.');
   assert.equal(capture.behaviorClaims.length, 2);
-  const genSpec = capture.behaviorClaims.find((c) => c.anchor === 'capture/capture-agent-generates-spec');
+  const genSpec = capture.behaviorClaims.find(
+    (c) => c.anchor === 'capture/capture-agent-generates-spec',
+  );
   assert.ok(genSpec);
   assert.equal(genSpec!.text, 'The capture agent generates a spec from observed behavior.');
 
@@ -85,7 +103,9 @@ test('buildDesignContext omits the tokens field entirely when extraction found n
 
 test('buildDesignContext keeps spec-derived constraints and code-derived tokens as separate, labeled fields', () => {
   const extraction = {
-    tokens: [{ name: 'color.primary', value: '#0af', category: 'color' as const, source: 'tokens.json' }],
+    tokens: [
+      { name: 'color.primary', value: '#0af', category: 'color' as const, source: 'tokens.json' },
+    ],
     sources: ['tokens.json'],
   };
   const ctx = buildDesignContext(fixtureSpec(), extraction);
@@ -111,7 +131,14 @@ test('renderDesignMarkdown labels product-constraints and visual-tokens sections
 
 test('renderDesignMarkdown includes anchored constraints and categorized tokens when present', () => {
   const extraction = {
-    tokens: [{ name: 'color.primary', value: '#0af', category: 'color' as const, source: 'design-tokens.json' }],
+    tokens: [
+      {
+        name: 'color.primary',
+        value: '#0af',
+        category: 'color' as const,
+        source: 'design-tokens.json',
+      },
+    ],
     sources: ['design-tokens.json'],
   };
   const md = renderDesignMarkdown(buildDesignContext(fixtureSpec(), extraction), 'spec.yaml');

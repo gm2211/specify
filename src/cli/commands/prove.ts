@@ -20,7 +20,11 @@ import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { c } from '../colors.js';
 import { loadSpec } from '../../spec/parser.js';
-import { loadProofInput, readGeneratorVersion, DEFAULT_SCREENSHOT_BYTE_CAP } from '../../report/proof-loader.js';
+import {
+  loadProofInput,
+  readGeneratorVersion,
+  DEFAULT_SCREENSHOT_BYTE_CAP,
+} from '../../report/proof-loader.js';
 import { renderProofHtml } from '../../report/proof-html.js';
 
 export interface ProveOptions {
@@ -37,7 +41,10 @@ export function parseScreenshotCap(raw: string | undefined): number {
   return n;
 }
 
-export function resolveProvePaths(input: string | undefined, output: string | undefined): { inputDir: string; outputPath: string } {
+export function resolveProvePaths(
+  input: string | undefined,
+  output: string | undefined,
+): { inputDir: string; outputPath: string } {
   const inputDir = path.resolve(input ?? '.specify/verify');
   const outputPath = output ? path.resolve(output) : path.join(inputDir, 'proof.html');
   return { inputDir, outputPath };
@@ -60,12 +67,20 @@ export async function prove(options: ProveOptions, ctx: CliContext): Promise<num
   // directory is diagnosed before a missing --spec, since the input
   // directory is almost always the more actionable problem.
   if (options.input === '') {
-    emitError({ error: 'invalid_parameter', parameter: '--input', hint: '--input requires a path' });
+    emitError({
+      error: 'invalid_parameter',
+      parameter: '--input',
+      hint: '--input requires a path',
+    });
     if (!ctx.quiet) process.stderr.write('Error: --input requires a path\n');
     return ExitCode.PARSE_ERROR;
   }
   if (options.output === '') {
-    emitError({ error: 'invalid_parameter', parameter: '--output', hint: '--output requires a path' });
+    emitError({
+      error: 'invalid_parameter',
+      parameter: '--output',
+      hint: '--output requires a path',
+    });
     if (!ctx.quiet) process.stderr.write('Error: --output requires a path\n');
     return ExitCode.PARSE_ERROR;
   }
@@ -95,7 +110,11 @@ export async function prove(options: ProveOptions, ctx: CliContext): Promise<num
   }
 
   if (!options.spec) {
-    emitError({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file or run from a directory containing one' });
+    emitError({
+      error: 'missing_parameter',
+      parameter: '--spec',
+      hint: 'Provide a spec file or run from a directory containing one',
+    });
     if (!ctx.quiet) process.stderr.write('Error: --spec is required\n');
     return ExitCode.PARSE_ERROR;
   }
@@ -163,12 +182,18 @@ export async function prove(options: ProveOptions, ctx: CliContext): Promise<num
 
   if (!ctx.quiet) {
     process.stderr.write(`${c.boldGreen('✓ Proof written:')} ${outputPath}\n`);
-    process.stderr.write(`  ${total} behaviors · ${passed} passed, ${failed} failed, ${skipped} skipped\n`);
-    process.stderr.write(`  Evidence: ${runnerRecordedEvidence} runner-recorded, ${agentReportedEvidence} agent-reported\n`);
+    process.stderr.write(
+      `  ${total} behaviors · ${passed} passed, ${failed} failed, ${skipped} skipped\n`,
+    );
+    process.stderr.write(
+      `  Evidence: ${runnerRecordedEvidence} runner-recorded, ${agentReportedEvidence} agent-reported\n`,
+    );
     process.stderr.write(
       `  Screenshots: ${proofInput.integrity.screenshotsEmbedded} embedded, ${proofInput.integrity.screenshotsLinked} linked (${formatMiB(proofInput.integrity.screenshotEncodedBytes)} inlined)\n`,
     );
-    process.stderr.write(`  ${c.yellow('⚠ proof.html embeds recorded stdout/stderr and screenshots verbatim — review before sharing.')}\n`);
+    process.stderr.write(
+      `  ${c.yellow('⚠ proof.html embeds recorded stdout/stderr and screenshots verbatim — review before sharing.')}\n`,
+    );
     process.stderr.write(`  $ open ${outputPath}\n`);
   }
 

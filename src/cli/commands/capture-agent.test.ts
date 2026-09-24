@@ -44,7 +44,11 @@ function mockPage(overrides: Record<string, (...args: any[]) => any> = {}) {
 
 test('executeCommand proxies click to page.click', async () => {
   const clicks: string[] = [];
-  const page = mockPage({ click: async (s: string) => { clicks.push(s); } });
+  const page = mockPage({
+    click: async (s: string) => {
+      clicks.push(s);
+    },
+  });
 
   const cmd: AgentCommand = { action: 'click', selector: 'button#submit' };
   const result = await executeCommand(page, cmd);
@@ -56,7 +60,11 @@ test('executeCommand proxies click to page.click', async () => {
 
 test('executeCommand proxies fill to page.fill', async () => {
   const fills: Array<{ s: string; v: string }> = [];
-  const page = mockPage({ fill: async (s: string, v: string) => { fills.push({ s, v }); } });
+  const page = mockPage({
+    fill: async (s: string, v: string) => {
+      fills.push({ s, v });
+    },
+  });
 
   const cmd: AgentCommand = { action: 'fill', selector: 'input#email', value: 'a@b.com' };
   const result = await executeCommand(page, cmd);
@@ -70,9 +78,14 @@ test('executeCommand proxies goto and auto-screenshots on navigation', async () 
   const screenshots: string[] = [];
   const page = mockPage({
     url: () => currentUrl,
-    goto: async (url: string) => { currentUrl = url; },
+    goto: async (url: string) => {
+      currentUrl = url;
+    },
   });
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
   const cmd: AgentCommand = { action: 'goto', url: 'https://example.com/dashboard' };
   const result = await executeCommand(page, cmd, screenshotFn);
@@ -87,7 +100,10 @@ test('executeCommand proxies goto and auto-screenshots on navigation', async () 
 test('executeCommand auto-screenshots every mutating action (evidence capture)', async () => {
   const screenshots: string[] = [];
   const page = mockPage();
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
   const cmd: AgentCommand = { action: 'click', selector: '#btn' };
   await executeCommand(page, cmd, screenshotFn);
@@ -135,7 +151,11 @@ test('executeCommand proxies title', async () => {
 });
 
 test('executeCommand returns error on failure without throwing', async () => {
-  const page = mockPage({ click: async () => { throw new Error('Element not found'); } });
+  const page = mockPage({
+    click: async () => {
+      throw new Error('Element not found');
+    },
+  });
 
   const result = await executeCommand(page, { action: 'click', selector: '#nope' });
 
@@ -146,9 +166,16 @@ test('executeCommand returns error on failure without throwing', async () => {
 test('executeCommand proxies explicit screenshot via screenshotFn', async () => {
   const screenshots: string[] = [];
   const page = mockPage();
-  const screenshotFn = async (name: string) => { screenshots.push(name); return `/tmp/${name}.png`; };
+  const screenshotFn = async (name: string) => {
+    screenshots.push(name);
+    return `/tmp/${name}.png`;
+  };
 
-  const result = await executeCommand(page, { action: 'screenshot', name: 'after-login' }, screenshotFn);
+  const result = await executeCommand(
+    page,
+    { action: 'screenshot', name: 'after-login' },
+    screenshotFn,
+  );
 
   assert.equal(result.success, true);
   assert.deepEqual(screenshots, ['after-login']);
@@ -156,11 +183,18 @@ test('executeCommand proxies explicit screenshot via screenshotFn', async () => 
 });
 
 function mockRecorder() {
-  const calls: { begin: Array<{ action: string; args?: Record<string, unknown> }>; end: Array<{ success: boolean; error?: string; screenshot?: string }> } = { begin: [], end: [] };
+  const calls: {
+    begin: Array<{ action: string; args?: Record<string, unknown> }>;
+    end: Array<{ success: boolean; error?: string; screenshot?: string }>;
+  } = { begin: [], end: [] };
   return {
     calls,
-    beginStep: async (action: string, args?: Record<string, unknown>) => { calls.begin.push({ action, args }); },
-    endStep: async (result: { success: boolean; error?: string; screenshot?: string }) => { calls.end.push(result); },
+    beginStep: async (action: string, args?: Record<string, unknown>) => {
+      calls.begin.push({ action, args });
+    },
+    endStep: async (result: { success: boolean; error?: string; screenshot?: string }) => {
+      calls.end.push(result);
+    },
   } as any;
 }
 
@@ -168,7 +202,12 @@ test('executeCommand records a step via the recorder on success', async () => {
   const page = mockPage();
   const recorder = mockRecorder();
 
-  const result = await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder);
+  const result = await executeCommand(
+    page,
+    { action: 'click', selector: '#submit' },
+    undefined,
+    recorder,
+  );
 
   assert.equal(result.success, true);
   assert.equal(recorder.calls.begin.length, 1);
@@ -178,10 +217,19 @@ test('executeCommand records a step via the recorder on success', async () => {
 });
 
 test('executeCommand records a step via the recorder on failure, never a fill value', async () => {
-  const page = mockPage({ fill: async () => { throw new Error('boom'); } });
+  const page = mockPage({
+    fill: async () => {
+      throw new Error('boom');
+    },
+  });
   const recorder = mockRecorder();
 
-  const result = await executeCommand(page, { action: 'fill', selector: '#password', value: 'super-secret' }, undefined, recorder);
+  const result = await executeCommand(
+    page,
+    { action: 'fill', selector: '#password', value: 'super-secret' },
+    undefined,
+    recorder,
+  );
 
   assert.equal(result.success, false);
   assert.equal(recorder.calls.begin.length, 1);
@@ -207,17 +255,28 @@ test('executeCommand does not invoke the recorder for the done action', async ()
 // ---------------------------------------------------------------------------
 
 function mockRecorderWithEnd() {
-  const ends: Array<{ success: boolean; error?: string; screenshot?: string; probes?: Record<string, boolean>; probesTruncated?: boolean }> = [];
+  const ends: Array<{
+    success: boolean;
+    error?: string;
+    screenshot?: string;
+    probes?: Record<string, boolean>;
+    probesTruncated?: boolean;
+  }> = [];
   return {
     ends,
     beginStep: async () => {},
-    endStep: async (result: any) => { ends.push(result); },
+    endStep: async (result: any) => {
+      ends.push(result);
+    },
   } as any;
 }
 
 /** Builds a page whose `locator(selector)` returns a stubbed locator for a fixed selector -> behavior map. */
 function mockPageWithLocators(
-  behaviors: Record<string, { count?: number; visible?: boolean; text?: string | null; delayMs?: number; throws?: boolean }>,
+  behaviors: Record<
+    string,
+    { count?: number; visible?: boolean; text?: string | null; delayMs?: number; throws?: boolean }
+  >,
 ) {
   return mockPage({
     locator: (selector: string) => {
@@ -246,12 +305,30 @@ test('executeCommand samples dom.exists/dom.visible/dom.text/dom.count probes an
   const recorder = mockRecorderWithEnd();
   const probePlan: ProbePlan = [
     { key: canonicalProbeKey('dom.exists', ['#toast']), predicate: 'dom.exists', args: ['#toast'] },
-    { key: canonicalProbeKey('dom.visible', ['#toast']), predicate: 'dom.visible', args: ['#toast'] },
-    { key: canonicalProbeKey('dom.text', ['#toast', 'placed']), predicate: 'dom.text', args: ['#toast', 'placed'] },
-    { key: canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2']), predicate: 'dom.count', args: ['.cart-item', 'gte', '2'] },
+    {
+      key: canonicalProbeKey('dom.visible', ['#toast']),
+      predicate: 'dom.visible',
+      args: ['#toast'],
+    },
+    {
+      key: canonicalProbeKey('dom.text', ['#toast', 'placed']),
+      predicate: 'dom.text',
+      args: ['#toast', 'placed'],
+    },
+    {
+      key: canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2']),
+      predicate: 'dom.count',
+      args: ['.cart-item', 'gte', '2'],
+    },
   ];
 
-  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+  await executeCommand(
+    page,
+    { action: 'click', selector: '#submit' },
+    undefined,
+    recorder,
+    probePlan,
+  );
 
   assert.equal(recorder.ends.length, 1);
   const probes = recorder.ends[0].probes;
@@ -267,10 +344,20 @@ test('executeCommand omits a probe key on error instead of recording false', asy
   const page = mockPageWithLocators({ '#missing': { throws: true } });
   const recorder = mockRecorderWithEnd();
   const probePlan: ProbePlan = [
-    { key: canonicalProbeKey('dom.exists', ['#missing']), predicate: 'dom.exists', args: ['#missing'] },
+    {
+      key: canonicalProbeKey('dom.exists', ['#missing']),
+      predicate: 'dom.exists',
+      args: ['#missing'],
+    },
   ];
 
-  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+  await executeCommand(
+    page,
+    { action: 'click', selector: '#submit' },
+    undefined,
+    recorder,
+    probePlan,
+  );
 
   const probes = recorder.ends[0].probes;
   assert.deepEqual(probes, {});
@@ -283,7 +370,13 @@ test('executeCommand omits a probe key on timeout instead of recording false', a
     { key: canonicalProbeKey('dom.exists', ['#slow']), predicate: 'dom.exists', args: ['#slow'] },
   ];
 
-  await executeCommand(page, { action: 'click', selector: '#submit' }, undefined, recorder, probePlan);
+  await executeCommand(
+    page,
+    { action: 'click', selector: '#submit' },
+    undefined,
+    recorder,
+    probePlan,
+  );
 
   const probes = recorder.ends[0].probes;
   assert.deepEqual(probes, {});
@@ -310,13 +403,21 @@ test('executeCommand does not sample probes when probePlan is empty', async () =
 
 test('executeCommand samples probes on the failure path too', async () => {
   const page = mockPageWithLocators({ '#toast': { count: 1 } });
-  page.click = async () => { throw new Error('boom'); };
+  page.click = async () => {
+    throw new Error('boom');
+  };
   const recorder = mockRecorderWithEnd();
   const probePlan: ProbePlan = [
     { key: canonicalProbeKey('dom.exists', ['#toast']), predicate: 'dom.exists', args: ['#toast'] },
   ];
 
-  const result = await executeCommand(page, { action: 'click', selector: '#nope' }, undefined, recorder, probePlan);
+  const result = await executeCommand(
+    page,
+    { action: 'click', selector: '#nope' },
+    undefined,
+    recorder,
+    probePlan,
+  );
 
   assert.equal(result.success, false);
   assert.equal(recorder.ends[0].success, false);
@@ -368,9 +469,24 @@ test('SP-efp end-to-end: formulas file -> probe plan -> live sampling -> recorde
     //    path), a numeric-arg predicate (dom.count), and a draft entry
     //    (dom.exists) to prove drafts are sampled for shadow mode.
     let file = emptyFormulasFile();
-    file = e2eAddFormula(file, 'ui/toast-appears', eventually(pred('dom.visible', ['#toast'])), 'approved');
-    file = e2eAddFormula(file, 'ui/cart-filled', globally(pred('dom.count', ['.cart-item', 'gte', '2'])), 'approved');
-    file = e2eAddFormula(file, 'ui/banner-shown', eventually(pred('dom.exists', ['#banner'])), 'draft');
+    file = e2eAddFormula(
+      file,
+      'ui/toast-appears',
+      eventually(pred('dom.visible', ['#toast'])),
+      'approved',
+    );
+    file = e2eAddFormula(
+      file,
+      'ui/cart-filled',
+      globally(pred('dom.count', ['.cart-item', 'gte', '2'])),
+      'approved',
+    );
+    file = e2eAddFormula(
+      file,
+      'ui/banner-shown',
+      eventually(pred('dom.exists', ['#banner'])),
+      'draft',
+    );
     const formulasPath = path.join(dir, 'specify.formulas.yaml');
     saveFormulas(formulasPath, file);
     const loaded = loadFormulas(formulasPath);
@@ -401,14 +517,29 @@ test('SP-efp end-to-end: formulas file -> probe plan -> live sampling -> recorde
       collector: { getTraffic: () => [], getConsoleLogs: () => [] },
     });
 
-    await executeCommand(page, { action: 'goto', url: 'https://x.test/' }, undefined, recorder, plan);
-    await executeCommand(page, { action: 'click', selector: '#add-to-cart' }, undefined, recorder, plan);
+    await executeCommand(
+      page,
+      { action: 'goto', url: 'https://x.test/' },
+      undefined,
+      recorder,
+      plan,
+    );
+    await executeCommand(
+      page,
+      { action: 'click', selector: '#add-to-cart' },
+      undefined,
+      recorder,
+      plan,
+    );
 
     const steps = recorder.getSteps();
     assert.equal(steps.length, 2);
     // Sanity: probes actually landed on the recorded steps under plan keys.
     assert.equal(steps[0].probes?.[canonicalProbeKey('dom.visible', ['#toast'])], true);
-    assert.equal(steps[0].probes?.[canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2'])], false);
+    assert.equal(
+      steps[0].probes?.[canonicalProbeKey('dom.count', ['.cart-item', 'gte', '2'])],
+      false,
+    );
 
     // 4. Lookup side: trace + merge, verdicts re-derive the keys from the
     //    formula ASTs independently of the plan.
@@ -424,7 +555,10 @@ test('SP-efp end-to-end: formulas file -> probe plan -> live sampling -> recorde
     };
     const merged = mergeMonitorVerdicts(output, loaded!, trace);
     const results = (merged.output as typeof output).results as Array<
-      (typeof output)['results'][number] & { verdict_source?: string; monitor?: Array<{ verdict: string; status: string }> }
+      (typeof output)['results'][number] & {
+        verdict_source?: string;
+        monitor?: Array<{ verdict: string; status: string }>;
+      }
     >;
     const byId = new Map(results.map((r) => [r.id, r]));
 

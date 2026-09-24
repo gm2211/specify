@@ -5,11 +5,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import { loadSpec, specToYaml } from './parser.js';
-import {
-  assessSpecSize,
-  defaultSplitOutputPath,
-  splitSpecFileToDirectory,
-} from './size-guard.js';
+import { assessSpecSize, defaultSplitOutputPath, splitSpecFileToDirectory } from './size-guard.js';
 import type { Spec } from './types.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
@@ -24,7 +20,11 @@ function sampleSpec(): Spec {
     target: { type: 'web', url: 'http://localhost:3000' },
     areas: [
       { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: 'User can log in' }] },
-      { id: 'billing', name: 'Billing', behaviors: [{ id: 'pay', description: 'User can pay an invoice' }] },
+      {
+        id: 'billing',
+        name: 'Billing',
+        behaviors: [{ id: 'pay', description: 'User can pay an invoice' }],
+      },
     ],
   };
 }
@@ -93,7 +93,10 @@ test('splitSpecFileToDirectory writes a composable manifest and area files', () 
 
     assert.equal(result.outputDir, outputDir);
     assert.equal(result.manifestPath, path.join(outputDir, 'spec.yaml'));
-    assert.deepEqual(result.areaPaths.map((areaPath) => path.basename(areaPath)), ['auth.yaml', 'billing.yaml']);
+    assert.deepEqual(
+      result.areaPaths.map((areaPath) => path.basename(areaPath)),
+      ['auth.yaml', 'billing.yaml'],
+    );
     assert.deepEqual(loadSpec(outputDir), sampleSpec());
   } finally {
     cleanup();
@@ -109,18 +112,12 @@ test('splitSpecFileToDirectory refuses a non-empty output directory by default',
     fs.mkdirSync(outputDir);
     fs.writeFileSync(path.join(outputDir, 'keep.txt'), 'do not overwrite');
 
-    assert.throws(
-      () => splitSpecFileToDirectory(specPath, { outputDir }),
-      /not empty/,
-    );
+    assert.throws(() => splitSpecFileToDirectory(specPath, { outputDir }), /not empty/);
   } finally {
     cleanup();
   }
 });
 
 test('defaultSplitOutputPath uses the extensionless spec path', () => {
-  assert.equal(
-    defaultSplitOutputPath('/tmp/argos.spec.yaml'),
-    '/tmp/argos.spec',
-  );
+  assert.equal(defaultSplitOutputPath('/tmp/argos.spec.yaml'), '/tmp/argos.spec');
 });

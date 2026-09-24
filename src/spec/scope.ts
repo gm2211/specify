@@ -33,7 +33,10 @@ export function scopedSpec(spec: Spec, ids: readonly string[]): Spec {
  * not in `base` are appended. Order follows `base` first, then any new ids
  * from `overrides` in their original order.
  */
-export function mergeResultsById(base: BehaviorResult[], overrides: BehaviorResult[]): BehaviorResult[] {
+export function mergeResultsById(
+  base: BehaviorResult[],
+  overrides: BehaviorResult[],
+): BehaviorResult[] {
   const byId = new Map<string, BehaviorResult>(base.map((r) => [r.id, r]));
   for (const r of overrides) byId.set(r.id, r);
   return [...byId.values()];

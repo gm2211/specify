@@ -174,7 +174,10 @@ export function decodeItfValue(raw: unknown, onError: (msg: string) => void, dep
         onError('#map entry is not a [key, value] pair');
         continue;
       }
-      decoded.push([decodeItfValue(pair[0], onError, depth + 1), decodeItfValue(pair[1], onError, depth + 1)]);
+      decoded.push([
+        decodeItfValue(pair[0], onError, depth + 1),
+        decodeItfValue(pair[1], onError, depth + 1),
+      ]);
     }
     return { map: decoded };
   }
@@ -238,7 +241,11 @@ export function parseItfTrace(raw: unknown): ParseItfResult {
     const decoded = decodeItfValue(rawState, (m) => onError(`state ${i}: ${m}`));
     // A record decodes to a plain object; guard the (impossible) non-object case.
     states.push(
-      decoded && typeof decoded === 'object' && !Array.isArray(decoded) && !('map' in decoded) && !('unserializable' in decoded)
+      decoded &&
+        typeof decoded === 'object' &&
+        !Array.isArray(decoded) &&
+        !('map' in decoded) &&
+        !('unserializable' in decoded)
         ? (decoded as ItfState)
         : {},
     );

@@ -5,7 +5,11 @@ import { deployCommand, _internals } from './deploy.js';
 
 class Sink extends Writable {
   buf = '';
-  override _write(chunk: Buffer | string, _enc: BufferEncoding, cb: (err?: Error | null) => void): void {
+  override _write(
+    chunk: Buffer | string,
+    _enc: BufferEncoding,
+    cb: (err?: Error | null) => void,
+  ): void {
     this.buf += chunk.toString();
     cb();
   }
@@ -13,7 +17,12 @@ class Sink extends Writable {
 
 test('describe: emits valid JSON manifest with required fields', async () => {
   const out = new Sink();
-  const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: '1.2.3', out });
+  const code = await deployCommand({
+    verb: 'describe',
+    format: 'json',
+    versionOverride: '1.2.3',
+    out,
+  });
   assert.equal(code, 0);
   const m = JSON.parse(out.buf);
   assert.equal(m.version, '1.2.3');
@@ -42,7 +51,9 @@ test('describe: agent_tools document file_ticket with feedback env vars', async 
   const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
   assert.equal(code, 0);
   const m = JSON.parse(out.buf);
-  const ticket = m.agent_tools.find((t: { name: string }) => t.name === 'mcp__feedback__file_ticket');
+  const ticket = m.agent_tools.find(
+    (t: { name: string }) => t.name === 'mcp__feedback__file_ticket',
+  );
   assert.ok(ticket, 'agent_tools should include file_ticket');
   assert.deepEqual(ticket.enabled_for_tasks, ['verify']);
   const envs = ticket.configuration.map((c: { env: string }) => c.env);
@@ -76,7 +87,12 @@ test('describe: trigger_models cover watch/webhook/both/none/cron with cron flag
 
 test('describe: text format renders human summary', async () => {
   const out = new Sink();
-  const code = await deployCommand({ verb: 'describe', format: 'text', versionOverride: '0.9.0', out });
+  const code = await deployCommand({
+    verb: 'describe',
+    format: 'text',
+    versionOverride: '0.9.0',
+    out,
+  });
   assert.equal(code, 0);
   assert.match(out.buf, /specify-qa v0\.9\.0/);
   assert.match(out.buf, /Required inputs/);
@@ -141,7 +157,9 @@ test('describe: agent_tools includes file_decision for verify + capture with all
   const code = await deployCommand({ verb: 'describe', format: 'json', versionOverride: 't', out });
   assert.equal(code, 0);
   const m = JSON.parse(out.buf);
-  const decision = m.agent_tools.find((t: { name: string }) => t.name === 'mcp__decisions__file_decision');
+  const decision = m.agent_tools.find(
+    (t: { name: string }) => t.name === 'mcp__decisions__file_decision',
+  );
   assert.ok(decision, 'agent_tools should include mcp__decisions__file_decision');
   assert.ok(decision.enabled_for_tasks.includes('verify'), 'should be enabled for verify');
   assert.ok(decision.enabled_for_tasks.includes('capture'), 'should be enabled for capture');
@@ -156,7 +174,11 @@ test('describe: agent_tools include budget_default and budget_env_override', asy
   assert.equal(code, 0);
   const m = JSON.parse(out.buf);
 
-  interface ToolEntry { name: string; budget_default: number; budget_env_override: string }
+  interface ToolEntry {
+    name: string;
+    budget_default: number;
+    budget_env_override: string;
+  }
   for (const t of m.agent_tools as ToolEntry[]) {
     assert.ok('budget_default' in t, `${t.name} missing budget_default`);
     assert.ok('budget_env_override' in t, `${t.name} missing budget_env_override`);

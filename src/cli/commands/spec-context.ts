@@ -52,7 +52,9 @@ export async function specContext(options: SpecContextOptions, ctx: CliContext):
   try {
     loaded = loadSpecWithProvenance(specPath);
   } catch (err) {
-    process.stderr.write(`Failed to load spec: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `Failed to load spec: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     return ExitCode.PARSE_ERROR;
   }
 
@@ -92,15 +94,21 @@ export async function specContext(options: SpecContextOptions, ctx: CliContext):
   });
 
   if (ctx.outputFormat === 'json' || ctx.outputFormat === 'ndjson') {
-    process.stdout.write(JSON.stringify({
-      spec: { name: spec.name, version: spec.version, source: specSourceLabel },
-      product: productContext,
-      design: designContext,
-      files: {
-        product: productResult,
-        design: designResult,
-      },
-    }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify(
+        {
+          spec: { name: spec.name, version: spec.version, source: specSourceLabel },
+          product: productContext,
+          design: designContext,
+          files: {
+            product: productResult,
+            design: designResult,
+          },
+        },
+        null,
+        2,
+      ) + '\n',
+    );
   }
 
   if (!ctx.quiet) {
@@ -117,11 +125,19 @@ export async function specContext(options: SpecContextOptions, ctx: CliContext):
 
 function reportFile(label: string, result: WriteManagedFileResult): void {
   if (result.applied) {
-    const verb = result.created ? 'created' : result.forced ? 'overwritten (--force)' : 'updated (managed region)';
+    const verb = result.created
+      ? 'created'
+      : result.forced
+        ? 'overwritten (--force)'
+        : 'updated (managed region)';
     process.stderr.write(`${c.boldGreen('✓')} ${label} ${verb}: ${result.path}\n`);
   } else {
-    process.stderr.write(`${c.yellow('⚠')} ${label} has unmanaged content (no specify:begin/end markers found) — refusing to overwrite in place.\n`);
+    process.stderr.write(
+      `${c.yellow('⚠')} ${label} has unmanaged content (no specify:begin/end markers found) — refusing to overwrite in place.\n`,
+    );
     process.stderr.write(`  ${c.dim('Proposal written to:')} ${result.proposedPath}\n`);
-    process.stderr.write(`  ${c.dim('Review the diff and merge by hand, add the markers yourself, or re-run with --force to overwrite.')}\n`);
+    process.stderr.write(
+      `  ${c.dim('Review the diff and merge by hand, add the markers yourself, or re-run with --force to overwrite.')}\n`,
+    );
   }
 }

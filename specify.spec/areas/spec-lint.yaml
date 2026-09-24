@@ -1,8 +1,8 @@
 id: spec-lint
 name: Spec Linting
 prose: >
-  Validates spec file structure without requiring captures. Schema validation plus semantic checks (duplicate IDs, empty
-  descriptions, oversized single files).
+  Validates spec file structure without requiring captures. Schema validation plus semantic checks
+  (duplicate IDs, empty descriptions, oversized single files).
 behaviors:
   - id: lint-valid-spec-exits-zero
     description: |
@@ -18,9 +18,10 @@ behaviors:
       --spec - reads spec YAML from stdin
   - id: lint-warns-oversized-single-file
     description: >
-      Linting a single-file spec that exceeds 40KiB, 800 lines, 12 areas, or 120 behaviors adds a non-fatal
-      "oversized-single-file-spec" warning suggesting `spec split`; the spec still reports valid if otherwise correct
+      Linting a single-file spec that exceeds 40KiB, 800 lines, 12 areas, or 120 behaviors adds a
+      non-fatal "oversized-single-file-spec" warning suggesting `spec split`; the spec still reports
+      valid if otherwise correct
   - id: lint-directory-spec-no-size-warning
     description: >
-      A directory spec (manifest + area files) never triggers the oversized-single-file-spec warning, regardless of its
-      total size
+      A directory spec (manifest + area files) never triggers the oversized-single-file-spec
+      warning, regardless of its total size

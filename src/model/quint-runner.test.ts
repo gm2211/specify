@@ -56,7 +56,14 @@ test('runQuintSimulation: parses the ITF the fake binary wrote', async () => {
 
 test('runQuintSimulation: builds a `quint run` argv with the tuning flags', async () => {
   const sink = { argv: [] as string[] };
-  await runQuintSimulation({ specPath: '/tmp/auth.qnt', maxSteps: 12, maxSamples: 3, seed: 7, invariant: 'safe', exec: capturingQuint(SAMPLE_ITF, sink) });
+  await runQuintSimulation({
+    specPath: '/tmp/auth.qnt',
+    maxSteps: 12,
+    maxSamples: 3,
+    seed: 7,
+    invariant: 'safe',
+    exec: capturingQuint(SAMPLE_ITF, sink),
+  });
   const seen = sink.argv;
   assert.equal(seen[0], 'quint');
   assert.equal(seen[1], 'run');
@@ -82,7 +89,12 @@ test('runQuintSimulation: cleans up the temp ITF file', async () => {
 });
 
 test('runQuintSimulation: a spawn error is a structured failure, not a throw', async () => {
-  const exec: QuintExec = async () => ({ code: null, stdout: '', stderr: '', spawnError: 'spawn quint ENOENT' });
+  const exec: QuintExec = async () => ({
+    code: null,
+    stdout: '',
+    stderr: '',
+    spawnError: 'spawn quint ENOENT',
+  });
   const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', exec });
   assert.equal(res.ok, false);
   assert.ok(res.error && res.error.includes('could not run quint'));
@@ -91,7 +103,10 @@ test('runQuintSimulation: a spawn error is a structured failure, not a throw', a
 
 test('runQuintSimulation: non-zero exit is fine when an ITF counterexample was written', async () => {
   // quint exits non-zero on an invariant violation but still writes the ITF.
-  const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', exec: fakeQuint(SAMPLE_ITF, { code: 1 }) });
+  const res = await runQuintSimulation({
+    specPath: '/tmp/auth.qnt',
+    exec: fakeQuint(SAMPLE_ITF, { code: 1 }),
+  });
   assert.equal(res.ok, true);
   assert.equal(res.traces.length, 1);
 });
@@ -107,7 +122,11 @@ test('runQuintSimulation: symbolic backend is refused unless the JVM flag is set
   const prev = process.env.SPECIFY_ENABLE_QUINT_SYMBOLIC;
   delete process.env.SPECIFY_ENABLE_QUINT_SYMBOLIC;
   try {
-    const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', symbolic: true, exec: fakeQuint(SAMPLE_ITF) });
+    const res = await runQuintSimulation({
+      specPath: '/tmp/auth.qnt',
+      symbolic: true,
+      exec: fakeQuint(SAMPLE_ITF),
+    });
     assert.equal(res.ok, false);
     assert.ok(res.error && res.error.includes('SPECIFY_ENABLE_QUINT_SYMBOLIC'));
   } finally {
@@ -130,7 +149,9 @@ test('spawnQuint: caps runaway stdout/stderr at the per-stream bound with trunca
 });
 
 test('spawnQuint: output under the cap is untouched and unflagged', async () => {
-  const res = await spawnQuint([process.execPath, '-e', "process.stdout.write('hello')"], { timeoutMs: 30_000 });
+  const res = await spawnQuint([process.execPath, '-e', "process.stdout.write('hello')"], {
+    timeoutMs: 30_000,
+  });
   assert.equal(res.stdout, 'hello');
   assert.equal(res.stdoutTruncated, false);
   assert.equal(res.stderrTruncated, false);
@@ -156,7 +177,11 @@ test('runQuintSimulation: an invalid binary is a structured config error before 
   const exec: QuintExec = async () => {
     throw new Error('exec must not be reached');
   };
-  const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', binary: 'quint; rm -rf /', exec });
+  const res = await runQuintSimulation({
+    specPath: '/tmp/auth.qnt',
+    binary: 'quint; rm -rf /',
+    exec,
+  });
   assert.equal(res.ok, false);
   assert.ok(res.error && res.error.includes('invalid quint binary'));
   assert.deepEqual(res.argv, []);
@@ -167,7 +192,11 @@ test('runQuintSimulation: symbolic uses the `verify` verb when the JVM flag is o
   process.env.SPECIFY_ENABLE_QUINT_SYMBOLIC = '1';
   const sink = { argv: [] as string[] };
   try {
-    const res = await runQuintSimulation({ specPath: '/tmp/auth.qnt', symbolic: true, exec: capturingQuint(SAMPLE_ITF, sink) });
+    const res = await runQuintSimulation({
+      specPath: '/tmp/auth.qnt',
+      symbolic: true,
+      exec: capturingQuint(SAMPLE_ITF, sink),
+    });
     const seen = sink.argv;
     assert.equal(res.ok, true);
     assert.equal(seen[1], 'verify');

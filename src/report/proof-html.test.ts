@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { escapeHtml, renderProofHtml, type ProofInput, type ProofArea, type ProofBehavior } from './proof-html.js';
+import {
+  escapeHtml,
+  renderProofHtml,
+  type ProofInput,
+  type ProofArea,
+  type ProofBehavior,
+} from './proof-html.js';
 
 function baseBehavior(overrides: Partial<ProofBehavior> = {}): ProofBehavior {
   return {
@@ -24,7 +30,11 @@ function baseInput(overrides: Partial<ProofInput> = {}): ProofInput {
     { id: 'area-a', name: 'Area A', behaviors: [baseBehavior()] },
   ];
   return {
-    generator: { version: '1.2.3', generatedAt: '2026-01-01T00:00:00.000Z', commandLine: 'specify prove' },
+    generator: {
+      version: '1.2.3',
+      generatedAt: '2026-01-01T00:00:00.000Z',
+      commandLine: 'specify prove',
+    },
     spec: { name: 'Test Spec', version: '2', path: '/tmp/spec.yaml' },
     target: { type: 'web', url: 'http://localhost:3000' },
     run: {
@@ -46,7 +56,8 @@ function baseInput(overrides: Partial<ProofInput> = {}): ProofInput {
       screenshotByteCap: 1024,
       generatorVersion: '1.2.3',
       generatedAt: '2026-01-01T00:00:00.000Z',
-      regenerateCommand: 'specify prove --spec /tmp/spec.yaml --input /tmp/verify --output /tmp/verify/proof.html',
+      regenerateCommand:
+        'specify prove --spec /tmp/spec.yaml --input /tmp/verify --output /tmp/verify/proof.html',
     },
     ...overrides,
   };
@@ -112,7 +123,12 @@ test('the embedded JSON payload round-trips through JSON.parse', () => {
 test('each unique screenshot basename is emitted exactly once in the shot store', () => {
   const input = baseInput({
     screenshots: {
-      '001-home.png': { kind: 'inline', dataUri: 'data:image/png;base64,AAAA', bytes: 10, encodedBytes: 12 },
+      '001-home.png': {
+        kind: 'inline',
+        dataUri: 'data:image/png;base64,AAAA',
+        bytes: 10,
+        encodedBytes: 12,
+      },
     },
     areas: [
       {
@@ -136,9 +152,18 @@ test('each unique screenshot basename is emitted exactly once in the shot store'
 
 test('evidence screenshot renders a keyed ev-shot img (no src) and the run timestamp falls back to "not recorded"', () => {
   const input = baseInput({
-    run: { timestamp: '', pass: true, summary: { total: 1, passed: 1, failed: 0, skipped: 0, untested: 0 } },
+    run: {
+      timestamp: '',
+      pass: true,
+      summary: { total: 1, passed: 1, failed: 0, skipped: 0, untested: 0 },
+    },
     screenshots: {
-      '001-home.png': { kind: 'inline', dataUri: 'data:image/png;base64,AAAA', bytes: 10, encodedBytes: 12 },
+      '001-home.png': {
+        kind: 'inline',
+        dataUri: 'data:image/png;base64,AAAA',
+        bytes: 10,
+        encodedBytes: 12,
+      },
     },
     areas: [
       {
@@ -201,9 +226,9 @@ test('the progress bar segment widths sum to ~100%', () => {
     },
   });
   const html = renderProofHtml(input);
-  const widths = [...html.matchAll(/progress-seg--(?:passed|failed|skipped|untested)" style="width:([\d.]+)%"/g)].map((m) =>
-    Number(m[1]),
-  );
+  const widths = [
+    ...html.matchAll(/progress-seg--(?:passed|failed|skipped|untested)" style="width:([\d.]+)%"/g),
+  ].map((m) => Number(m[1]));
   assert.equal(widths.length, 4);
   const sum = widths.reduce((a, b) => a + b, 0);
   assert.ok(Math.abs(sum - 100) <= 0.01, `expected ~100, got ${sum}`);

@@ -45,13 +45,21 @@ export function validateStorageStatePath(storageStatePath: string): StorageState
   const resolved = path.resolve(storageStatePath);
 
   if (!fs.existsSync(resolved)) {
-    return { error: 'invalid_storage_state', target: storageStatePath, hint: 'Storage-state file not found' };
+    return {
+      error: 'invalid_storage_state',
+      target: storageStatePath,
+      hint: 'Storage-state file not found',
+    };
   }
 
   try {
     JSON.parse(fs.readFileSync(resolved, 'utf-8'));
   } catch {
-    return { error: 'invalid_storage_state', target: storageStatePath, hint: 'Storage-state file is not valid JSON' };
+    return {
+      error: 'invalid_storage_state',
+      target: storageStatePath,
+      hint: 'Storage-state file is not valid JSON',
+    };
   }
 
   return null;
@@ -62,7 +70,9 @@ function warnIfInsecurePermissions(resolvedPath: string, log: (msg: string) => v
   try {
     const mode = fs.statSync(resolvedPath).mode & 0o777;
     if (mode & 0o077) {
-      log(`Warning: ${resolvedPath} is group- or world-readable; run "chmod 600 ${resolvedPath}" to protect the session cookies it contains`);
+      log(
+        `Warning: ${resolvedPath} is group- or world-readable; run "chmod 600 ${resolvedPath}" to protect the session cookies it contains`,
+      );
     }
   } catch {
     // Best-effort; never block the run over a permission-check failure.
@@ -85,11 +95,15 @@ function warnIfInsecurePermissions(resolvedPath: string, log: (msg: string) => v
 // alphabet ([A-Za-z0-9+/=]) is always a single safe token.
 // ---------------------------------------------------------------------------
 
-function runSecurityInteractive(commandLine: string): Promise<{ code: number | null; stderr: string }> {
+function runSecurityInteractive(
+  commandLine: string,
+): Promise<{ code: number | null; stderr: string }> {
   return new Promise((resolve, reject) => {
     const child = spawn('security', ['-i'], { stdio: ['pipe', 'ignore', 'pipe'] });
     let stderr = '';
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    child.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stderr }));
     child.stdin.write(commandLine + '\n');
@@ -97,13 +111,26 @@ function runSecurityInteractive(commandLine: string): Promise<{ code: number | n
   });
 }
 
-function runSecurityFind(name: string): Promise<{ code: number | null; stdout: string; stderr: string }> {
+function runSecurityFind(
+  name: string,
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = spawn('security', ['find-generic-password', '-s', name, '-a', KEYCHAIN_ACCOUNT, '-w']);
+    const child = spawn('security', [
+      'find-generic-password',
+      '-s',
+      name,
+      '-a',
+      KEYCHAIN_ACCOUNT,
+      '-w',
+    ]);
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (d: Buffer) => { stdout += d.toString(); });
-    child.stderr.on('data', (d: Buffer) => { stderr += d.toString(); });
+    child.stdout.on('data', (d: Buffer) => {
+      stdout += d.toString();
+    });
+    child.stderr.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
     child.on('error', reject);
     child.on('close', (code) => resolve({ code, stdout, stderr }));
   });
@@ -117,43 +144,90 @@ function keychainUnsupportedError(name: string): StorageStateError {
   };
 }
 
-async function readKeychain(name: string): Promise<{ ok: true; json: string } | { ok: false; error: StorageStateError }> {
+async function readKeychain(
+  name: string,
+): Promise<{ ok: true; json: string } | { ok: false; error: StorageStateError }> {
   if (process.platform !== 'darwin') {
     return { ok: false, error: keychainUnsupportedError(name) };
   }
   if (!SAFE_KEYCHAIN_NAME.test(name)) {
-    return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: 'Keychain name must match [A-Za-z0-9._-]+' } };
+    return {
+      ok: false,
+      error: {
+        error: 'keychain_error',
+        target: `keychain:${name}`,
+        hint: 'Keychain name must match [A-Za-z0-9._-]+',
+      },
+    };
   }
   try {
     const { code, stdout } = await runSecurityFind(name);
     if (code !== 0) {
-      return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: `No keychain item named "${name}" found for account "${KEYCHAIN_ACCOUNT}"` } };
+      return {
+        ok: false,
+        error: {
+          error: 'keychain_error',
+          target: `keychain:${name}`,
+          hint: `No keychain item named "${name}" found for account "${KEYCHAIN_ACCOUNT}"`,
+        },
+      };
     }
     const b64 = stdout.replace(/\n$/, '');
     const json = Buffer.from(b64, 'base64').toString('utf-8');
     return { ok: true, json };
   } catch (err) {
-    return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: err instanceof Error ? err.message : String(err) } };
+    return {
+      ok: false,
+      error: {
+        error: 'keychain_error',
+        target: `keychain:${name}`,
+        hint: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
 }
 
-async function writeKeychain(name: string, json: string): Promise<{ ok: true } | { ok: false; error: StorageStateError } > {
+async function writeKeychain(
+  name: string,
+  json: string,
+): Promise<{ ok: true } | { ok: false; error: StorageStateError }> {
   if (process.platform !== 'darwin') {
     return { ok: false, error: keychainUnsupportedError(name) };
   }
   if (!SAFE_KEYCHAIN_NAME.test(name)) {
-    return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: 'Keychain name must match [A-Za-z0-9._-]+' } };
+    return {
+      ok: false,
+      error: {
+        error: 'keychain_error',
+        target: `keychain:${name}`,
+        hint: 'Keychain name must match [A-Za-z0-9._-]+',
+      },
+    };
   }
   try {
     const b64 = Buffer.from(json, 'utf-8').toString('base64');
     const commandLine = `add-generic-password -U -a ${KEYCHAIN_ACCOUNT} -s ${name} -w '${b64}'`;
     const { code, stderr } = await runSecurityInteractive(commandLine);
     if (code !== 0) {
-      return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: stderr.trim().split('\n').pop() || 'security -i failed' } };
+      return {
+        ok: false,
+        error: {
+          error: 'keychain_error',
+          target: `keychain:${name}`,
+          hint: stderr.trim().split('\n').pop() || 'security -i failed',
+        },
+      };
     }
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: { error: 'keychain_error', target: `keychain:${name}`, hint: err instanceof Error ? err.message : String(err) } };
+    return {
+      ok: false,
+      error: {
+        error: 'keychain_error',
+        target: `keychain:${name}`,
+        hint: err instanceof Error ? err.message : String(err),
+      },
+    };
   }
 }
 
@@ -169,7 +243,10 @@ async function writeKeychain(name: string, json: string): Promise<{ ok: true } |
 export async function resolveStorageStateInput(
   value: string,
   log: (msg: string) => void,
-): Promise<{ ok: true; contextValue: string | Record<string, unknown> } | { ok: false; error: StorageStateError }> {
+): Promise<
+  | { ok: true; contextValue: string | Record<string, unknown> }
+  | { ok: false; error: StorageStateError }
+> {
   if (isKeychainRef(value)) {
     const name = keychainName(value);
     const result = await readKeychain(name);
@@ -178,7 +255,14 @@ export async function resolveStorageStateInput(
       const parsed = JSON.parse(result.json) as Record<string, unknown>;
       return { ok: true, contextValue: parsed };
     } catch {
-      return { ok: false, error: { error: 'keychain_error', target: value, hint: 'Keychain item did not contain valid JSON' } };
+      return {
+        ok: false,
+        error: {
+          error: 'keychain_error',
+          target: value,
+          hint: 'Keychain item did not contain valid JSON',
+        },
+      };
     }
   }
 

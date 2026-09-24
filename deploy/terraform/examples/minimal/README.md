@@ -1,7 +1,7 @@
 # Example: minimal
 
-Webhook-mode QA pod with an inline spec and the file report sink. Easiest
-path to "I see a verify run finishing on a real cluster".
+Webhook-mode QA pod with an inline spec and the file report sink. Easiest path to "I see a verify
+run finishing on a real cluster".
 
 ```sh
 # Pre-reqs once: namespace + Secret.

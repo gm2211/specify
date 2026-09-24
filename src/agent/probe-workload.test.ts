@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { EndpointEntry, EndpointMapFile, EndpointStatus, EndpointOperation, IdLocation } from '../model/endpoint-map.js';
+import type {
+  EndpointEntry,
+  EndpointMapFile,
+  EndpointStatus,
+  EndpointOperation,
+  IdLocation,
+} from '../model/endpoint-map.js';
 import type { ApiTarget } from '../spec/types.js';
 import {
   MARKER_PREFIX,
@@ -44,7 +50,12 @@ function endpoint(
     entity: extra.entity ?? 'user',
     operation,
     idLocation,
-    markerField: 'markerField' in extra ? (extra.markerField ?? null) : operation === 'create' || operation === 'update' ? 'name' : null,
+    markerField:
+      'markerField' in extra
+        ? (extra.markerField ?? null)
+        : operation === 'create' || operation === 'update'
+          ? 'name'
+          : null,
     confidence: 'high',
     rationale: 'test',
     status: extra.status ?? ('approved' as EndpointStatus),
@@ -60,7 +71,12 @@ function mapFile(endpoints: EndpointEntry[]): EndpointMapFile {
   return { version: 1, templates: [], endpoints };
 }
 
-const optedInTarget: ApiTarget = { type: 'api', url: 'http://api.test', probes: { enabled: true }, production: false };
+const optedInTarget: ApiTarget = {
+  type: 'api',
+  url: 'http://api.test',
+  probes: { enabled: true },
+  production: false,
+};
 
 /** Deterministic marker id generator. */
 function seqIds(): () => string {
@@ -80,7 +96,12 @@ function seqClock(): () => number {
  * ProbeHttpError.
  */
 function scriptClient(
-  routes: Record<string, ProbeHttpResponse | ((req: ProbeHttpRequest) => ProbeHttpResponse | Promise<ProbeHttpResponse>) | ProbeHttpError>,
+  routes: Record<
+    string,
+    | ProbeHttpResponse
+    | ((req: ProbeHttpRequest) => ProbeHttpResponse | Promise<ProbeHttpResponse>)
+    | ProbeHttpError
+  >,
 ): { client: ProbeHttpClient; calls: ProbeHttpRequest[] } {
   const calls: ProbeHttpRequest[] = [];
   const client: ProbeHttpClient = async (req) => {
@@ -111,7 +132,10 @@ test('newMarker embeds a unique id behind the shared prefix', () => {
 
 test('renderTemplate substitutes and encodes path params', () => {
   assert.equal(renderTemplate('/users/:id', { id: '42' }), '/users/42');
-  assert.equal(renderTemplate('/users/:id/orders/:id2', { id: '1', id2: '2' }), '/users/1/orders/2');
+  assert.equal(
+    renderTemplate('/users/:id/orders/:id2', { id: '1', id2: '2' }),
+    '/users/1/orders/2',
+  );
   assert.equal(renderTemplate('/users', {}), '/users');
   assert.equal(renderTemplate('/', {}), '/');
   assert.equal(renderTemplate('/a b/:id', { id: 'x/y' }), '/a b/x%2Fy');
@@ -146,14 +170,25 @@ test('assertProbesAllowed requires all three conditions', () => {
   // Runtime flag off.
   assert.throws(() => assertProbesAllowed(optedInTarget, { allowProbes: false }), ProbeSafetyError);
   // Not opted in.
-  assert.throws(() => assertProbesAllowed({ type: 'api', url: 'http://x' }, { allowProbes: true }), ProbeSafetyError);
   assert.throws(
-    () => assertProbesAllowed({ type: 'api', url: 'http://x', probes: { enabled: false } }, { allowProbes: true }),
+    () => assertProbesAllowed({ type: 'api', url: 'http://x' }, { allowProbes: true }),
+    ProbeSafetyError,
+  );
+  assert.throws(
+    () =>
+      assertProbesAllowed(
+        { type: 'api', url: 'http://x', probes: { enabled: false } },
+        { allowProbes: true },
+      ),
     ProbeSafetyError,
   );
   // Production hard-block wins even when opted in + flag set.
   assert.throws(
-    () => assertProbesAllowed({ type: 'api', url: 'http://x', probes: { enabled: true }, production: true }, { allowProbes: true }),
+    () =>
+      assertProbesAllowed(
+        { type: 'api', url: 'http://x', probes: { enabled: true }, production: true },
+        { allowProbes: true },
+      ),
     ProbeSafetyError,
   );
 });
@@ -162,7 +197,11 @@ test('assertProbesAllowed fails closed when production is not declared', () => {
   // probes.enabled without an explicit production: false refuses with a
   // message telling the author to declare the field.
   assert.throws(
-    () => assertProbesAllowed({ type: 'api', url: 'http://x', probes: { enabled: true } }, { allowProbes: true }),
+    () =>
+      assertProbesAllowed(
+        { type: 'api', url: 'http://x', probes: { enabled: true } },
+        { allowProbes: true },
+      ),
     (err: unknown) => err instanceof ProbeSafetyError && /production: false/.test(err.message),
   );
 });
@@ -183,7 +222,11 @@ test('runProbeWorkload refuses an undeclared-production target before any reques
 test('runProbeWorkload refuses a disallowed target before any request', async () => {
   const { client, calls } = scriptClient({});
   await assert.rejects(
-    runProbeWorkload(mapFile([endpoint('POST', '/users', 'create')]), { type: 'api', url: 'http://x' }, { allowProbes: true, http: client }),
+    runProbeWorkload(
+      mapFile([endpoint('POST', '/users', 'create')]),
+      { type: 'api', url: 'http://x' },
+      { allowProbes: true, http: client },
+    ),
     ProbeSafetyError,
   );
   assert.equal(calls.length, 0);
@@ -251,7 +294,10 @@ test('happy-path CRUD run produces a complete, marked op log', async () => {
   assert.equal(result.cleanup.attempted, 0);
 
   // Op ids are sequential.
-  assert.deepEqual(result.ops.map((o) => o.opId), ['op-0001', 'op-0002', 'op-0003', 'op-0004', 'op-0005', 'op-0006', 'op-0007']);
+  assert.deepEqual(
+    result.ops.map((o) => o.opId),
+    ['op-0001', 'op-0002', 'op-0003', 'op-0004', 'op-0005', 'op-0006', 'op-0007'],
+  );
 
   // Create carried a marker in the body and reported the id.
   const create = result.ops[0];
@@ -306,14 +352,24 @@ test('timeout is never classified as fail; a definite network error is', async (
   const timeout = await runProbeWorkload(
     mapFile([endpoint('POST', '/users', 'create')]),
     optedInTarget,
-    { allowProbes: true, http: scriptClient({ 'POST /users': new ProbeHttpError('t', 'timeout') }).client, genId: seqIds(), now: seqClock() },
+    {
+      allowProbes: true,
+      http: scriptClient({ 'POST /users': new ProbeHttpError('t', 'timeout') }).client,
+      genId: seqIds(),
+      now: seqClock(),
+    },
   );
   assert.equal(timeout.ops[0].outcome, 'indeterminate');
 
   const network = await runProbeWorkload(
     mapFile([endpoint('POST', '/users', 'create')]),
     optedInTarget,
-    { allowProbes: true, http: scriptClient({ 'POST /users': new ProbeHttpError('refused', 'network') }).client, genId: seqIds(), now: seqClock() },
+    {
+      allowProbes: true,
+      http: scriptClient({ 'POST /users': new ProbeHttpError('refused', 'network') }).client,
+      genId: seqIds(),
+      now: seqClock(),
+    },
   );
   assert.equal(network.ops[0].outcome, 'fail');
 });
@@ -501,7 +557,12 @@ test('a stale approved endpoint is not invoked', async () => {
     'POST /users': { status: 201, body: { id: '1' } },
     'DELETE /users/1': { status: 204, body: undefined },
   });
-  await runProbeWorkload(mapFile(eps), optedInTarget, { allowProbes: true, http: client, genId: seqIds(), now: seqClock() });
+  await runProbeWorkload(mapFile(eps), optedInTarget, {
+    allowProbes: true,
+    http: client,
+    genId: seqIds(),
+    now: seqClock(),
+  });
   assert.ok(!calls.some((c) => c.method === 'GET'));
 });
 
@@ -514,7 +575,12 @@ test('a create without a markerField still runs but records a null marker', asyn
     'POST /users': { status: 201, body: { id: '1' } },
     'DELETE /users/1': { status: 204, body: undefined },
   });
-  const result = await runProbeWorkload(mapFile(eps), optedInTarget, { allowProbes: true, http: client, genId: seqIds(), now: seqClock() });
+  const result = await runProbeWorkload(mapFile(eps), optedInTarget, {
+    allowProbes: true,
+    http: client,
+    genId: seqIds(),
+    now: seqClock(),
+  });
   assert.equal(result.ops[0].marker, null);
   assert.deepEqual(result.ops[0].request.body, {});
 });
@@ -576,7 +642,10 @@ test('defaultHttpClient parses JSON, forwards body, and classifies a timeout', a
   const base = `http://127.0.0.1:${port}`;
 
   try {
-    const res = await defaultHttpClient({ method: 'POST', url: `${base}/x`, body: { a: 1 } }, { timeoutMs: 2000 });
+    const res = await defaultHttpClient(
+      { method: 'POST', url: `${base}/x`, body: { a: 1 } },
+      { timeoutMs: 2000 },
+    );
     assert.equal(res.status, 201);
     assert.deepEqual(res.body, { ok: true, echo: JSON.stringify({ a: 1 }) });
 

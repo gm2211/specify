@@ -308,7 +308,8 @@ export function defaultFlowClassifier(
   const scope = opts.inScopeStateIds;
   return {
     isAuthenticated: (state) => state.predicates[authKey] === true,
-    isTerminal: (state) => state.predicates[terminalKey] === true || (outDegree.get(state.id) ?? 0) === 0,
+    isTerminal: (state) =>
+      state.predicates[terminalKey] === true || (outDegree.get(state.id) ?? 0) === 0,
     inScope: (state) => (scope ? scope.has(state.id) : true),
   };
 }
@@ -471,7 +472,8 @@ const backNavAfterAuthExit: MutationOperator = (trace, ctx) => {
       note: `back-navigation to authenticated page ${exit.fromUrlTemplate} after leaving it`,
     };
     steps.push(backStep);
-    for (let k = i + 1; k < trace.transitions.length; k++) steps.push(modelStep(trace.transitions[k]));
+    for (let k = i + 1; k < trace.transitions.length; k++)
+      steps.push(modelStep(trace.transitions[k]));
     return {
       id: `${trace.id}~back-nav-after-auth-exit~${ord}`,
       operator: 'back-nav-after-auth-exit',
@@ -518,7 +520,8 @@ const doubleSubmit: MutationOperator = (trace, ctx) => {
     for (let k = 0; k <= i; k++) steps.push(modelStep(trace.transitions[k]));
     // Fire the same write a second time, back-to-back.
     steps.push(modelStep(dup));
-    for (let k = i + 1; k < trace.transitions.length; k++) steps.push(modelStep(trace.transitions[k]));
+    for (let k = i + 1; k < trace.transitions.length; k++)
+      steps.push(modelStep(trace.transitions[k]));
     const write = writeEntriesOf(ctx.index, dup.arc);
     return {
       id: `${trace.id}~double-submit~${ord}`,
@@ -532,7 +535,12 @@ const doubleSubmit: MutationOperator = (trace, ctx) => {
         class: 'no-second-side-effect',
         outcome: 'tolerate',
         description: `Re-submitting ${dup.actionKey} on ${dup.fromUrlTemplate} must not create a second side effect. A rejected second fire (409/4xx) passes; a repeated ${write.map((w) => w.method).join('/')} 2xx is inconclusive (idempotent retry vs duplicate — needs corroboration); only corroborated duplication is a violation.`,
-        check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write, onRepeatedSuccess: 'inconclusive' },
+        check: {
+          kind: 'no-repeated-write',
+          injectedStepIndex: i + 1,
+          write,
+          onRepeatedSuccess: 'inconclusive',
+        },
       },
       // A re-submit is a valid-if-unusual action the server should dedup.
       wellFormed: true,
@@ -566,7 +574,12 @@ const sessionClearMidflow: MutationOperator = (trace, ctx) => {
     steps.push(clearStep);
     for (let k = i + 1; k < n; k++) steps.push(modelStep(trace.transitions[k]));
     const authStates = [
-      ...new Set(trace.transitions.slice(i + 1).map((t) => t.to).filter((s) => isAuthState(ctx, s))),
+      ...new Set(
+        trace.transitions
+          .slice(i + 1)
+          .map((t) => t.to)
+          .filter((s) => isAuthState(ctx, s)),
+      ),
     ].sort();
     return {
       id: `${trace.id}~session-clear-midflow~${ord}`,
@@ -627,7 +640,12 @@ const revisitAfterTerminal: MutationOperator = (trace, ctx) => {
             class: 'terminal-state-not-reprocessable',
             outcome: 'tolerate',
             description: `Re-opening completed ${arrival.toUrlTemplate} must not re-run its side effect (${write.map((w) => w.method).join('/')}); a redirect away or an already-complete view both pass — only a repeated write is suspect, and a repeated 2xx alone is inconclusive.`,
-            check: { kind: 'no-repeated-write', injectedStepIndex: i + 1, write, onRepeatedSuccess: 'inconclusive' },
+            check: {
+              kind: 'no-repeated-write',
+              injectedStepIndex: i + 1,
+              write,
+              onRepeatedSuccess: 'inconclusive',
+            },
           }
         : {
             class: 'terminal-state-not-reprocessable',
@@ -764,9 +782,10 @@ export function mutateSuite(
   };
 
   const mutations: MutatedTrace[] = [];
-  const operatorCounts = Object.fromEntries(
-    ALL_OPERATORS.map((op) => [op, 0]),
-  ) as Record<MutationOperatorName, number>;
+  const operatorCounts = Object.fromEntries(ALL_OPERATORS.map((op) => [op, 0])) as Record<
+    MutationOperatorName,
+    number
+  >;
 
   // Traces in emission order; operators in the requested (or canonical) order.
   const orderedOps = ALL_OPERATORS.filter((op) => operators.includes(op));
@@ -817,9 +836,7 @@ export function mutateSuite(
 
 /** One-line human summary of a mutation suite, for a CLI/report footer. */
 export function renderMutationSummary(suite: MutationSuite): string {
-  const parts = suite.operators
-    .map((op) => `${op} ${suite.operatorCounts[op]}`)
-    .join(', ');
+  const parts = suite.operators.map((op) => `${op} ${suite.operatorCounts[op]}`).join(', ');
   const skipped = suite.applicability.filter((a) => a.variants === 0);
   const warn =
     skipped.length > 0

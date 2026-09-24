@@ -19,7 +19,9 @@ function tmpDir(): { dir: string; cleanup: () => void } {
   return { dir, cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
 }
 
-async function captureStdout(fn: () => Promise<number>): Promise<{ exitCode: number; text: string }> {
+async function captureStdout(
+  fn: () => Promise<number>,
+): Promise<{ exitCode: number; text: string }> {
   const original = process.stdout.write.bind(process.stdout);
   const chunks: string[] = [];
   process.stdout.write = ((chunk: unknown) => {
@@ -52,7 +54,9 @@ test('prove() reports input_not_found for a missing --input directory', async ()
   const { dir, cleanup } = tmpDir();
   try {
     const missing = path.join(dir, 'nope');
-    const { exitCode, text } = await captureStdout(() => prove({ spec: '', input: missing }, quietCtx()));
+    const { exitCode, text } = await captureStdout(() =>
+      prove({ spec: '', input: missing }, quietCtx()),
+    );
     assert.equal(exitCode, 10);
     const parsed = JSON.parse(text.trim());
     assert.equal(parsed.error, 'input_not_found');
@@ -64,7 +68,9 @@ test('prove() reports input_not_found for a missing --input directory', async ()
 test('prove() reports verify_result_not_found when the input dir exists but has no verify-result.json', async () => {
   const { dir, cleanup } = tmpDir();
   try {
-    const { exitCode, text } = await captureStdout(() => prove({ spec: '', input: dir }, quietCtx()));
+    const { exitCode, text } = await captureStdout(() =>
+      prove({ spec: '', input: dir }, quietCtx()),
+    );
     assert.equal(exitCode, 10);
     const parsed = JSON.parse(text.trim());
     assert.equal(parsed.error, 'verify_result_not_found');
@@ -129,7 +135,9 @@ test('prove() happy path: writes proof.html and exits 0', async () => {
       'utf-8',
     );
 
-    const { exitCode, text } = await captureStdout(() => prove({ spec: specPath, input: dir }, quietCtx()));
+    const { exitCode, text } = await captureStdout(() =>
+      prove({ spec: specPath, input: dir }, quietCtx()),
+    );
     assert.equal(exitCode, 0);
     const outputPath = path.join(dir, 'proof.html');
     assert.ok(fs.existsSync(outputPath));

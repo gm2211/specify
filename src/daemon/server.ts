@@ -115,14 +115,18 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
   // configurePool but before startK8sWatcher (which self-POSTs to /inbox).
   const { restored, interrupted } = inbox.restoreFromDisk();
   if (restored > 0) {
-    process.stderr.write(`[daemon] restored ${restored} inbox record(s) from disk (${interrupted} marked interrupted)\n`);
+    process.stderr.write(
+      `[daemon] restored ${restored} inbox record(s) from disk (${interrupted} marked interrupted)\n`,
+    );
   }
 
   // Wire outbound report sinks (file / slack). No-op when the env vars
   // (SPECIFY_REPORT_FILE_DIR, SPECIFY_REPORT_SLACK_WEBHOOK_FILE) aren't set.
   const sinks = attachReportSinks();
   if (sinks.sinks.length > 0) {
-    process.stderr.write(`[daemon] report sinks attached: ${sinks.sinks.map((s) => s.name).join(', ')}\n`);
+    process.stderr.write(
+      `[daemon] report sinks attached: ${sinks.sinks.map((s) => s.name).join(', ')}\n`,
+    );
   }
 
   // Cluster-watch discovery (no-op unless SPECIFY_K8S_WATCH=true). When a
@@ -259,36 +263,49 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
     // 'failed' with the same WorkerPoolQueueFullError message).
     if ((body.mode ?? 'stateless') === 'stateless') {
       const poolStats = getPool()?.stats();
-      if (poolStats && poolStats.active >= poolStats.maxConcurrent && poolStats.queued >= poolStats.maxQueueLength) {
-        return c.json({
-          error: 'queue_full',
-          detail: `daemon worker queue is full (${poolStats.queued}/${poolStats.maxQueueLength} waiting) — try again later`,
-          queued: poolStats.queued,
-          maxQueueLength: poolStats.maxQueueLength,
-        }, 429);
+      if (
+        poolStats &&
+        poolStats.active >= poolStats.maxConcurrent &&
+        poolStats.queued >= poolStats.maxQueueLength
+      ) {
+        return c.json(
+          {
+            error: 'queue_full',
+            detail: `daemon worker queue is full (${poolStats.queued}/${poolStats.maxQueueLength} waiting) — try again later`,
+            queued: poolStats.queued,
+            maxQueueLength: poolStats.maxQueueLength,
+          },
+          429,
+        );
       }
     }
     const message = inbox.submit(body as InboxRequest);
-    return c.json({
-      id: message.id,
-      status: message.status,
-      session: message.session,
-      stream: `/inbox/${message.id}/stream`,
-    }, 202);
+    return c.json(
+      {
+        id: message.id,
+        status: message.status,
+        session: message.session,
+        stream: `/inbox/${message.id}/stream`,
+      },
+      202,
+    );
   });
 
   app.get('/inbox', (c) => {
     const limit = Number(c.req.query('limit') ?? '50');
     const safeLimit = Number.isFinite(limit) && limit > 0 ? Math.min(limit, 500) : 50;
-    const items = inbox.list().slice(0, safeLimit).map((m) => ({
-      id: m.id,
-      createdAt: m.createdAt,
-      status: m.status,
-      task: m.request.task,
-      session: m.session,
-      error: m.error,
-      costUsd: m.result?.costUsd,
-    }));
+    const items = inbox
+      .list()
+      .slice(0, safeLimit)
+      .map((m) => ({
+        id: m.id,
+        createdAt: m.createdAt,
+        status: m.status,
+        task: m.request.task,
+        session: m.session,
+        error: m.error,
+        costUsd: m.result?.costUsd,
+      }));
     return c.json({ messages: items });
   });
 
@@ -327,8 +344,16 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
           } catch {
             unsub();
           }
-          if (event.type === 'inbox:completed' || event.type === 'inbox:failed' || event.type === 'inbox:interrupted') {
-            try { controller.close(); } catch { /* already closed */ }
+          if (
+            event.type === 'inbox:completed' ||
+            event.type === 'inbox:failed' ||
+            event.type === 'inbox:interrupted'
+          ) {
+            try {
+              controller.close();
+            } catch {
+              /* already closed */
+            }
             unsub();
           }
         });
@@ -340,7 +365,7 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   });
@@ -366,7 +391,7 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
       headers: {
         'Content-Type': 'text/event-stream',
         'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
+        Connection: 'keep-alive',
       },
     });
   });
@@ -388,7 +413,12 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
 
   app.post('/decisions/:id/resolve', async (c) => {
     const id = c.req.param('id');
-    let body: { resolution_index?: unknown; scope?: unknown; resolved_by?: unknown; note?: unknown };
+    let body: {
+      resolution_index?: unknown;
+      scope?: unknown;
+      resolved_by?: unknown;
+      note?: unknown;
+    };
     try {
       body = await c.req.json();
     } catch {
@@ -402,7 +432,8 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
     }
     const existing = getDecision(id);
     if (!existing) return c.json({ error: 'not_found', id }, 404);
-    if (existing.status !== 'open') return c.json({ error: 'already_resolved', id, status: existing.status }, 409);
+    if (existing.status !== 'open')
+      return c.json({ error: 'already_resolved', id, status: existing.status }, 409);
     try {
       const resolved = await resolveDecision(id, {
         resolution_index: body.resolution_index,
@@ -413,8 +444,10 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
       return c.json(resolved);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      if (msg.includes('Scope mismatch')) return c.json({ error: 'scope_mismatch', detail: msg }, 400);
-      if (msg.includes('Invalid resolution_index')) return c.json({ error: 'invalid_resolution_index', detail: msg }, 400);
+      if (msg.includes('Scope mismatch'))
+        return c.json({ error: 'scope_mismatch', detail: msg }, 400);
+      if (msg.includes('Invalid resolution_index'))
+        return c.json({ error: 'invalid_resolution_index', detail: msg }, 400);
       return c.json({ error: 'resolve_failed', detail: msg }, 500);
     }
   });
@@ -445,7 +478,11 @@ export async function startDaemonServer(opts: DaemonOptions): Promise<void> {
 
   await new Promise<void>((resolve) => {
     const cleanup = () => {
-      try { (server as unknown as { close?: () => void }).close?.(); } catch { /* best effort */ }
+      try {
+        (server as unknown as { close?: () => void }).close?.();
+      } catch {
+        /* best effort */
+      }
       resolve();
     };
     process.on('SIGINT', cleanup);

@@ -87,7 +87,10 @@ test('selectTechnique: threshold is inclusive and overridable', () => {
   // HIGH ≈ 0.909 — below a 0.95 threshold.
   assert.equal(selectTechnique('a/b', ctx(), { threshold: 0.95 }), 'agent');
   // NEUTRAL = 0.5 exactly — inclusive >= comparison.
-  assert.equal(selectTechnique('a/b', ctx({ confidenceRow: NEUTRAL }), { threshold: 0.5 }), 'scripted');
+  assert.equal(
+    selectTechnique('a/b', ctx({ confidenceRow: NEUTRAL }), { threshold: 0.5 }),
+    'scripted',
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -100,13 +103,19 @@ test('demotion: repeated cross-check mismatches drop a high-confidence behavior 
     const store = new ConfidenceStore(path.join(dir, 'confidence.json'));
     // Build up high confidence: 20 accepts, 0 overrides → 20/21 ≈ 0.95.
     for (let i = 0; i < 20; i++) store.record('area/beh', 'accept');
-    assert.equal(selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })), 'scripted');
+    assert.equal(
+      selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })),
+      'scripted',
+    );
 
     // Repeated cross-check mismatches demote via the EXISTING math
     // (2+ consecutive mismatches each add an override).
     for (let i = 0; i < 30; i++) store.recordFromCrossCheck('area/beh', false);
     const demoted = store.get('area/beh');
-    assert.ok(confidenceFor(demoted) < 0.7, `expected demoted confidence < 0.7, got ${confidenceFor(demoted)}`);
+    assert.ok(
+      confidenceFor(demoted) < 0.7,
+      `expected demoted confidence < 0.7, got ${confidenceFor(demoted)}`,
+    );
     assert.equal(selectTechnique('area/beh', ctx({ confidenceRow: demoted })), 'agent');
   } finally {
     cleanup();
@@ -118,9 +127,15 @@ test('demotion: feedback overrides route a previously-scripted behavior to agent
   try {
     const store = new ConfidenceStore(path.join(dir, 'confidence.json'));
     for (let i = 0; i < 10; i++) store.record('area/beh', 'accept');
-    assert.equal(selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })), 'scripted');
+    assert.equal(
+      selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })),
+      'scripted',
+    );
     for (let i = 0; i < 10; i++) store.record('area/beh', 'override');
-    assert.equal(selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })), 'agent');
+    assert.equal(
+      selectTechnique('area/beh', ctx({ confidenceRow: store.get('area/beh') })),
+      'agent',
+    );
   } finally {
     cleanup();
   }
@@ -171,7 +186,10 @@ test('buildScopedGrep: empty list → undefined (caller skips the run, never an 
 test('findGeneratedTest: finds a behavior title inside a generated spec file, with mtime', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'gen.spec.ts'), `test('a/one: does the thing', async () => {});\n`);
+    fs.writeFileSync(
+      path.join(dir, 'gen.spec.ts'),
+      `test('a/one: does the thing', async () => {});\n`,
+    );
     const found = findGeneratedTest(dir, 'a/one');
     assert.equal(found.exists, true);
     assert.ok(typeof found.mtimeMs === 'number' && found.mtimeMs > 0);
@@ -191,10 +209,14 @@ test('lastVerifyStatuses: reads statuses from verify-result.json; missing/corrup
     assert.equal(lastVerifyStatuses(dir).size, 0);
     fs.writeFileSync(
       path.join(dir, 'verify-result.json'),
-      JSON.stringify({ structuredOutput: { results: [
-        { id: 'a/one', status: 'passed', description: '' },
-        { id: 'a/two', status: 'failed', description: '' },
-      ] } }),
+      JSON.stringify({
+        structuredOutput: {
+          results: [
+            { id: 'a/one', status: 'passed', description: '' },
+            { id: 'a/two', status: 'failed', description: '' },
+          ],
+        },
+      }),
     );
     const statuses = lastVerifyStatuses(dir);
     assert.equal(statuses.get('a/one'), 'passed');
@@ -246,25 +268,40 @@ test('routeBehaviors: partitions per policy and never drops a behavior', () => {
     // Last run: both passed.
     fs.writeFileSync(
       path.join(dir, 'verify-result.json'),
-      JSON.stringify({ structuredOutput: { results: [
-        { id: 'checkout/apply-coupon', status: 'passed', description: '' },
-        { id: 'checkout/visual-polish', status: 'passed', description: '' },
-      ] } }),
+      JSON.stringify({
+        structuredOutput: {
+          results: [
+            { id: 'checkout/apply-coupon', status: 'passed', description: '' },
+            { id: 'checkout/visual-polish', status: 'passed', description: '' },
+          ],
+        },
+      }),
     );
     // High confidence everywhere — the stubbed store.
-    const getRow = (id: string): ConfidenceRow => ({ behaviorId: id, accepts: 20, overrides: 1, lastUpdatedAt: '' });
+    const getRow = (id: string): ConfidenceRow => ({
+      behaviorId: id,
+      accepts: 20,
+      overrides: 1,
+      lastUpdatedAt: '',
+    });
 
     const partition = routeBehaviors(makeSpec(), getRow, dir);
     // apply-coupon: all gates pass → scripted.
     assert.deepEqual(partition.scripted, ['checkout/apply-coupon']);
     // free-shipping (no test), login (no test/history), visual-polish (agent-only tag) → agent.
-    assert.deepEqual(
-      [...partition.agent].sort(),
-      ['auth/login', 'checkout/free-shipping', 'checkout/visual-polish'],
-    );
+    assert.deepEqual([...partition.agent].sort(), [
+      'auth/login',
+      'checkout/free-shipping',
+      'checkout/visual-polish',
+    ]);
     // Coverage: every behavior routed exactly once.
     const all = [...partition.scripted, ...partition.agent].sort();
-    assert.deepEqual(all, ['auth/login', 'checkout/apply-coupon', 'checkout/free-shipping', 'checkout/visual-polish']);
+    assert.deepEqual(all, [
+      'auth/login',
+      'checkout/apply-coupon',
+      'checkout/free-shipping',
+      'checkout/visual-polish',
+    ]);
   } finally {
     cleanup();
   }
@@ -273,12 +310,24 @@ test('routeBehaviors: partitions per policy and never drops a behavior', () => {
 test('routeBehaviors: sparse confidence data routes everything to agent (ALL_UNTESTED-safe default)', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    fs.writeFileSync(path.join(dir, 'gen.spec.ts'), `test('checkout/apply-coupon: coupon works', async () => {});\n`);
+    fs.writeFileSync(
+      path.join(dir, 'gen.spec.ts'),
+      `test('checkout/apply-coupon: coupon works', async () => {});\n`,
+    );
     fs.writeFileSync(
       path.join(dir, 'verify-result.json'),
-      JSON.stringify({ structuredOutput: { results: [{ id: 'checkout/apply-coupon', status: 'passed', description: '' }] } }),
+      JSON.stringify({
+        structuredOutput: {
+          results: [{ id: 'checkout/apply-coupon', status: 'passed', description: '' }],
+        },
+      }),
     );
-    const neutral = (id: string): ConfidenceRow => ({ behaviorId: id, accepts: 0, overrides: 0, lastUpdatedAt: '' });
+    const neutral = (id: string): ConfidenceRow => ({
+      behaviorId: id,
+      accepts: 0,
+      overrides: 0,
+      lastUpdatedAt: '',
+    });
     const partition = routeBehaviors(makeSpec(), neutral, dir);
     assert.deepEqual(partition.scripted, []);
     assert.equal(partition.agent.length, 4);

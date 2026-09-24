@@ -27,9 +27,7 @@ import { z } from 'zod';
 import { eventBus } from './event-bus.js';
 import { enforceBudget } from './tool-budget.js';
 
-export type FeedbackSink =
-  | { kind: 'bd' }
-  | { kind: 'http'; url: string; bearerFile?: string };
+export type FeedbackSink = { kind: 'bd' } | { kind: 'http'; url: string; bearerFile?: string };
 
 export interface FeedbackMcpContext {
   specId: string;
@@ -41,7 +39,9 @@ export interface FeedbackMcpContext {
   fetchImpl?: typeof fetch;
 }
 
-export function feedbackSinkFromEnv(env: Record<string, string | undefined> = process.env): FeedbackSink {
+export function feedbackSinkFromEnv(
+  env: Record<string, string | undefined> = process.env,
+): FeedbackSink {
   if (env.SPECIFY_FEEDBACK_URL) {
     return {
       kind: 'http',
@@ -75,17 +75,19 @@ export function createFeedbackMcpServer(ctx: FeedbackMcpContext) {
           const budget = enforceBudget(ctx.runId, 'file_ticket');
           if (!budget.ok) {
             return {
-              content: [{
-                type: 'text' as const,
-                text: JSON.stringify({
-                  ok: false,
-                  error: 'budget_exceeded',
-                  tool: 'file_ticket',
-                  limit: budget.limit,
-                  used: budget.used,
-                  hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
-                }),
-              }],
+              content: [
+                {
+                  type: 'text' as const,
+                  text: JSON.stringify({
+                    ok: false,
+                    error: 'budget_exceeded',
+                    tool: 'file_ticket',
+                    limit: budget.limit,
+                    used: budget.used,
+                    hint: 'This tool has a per-run call cap to prevent runaway loops. Continue with a different action or end the run.',
+                  }),
+                },
+              ],
             };
           }
           const id = await fileTicket(ctx, args);
@@ -122,10 +124,14 @@ async function fileTicket(ctx: FeedbackMcpContext, args: TicketArgs): Promise<st
 function severityToPriority(s: TicketArgs['severity']): string {
   // bd priorities: 0 critical, 1 high, 2 medium (default), 3 low, 4 backlog.
   switch (s) {
-    case 'critical': return '0';
-    case 'major':    return '1';
-    case 'minor':    return '2';
-    case 'cosmetic': return '3';
+    case 'critical':
+      return '0';
+    case 'major':
+      return '1';
+    case 'minor':
+      return '2';
+    case 'cosmetic':
+      return '3';
   }
 }
 
@@ -133,10 +139,14 @@ async function fileTicketBd(ctx: FeedbackMcpContext, args: TicketArgs): Promise<
   const description = composeDescription(ctx, args);
   const cliArgs = [
     'create',
-    '--title', args.summary,
-    '--description', description,
-    '--type', 'bug',
-    '--priority', severityToPriority(args.severity),
+    '--title',
+    args.summary,
+    '--description',
+    description,
+    '--type',
+    'bug',
+    '--priority',
+    severityToPriority(args.severity),
   ];
   const exec = ctx.bdExec ?? defaultBdExec;
   const { stdout, code } = await exec(cliArgs);
@@ -164,14 +174,22 @@ function defaultBdExec(args: string[]): Promise<{ stdout: string; code: number |
   return new Promise((resolve, reject) => {
     const proc = spawn('bd', args, { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
-    proc.stdout.on('data', (d: Buffer) => { out += d.toString(); });
-    proc.stderr.on('data', (d: Buffer) => { out += d.toString(); });
+    proc.stdout.on('data', (d: Buffer) => {
+      out += d.toString();
+    });
+    proc.stderr.on('data', (d: Buffer) => {
+      out += d.toString();
+    });
     proc.on('error', reject);
     proc.on('close', (code) => resolve({ stdout: out, code }));
   });
 }
 
-async function fileTicketHttp(ctx: FeedbackMcpContext, sink: { url: string; bearerFile?: string }, args: TicketArgs): Promise<string> {
+async function fileTicketHttp(
+  ctx: FeedbackMcpContext,
+  sink: { url: string; bearerFile?: string },
+  args: TicketArgs,
+): Promise<string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (sink.bearerFile) {
     if (!fs.existsSync(sink.bearerFile)) {

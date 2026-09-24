@@ -94,7 +94,10 @@ export function patternMatches(pattern: string, url: string): boolean {
   if (!pattern) return false;
   if (pattern === '*') return true;
   if (!pattern.includes('*')) return url.includes(pattern);
-  const source = pattern.split('*').map((part) => escapeRegExp(part)).join('.*');
+  const source = pattern
+    .split('*')
+    .map((part) => escapeRegExp(part))
+    .join('.*');
   // Pattern is operator-authored (CLI --fault flags or the agent's own
   // browser_inject_fault calls) — not attacker-controlled input — so the
   // dynamic RegExp construction here isn't a ReDoS/injection surface.

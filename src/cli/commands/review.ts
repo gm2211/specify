@@ -82,37 +82,59 @@ async function reviewStop(): Promise<number> {
   }
   if (!isAlive(existing.pid)) {
     process.stderr.write('Review not running — pid stale, cleaning up.\n');
-    try { fs.unlinkSync(PID_FILE); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch {
+      /* ignore */
+    }
     return ExitCode.SUCCESS;
   }
   try {
     process.kill(existing.pid, 'SIGTERM');
   } catch (err) {
-    process.stderr.write(`Failed to kill pid ${existing.pid}: ${err instanceof Error ? err.message : String(err)}\n`);
+    process.stderr.write(
+      `Failed to kill pid ${existing.pid}: ${err instanceof Error ? err.message : String(err)}\n`,
+    );
     return ExitCode.BROWSER_ERROR;
   }
   await new Promise((r) => setTimeout(r, 500));
   if (isAlive(existing.pid)) {
-    try { process.kill(existing.pid, 'SIGKILL'); } catch { /* ignore */ }
+    try {
+      process.kill(existing.pid, 'SIGKILL');
+    } catch {
+      /* ignore */
+    }
   }
-  try { fs.unlinkSync(PID_FILE); } catch { /* ignore */ }
+  try {
+    fs.unlinkSync(PID_FILE);
+  } catch {
+    /* ignore */
+  }
   process.stderr.write(`Review stopped (pid ${existing.pid}).\n`);
   return ExitCode.SUCCESS;
 }
 
 async function reviewBackground(options: ReviewOptions): Promise<number> {
   if (!options.spec) {
-    process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec' }) + '\n');
+    process.stdout.write(
+      JSON.stringify({ error: 'missing_parameter', parameter: '--spec' }) + '\n',
+    );
     return ExitCode.PARSE_ERROR;
   }
 
   const existing = readPidFile();
   if (existing && isAlive(existing.pid)) {
-    process.stderr.write(`Review already running — pid ${existing.pid}, ${displayUrl(existing.host ?? '127.0.0.1', existing.port)}\n`);
+    process.stderr.write(
+      `Review already running — pid ${existing.pid}, ${displayUrl(existing.host ?? '127.0.0.1', existing.port)}\n`,
+    );
     return ExitCode.SUCCESS;
   }
   if (existing) {
-    try { fs.unlinkSync(PID_FILE); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(PID_FILE);
+    } catch {
+      /* ignore */
+    }
   }
 
   fs.mkdirSync(STATE_DIR, { recursive: true });
@@ -126,8 +148,25 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
   const isTs = scriptPath.endsWith('.ts');
   const cmd = isTs ? 'npx' : process.argv[0];
   const childArgs = isTs
-    ? ['tsx', scriptPath, 'review', '--spec', path.resolve(options.spec), '--port', String(port), '--no-open']
-    : [scriptPath, 'review', '--spec', path.resolve(options.spec), '--port', String(port), '--no-open'];
+    ? [
+        'tsx',
+        scriptPath,
+        'review',
+        '--spec',
+        path.resolve(options.spec),
+        '--port',
+        String(port),
+        '--no-open',
+      ]
+    : [
+        scriptPath,
+        'review',
+        '--spec',
+        path.resolve(options.spec),
+        '--port',
+        String(port),
+        '--no-open',
+      ];
   if (options.agentReport) childArgs.push('--agent-report', path.resolve(options.agentReport));
   // Forward an explicit --host so the detached child (which re-parses its
   // own argv) binds the same interface the caller asked for.
@@ -141,7 +180,10 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
   });
   child.unref();
 
-  fs.writeFileSync(PID_FILE, JSON.stringify({ pid: child.pid, port, host, startedAt: new Date().toISOString() }));
+  fs.writeFileSync(
+    PID_FILE,
+    JSON.stringify({ pid: child.pid, port, host, startedAt: new Date().toISOString() }),
+  );
 
   await new Promise((r) => setTimeout(r, 600));
 
@@ -151,13 +193,10 @@ async function reviewBackground(options: ReviewOptions): Promise<number> {
 
   if (!options.noOpen) {
     const { execFile } = await import('child_process');
-    const openCmd = process.platform === 'darwin' ? 'open'
-      : process.platform === 'win32' ? 'cmd'
-      : 'xdg-open';
+    const openCmd =
+      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'cmd' : 'xdg-open';
     const openUrl = displayUrl(host, port);
-    const openArgs = process.platform === 'win32'
-      ? ['/c', 'start', '', openUrl]
-      : [openUrl];
+    const openArgs = process.platform === 'win32' ? ['/c', 'start', '', openUrl] : [openUrl];
     execFile(openCmd, openArgs, () => {});
   }
 
@@ -174,7 +213,11 @@ export async function review(options: ReviewOptions, _ctx: CliContext): Promise<
   }
 
   if (!options.spec) {
-    const err = { error: 'missing_parameter', parameter: '--spec', message: 'Spec file path is required' };
+    const err = {
+      error: 'missing_parameter',
+      parameter: '--spec',
+      message: 'Spec file path is required',
+    };
     process.stdout.write(JSON.stringify(err) + '\n');
     return ExitCode.PARSE_ERROR;
   }

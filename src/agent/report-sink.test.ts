@@ -3,11 +3,7 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import {
-  attachReportSinks,
-  buildSinks,
-  sinkConfigFromEnv,
-} from './report-sink.js';
+import { attachReportSinks, buildSinks, sinkConfigFromEnv } from './report-sink.js';
 import type { ReportContext } from './report-sink.js';
 import { eventBus } from './event-bus.js';
 
@@ -80,7 +76,10 @@ test('slack sink: posts JSON payload, wraps non-OK as Error', async () => {
       costUsd: 0.1234,
     });
     assert.equal(posted.url, 'https://hooks.slack.com/T/B/X');
-    const p = posted.payload as { text: string; attachments: Array<{ color: string; fields: Array<{ title: string; value: string }> }> };
+    const p = posted.payload as {
+      text: string;
+      attachments: Array<{ color: string; fields: Array<{ title: string; value: string }> }>;
+    };
     assert.match(p.text, /all 5 behaviors passing/);
     assert.equal(p.attachments[0].color, 'good');
     assert.ok(p.attachments[0].fields.some((f) => f.title === 'Cost' && f.value === '$0.1234'));
@@ -110,7 +109,10 @@ test('slack sink: failure color when behaviors failed', async () => {
   try {
     const webhookFile = path.join(dir, 'webhook');
     fs.writeFileSync(webhookFile, 'https://x');
-    let payload: { attachments: Array<{ color: string }>; text: string } = { attachments: [], text: '' };
+    let payload: { attachments: Array<{ color: string }>; text: string } = {
+      attachments: [],
+      text: '',
+    };
     const fetchImpl = (async (_url: string, init?: RequestInit) => {
       payload = JSON.parse(init?.body as string);
       return new Response('ok', { status: 200 });
@@ -197,7 +199,12 @@ function makeVerifyBody(
     task: 'verify',
     structuredOutput: {
       pass: true,
-      summary: { total: results.length, passed: results.filter((r) => r.status === 'passed').length, failed: 0, skipped: 0 },
+      summary: {
+        total: results.length,
+        passed: results.filter((r) => r.status === 'passed').length,
+        failed: 0,
+        skipped: 0,
+      },
       results,
     },
   };
@@ -225,7 +232,10 @@ test('platform sink: area with all untimed behaviors → entry has no durationMs
   assert.equal(entries.length, 1);
   assert.equal(entries[0].area, 'home');
   assert.equal(entries[0].passed, true);
-  assert.ok(!('durationMs' in entries[0]), 'durationMs should be absent when no behavior has timing');
+  assert.ok(
+    !('durationMs' in entries[0]),
+    'durationMs should be absent when no behavior has timing',
+  );
 });
 
 test('platform sink: area with mixed timing → durationMs equals sum of known durations only', async () => {
@@ -241,7 +251,7 @@ test('platform sink: area with mixed timing → durationMs equals sum of known d
     resultPath: '/dev/null',
     body: makeVerifyBody([
       { id: 'home/loads', status: 'passed', duration_ms: 300 },
-      { id: 'home/renders', status: 'passed' },   // no duration_ms
+      { id: 'home/renders', status: 'passed' }, // no duration_ms
       { id: 'home/nav', status: 'passed', duration_ms: 150 },
     ]),
   };
@@ -249,7 +259,11 @@ test('platform sink: area with mixed timing → durationMs equals sum of known d
 
   const entries = postedBody as Array<Record<string, unknown>>;
   assert.equal(entries.length, 1);
-  assert.equal(entries[0].durationMs, 450, 'durationMs should be sum of the two timed behaviors only');
+  assert.equal(
+    entries[0].durationMs,
+    450,
+    'durationMs should be sum of the two timed behaviors only',
+  );
 });
 
 test('platform sink: failed area with all failures confirmed → reproduced: true', async () => {
@@ -269,7 +283,11 @@ test('platform sink: failed area with all failures confirmed → reproduced: tru
         id: 'checkout/free-shipping',
         status: 'failed',
         rationale: 'shipping was charged',
-        repro: { test: 'checkout/free-shipping: ships free over $50', confirmed: true, output: 'generated test failed as expected' },
+        repro: {
+          test: 'checkout/free-shipping: ships free over $50',
+          confirmed: true,
+          output: 'generated test failed as expected',
+        },
       },
     ]),
   };
@@ -297,7 +315,11 @@ test('platform sink: failed area with an unconfirmed failure → reproduced: fal
         id: 'checkout/free-shipping',
         status: 'failed',
         rationale: 'shipping was charged',
-        repro: { test: 'checkout/free-shipping: ships free over $50', confirmed: false, output: 'generated test passed, but the behavior was reported as failed' },
+        repro: {
+          test: 'checkout/free-shipping: ships free over $50',
+          confirmed: false,
+          output: 'generated test passed, but the behavior was reported as failed',
+        },
       },
     ]),
   };
@@ -320,7 +342,9 @@ test('platform sink: failed area with no repro info at all → reproduced: false
   const ctx: ReportContext = {
     id: 'msg_norepro',
     resultPath: '/dev/null',
-    body: makeVerifyBody([{ id: 'checkout/free-shipping', status: 'failed', rationale: 'shipping was charged' }]),
+    body: makeVerifyBody([
+      { id: 'checkout/free-shipping', status: 'failed', rationale: 'shipping was charged' },
+    ]),
   };
   await sinks[0].send(ctx);
 
@@ -386,16 +410,17 @@ test('platform sink: ctx without timestamps → no startedAt/completedAt keys in
   const ctx: ReportContext = {
     id: 'msg_nots',
     resultPath: '/dev/null',
-    body: makeVerifyBody([
-      { id: 'home/loads', status: 'passed', duration_ms: 100 },
-    ]),
+    body: makeVerifyBody([{ id: 'home/loads', status: 'passed', duration_ms: 100 }]),
   };
   await sinks[0].send(ctx);
 
   const entries = postedBody as Array<Record<string, unknown>>;
   assert.equal(entries.length, 1);
   assert.ok(!('startedAt' in entries[0]), 'startedAt should be absent when ctx has no timestamps');
-  assert.ok(!('completedAt' in entries[0]), 'completedAt should be absent when ctx has no timestamps');
+  assert.ok(
+    !('completedAt' in entries[0]),
+    'completedAt should be absent when ctx has no timestamps',
+  );
 });
 
 test('attachReportSinks: bus event with timestamps propagates to platform sink', async () => {

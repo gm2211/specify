@@ -3,14 +3,24 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { defaultDraftsDir, heuristicDescribe, listDrafts, setDraftStatus, synthesizeDraft } from './skill-synthesizer.js';
+import {
+  defaultDraftsDir,
+  heuristicDescribe,
+  listDrafts,
+  setDraftStatus,
+  synthesizeDraft,
+} from './skill-synthesizer.js';
 import type { CandidatePattern } from './pattern-miner.js';
 
 function tmpSpec(): { specPath: string; draftsDir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-syn-'));
   const specPath = path.join(dir, 'specify.spec.yaml');
   fs.writeFileSync(specPath, '# stub\n');
-  return { specPath, draftsDir: defaultDraftsDir(specPath), cleanup: () => fs.rmSync(dir, { recursive: true, force: true }) };
+  return {
+    specPath,
+    draftsDir: defaultDraftsDir(specPath),
+    cleanup: () => fs.rmSync(dir, { recursive: true, force: true }),
+  };
 }
 
 const samplePattern: CandidatePattern = {
@@ -27,9 +37,33 @@ const samplePattern: CandidatePattern = {
     {
       sessionId: 'ses_1',
       events: [
-        { id: 1, sessionId: 'ses_1', ts: '2026-04-27T10:00:00Z', role: 'user', kind: 'browser:click', content: 'click signup button', tags: null },
-        { id: 2, sessionId: 'ses_1', ts: '2026-04-27T10:00:01Z', role: 'user', kind: 'browser:input', content: 'type email address', tags: null },
-        { id: 3, sessionId: 'ses_1', ts: '2026-04-27T10:00:02Z', role: 'user', kind: 'browser:click', content: 'click submit button', tags: null },
+        {
+          id: 1,
+          sessionId: 'ses_1',
+          ts: '2026-04-27T10:00:00Z',
+          role: 'user',
+          kind: 'browser:click',
+          content: 'click signup button',
+          tags: null,
+        },
+        {
+          id: 2,
+          sessionId: 'ses_1',
+          ts: '2026-04-27T10:00:01Z',
+          role: 'user',
+          kind: 'browser:input',
+          content: 'type email address',
+          tags: null,
+        },
+        {
+          id: 3,
+          sessionId: 'ses_1',
+          ts: '2026-04-27T10:00:02Z',
+          role: 'user',
+          kind: 'browser:click',
+          content: 'click submit button',
+          tags: null,
+        },
       ],
     },
   ],

@@ -25,7 +25,12 @@ import {
 
 // --- Fixture helpers ---------------------------------------------------------
 
-function traffic(url: string, status: number, ts: number, extra: Partial<CapturedTraffic> = {}): CapturedTraffic {
+function traffic(
+  url: string,
+  status: number,
+  ts: number,
+  extra: Partial<CapturedTraffic> = {},
+): CapturedTraffic {
   return {
     url,
     method: 'GET',
@@ -81,7 +86,11 @@ function formulasFile(...formulas: FormulaEntry[]): FormulasFile {
   return { version: 1, predicates_version: 1, formulas };
 }
 
-function behaviorResult(id: string, status: 'passed' | 'failed' | 'skipped', rationale?: string): BehaviorResult {
+function behaviorResult(
+  id: string,
+  status: 'passed' | 'failed' | 'skipped',
+  rationale?: string,
+): BehaviorResult {
   return { id, description: `behavior ${id}`, status, ...(rationale ? { rationale } : {}) };
 }
 
@@ -104,7 +113,10 @@ function verifyOutput(...results: BehaviorResult[]): VerifyOut {
 
 type EmittedEvent = { type: MonitorEventType; data: Record<string, unknown> };
 
-function emitSink(): { events: EmittedEvent[]; emit: (type: MonitorEventType, data: Record<string, unknown>) => void } {
+function emitSink(): {
+  events: EmittedEvent[];
+  emit: (type: MonitorEventType, data: Record<string, unknown>) => void;
+} {
   const events: EmittedEvent[] = [];
   return { events, emit: (type, data) => events.push({ type, data }) };
 }
@@ -115,7 +127,10 @@ function serverErrorTrace() {
     step(0, { action: 'goto', trafficRange: [0, 1], consoleRange: [0, 0] }),
     step(1, { trafficRange: [1, 2], consoleRange: [0, 1] }),
   ];
-  const t = [traffic('https://app.test/api/session', 200, 100), traffic('https://app.test/api/save', 500, 1100)];
+  const t = [
+    traffic('https://app.test/api/session', 200, 100),
+    traffic('https://app.test/api/save', 500, 1100),
+  ];
   const c = [consoleEntry('error', 'save failed', 1150)];
   return buildVerifyTrace(steps, t, c);
 }
@@ -132,7 +147,12 @@ const BEHAVIOR = 'checkout/save-works';
 test('approved violated formula overrides an LLM pass: failed, verdict_source monitor, witness present', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed', 'Looked fine.'));
   const sink = emitSink();
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace(), { emit: sink.emit });
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    serverErrorTrace(),
+    { emit: sink.emit },
+  );
 
   const out = merged.output as VerifyOut;
   const result = out.results[0];
@@ -164,7 +184,11 @@ test('approved violated formula overrides an LLM pass: failed, verdict_source mo
 
 test('approved violated formula + LLM fail: concur, verdict_source monitor+llm, not monitor-only', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'failed', 'Save button broken.'));
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace());
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    serverErrorTrace(),
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'failed');
@@ -180,7 +204,12 @@ test('satisfied approved formula never overturns an LLM fail: disagreement flagg
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'failed', 'Confirmation page missing.'));
   const sink = emitSink();
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')), trace, { emit: sink.emit });
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')),
+    trace,
+    { emit: sink.emit },
+  );
 
   const out = merged.output as VerifyOut;
   const result = out.results[0];
@@ -200,7 +229,11 @@ test('satisfied approved formula + LLM pass: passed, verdict_source monitor+llm'
   const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')), trace);
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')),
+    trace,
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'passed');
@@ -212,7 +245,12 @@ test('satisfied approved formula + LLM pass: passed, verdict_source monitor+llm'
 test('draft formula violated: shadow mode — advisory verdict attached, no status change, no events', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
   const sink = emitSink();
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'draft')), serverErrorTrace(), { emit: sink.emit });
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'draft')),
+    serverErrorTrace(),
+    { emit: sink.emit },
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'passed');
@@ -229,7 +267,11 @@ test('unevaluable predicate: verdict unevaluable, no status change', () => {
   // ax.role needs an AX snapshot + axBaseDir; neither is available here.
   const formula = eventually(pred('ax.role', ['button', 'Save']));
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, formula, 'approved')), serverErrorTrace());
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, formula, 'approved')),
+    serverErrorTrace(),
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'passed');
@@ -247,7 +289,11 @@ test('inconclusive verdict (prefix semantics, obligation never witnessed): no st
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
   const formula = eventually(pred('http.request', ['/api/save']));
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, formula, 'approved')), trace);
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, formula, 'approved')),
+    trace,
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'passed');
@@ -259,18 +305,30 @@ test('inconclusive verdict (prefix semantics, obligation never witnessed): no st
 test('rejected formulas are not evaluated; no applicable formulas returns the input by reference', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
 
-  const rejectedOnly = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'rejected')), serverErrorTrace());
+  const rejectedOnly = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'rejected')),
+    serverErrorTrace(),
+  );
   assert.equal(rejectedOnly.output, output);
   assert.equal(rejectedOnly.verdictsAttached, 0);
 
-  const otherBehavior = mergeMonitorVerdicts(output, formulasFile(formulaEntry('other/behavior', NO_5XX, 'approved')), serverErrorTrace());
+  const otherBehavior = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry('other/behavior', NO_5XX, 'approved')),
+    serverErrorTrace(),
+  );
   assert.equal(otherBehavior.output, output);
 });
 
 test('merge never mutates the input structured output', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed', 'Looked fine.'));
   const snapshot = JSON.stringify(output);
-  mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace());
+  mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    serverErrorTrace(),
+  );
   assert.equal(JSON.stringify(output), snapshot);
 });
 
@@ -279,7 +337,11 @@ test('behaviors without formulas are untouched; summary recomputed across the mi
     behaviorResult(BEHAVIOR, 'passed'),
     behaviorResult('other/untouched', 'passed'),
   );
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace());
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    serverErrorTrace(),
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[1].monitor, undefined);
@@ -294,7 +356,11 @@ test('isMonitorOnlyFailure: mixed failures (any LLM-reported fail) are not monit
     behaviorResult(BEHAVIOR, 'passed'),
     behaviorResult('other/llm-failed', 'failed'),
   );
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace());
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    serverErrorTrace(),
+  );
   assert.equal(isMonitorOnlyFailure(merged.output), false);
   // And a fully-passing output is never monitor-only.
   assert.equal(isMonitorOnlyFailure(verifyOutput(behaviorResult(BEHAVIOR, 'passed'))), false);
@@ -302,7 +368,11 @@ test('isMonitorOnlyFailure: mixed failures (any LLM-reported fail) are not monit
 
 test('malformed structured output (no results array) is returned untouched', () => {
   for (const bad of [undefined, null, 42, 'text', {}, { results: 'nope' }]) {
-    const merged = mergeMonitorVerdicts(bad, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), serverErrorTrace());
+    const merged = mergeMonitorVerdicts(
+      bad,
+      formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+      serverErrorTrace(),
+    );
     assert.equal(merged.output, bad);
     assert.equal(merged.verdictsAttached, 0);
   }
@@ -329,7 +399,10 @@ test('buildVerifyTrace: step positions with index-slice event windows; final ope
   assert.equal(trace[1].events.length, 3); // b, c and the console error
   assert.ok(trace[0].step);
   // Events within a window are timestamp-sorted.
-  assert.deepEqual(trace[1].events.map((e) => e.ts), [1100, 1150, 1200]);
+  assert.deepEqual(
+    trace[1].events.map((e) => e.ts),
+    [1100, 1150, 1200],
+  );
 });
 
 test('buildVerifyTrace fallback: no steps -> event timeline; step predicates unevaluable, event formulas evaluable', () => {
@@ -358,16 +431,23 @@ test('mergeMonitorVerdictsForRun: builds the trace from in-memory run data and m
     step(0, { action: 'goto', trafficRange: [0, 1], consoleRange: [0, 0] }),
     step(1, { trafficRange: [1, 1], consoleRange: [0, 0] }), // open final range
   ];
-  const t = [traffic('https://app.test/api/session', 200, 100), traffic('https://app.test/api/save', 500, 1100)];
+  const t = [
+    traffic('https://app.test/api/session', 200, 100),
+    traffic('https://app.test/api/save', 500, 1100),
+  ];
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
   const sink = emitSink();
 
-  const merged = mergeMonitorVerdictsForRun(output, formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')), {
-    steps,
-    traffic: t,
-    consoleLogs: [],
-    emit: sink.emit,
-  });
+  const merged = mergeMonitorVerdictsForRun(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, NO_5XX, 'approved')),
+    {
+      steps,
+      traffic: t,
+      consoleLogs: [],
+      emit: sink.emit,
+    },
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].status, 'failed');
@@ -400,7 +480,9 @@ test('SP-efp: F(dom.visible(#toast)) satisfied end-to-end via verdict-merge over
   const trace = buildVerifyTrace(steps, [], []);
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const file = formulasFile(formulaEntry(BEHAVIOR, eventually(pred('dom.visible', ['#toast'])), 'approved'));
+  const file = formulasFile(
+    formulaEntry(BEHAVIOR, eventually(pred('dom.visible', ['#toast'])), 'approved'),
+  );
   const merged = mergeMonitorVerdicts(output, file, trace);
 
   const out = merged.output as VerifyOut;
@@ -419,7 +501,9 @@ test('SP-efp: G(dom.visible(#toast)) violated end-to-end forces the behavior to 
   const trace = buildVerifyTrace(steps, [], []);
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const file = formulasFile(formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'));
+  const file = formulasFile(
+    formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'),
+  );
   const merged = mergeMonitorVerdicts(output, file, trace);
 
   const out = merged.output as VerifyOut;
@@ -435,7 +519,9 @@ test('SP-efp: dom.* probe never sampled (no probes map on any step) is unevaluab
   const trace = buildVerifyTrace(steps, [], []);
 
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const file = formulasFile(formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'));
+  const file = formulasFile(
+    formulaEntry(BEHAVIOR, globally(pred('dom.visible', ['#toast'])), 'approved'),
+  );
   const merged = mergeMonitorVerdicts(output, file, trace);
 
   const out = merged.output as VerifyOut;
@@ -452,7 +538,10 @@ test('SP-efp: dom.* probe never sampled (no probes map on any step) is unevaluab
 // /api/session and /api/save), so the implication holds vacuously at
 // position 0 and F is satisfied immediately — a hollow pass.
 const VACUOUS_SAVE = eventually(
-  implies(pred('http.request', ['/api/never-called']), pred('http.response', ['/api/never-called', '200'])),
+  implies(
+    pred('http.request', ['/api/never-called']),
+    pred('http.response', ['/api/never-called', '200']),
+  ),
 );
 
 test('vacuous satisfied formula: verdict is satisfied but flagged vacuous, and emits monitor:vacuous', () => {
@@ -477,9 +566,14 @@ test('non-vacuous satisfied formula: no vacuous flag, no monitor:vacuous event',
   const trace = buildVerifyTrace(steps, [traffic('https://app.test/api/save', 200, 100)], []);
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
   const sink = emitSink();
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')), trace, {
-    emit: sink.emit,
-  });
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'approved')),
+    trace,
+    {
+      emit: sink.emit,
+    },
+  );
 
   const out = merged.output as VerifyOut;
   assert.equal(out.results[0].monitor?.[0].verdict, 'satisfied');
@@ -489,7 +583,11 @@ test('non-vacuous satisfied formula: no vacuous flag, no monitor:vacuous event',
 
 test('formulaStats is absent from the result when opts.statsFile is not provided', () => {
   const output = verifyOutput(behaviorResult(BEHAVIOR, 'passed'));
-  const merged = mergeMonitorVerdicts(output, formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'draft')), serverErrorTrace());
+  const merged = mergeMonitorVerdicts(
+    output,
+    formulasFile(formulaEntry(BEHAVIOR, SAVE_OK, 'draft')),
+    serverErrorTrace(),
+  );
   assert.equal(merged.formulaStats, undefined);
 });
 
@@ -507,7 +605,11 @@ test('formulaStats: draft shadow-mode agreement folds into the stats file and re
     statsFile = merged.formulaStats!.file;
     lastPromotion = merged.formulaStats!.promotionSuggested;
   }
-  assert.deepEqual(lastPromotion, ['fml-shadow'], 'promotion suggested on the run that crosses the streak');
+  assert.deepEqual(
+    lastPromotion,
+    ['fml-shadow'],
+    'promotion suggested on the run that crosses the streak',
+  );
   assert.equal(statsFile.rows['fml-shadow'].agreements, PROMOTION_STREAK);
 });
 
@@ -537,7 +639,11 @@ test('formulaStats end-to-end drift: a grounded formula going unevaluable across
     allDriftDetections.push(...merged.formulaStats!.driftDetected);
   }
 
-  assert.deepEqual(allDriftDetections, ['fml-drifting'], 'drift detected exactly once across the run series');
+  assert.deepEqual(
+    allDriftDetections,
+    ['fml-drifting'],
+    'drift detected exactly once across the run series',
+  );
   assert.equal(statsFile.rows['fml-drifting'].driftFlagged, true);
   assert.ok(statsFile.rows['fml-drifting'].unevaluable >= DRIFT_WINDOW - 1);
 });

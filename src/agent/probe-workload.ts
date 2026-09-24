@@ -159,7 +159,10 @@ export class ProbeHttpError extends Error {
  * (kind `timeout` for aborts/timeouts, `network` for definite pre-flight
  * failures) when no response is received.
  */
-export type ProbeHttpClient = (req: ProbeHttpRequest, opts: { timeoutMs: number }) => Promise<ProbeHttpResponse>;
+export type ProbeHttpClient = (
+  req: ProbeHttpRequest,
+  opts: { timeoutMs: number },
+) => Promise<ProbeHttpResponse>;
 
 /** Largest response body (in chars) retained on a ProbeResponseRecord. */
 const MAX_RESPONSE_BODY_CHARS = 64 * 1024;
@@ -188,7 +191,8 @@ export const defaultHttpClient: ProbeHttpClient = async (req, opts) => {
     });
   } catch (err) {
     const name = err instanceof Error ? err.name : '';
-    const kind: ProbeHttpErrorKind = name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network';
+    const kind: ProbeHttpErrorKind =
+      name === 'TimeoutError' || name === 'AbortError' ? 'timeout' : 'network';
     throw new ProbeHttpError(err instanceof Error ? err.message : String(err), kind, err);
   }
 
@@ -198,7 +202,8 @@ export const defaultHttpClient: ProbeHttpClient = async (req, opts) => {
   } catch {
     // Body read failed after headers arrived; still a definite response.
   }
-  const capped = text.length > MAX_RESPONSE_BODY_CHARS ? text.slice(0, MAX_RESPONSE_BODY_CHARS) : text;
+  const capped =
+    text.length > MAX_RESPONSE_BODY_CHARS ? text.slice(0, MAX_RESPONSE_BODY_CHARS) : text;
   return { status: res.status, body: parseMaybeJson(capped) };
 };
 
@@ -253,7 +258,9 @@ export function renderTemplate(template: string, params: Record<string, string>)
     const name = seg.slice(1);
     const value = params[name];
     if (value === undefined) {
-      throw new TemplateRenderError(`Template "${template}" needs param ":${name}" but it was not provided`);
+      throw new TemplateRenderError(
+        `Template "${template}" needs param ":${name}" but it was not provided`,
+      );
     }
     return encodeURIComponent(value);
   });
@@ -519,19 +526,36 @@ export async function runProbeWorkload(
       // 2. READ (read-your-writes)
       if (wl.read) {
         entityResult.ops.push(
-          await runOne({ type: 'read', entity: wl.entity, marker: currentMarker, method: wl.read.method, template: wl.read.template, params: readParams, headers }),
+          await runOne({
+            type: 'read',
+            entity: wl.entity,
+            marker: currentMarker,
+            method: wl.read.method,
+            template: wl.read.template,
+            params: readParams,
+            headers,
+          }),
         );
       }
       // 3. LIST (create-appears-in-subsequent-list)
       if (wl.list) {
         entityResult.ops.push(
-          await runOne({ type: 'list', entity: wl.entity, marker: currentMarker, method: wl.list.method, template: wl.list.template, params: {}, headers }),
+          await runOne({
+            type: 'list',
+            entity: wl.entity,
+            marker: currentMarker,
+            method: wl.list.method,
+            template: wl.list.template,
+            params: {},
+            headers,
+          }),
         );
       }
       // 4. UPDATE (a second marked write; monotonic reads afterward)
       if (wl.update) {
         const updateMarker = wl.update.markerField ? mint(markers, genId) : currentMarker;
-        const updateBody = wl.update.markerField && updateMarker ? { [wl.update.markerField]: updateMarker } : {};
+        const updateBody =
+          wl.update.markerField && updateMarker ? { [wl.update.markerField]: updateMarker } : {};
         const updateParams = itemParams(wl.update.idLocation, wl.update, id);
         const updateRec = await runOne({
           type: 'update',
@@ -549,7 +573,15 @@ export async function runProbeWorkload(
         // 5. READ again (monotonic read: never observe an older marker)
         if (wl.read) {
           entityResult.ops.push(
-            await runOne({ type: 'read', entity: wl.entity, marker: currentMarker, method: wl.read.method, template: wl.read.template, params: readParams, headers }),
+            await runOne({
+              type: 'read',
+              entity: wl.entity,
+              marker: currentMarker,
+              method: wl.read.method,
+              template: wl.read.template,
+              params: readParams,
+              headers,
+            }),
           );
         }
       }
@@ -558,7 +590,10 @@ export async function runProbeWorkload(
       // DELETE template would hit far more than the one probe entity. A
       // skipped delete leaves the entity for cleanup, which reports it as
       // skipped-unsafe.
-      if (wl.delete && deleteAddressesId(wl.delete, itemParams(wl.delete.idLocation, wl.delete, id))) {
+      if (
+        wl.delete &&
+        deleteAddressesId(wl.delete, itemParams(wl.delete.idLocation, wl.delete, id))
+      ) {
         const deleteParams = itemParams(wl.delete.idLocation, wl.delete, id);
         const deleteRec = await runOne({
           type: 'delete',
@@ -575,7 +610,15 @@ export async function runProbeWorkload(
         // 7. READ after delete (no-resurrection-after-delete)
         if (wl.read) {
           entityResult.ops.push(
-            await runOne({ type: 'read', entity: wl.entity, marker: currentMarker, method: wl.read.method, template: wl.read.template, params: readParams, headers }),
+            await runOne({
+              type: 'read',
+              entity: wl.entity,
+              marker: currentMarker,
+              method: wl.read.method,
+              template: wl.read.template,
+              params: readParams,
+              headers,
+            }),
           );
         }
       }
@@ -584,7 +627,17 @@ export async function runProbeWorkload(
     entities.push(entityResult);
   }
 
-  const cleanup = await cleanupEntities(entities, bounded, baseUrl, headers, http, now, timeoutMs, nextOpId, allOps);
+  const cleanup = await cleanupEntities(
+    entities,
+    bounded,
+    baseUrl,
+    headers,
+    http,
+    now,
+    timeoutMs,
+    nextOpId,
+    allOps,
+  );
 
   return { ops: allOps, entities, markers: [...markers], cleanup };
 }
@@ -621,7 +674,11 @@ function deleteAddressesId(del: EndpointEntry, params: Record<string, string>): 
 /** Build the path-param map for an item endpoint, mapping its id path param to
  * the created id. Falls back to the create idLocation's param when the item
  * endpoint's own idLocation is not a path param. */
-function itemParams(createIdLocation: IdLocation, itemEndpoint: EndpointEntry | undefined, id: string): Record<string, string> {
+function itemParams(
+  createIdLocation: IdLocation,
+  itemEndpoint: EndpointEntry | undefined,
+  id: string,
+): Record<string, string> {
   const params: Record<string, string> = {};
   const loc = itemEndpoint?.idLocation;
   if (loc && loc.kind === 'path') {
@@ -680,7 +737,17 @@ async function executeOp(args: ExecuteOpArgs): Promise<ProbeOpRecord> {
       url: `${baseUrl}${spec.template}`,
       ...(spec.body !== undefined ? { body: spec.body } : {}),
     };
-    return { opId, type, entity, marker, invokeTs, completeTs: now(), outcome: 'fail', request, error: message };
+    return {
+      opId,
+      type,
+      entity,
+      marker,
+      invokeTs,
+      completeTs: now(),
+      outcome: 'fail',
+      request,
+      error: message,
+    };
   }
 
   const request: ProbeRequestRecord = {
@@ -701,10 +768,30 @@ async function executeOp(args: ExecuteOpArgs): Promise<ProbeOpRecord> {
   } catch (err) {
     const completeTs = now();
     if (err instanceof ProbeHttpError && err.kind === 'timeout') {
-      return { opId, type, entity, marker, invokeTs, completeTs, outcome: 'indeterminate', request, error: err.message };
+      return {
+        opId,
+        type,
+        entity,
+        marker,
+        invokeTs,
+        completeTs,
+        outcome: 'indeterminate',
+        request,
+        error: err.message,
+      };
     }
     const message = err instanceof Error ? err.message : String(err);
-    return { opId, type, entity, marker, invokeTs, completeTs, outcome: 'fail', request, error: message };
+    return {
+      opId,
+      type,
+      entity,
+      marker,
+      invokeTs,
+      completeTs,
+      outcome: 'fail',
+      request,
+      error: message,
+    };
   }
 
   const completeTs = now();
@@ -752,7 +839,12 @@ async function cleanupEntities(
     if (!del) {
       // Nothing we can do — no delete endpoint. Report as a failed attempt so
       // the leftover is visible.
-      attempts.push({ entity: ent.entity, id: ent.createdId, outcome: 'fail', error: 'no approved delete endpoint' });
+      attempts.push({
+        entity: ent.entity,
+        id: ent.createdId,
+        outcome: 'fail',
+        error: 'no approved delete endpoint',
+      });
       continue;
     }
     const params = itemParams(wl!.create!.idLocation, del, ent.createdId);
@@ -769,7 +861,15 @@ async function cleanupEntities(
     }
     const rec = await executeOp({
       opId: nextOpId(),
-      spec: { type: 'delete', entity: ent.entity, marker: ent.marker, method: del.method, template: del.template, params, headers },
+      spec: {
+        type: 'delete',
+        entity: ent.entity,
+        marker: ent.marker,
+        method: del.method,
+        template: del.template,
+        params,
+        headers,
+      },
       baseUrl,
       http,
       now,

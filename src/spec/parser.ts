@@ -164,12 +164,14 @@ function loadSpecDirectory(rootPath: string): LoadedSpec {
       errors.push({
         path: '/areas',
         sourcePath: manifestPath,
-        message: 'Manifest areas must be an array of relative fragment paths or inline area objects',
+        message:
+          'Manifest areas must be an array of relative fragment paths or inline area objects',
       });
     }
   } else {
-    areaEntries = discoverAreaFragmentPaths(rootPath)
-      .map((fragmentPath) => path.relative(path.dirname(manifestPath), fragmentPath));
+    areaEntries = discoverAreaFragmentPaths(rootPath).map((fragmentPath) =>
+      path.relative(path.dirname(manifestPath), fragmentPath),
+    );
   }
   const areas: Area[] = [];
   const areaSources: Record<string, string> = {};
@@ -340,7 +342,13 @@ function areaObjectsFromFragment(sourcePath: string): {
   }
   return {
     areas: [],
-    errors: [{ path: '/', sourcePath, message: 'Area fragment must contain an area object or an array of area objects' }],
+    errors: [
+      {
+        path: '/',
+        sourcePath,
+        message: 'Area fragment must contain an area object or an array of area objects',
+      },
+    ],
   };
 }
 

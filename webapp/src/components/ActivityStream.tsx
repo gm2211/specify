@@ -40,11 +40,21 @@ function eventToLine(evt: AgentEvent, id: number): LogLine | null {
       return { id, kind: 'tool', text: s, ts: now };
     }
     case 'agent:retry':
-      return { id, kind: 'status', text: `retrying (attempt ${d.attempt}/${d.maxRetries})`, ts: now };
+      return {
+        id,
+        kind: 'status',
+        text: `retrying (attempt ${d.attempt}/${d.maxRetries})`,
+        ts: now,
+      };
     case 'agent:ask_user':
       return { id, kind: 'status', text: `agent asks: ${d.question}`, ts: now };
     case 'agent:completed':
-      return { id, kind: 'status', text: `agent completed — pass: ${d.pass} ($${Number(d.costUsd ?? 0).toFixed(4)})`, ts: now };
+      return {
+        id,
+        kind: 'status',
+        text: `agent completed — pass: ${d.pass} ($${Number(d.costUsd ?? 0).toFixed(4)})`,
+        ts: now,
+      };
     case 'agent:error':
       return { id, kind: 'error', text: `agent error: ${clean(String(d.subtype ?? ''))}`, ts: now };
     case 'agent:failed':
@@ -53,10 +63,22 @@ function eventToLine(evt: AgentEvent, id: number): LogLine | null {
     case 'behavior:failed':
     case 'behavior:skipped': {
       const status = evt.type.split(':')[1];
-      return { id, kind: 'behavior', text: `${status}: ${d.id}`, ts: now, sessionId: evt.sessionId, behaviorId: typeof d.id === 'string' ? d.id : undefined };
+      return {
+        id,
+        kind: 'behavior',
+        text: `${status}: ${d.id}`,
+        ts: now,
+        sessionId: evt.sessionId,
+        behaviorId: typeof d.id === 'string' ? d.id : undefined,
+      };
     }
     case 'verify:started':
-      return { id, kind: 'status', text: `verify started${d.scope ? ` (${(d.scope as { areaId: string; behaviorId: string }).areaId}/${(d.scope as { areaId: string; behaviorId: string }).behaviorId})` : ''}`, ts: now };
+      return {
+        id,
+        kind: 'status',
+        text: `verify started${d.scope ? ` (${(d.scope as { areaId: string; behaviorId: string }).areaId}/${(d.scope as { areaId: string; behaviorId: string }).behaviorId})` : ''}`,
+        ts: now,
+      };
     case 'verify:completed':
       return { id, kind: 'status', text: 'verify complete', ts: now };
     case 'verify:failed':
@@ -144,10 +166,10 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
         aria-expanded={expanded}
       >
         <span className={`activity-stream-pulse ${active ? 'activity-stream-pulse--on' : ''}`} />
-        <span className="activity-stream-title">
-          {active ? 'Agent running' : 'Last agent run'}
+        <span className="activity-stream-title">{active ? 'Agent running' : 'Last agent run'}</span>
+        <span className="activity-stream-count">
+          {lines.length} event{lines.length === 1 ? '' : 's'}
         </span>
-        <span className="activity-stream-count">{lines.length} event{lines.length === 1 ? '' : 's'}</span>
         <span className="activity-stream-toggle">{expanded ? '−' : '+'}</span>
       </button>
       {expanded && (
@@ -156,7 +178,10 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
             <div className="activity-stream-empty">Waiting for agent output…</div>
           ) : (
             lines.map((line) => (
-              <div key={line.id} className={`activity-line activity-line--${line.kind} ${flashIds.has(line.id) ? 'activity-line--flagged' : ''}`}>
+              <div
+                key={line.id}
+                className={`activity-line activity-line--${line.kind} ${flashIds.has(line.id) ? 'activity-line--flagged' : ''}`}
+              >
                 <span className="activity-time">{timeLabel(line.ts)}</span>
                 <span className="activity-kind">{line.kind}</span>
                 <span className="activity-text">{line.text}</span>
@@ -176,7 +201,9 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
                       sessionId={line.sessionId}
                       behaviorId={line.behaviorId}
                       eventId={`evt_${line.id}`}
-                      defaultKind={line.kind === 'error' || line.kind === 'behavior' ? 'file_bug' : 'note'}
+                      defaultKind={
+                        line.kind === 'error' || line.kind === 'behavior' ? 'file_bug' : 'note'
+                      }
                       placeholder="What did you notice about this event?"
                       onDone={() => {
                         flashSuccess(line.id);
@@ -202,7 +229,11 @@ export default function ActivityStream({ active }: ActivityStreamProps) {
               onCancel={() => setSessionFeedbackOpen(false)}
             />
           ) : (
-            <button type="button" className="activity-session-feedback-toggle" onClick={() => setSessionFeedbackOpen(true)}>
+            <button
+              type="button"
+              className="activity-session-feedback-toggle"
+              onClick={() => setSessionFeedbackOpen(true)}
+            >
               Add session-level feedback
             </button>
           )}

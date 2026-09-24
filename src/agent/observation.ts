@@ -94,7 +94,9 @@ export interface ObservationRecorderOptions {
 const RECORDABLE_ARG_KEYS = ['selector', 'url'] as const;
 
 /** Pick only the safe-to-record keys (selector/url) out of an arbitrary args object. */
-export function extractRecordableArgs(args: Record<string, unknown> | undefined | null): Record<string, unknown> | undefined {
+export function extractRecordableArgs(
+  args: Record<string, unknown> | undefined | null,
+): Record<string, unknown> | undefined {
   if (!args) return undefined;
   const out: Record<string, unknown> = {};
   for (const key of RECORDABLE_ARG_KEYS) {

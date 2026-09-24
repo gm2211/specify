@@ -14,7 +14,10 @@ function renderFaultInjectionSection(faultPlan?: FaultPlan): string {
   if (!faultPlan || faultPlan.rules.length === 0) return '';
 
   const ruleLines = faultPlan.rules
-    .map((r) => `- ${r.method ? r.method.toUpperCase() + ' ' : ''}${r.urlPattern} → ${r.fault}${r.rate < 1 ? ` (rate ${r.rate})` : ''}`)
+    .map(
+      (r) =>
+        `- ${r.method ? r.method.toUpperCase() + ' ' : ''}${r.urlPattern} → ${r.fault}${r.rate < 1 ? ` (rate ${r.rate})` : ''}`,
+    )
     .join('\n');
 
   return `
@@ -337,7 +340,11 @@ export default defineConfig({
 - List all written spec file names (not playwright.config.ts) in the \`test_files\` field of the JSON output`;
 }
 
-export function getCompilePrompt(specYaml: string, predicateDocs: string, existingFormulasYaml: string): string {
+export function getCompilePrompt(
+  specYaml: string,
+  predicateDocs: string,
+  existingFormulasYaml: string,
+): string {
   return `You are Specify, a formula compiler. You do NOT have a browser. Your only
 job is to read plain-language behavior claims from a spec and, for each one,
 either compile it into a finite-trace LTLf formula that a deterministic
@@ -550,4 +557,3 @@ warrants a hand-modeled spec and what it asserts). Each \`skipped\` entry has
 two arrays. Remember: skipping is the correct output for all but a handful of
 flows. The drafted spec is INERT until a human reviews and approves it.`;
 }
-

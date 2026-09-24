@@ -174,7 +174,9 @@ function validateEntry(raw: unknown, index: number, filePath: string): FormulaEn
     compiled_by: compiledBy,
     compiled_at: compiledAt,
     ...(typeof provenanceObj.model === 'string' ? { model: provenanceObj.model } : {}),
-    ...(typeof provenanceObj.session_id === 'string' ? { session_id: provenanceObj.session_id } : {}),
+    ...(typeof provenanceObj.session_id === 'string'
+      ? { session_id: provenanceObj.session_id }
+      : {}),
   };
 
   let parentOf: string[] | undefined;
@@ -221,7 +223,11 @@ export function loadFormulas(filePath: string): FormulasFile | null {
   try {
     raw = yaml.load(fs.readFileSync(filePath, 'utf-8'));
   } catch (err) {
-    throw new FormulasLoadError(`Failed to parse ${filePath} as YAML: ${(err as Error).message}`, filePath, err);
+    throw new FormulasLoadError(
+      `Failed to parse ${filePath} as YAML: ${(err as Error).message}`,
+      filePath,
+      err,
+    );
   }
 
   if (!raw || typeof raw !== 'object') {
@@ -230,7 +236,10 @@ export function loadFormulas(filePath: string): FormulasFile | null {
   const data = raw as Record<string, unknown>;
 
   if (data.version !== 1) {
-    throw new FormulasLoadError(`${filePath} has unsupported version "${String(data.version)}" (expected 1)`, filePath);
+    throw new FormulasLoadError(
+      `${filePath} has unsupported version "${String(data.version)}" (expected 1)`,
+      filePath,
+    );
   }
   if (data.predicates_version !== 1) {
     throw new FormulasLoadError(
@@ -278,7 +287,9 @@ function orderEntry(entry: FormulaEntry): Record<string, unknown> {
     provenance: {
       compiled_by: entry.provenance.compiled_by,
       ...(entry.provenance.model !== undefined ? { model: entry.provenance.model } : {}),
-      ...(entry.provenance.session_id !== undefined ? { session_id: entry.provenance.session_id } : {}),
+      ...(entry.provenance.session_id !== undefined
+        ? { session_id: entry.provenance.session_id }
+        : {}),
       compiled_at: entry.provenance.compiled_at,
     },
   };

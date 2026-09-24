@@ -1,9 +1,9 @@
 id: daemon
 name: Daemon Mode
 prose: >
-  Long-running mode: an HTTP inbox server that accepts verify/capture/freeform tasks from other agents or the MCP
-  daemon tools, idle at zero token cost until a task is pushed in. Deterministic replay/compare tasks live in mockify
-  (`mockify replay --against`, `mockify compare`), not here.
+  Long-running mode: an HTTP inbox server that accepts verify/capture/freeform tasks from other
+  agents or the MCP daemon tools, idle at zero token cost until a task is pushed in. Deterministic
+  replay/compare tasks live in mockify (`mockify replay --against`, `mockify compare`), not here.
 behaviors:
   - id: daemon-runs-forever
     description: |
@@ -19,5 +19,5 @@ behaviors:
       --no-auth disables the inbox's auth check
   - id: daemon-max-workers
     description: >
-      --max-workers caps concurrent daemon tasks (default 2); a non-numeric or non-positive value outputs error JSON
-      with invalid_max_workers and exits 10
+      --max-workers caps concurrent daemon tasks (default 2); a non-numeric or non-positive value
+      outputs error JSON with invalid_max_workers and exits 10

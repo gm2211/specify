@@ -52,7 +52,6 @@ function collectAntecedents(formula: Formula, out: Formula[]): void {
   }
 }
 
-
 export interface VacuityOptions {
   /**
    * Whether `trace` is the COMPLETE record of the observation window. The

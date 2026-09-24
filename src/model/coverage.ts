@@ -317,7 +317,10 @@ const EMBED_CAP = 120;
  * spaces, strip backticks, and cap the length with an ellipsis.
  */
 function sanitizeEmbedded(value: string): string {
-  const cleaned = value.replace(/[\r\n\t]+/g, ' ').replace(/`/g, '').trim();
+  const cleaned = value
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/`/g, '')
+    .trim();
   return cleaned.length > EMBED_CAP ? cleaned.slice(0, EMBED_CAP - 1) + '…' : cleaned;
 }
 

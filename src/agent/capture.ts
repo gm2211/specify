@@ -18,8 +18,19 @@ import type { FaultInjector, FaultType } from './fault-injector.js';
 const FAULT_TIMEOUT_DELAY_MS = 3000;
 
 const STATIC_EXT = new Set([
-  '.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg',
-  '.woff', '.woff2', '.ttf', '.ico', '.map', '.less',
+  '.css',
+  '.js',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.woff',
+  '.woff2',
+  '.ttf',
+  '.ico',
+  '.map',
+  '.less',
 ]);
 
 /**
@@ -31,10 +42,26 @@ const STATIC_EXT = new Set([
  * isn't matched correctly.
  */
 const TWO_LEVEL_PUBLIC_SUFFIXES = new Set([
-  'co.uk', 'org.uk', 'gov.uk', 'ac.uk', 'me.uk', 'net.uk',
-  'com.au', 'net.au', 'org.au', 'gov.au',
-  'co.nz', 'co.jp', 'co.in', 'co.za', 'co.kr',
-  'com.br', 'com.mx', 'com.cn', 'com.sg', 'com.hk',
+  'co.uk',
+  'org.uk',
+  'gov.uk',
+  'ac.uk',
+  'me.uk',
+  'net.uk',
+  'com.au',
+  'net.au',
+  'org.au',
+  'gov.au',
+  'co.nz',
+  'co.jp',
+  'co.in',
+  'co.za',
+  'co.kr',
+  'com.br',
+  'com.mx',
+  'com.cn',
+  'com.sg',
+  'com.hk',
 ]);
 
 /**
@@ -108,12 +135,14 @@ export function shouldCapture(url: string, hostFilter: string): boolean {
 function slugify(url: string): string {
   try {
     const u = new URL(url);
-    return u.pathname
-      .replace(/^\//, '')
-      .replace(/[/?&#=.]/g, '_')
-      .replace(/_+/g, '_')
-      .replace(/_$/, '')
-      .substring(0, 80) || 'page';
+    return (
+      u.pathname
+        .replace(/^\//, '')
+        .replace(/[/?&#=.]/g, '_')
+        .replace(/_+/g, '_')
+        .replace(/_$/, '')
+        .substring(0, 80) || 'page'
+    );
   } catch {
     return 'page';
   }
@@ -205,7 +234,12 @@ export class CaptureCollector {
               url,
               method,
               postData: request.postData() ?? null,
-              status: decision.fault === '500' ? 500 : decision.fault === 'empty' ? 200 : NO_RESPONSE_FAULT_STATUS,
+              status:
+                decision.fault === '500'
+                  ? 500
+                  : decision.fault === 'empty'
+                    ? 200
+                    : NO_RESPONSE_FAULT_STATUS,
               contentType: decision.fault === '500' ? 'application/json' : '',
               ts: tsEnd,
               tsStart,
@@ -317,14 +351,18 @@ export class CaptureCollector {
 
     // Enumerate screenshot files
     const screenshotFiles = fs.existsSync(this.screenshotDir)
-      ? fs.readdirSync(this.screenshotDir)
+      ? fs
+          .readdirSync(this.screenshotDir)
           .filter((f) => f.endsWith('.png'))
           .sort()
           .map((f) => path.join('screenshots', f))
       : [];
 
     // Write summary.txt
-    const endpointMap = new Map<string, { method: string; url: string; status: number | string; count: number }>();
+    const endpointMap = new Map<
+      string,
+      { method: string; url: string; status: number | string; count: number }
+    >();
     for (const req of this.traffic) {
       let pattern: string;
       try {
@@ -338,7 +376,12 @@ export class CaptureCollector {
       if (existing) {
         existing.count++;
       } else {
-        endpointMap.set(key, { method: req.method, url: pattern, status: req.status ?? '?', count: 1 });
+        endpointMap.set(key, {
+          method: req.method,
+          url: pattern,
+          status: req.status ?? '?',
+          count: 1,
+        });
       }
     }
 
@@ -353,7 +396,11 @@ export class CaptureCollector {
       '',
       ...sorted.map((s) => `${s.method.padEnd(7)} ${String(s.status).padEnd(7)} ${s.url}`),
     ];
-    fs.writeFileSync(path.join(this.outputDir, 'summary.txt'), summaryLines.join('\n') + '\n', 'utf-8');
+    fs.writeFileSync(
+      path.join(this.outputDir, 'summary.txt'),
+      summaryLines.join('\n') + '\n',
+      'utf-8',
+    );
 
     // Build and write manifest
     const manifest: CaptureManifest = {
@@ -364,9 +411,17 @@ export class CaptureCollector {
         outputDir: this.outputDir,
         totalRequests: this.traffic.length,
         totalScreenshots: this.screenshotCount,
-        pagesVisited: new Set(this.traffic.filter((t) => t.method === 'GET').map((t) => {
-          try { return new URL(t.url).pathname; } catch { return t.url; }
-        })).size,
+        pagesVisited: new Set(
+          this.traffic
+            .filter((t) => t.method === 'GET')
+            .map((t) => {
+              try {
+                return new URL(t.url).pathname;
+              } catch {
+                return t.url;
+              }
+            }),
+        ).size,
         consoleLogCount: this.consoleLogs.length,
       },
       trafficFile: 'traffic.json',
@@ -378,7 +433,11 @@ export class CaptureCollector {
         : {}),
     };
 
-    fs.writeFileSync(path.join(this.outputDir, 'manifest.json'), JSON.stringify(manifest, null, 2), 'utf-8');
+    fs.writeFileSync(
+      path.join(this.outputDir, 'manifest.json'),
+      JSON.stringify(manifest, null, 2),
+      'utf-8',
+    );
 
     return manifest;
   }

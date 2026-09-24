@@ -8,7 +8,10 @@ import {
   _internal_state,
 } from './pattern-propagator.js';
 
-async function withLearnedSkillsFlag<T>(value: string | undefined, fn: () => T | Promise<T>): Promise<T> {
+async function withLearnedSkillsFlag<T>(
+  value: string | undefined,
+  fn: () => T | Promise<T>,
+): Promise<T> {
   const prev = process.env.SPECIFY_ENABLE_LEARNED_SKILLS;
   try {
     if (value === undefined) delete process.env.SPECIFY_ENABLE_LEARNED_SKILLS;
@@ -48,11 +51,15 @@ test('propagator ignores feedback when learned skills flag is off', async () => 
 
     setActivePropagator(injector);
     try {
-      eventBus.send('feedback:propagate_pattern', {
-        text: 'always check keyboard nav on submit buttons',
-        areaId: 'forms',
-        behaviorId: 'submit',
-      }, 'ses_xx');
+      eventBus.send(
+        'feedback:propagate_pattern',
+        {
+          text: 'always check keyboard nav on submit buttons',
+          areaId: 'forms',
+          behaviorId: 'submit',
+        },
+        'ses_xx',
+      );
       await Promise.resolve();
     } finally {
       setActivePropagator(null);
@@ -86,11 +93,15 @@ test('propagator injects when feedback:propagate_pattern fires and flag is enabl
 
     setActivePropagator(injector);
     try {
-      eventBus.send('feedback:propagate_pattern', {
-        text: 'always check keyboard nav on submit buttons',
-        areaId: 'forms',
-        behaviorId: 'submit',
-      }, 'ses_xx');
+      eventBus.send(
+        'feedback:propagate_pattern',
+        {
+          text: 'always check keyboard nav on submit buttons',
+          areaId: 'forms',
+          behaviorId: 'submit',
+        },
+        'ses_xx',
+      );
       // Sync emit: listener runs synchronously on emit; allow microtask flush.
       await Promise.resolve();
     } finally {

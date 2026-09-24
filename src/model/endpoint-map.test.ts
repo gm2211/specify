@@ -24,11 +24,7 @@ import {
 } from './endpoint-map.js';
 
 // Minimal helper to build a captured request.
-function req(
-  method: string,
-  url: string,
-  extra: Partial<CapturedTraffic> = {},
-): CapturedTraffic {
+function req(method: string, url: string, extra: Partial<CapturedTraffic> = {}): CapturedTraffic {
   return {
     url,
     method,
@@ -257,7 +253,10 @@ test('deriveEndpointMap: output is deterministic and template-sorted', () => {
   );
   // Sorted by template.
   const templates = a.endpoints.map((e) => e.template);
-  assert.deepEqual(templates, [...templates].sort((x, y) => x.localeCompare(y)));
+  assert.deepEqual(
+    templates,
+    [...templates].sort((x, y) => x.localeCompare(y)),
+  );
 });
 
 test('endpointId is stable and method+template derived', () => {
@@ -306,9 +305,7 @@ test('mergeEndpointMap: removed endpoint flagged stale not deleted', () => {
   const first = deriveEndpointMap(fixtureTraffic());
   // Fresh capture no longer includes DELETE /users/:id but the template still
   // exists (GET/PATCH still hit /users/:id) -> not-observed.
-  const withoutDelete = deriveEndpointMap(
-    fixtureTraffic().filter((r) => r.method !== 'DELETE'),
-  );
+  const withoutDelete = deriveEndpointMap(fixtureTraffic().filter((r) => r.method !== 'DELETE'));
   const { file: merged, drifted } = mergeEndpointMap(first, withoutDelete);
   const del = findEndpoint(merged, 'DELETE', '/users/:id')!;
   assert.equal(del.stale, 'not-observed');
@@ -331,7 +328,10 @@ test('mergeEndpointMap: template drift flagged when template disappears', () => 
 
 test('mergeEndpointMap: re-observing a stale endpoint clears the flag', () => {
   const first = deriveEndpointMap(fixtureTraffic());
-  const stale = mergeEndpointMap(first, deriveEndpointMap(fixtureTraffic().filter((r) => r.method !== 'DELETE')));
+  const stale = mergeEndpointMap(
+    first,
+    deriveEndpointMap(fixtureTraffic().filter((r) => r.method !== 'DELETE')),
+  );
   assert.equal(findEndpoint(stale.file, 'DELETE', '/users/:id')!.stale, 'not-observed');
   // Now DELETE shows up again.
   const recovered = mergeEndpointMap(stale.file, deriveEndpointMap(fixtureTraffic()));
@@ -363,7 +363,10 @@ test('approvedEndpoints excludes stale entries', () => {
   const del = findEndpoint(map, 'DELETE', '/users/:id')!;
   let file = setEndpointStatus(map, del.id, 'approved');
   // Merge a capture without DELETE -> becomes stale even though approved.
-  file = mergeEndpointMap(file, deriveEndpointMap(fixtureTraffic().filter((r) => r.method !== 'DELETE'))).file;
+  file = mergeEndpointMap(
+    file,
+    deriveEndpointMap(fixtureTraffic().filter((r) => r.method !== 'DELETE')),
+  ).file;
   assert.ok(findEndpoint(file, 'DELETE', '/users/:id')!.stale);
   assert.ok(approvedEndpoints(file).every((e) => e.method !== 'DELETE'));
 });
@@ -384,7 +387,10 @@ test('save/load round-trips and preserves classification', () => {
     const loaded = loadEndpointMap(p)!;
     assert.equal(loaded.target_key, 'web_api.example.com');
     assert.equal(findEndpoint(loaded, 'GET', '/users/:id')!.status, 'approved');
-    assert.deepEqual(loaded.endpoints.map((e) => e.id), approved.endpoints.map((e) => e.id));
+    assert.deepEqual(
+      loaded.endpoints.map((e) => e.id),
+      approved.endpoints.map((e) => e.id),
+    );
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -403,7 +409,11 @@ test('save canonicalizes endpoint order: load, modify, save without merge', () =
 
     const loaded = loadEndpointMap(p)!;
     const keys = loaded.endpoints.map((e) => `${e.template} ${e.method}`);
-    assert.deepEqual(keys, [...keys].sort((a, b) => a.localeCompare(b)), 'serialized in canonical order');
+    assert.deepEqual(
+      keys,
+      [...keys].sort((a, b) => a.localeCompare(b)),
+      'serialized in canonical order',
+    );
     // The status change itself round-trips.
     assert.equal(loaded.endpoints.filter((e) => e.status === 'approved').length, 1);
   } finally {

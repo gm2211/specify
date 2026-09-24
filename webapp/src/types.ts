@@ -33,7 +33,15 @@ export interface Spec {
 }
 
 export interface ActionTraceEntry {
-  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  type:
+    | 'navigation'
+    | 'click'
+    | 'fill'
+    | 'screenshot'
+    | 'observation'
+    | 'assertion'
+    | 'wait'
+    | 'other';
   description: string;
   screenshot?: string;
   timestamp?: string;

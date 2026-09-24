@@ -58,7 +58,10 @@ export interface ExecResult {
 }
 
 /** The subprocess boundary. Injected in tests; defaults to a real `spawn`. */
-export type QuintExec = (argv: string[], opts: { cwd?: string; timeoutMs: number; env?: NodeJS.ProcessEnv }) => Promise<ExecResult>;
+export type QuintExec = (
+  argv: string[],
+  opts: { cwd?: string; timeoutMs: number; env?: NodeJS.ProcessEnv },
+) => Promise<ExecResult>;
 
 /**
  * Per-stream output cap: 256 KiB, matching src/agent/cli-mcp.ts's
@@ -98,7 +101,10 @@ export const spawnQuint: QuintExec = (argv, opts) =>
     const stdout = new BoundedSink(QUINT_OUTPUT_CAP_BYTES);
     const stderr = new BoundedSink(QUINT_OUTPUT_CAP_BYTES);
     let settled = false;
-    const snapshot = (): Pick<ExecResult, 'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'> => ({
+    const snapshot = (): Pick<
+      ExecResult,
+      'stdout' | 'stderr' | 'stdoutTruncated' | 'stderrTruncated'
+    > => ({
       stdout: stdout.text,
       stderr: stderr.text,
       stdoutTruncated: stdout.truncated,
@@ -111,7 +117,12 @@ export const spawnQuint: QuintExec = (argv, opts) =>
     };
     let child: ReturnType<typeof spawn>;
     try {
-      child = spawn(argv[0], argv.slice(1), { cwd: opts.cwd, env: { ...process.env, ...opts.env }, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'] });
+      child = spawn(argv[0], argv.slice(1), {
+        cwd: opts.cwd,
+        env: { ...process.env, ...opts.env },
+        detached: process.platform !== 'win32',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
     } catch (err) {
       finish({ code: null, ...snapshot(), spawnError: (err as Error).message });
       return;
@@ -120,8 +131,14 @@ export const spawnQuint: QuintExec = (argv, opts) =>
       try {
         if (process.platform !== 'win32' && child.pid) process.kill(-child.pid, 'SIGKILL');
         else child.kill('SIGKILL');
-      } catch { /* already exited */ }
-      finish({ code: null, ...snapshot(), spawnError: `quint timed out after ${opts.timeoutMs}ms` });
+      } catch {
+        /* already exited */
+      }
+      finish({
+        code: null,
+        ...snapshot(),
+        spawnError: `quint timed out after ${opts.timeoutMs}ms`,
+      });
     }, opts.timeoutMs);
     child.stdout?.on('data', (d) => {
       stdout.append(d);
@@ -238,7 +255,14 @@ export async function runQuintSimulation(options: QuintRunOptions): Promise<Quin
   );
 
   const verb = options.symbolic ? 'verify' : 'run';
-  const argv: string[] = [binary, verb, '--out-itf', outFile, '--max-steps', String(options.maxSteps ?? DEFAULT_MAX_STEPS)];
+  const argv: string[] = [
+    binary,
+    verb,
+    '--out-itf',
+    outFile,
+    '--max-steps',
+    String(options.maxSteps ?? DEFAULT_MAX_STEPS),
+  ];
   if (!options.symbolic) {
     argv.push('--max-samples', String(options.maxSamples ?? 1));
   }
@@ -252,12 +276,25 @@ export async function runQuintSimulation(options: QuintRunOptions): Promise<Quin
   } catch (err) {
     // A well-behaved QuintExec never throws; guard defensively anyway.
     safeUnlink(outFile);
-    return { ok: false, traces: [], itfErrors: [], error: `quint exec threw: ${(err as Error).message}`, argv };
+    return {
+      ok: false,
+      traces: [],
+      itfErrors: [],
+      error: `quint exec threw: ${(err as Error).message}`,
+      argv,
+    };
   }
 
   if (result.spawnError) {
     safeUnlink(outFile);
-    return { ok: false, traces: [], itfErrors: [], error: `could not run quint: ${result.spawnError}`, argv, stderr: result.stderr };
+    return {
+      ok: false,
+      traces: [],
+      itfErrors: [],
+      error: `could not run quint: ${result.spawnError}`,
+      argv,
+      stderr: result.stderr,
+    };
   }
 
   // quint exits non-zero when an invariant is VIOLATED — that still writes an

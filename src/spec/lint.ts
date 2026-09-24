@@ -131,7 +131,7 @@ export function lintRaw(
   }
 
   // If schema validation failed badly, skip semantic checks
-  if (errors.some(e => e.rule === 'schema' && e.path === '/')) {
+  if (errors.some((e) => e.rule === 'schema' && e.path === '/')) {
     return { valid: false, errors };
   }
 
@@ -141,7 +141,7 @@ export function lintRaw(
   const sourcePath = _sourceName !== '-' && _sourceName !== '<string>' ? _sourceName : undefined;
   errors.push(...lintSingleFileSize(content, spec, sourcePath));
 
-  const hasErrors = errors.some(e => e.severity === 'error');
+  const hasErrors = errors.some((e) => e.severity === 'error');
   return { valid: !hasErrors, errors };
 }
 
@@ -157,7 +157,7 @@ export function lintPath(specPath: string, options?: LintOptions): LintResult {
       const content = fs.readFileSync(specPath, 'utf-8');
       errors.push(...lintSingleFileSize(content, spec, specPath));
     }
-    const hasErrors = errors.some(e => e.severity === 'error');
+    const hasErrors = errors.some((e) => e.severity === 'error');
     return { valid: !hasErrors, errors };
   } catch (err) {
     if (err instanceof SpecCompositionError) {
@@ -455,7 +455,11 @@ function lintEntailment(formulas: FormulaEntry[]): LintError[] {
  * Only called when a registry was supplied (see lintFormulas above) — this
  * function itself doesn't attempt to resolve one.
  */
-function lintUnknownPredicates(entry: FormulaEntry, index: number, registry: ReadonlySet<string>): LintError[] {
+function lintUnknownPredicates(
+  entry: FormulaEntry,
+  index: number,
+  registry: ReadonlySet<string>,
+): LintError[] {
   const errors: LintError[] = [];
   for (const name of collectPredicateNames(entry.formula)) {
     if (!registry.has(name)) {
@@ -526,9 +530,11 @@ function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
         for (const key of Object.keys(rows as Record<string, unknown>)) {
           const known = key.includes('/') ? fqIds.has(key) : bareBehaviorIds.has(key);
           if (!known) {
-            errors.push(danglingWarning(
-              `confidence.json has a row for unknown behavior "${key}" — no matching behavior in the current spec.`,
-            ));
+            errors.push(
+              danglingWarning(
+                `confidence.json has a row for unknown behavior "${key}" — no matching behavior in the current spec.`,
+              ),
+            );
           }
         }
       }
@@ -541,7 +547,9 @@ function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
   const observationsPath = path.join(rootDir, 'specify.observations.yaml');
   if (fs.existsSync(observationsPath)) {
     try {
-      const raw = yaml.load(fs.readFileSync(observationsPath, 'utf-8')) as { observations?: unknown } | null;
+      const raw = yaml.load(fs.readFileSync(observationsPath, 'utf-8')) as {
+        observations?: unknown;
+      } | null;
       const observations = raw && Array.isArray(raw.observations) ? raw.observations : [];
       for (const o of observations) {
         if (!o || typeof o !== 'object') continue;
@@ -550,9 +558,11 @@ function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
         if (!areaId && !behaviorId) continue;
         if (!isKnownScope(areaId, behaviorId)) {
           const id = (o as Record<string, unknown>).id ?? '?';
-          errors.push(danglingWarning(
-            `Observation "${id}" references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
-          ));
+          errors.push(
+            danglingWarning(
+              `Observation "${id}" references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
+            ),
+          );
         }
       }
     } catch {
@@ -580,9 +590,11 @@ function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
             if (!isKnownScope(areaId, behaviorId)) {
               const id = (row as Record<string, unknown>).id ?? '?';
               const rel = path.relative(rootDir, filePath);
-              errors.push(danglingWarning(
-                `Memory row "${id}" in ${rel} references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
-              ));
+              errors.push(
+                danglingWarning(
+                  `Memory row "${id}" in ${rel} references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
+                ),
+              );
             }
           }
         } catch {

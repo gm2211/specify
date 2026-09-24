@@ -19,8 +19,18 @@ function trace(states: ItfState[]): ItfTrace {
 // ---------------------------------------------------------------------------
 
 test('readPredicateBits: reads an ITF map form', () => {
-  const state: ItfState = { predicates: { map: [['http.response', true], ['page.url', false]] } };
-  assert.deepEqual(readPredicateBits(state, 'predicates'), { 'http.response': true, 'page.url': false });
+  const state: ItfState = {
+    predicates: {
+      map: [
+        ['http.response', true],
+        ['page.url', false],
+      ],
+    },
+  };
+  assert.deepEqual(readPredicateBits(state, 'predicates'), {
+    'http.response': true,
+    'page.url': false,
+  });
 });
 
 test('readPredicateBits: reads a plain record form', () => {
@@ -29,7 +39,14 @@ test('readPredicateBits: reads a plain record form', () => {
 });
 
 test('readPredicateBits: skips non-boolean values', () => {
-  const state: ItfState = { predicates: { map: [['x', 'nope' as unknown as boolean], ['y', true]] } };
+  const state: ItfState = {
+    predicates: {
+      map: [
+        ['x', 'nope' as unknown as boolean],
+        ['y', true],
+      ],
+    },
+  };
   assert.deepEqual(readPredicateBits(state, 'predicates'), { y: true });
 });
 
@@ -89,7 +106,16 @@ test('bridgeItfTrace: ungrounded predicate names are reported, not asserted', ()
   const script = bridgeItfTrace(
     trace([
       { url: '/login', predicates: { map: [['not.a.real.predicate', true]] } },
-      { url: '/dashboard', action: 'browser_click', predicates: { map: [['page.url', true], ['bogus.pred', false]] } },
+      {
+        url: '/dashboard',
+        action: 'browser_click',
+        predicates: {
+          map: [
+            ['page.url', true],
+            ['bogus.pred', false],
+          ],
+        },
+      },
     ]),
     'auth/login',
   );
@@ -179,7 +205,8 @@ test('bridgeApprovedSpecTrace: refuses a draft spec — the gate is structural',
 
 test('bridgeApprovedSpecTrace: refuses a rejected spec', () => {
   assert.throws(
-    () => bridgeApprovedSpecTrace(storeWith('rejected'), 'qnt-0123456789', trace([{ url: '/login' }])),
+    () =>
+      bridgeApprovedSpecTrace(storeWith('rejected'), 'qnt-0123456789', trace([{ url: '/login' }])),
     QuintSpecNotApprovedError,
   );
 });

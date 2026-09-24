@@ -21,11 +21,7 @@
  *     uses innerHTML on anything derived from the payload.
  */
 
-import type {
-  BehaviorResult,
-  GuaranteeCheck,
-  MonitorVerdict,
-} from '../spec/types.js';
+import type { BehaviorResult, GuaranteeCheck, MonitorVerdict } from '../spec/types.js';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -92,12 +88,28 @@ export interface ProofEvidenceItem {
 }
 
 export type ProofEvidenceActual =
-  | { kind: 'cli'; step: number; argv: string[]; stdout: string; stderr: string; exitCode: number | null; signal?: string }
+  | {
+      kind: 'cli';
+      step: number;
+      argv: string[];
+      stdout: string;
+      stderr: string;
+      exitCode: number | null;
+      signal?: string;
+    }
   | { kind: 'screenshot'; key: string; step?: number; url?: string }
   | { kind: 'scripted' };
 
 export interface ProofTraceStep {
-  type: 'navigation' | 'click' | 'fill' | 'screenshot' | 'observation' | 'assertion' | 'wait' | 'other';
+  type:
+    | 'navigation'
+    | 'click'
+    | 'fill'
+    | 'screenshot'
+    | 'observation'
+    | 'assertion'
+    | 'wait'
+    | 'other';
   description: string;
   timestamp?: string;
   screenshotKey?: string;
@@ -162,7 +174,13 @@ export const PROOF_LINE_MS = 30;
 // Escaping — the single choke point for untrusted text
 // ---------------------------------------------------------------------------
 
-const HTML_ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
 
 export function escapeHtml(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
@@ -234,11 +252,23 @@ export function renderProofHtml(input: ProofInput): string {
             .filter((b) => b.frames.length > 0)
             .map((b) => [
               slugId(b.id),
-              b.frames.map((f) => ({ key: f.key, caption: f.caption, step: f.observationStep, url: f.url, source: f.source })),
+              b.frames.map((f) => ({
+                key: f.key,
+                caption: f.caption,
+                step: f.observationStep,
+                url: f.url,
+                source: f.source,
+              })),
             ]),
         ),
       ),
-      session: input.sessionFrames.map((f) => ({ key: f.key, caption: f.caption, step: f.observationStep, url: f.url, source: f.source })),
+      session: input.sessionFrames.map((f) => ({
+        key: f.key,
+        caption: f.caption,
+        step: f.observationStep,
+        url: f.url,
+        source: f.source,
+      })),
     },
   };
   const payloadJson = escapeJsonForScript(JSON.stringify(payload));
@@ -301,12 +331,17 @@ function renderHeader(input: ProofInput): string {
   ];
   const total = run.summary.total;
   const segsHtml = segs
-    .map((s) => `<span class="progress-seg progress-seg--${s.key}" style="width:${pct(run.summary[s.key], total).toFixed(2)}%"></span>`)
+    .map(
+      (s) =>
+        `<span class="progress-seg progress-seg--${s.key}" style="width:${pct(run.summary[s.key], total).toFixed(2)}%"></span>`,
+    )
     .join('');
   const ariaLabel = `${run.summary.passed} passed, ${run.summary.failed} failed, ${run.summary.skipped} skipped, ${run.summary.untested} untested of ${total} behaviors`;
 
   const countsHtml = segs
-    .map((s) => `<span class="count count--${s.key}"><b>${run.summary[s.key]}</b> ${s.label}</span>`)
+    .map(
+      (s) => `<span class="count count--${s.key}"><b>${run.summary[s.key]}</b> ${s.label}</span>`,
+    )
     .join('');
 
   return `<header class="proof-header">
@@ -355,11 +390,16 @@ function renderBehavior(b: ProofBehavior): string {
     reproBadge = `<span class="badge ${cls}" title="${escapeHtml(b.repro.output)}">${label}</span>`;
   }
 
-  const duration = b.durationMs !== undefined ? `<span class="b-duration">${escapeHtml(formatDuration(b.durationMs))}</span>` : '';
+  const duration =
+    b.durationMs !== undefined
+      ? `<span class="b-duration">${escapeHtml(formatDuration(b.durationMs))}</span>`
+      : '';
 
   const desc = `<p class="b-desc">${escapeHtml(b.description)}</p>`;
   const details = b.details ? `<p class="b-details">${escapeHtml(b.details)}</p>` : '';
-  const method = b.method ? `<p class="b-method"><span class="k">Method</span> ${escapeHtml(b.method)}</p>` : '';
+  const method = b.method
+    ? `<p class="b-method"><span class="k">Method</span> ${escapeHtml(b.method)}</p>`
+    : '';
   const rationale = b.rationale ? `<p class="b-rationale">${escapeHtml(b.rationale)}</p>` : '';
 
   return `<article class="behavior behavior--${b.status}" id="${escapeHtml(slug)}">
@@ -439,13 +479,18 @@ function renderActualCol(actual: ProofEvidenceActual): string {
   if (actual.kind === 'cli') {
     const exitOk = actual.exitCode === 0;
     const exitClass = exitOk ? 'exit--ok' : 'exit--err';
-    const exitLabel = actual.exitCode === null ? `signal ${actual.signal ?? 'unknown'}` : `exit ${actual.exitCode}`;
-    const body = [`$ ${actual.argv.join(' ')}`, actual.stdout, actual.stderr].filter((s) => s.length > 0).join('\n');
+    const exitLabel =
+      actual.exitCode === null ? `signal ${actual.signal ?? 'unknown'}` : `exit ${actual.exitCode}`;
+    const body = [`$ ${actual.argv.join(' ')}`, actual.stdout, actual.stderr]
+      .filter((s) => s.length > 0)
+      .join('\n');
     return `<div class="ev-col"><h4>Actual — runner-recorded, step ${actual.step}</h4><pre class="ev-actual">${escapeHtml(body)}</pre><span class="exit ${exitClass}">${escapeHtml(exitLabel)}</span></div>`;
   }
   if (actual.kind === 'screenshot') {
     const stepLabel = actual.step !== undefined ? ` (step ${actual.step})` : '';
-    const meta = [actual.step !== undefined ? `step ${actual.step}` : '', actual.url ?? ''].filter((s) => s.length > 0).join(' · ');
+    const meta = [actual.step !== undefined ? `step ${actual.step}` : '', actual.url ?? '']
+      .filter((s) => s.length > 0)
+      .join(' · ');
     const caption = `<p class="ev-shot-caption"><code>${escapeHtml(actual.key)}</code>${meta ? ` <span class="dim">${escapeHtml(meta)}</span>` : ''}</p>`;
     return `<div class="ev-col"><h4>Actual — runner-recorded screenshot${escapeHtml(stepLabel)}</h4><img class="ev-shot" data-key="${escapeHtml(actual.key)}" alt="${escapeHtml(actual.key)}" loading="lazy">${caption}</div>`;
   }
@@ -530,9 +575,12 @@ function renderTerminalSteps(steps: ProofCliStep[]): string {
 function renderTerminal(step: ProofCliStep): string {
   const exitOk = step.exitCode === 0;
   const exitClass = exitOk ? 'exit--ok' : 'exit--err';
-  const exitLabel = step.exitCode === null ? `signal ${step.signal ?? 'unknown'}` : `exit ${step.exitCode}`;
+  const exitLabel =
+    step.exitCode === null ? `signal ${step.signal ?? 'unknown'}` : `exit ${step.exitCode}`;
   const truncated = step.stdoutTruncated || step.stderrTruncated;
-  const body = [`$ ${step.argv.join(' ')}`, step.stdout, step.stderr].filter((s) => s.length > 0).join('\n');
+  const body = [`$ ${step.argv.join(' ')}`, step.stdout, step.stderr]
+    .filter((s) => s.length > 0)
+    .join('\n');
   return `<section class="term" id="term-${step.step}" data-term="${step.step}">
     <div class="term-head">
       <span class="term-title">step ${step.step} · <code>${escapeHtml(step.argv.join(' '))}</code></span>
@@ -557,9 +605,13 @@ function renderRecordedSession(input: ProofInput): string {
   const hasFilm = input.sessionFrames.length > 0;
   const hasCli = input.cliSession.length > 0;
   if (!hasFilm && !hasCli) return '';
-  const parts: string[] = ['<section class="recorded" id="recorded-session"><h2>Recorded session</h2>'];
+  const parts: string[] = [
+    '<section class="recorded" id="recorded-session"><h2>Recorded session</h2>',
+  ];
   if (hasFilm) {
-    parts.push(renderFilmSection('session', input.sessionFrames, 'Full runner-recorded screenshot film'));
+    parts.push(
+      renderFilmSection('session', input.sessionFrames, 'Full runner-recorded screenshot film'),
+    );
   }
   if (hasCli) {
     parts.push(input.cliSession.map((s) => renderTerminal(s)).join('\n'));
@@ -572,7 +624,13 @@ function renderRecordedSession(input: ProofInput): string {
 // Integrity footer
 // ---------------------------------------------------------------------------
 
-const INTEGRITY_ORDER = ['verify-result.json', 'capture/observations.json', 'cli/observations.json', 'run-context.json', 'capture/manifest.json'];
+const INTEGRITY_ORDER = [
+  'verify-result.json',
+  'capture/observations.json',
+  'cli/observations.json',
+  'run-context.json',
+  'capture/manifest.json',
+];
 
 function renderIntegrity(integrity: ProofIntegrity): string {
   const rows = INTEGRITY_ORDER.map((relPath) => {

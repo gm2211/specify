@@ -69,7 +69,10 @@ const PREDICATE_NAMES = new Set(['http.response', 'step.action', 'page.url']);
 
 test('collectAllBehaviors flattens areas into fully-qualified ids', () => {
   const behaviors = collectAllBehaviors(sampleSpec());
-  assert.deepEqual(behaviors.map((b) => b.fqId), ['auth/login', 'auth/logout', 'dashboard/layout']);
+  assert.deepEqual(
+    behaviors.map((b) => b.fqId),
+    ['auth/login', 'auth/logout', 'dashboard/layout'],
+  );
 });
 
 test('selectCandidates excludes already-compiled behaviors by default', () => {
@@ -85,7 +88,10 @@ test('selectCandidates excludes already-compiled behaviors by default', () => {
   });
 
   const candidates = selectCandidates(all, existing, undefined, false);
-  assert.deepEqual(candidates.map((c) => c.fqId), ['auth/logout', 'dashboard/layout']);
+  assert.deepEqual(
+    candidates.map((c) => c.fqId),
+    ['auth/logout', 'dashboard/layout'],
+  );
 });
 
 test('selectCandidates includes already-compiled behaviors when force is set', () => {
@@ -101,13 +107,19 @@ test('selectCandidates includes already-compiled behaviors when force is set', (
   });
 
   const candidates = selectCandidates(all, existing, undefined, true);
-  assert.deepEqual(candidates.map((c) => c.fqId), ['auth/login', 'auth/logout', 'dashboard/layout']);
+  assert.deepEqual(
+    candidates.map((c) => c.fqId),
+    ['auth/login', 'auth/logout', 'dashboard/layout'],
+  );
 });
 
 test('selectCandidates applies a --behavior filter', () => {
   const all = collectAllBehaviors(sampleSpec());
   const candidates = selectCandidates(all, null, ['auth/logout'], false);
-  assert.deepEqual(candidates.map((c) => c.fqId), ['auth/logout']);
+  assert.deepEqual(
+    candidates.map((c) => c.fqId),
+    ['auth/logout'],
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -175,7 +187,10 @@ test('validateCompileResult accepts a bogus predicates_used declaration and repl
   if (result.ok) {
     assert.deepEqual(result.predicatesUsed, ['http.response']);
     assert.ok(result.misreportedPredicates, 'mismatching declaration must be flagged');
-    assert.deepEqual(result.misreportedPredicates?.declared, ['http.response', 'made.up.predicate']);
+    assert.deepEqual(result.misreportedPredicates?.declared, [
+      'http.response',
+      'made.up.predicate',
+    ]);
   }
 });
 
@@ -207,7 +222,11 @@ test('validateCompileResult stores the AST-derived predicate set when the model 
   const result = validateCompileResult(raw, behaviors, PREDICATE_NAMES);
   assert.equal(result.ok, true);
   if (result.ok) {
-    assert.deepEqual(result.predicatesUsed, ['step.action'], 'persisted set must come from the AST, not the self-report');
+    assert.deepEqual(
+      result.predicatesUsed,
+      ['step.action'],
+      'persisted set must come from the AST, not the self-report',
+    );
     assert.deepEqual(result.misreportedPredicates, {
       declared: ['http.response'],
       actual: ['step.action'],
@@ -219,7 +238,9 @@ test('validateCompileResult reports no misreport when declaration matches the AS
   const behaviors = new Map([['auth/login', 'User can log in']]);
   const raw: RawCompileResult = {
     behavior: 'auth/login',
-    formula: globally(implies(pred('step.action', ['click']), eventually(pred('http.response', ['200'])))),
+    formula: globally(
+      implies(pred('step.action', ['click']), eventually(pred('http.response', ['200']))),
+    ),
     predicates_used: ['http.response', 'step.action', 'http.response'],
     rationale: 'x',
   };
@@ -233,7 +254,10 @@ test('validateCompileResult reports no misreport when declaration matches the AS
 
 test('normalizeSkipped requires a string behavior', () => {
   assert.equal(normalizeSkipped({ reason: 'no id' }), null);
-  const withReason = normalizeSkipped({ behavior: 'dashboard/layout', reason: 'subjective UX judgment' });
+  const withReason = normalizeSkipped({
+    behavior: 'dashboard/layout',
+    reason: 'subjective UX judgment',
+  });
   assert.deepEqual(withReason, { behavior: 'dashboard/layout', reason: 'subjective UX judgment' });
   const withoutReason = normalizeSkipped({ behavior: 'dashboard/layout' });
   assert.deepEqual(withoutReason, { behavior: 'dashboard/layout', reason: '(no reason given)' });
@@ -244,15 +268,19 @@ test('normalizeSkipped requires a string behavior', () => {
 // ---------------------------------------------------------------------------
 
 test('mergeCompiledResults appends new drafts with llm provenance', () => {
-  const outcome = mergeCompiledResults(emptyFormulasFile(), [
-    {
-      behavior: 'auth/login',
-      formula: eventually(pred('http.response', ['200'])),
-      predicatesUsed: ['http.response'],
-      rationale: 'x',
-      description: 'User can log in',
-    },
-  ], { compiled_by: 'llm', model: 'test-model', compiled_at: '2026-01-01T00:00:00Z' });
+  const outcome = mergeCompiledResults(
+    emptyFormulasFile(),
+    [
+      {
+        behavior: 'auth/login',
+        formula: eventually(pred('http.response', ['200'])),
+        predicatesUsed: ['http.response'],
+        rationale: 'x',
+        description: 'User can log in',
+      },
+    ],
+    { compiled_by: 'llm', model: 'test-model', compiled_at: '2026-01-01T00:00:00Z' },
+  );
 
   assert.equal(outcome.added.length, 1);
   assert.equal(outcome.file.formulas.length, 1);
@@ -271,9 +299,19 @@ test('mergeCompiledResults dedupes structurally identical formulas for the same 
     provenance: { compiled_by: 'llm', compiled_at: '2026-01-01T00:00:00Z' },
   });
 
-  const outcome = mergeCompiledResults(existing, [
-    { behavior: 'auth/login', formula, predicatesUsed: ['http.response'], rationale: 'x', description: 'User can log in' },
-  ], { compiled_by: 'llm', compiled_at: '2026-01-02T00:00:00Z' });
+  const outcome = mergeCompiledResults(
+    existing,
+    [
+      {
+        behavior: 'auth/login',
+        formula,
+        predicatesUsed: ['http.response'],
+        rationale: 'x',
+        description: 'User can log in',
+      },
+    ],
+    { compiled_by: 'llm', compiled_at: '2026-01-02T00:00:00Z' },
+  );
 
   assert.equal(outcome.added.length, 0);
   assert.deepEqual(outcome.deduped, ['auth/login']);
@@ -286,27 +324,30 @@ test('mergeCompiledResults dedupes structurally identical formulas for the same 
 
 function writeSpecFixture(dir: string): string {
   const specPath = path.join(dir, 'spec.yaml');
-  writeFile(specPath, [
-    'version: "2"',
-    'name: Test Spec',
-    'target:',
-    '  type: web',
-    '  url: http://localhost:3000',
-    'areas:',
-    '  - id: auth',
-    '    name: Auth',
-    '    behaviors:',
-    '      - id: login',
-    '        description: User can log in with valid credentials',
-    '      - id: logout',
-    '        description: User can log out',
-    '  - id: dashboard',
-    '    name: Dashboard',
-    '    behaviors:',
-    '      - id: layout',
-    '        description: Dashboard layout looks clean and modern',
-    '',
-  ].join('\n'));
+  writeFile(
+    specPath,
+    [
+      'version: "2"',
+      'name: Test Spec',
+      'target:',
+      '  type: web',
+      '  url: http://localhost:3000',
+      'areas:',
+      '  - id: auth',
+      '    name: Auth',
+      '    behaviors:',
+      '      - id: login',
+      '        description: User can log in with valid credentials',
+      '      - id: logout',
+      '        description: User can log out',
+      '  - id: dashboard',
+      '    name: Dashboard',
+      '    behaviors:',
+      '      - id: layout',
+      '        description: Dashboard layout looks clean and modern',
+      '',
+    ].join('\n'),
+  );
   return specPath;
 }
 
@@ -336,7 +377,10 @@ test('specCompile writes valid drafts, rejects invalid ones, and records skips (
           },
         ],
         skipped: [
-          { behavior: 'dashboard/layout', reason: 'Subjective UX judgment — not machine-checkable.' },
+          {
+            behavior: 'dashboard/layout',
+            reason: 'Subjective UX judgment — not machine-checkable.',
+          },
         ],
       },
     });
@@ -392,7 +436,10 @@ test('specCompile is idempotent: a re-run excludes already-compiled behaviors fr
           // (only a written formula entry removes a behavior from the
           // candidate set without --force).
           skipped: params.specYaml.includes('logout')
-            ? [{ behavior: 'auth/logout', reason: 'skip' }, { behavior: 'dashboard/layout', reason: 'skip' }]
+            ? [
+                { behavior: 'auth/logout', reason: 'skip' },
+                { behavior: 'dashboard/layout', reason: 'skip' },
+              ]
             : [{ behavior: 'dashboard/layout', reason: 'skip' }],
         },
       };
@@ -404,12 +451,22 @@ test('specCompile is idempotent: a re-run excludes already-compiled behaviors fr
 
     const second = await specCompile({ spec: specPath }, quietCtx(), { agentRunner: stubRunner });
     assert.equal(second, 0);
-    assert.equal(candidateCountsPerCall.length, 2, 'second run still has skipped candidates left to (re-)ask about');
+    assert.equal(
+      candidateCountsPerCall.length,
+      2,
+      'second run still has skipped candidates left to (re-)ask about',
+    );
 
     // The key idempotence guarantee: auth/login (which now has a written
     // formula entry) never reappears in a later prompt's behavior set.
-    assert.ok(!behaviorIdsPerCall[1].includes('login'), 'already-compiled behavior must be excluded from the second prompt');
-    assert.ok(behaviorIdsPerCall[0].includes('login'), 'first prompt should have included it before it was compiled');
+    assert.ok(
+      !behaviorIdsPerCall[1].includes('login'),
+      'already-compiled behavior must be excluded from the second prompt',
+    );
+    assert.ok(
+      behaviorIdsPerCall[0].includes('login'),
+      'first prompt should have included it before it was compiled',
+    );
 
     const { loadFormulas } = await import('../../spec/formulas.js');
     const written = loadFormulas(path.join(dir, 'specify.formulas.yaml')) as FormulasFile;
@@ -434,9 +491,24 @@ test('specCompile with all behaviors already compiled short-circuits without inv
         costUsd: 0,
         output: {
           results: [
-            { behavior: 'auth/login', formula: eventually(pred('http.response', ['200'])), predicates_used: ['http.response'], rationale: 'x' },
-            { behavior: 'auth/logout', formula: eventually(pred('http.response', ['200'])), predicates_used: ['http.response'], rationale: 'x' },
-            { behavior: 'dashboard/layout', formula: eventually(pred('http.response', ['200'])), predicates_used: ['http.response'], rationale: 'x' },
+            {
+              behavior: 'auth/login',
+              formula: eventually(pred('http.response', ['200'])),
+              predicates_used: ['http.response'],
+              rationale: 'x',
+            },
+            {
+              behavior: 'auth/logout',
+              formula: eventually(pred('http.response', ['200'])),
+              predicates_used: ['http.response'],
+              rationale: 'x',
+            },
+            {
+              behavior: 'dashboard/layout',
+              formula: eventually(pred('http.response', ['200'])),
+              predicates_used: ['http.response'],
+              rationale: 'x',
+            },
           ],
           skipped: [],
         },
@@ -460,26 +532,32 @@ test('specCompile --force recompiles a behavior that already has a formula', asy
   try {
     const specPath = writeSpecFixture(dir);
 
-    const makeRunner = (formula: Formula): CompileAgentRunner => async () => ({
-      model: 'stub-model',
-      costUsd: 0,
-      output: {
-        results: [
-          { behavior: 'auth/login', formula, predicates_used: ['http.response'], rationale: 'x' },
-        ],
-        skipped: [
-          { behavior: 'auth/logout', reason: 'skip' },
-          { behavior: 'dashboard/layout', reason: 'skip' },
-        ],
-      },
-    });
+    const makeRunner =
+      (formula: Formula): CompileAgentRunner =>
+      async () => ({
+        model: 'stub-model',
+        costUsd: 0,
+        output: {
+          results: [
+            { behavior: 'auth/login', formula, predicates_used: ['http.response'], rationale: 'x' },
+          ],
+          skipped: [
+            { behavior: 'auth/logout', reason: 'skip' },
+            { behavior: 'dashboard/layout', reason: 'skip' },
+          ],
+        },
+      });
 
     await specCompile({ spec: specPath }, quietCtx(), {
       agentRunner: makeRunner(eventually(pred('http.response', ['200']))),
     });
 
     const forced = await specCompile({ spec: specPath, force: true }, quietCtx(), {
-      agentRunner: makeRunner(globally(implies(pred('step.action', ['click']), eventually(pred('http.response', ['200']))))),
+      agentRunner: makeRunner(
+        globally(
+          implies(pred('step.action', ['click']), eventually(pred('http.response', ['200']))),
+        ),
+      ),
     });
     assert.equal(forced, 0);
 
@@ -547,7 +625,12 @@ test('specCompile warns about a --behavior id matching nothing but proceeds with
         costUsd: 0,
         output: {
           results: [
-            { behavior: 'auth/login', formula: eventually(pred('http.response', ['200'])), predicates_used: ['http.response'], rationale: 'x' },
+            {
+              behavior: 'auth/login',
+              formula: eventually(pred('http.response', ['200'])),
+              predicates_used: ['http.response'],
+              rationale: 'x',
+            },
           ],
           skipped: [],
         },

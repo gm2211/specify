@@ -27,9 +27,14 @@ afterEach(() => {
 
 type AnyServer = {
   instance?: {
-    _registeredTools?: Record<string, {
-      handler: (args: Record<string, unknown>) => Promise<{ content: Array<{ type: string; text: string }> }>;
-    }>;
+    _registeredTools?: Record<
+      string,
+      {
+        handler: (
+          args: Record<string, unknown>,
+        ) => Promise<{ content: Array<{ type: string; text: string }> }>;
+      }
+    >;
   };
 };
 
@@ -60,7 +65,11 @@ const baseArgs = {
   context: 'Page at /dashboard returns HTTP 500 on first load.',
   proposed_resolutions: [
     { scope: 'narrow', label: 'Skip for now' },
-    { scope: 'medium', label: 'Expected — backend not seeded', action_hint: 'Skip the dashboard check' },
+    {
+      scope: 'medium',
+      label: 'Expected — backend not seeded',
+      action_hint: 'Skip the dashboard check',
+    },
   ],
   blocking: false,
 };
@@ -153,7 +162,9 @@ test('file_decision medium-scope resolution: writes memory row via provider', as
   await resolveDecision(
     capturedId,
     { resolution_index: 1, scope: 'medium' },
-    async (_scope, _runId, deltas) => { written.push({ deltas }); },
+    async (_scope, _runId, deltas) => {
+      written.push({ deltas });
+    },
     fakeScope as never,
   );
   await handlerPromise;
@@ -189,7 +200,9 @@ test('file_decision broad-scope resolution: writes playbook memory row', async (
   await resolveDecision(
     capturedId,
     { resolution_index: 1, scope: 'broad' },
-    async (_scope, _runId, deltas) => { written.push({ deltas }); },
+    async (_scope, _runId, deltas) => {
+      written.push({ deltas });
+    },
     fakeScope as never,
   );
   await handlerPromise;

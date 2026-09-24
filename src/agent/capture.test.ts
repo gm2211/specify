@@ -43,10 +43,7 @@ test('shouldCapture: SPECIFY_CAPTURE_HOST_FILTER widens the filter to extra doma
   const orig = process.env.SPECIFY_CAPTURE_HOST_FILTER;
   process.env.SPECIFY_CAPTURE_HOST_FILTER = 'payments.example';
   try {
-    assert.equal(
-      shouldCapture('https://api.payments.example/charge', 'www.example.com'),
-      true,
-    );
+    assert.equal(shouldCapture('https://api.payments.example/charge', 'www.example.com'), true);
   } finally {
     if (orig === undefined) delete process.env.SPECIFY_CAPTURE_HOST_FILTER;
     else process.env.SPECIFY_CAPTURE_HOST_FILTER = orig;
@@ -57,10 +54,7 @@ test('shouldCapture: SPECIFY_CAPTURE_HOST_FILTER="*" disables host filtering', (
   const orig = process.env.SPECIFY_CAPTURE_HOST_FILTER;
   process.env.SPECIFY_CAPTURE_HOST_FILTER = '*';
   try {
-    assert.equal(
-      shouldCapture('https://totally-unrelated.io/anything', 'www.example.com'),
-      true,
-    );
+    assert.equal(shouldCapture('https://totally-unrelated.io/anything', 'www.example.com'), true);
   } finally {
     if (orig === undefined) delete process.env.SPECIFY_CAPTURE_HOST_FILTER;
     else process.env.SPECIFY_CAPTURE_HOST_FILTER = orig;
@@ -102,7 +96,11 @@ function fakeRoute(url: string, method: string) {
     }),
     fetch: async () => {
       calls.fetch++;
-      return { status: () => 200, headers: () => ({ 'content-type': 'application/json' }), text: async () => '{}' };
+      return {
+        status: () => 200,
+        headers: () => ({ 'content-type': 'application/json' }),
+        text: async () => '{}',
+      };
     },
     fulfill: async (opts: unknown) => {
       calls.fulfill.push(opts);
@@ -129,8 +127,15 @@ function fakeContext() {
 }
 
 test('fault-matched request never invokes route.fetch (500)', async () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }] });
-  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+  });
+  const collector = new CaptureCollector({
+    outputDir: tmpOutputDir(),
+    targetUrl: 'https://x.test',
+    injector,
+  });
   const { context, getHandler } = fakeContext();
   await collector.attachToContext(context as never);
 
@@ -139,7 +144,11 @@ test('fault-matched request never invokes route.fetch (500)', async () => {
 
   assert.equal(calls.fetch, 0, 'route.fetch() must never be called for a fault-matched request');
   assert.equal(calls.fulfill.length, 1);
-  assert.deepEqual(calls.fulfill[0], { status: 500, contentType: 'application/json', body: '{"error":"injected"}' });
+  assert.deepEqual(calls.fulfill[0], {
+    status: 500,
+    contentType: 'application/json',
+    body: '{"error":"injected"}',
+  });
 
   const traffic = collector.getTraffic();
   assert.equal(traffic.length, 1);
@@ -148,8 +157,15 @@ test('fault-matched request never invokes route.fetch (500)', async () => {
 });
 
 test('fault-matched request never invokes route.fetch (abort)', async () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: 'abort', rate: 1.0 }] });
-  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: 'abort', rate: 1.0 }],
+  });
+  const collector = new CaptureCollector({
+    outputDir: tmpOutputDir(),
+    targetUrl: 'https://x.test',
+    injector,
+  });
   const { context, getHandler } = fakeContext();
   await collector.attachToContext(context as never);
 
@@ -162,8 +178,15 @@ test('fault-matched request never invokes route.fetch (abort)', async () => {
 });
 
 test('fault-matched request never invokes route.fetch (empty)', async () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: 'empty', rate: 1.0 }] });
-  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: 'empty', rate: 1.0 }],
+  });
+  const collector = new CaptureCollector({
+    outputDir: tmpOutputDir(),
+    targetUrl: 'https://x.test',
+    injector,
+  });
   const { context, getHandler } = fakeContext();
   await collector.attachToContext(context as never);
 
@@ -177,8 +200,15 @@ test('fault-matched request never invokes route.fetch (empty)', async () => {
 });
 
 test('non-matching request falls through to the normal route.fetch() path', async () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }] });
-  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test', injector });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+  });
+  const collector = new CaptureCollector({
+    outputDir: tmpOutputDir(),
+    targetUrl: 'https://x.test',
+    injector,
+  });
   const { context, getHandler } = fakeContext();
   await collector.attachToContext(context as never);
 
@@ -192,7 +222,10 @@ test('non-matching request falls through to the normal route.fetch() path', asyn
 });
 
 test('no injector configured: behavior is unchanged (route.fetch always called)', async () => {
-  const collector = new CaptureCollector({ outputDir: tmpOutputDir(), targetUrl: 'https://x.test' });
+  const collector = new CaptureCollector({
+    outputDir: tmpOutputDir(),
+    targetUrl: 'https://x.test',
+  });
   const { context, getHandler } = fakeContext();
   await collector.attachToContext(context as never);
 

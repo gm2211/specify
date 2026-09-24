@@ -69,7 +69,11 @@ export { COMMANDS };
 // Argument parsing
 // ---------------------------------------------------------------------------
 
-function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: string[]; debug: boolean } {
+function parseGlobalOptions(args: string[]): {
+  ctx: CliContext;
+  remaining: string[];
+  debug: boolean;
+} {
   let outputFormat: OutputFormat | undefined;
   let fields: string[] | undefined;
   let quiet = false;
@@ -78,11 +82,19 @@ function parseGlobalOptions(args: string[]): { ctx: CliContext; remaining: strin
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if ((arg === '--output-format' || arg === '--format') && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
+    if (
+      (arg === '--output-format' || arg === '--format') &&
+      args[i + 1] &&
+      !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))
+    ) {
       outputFormat = args[++i] as OutputFormat;
     } else if (arg === '--json') {
       outputFormat = 'json';
-    } else if (arg === '--fields' && args[i + 1] && !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))) {
+    } else if (
+      arg === '--fields' &&
+      args[i + 1] &&
+      !(args[i + 1].length > 1 && args[i + 1].startsWith('-'))
+    ) {
       fields = args[++i].split(',');
     } else if (arg === '--quiet' || arg === '-q') {
       quiet = true;
@@ -201,32 +213,47 @@ function agentExitCode(err: unknown): number {
 function printHelp(asJson: boolean): void {
   if (asJson) {
     // Agent-friendly: emit command manifest as JSON to stdout
-    process.stdout.write(JSON.stringify({
-      name: 'specify',
-      version: VERSION,
-      description: 'Spec-driven functional verification for web applications',
-      commands: COMMANDS,
-      global_options: [
-        { name: '--json', description: 'Force JSON output' },
-        { name: '--output-format', type: 'string', description: 'Output format: json|text|markdown|ndjson' },
-        { name: '--fields', type: 'string', description: 'Comma-separated field paths to select from output' },
-        { name: '--quiet', description: 'Suppress non-essential output' },
-      ],
-      exit_codes: {
-        '0': 'success',
-        '1': 'assertion_failure',
-        '2': 'all_untested',
-        '10': 'parse_error',
-        '11': 'network_error',
-        '12': 'timeout',
-        '14': 'browser_error',
-        '15': 'monitor_violation',
-      },
-      hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
-    }, null, 2) + '\n');
+    process.stdout.write(
+      JSON.stringify(
+        {
+          name: 'specify',
+          version: VERSION,
+          description: 'Spec-driven functional verification for web applications',
+          commands: COMMANDS,
+          global_options: [
+            { name: '--json', description: 'Force JSON output' },
+            {
+              name: '--output-format',
+              type: 'string',
+              description: 'Output format: json|text|markdown|ndjson',
+            },
+            {
+              name: '--fields',
+              type: 'string',
+              description: 'Comma-separated field paths to select from output',
+            },
+            { name: '--quiet', description: 'Suppress non-essential output' },
+          ],
+          exit_codes: {
+            '0': 'success',
+            '1': 'assertion_failure',
+            '2': 'all_untested',
+            '10': 'parse_error',
+            '11': 'network_error',
+            '12': 'timeout',
+            '14': 'browser_error',
+            '15': 'monitor_violation',
+          },
+          hint: 'Run "specify schema commands" for full parameter schemas. Run "specify human" for interactive mode.',
+        },
+        null,
+        2,
+      ) + '\n',
+    );
   } else {
     // Human-readable to stderr
-    process.stderr.write(`
+    process.stderr.write(
+      `
 ${c.boldCyan('Specify')} ${c.dim('—')} behavioral contracts and recorded QA evidence
 
 ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
@@ -271,17 +298,18 @@ ${c.bold('Examples:')}
   ${c.dim('$')} specify spec lint --spec ./spec.yaml
   ${c.dim('$')} specify verify --spec ./spec.yaml --url http://localhost:3000
   ${c.dim('$')} specify review --spec ./spec.yaml
-`.trimStart());
+`.trimStart(),
+    );
   }
 }
 
 function printCommandHelp(noun: string, args: string[]): void {
-  const verb = args.find(a => a !== noun && a !== '--help' && a !== '-h' && !a.startsWith('-'));
+  const verb = args.find((a) => a !== noun && a !== '--help' && a !== '-h' && !a.startsWith('-'));
   const searchName = verb ? `${noun} ${verb}` : noun;
 
   // Find matching commands in manifest
-  const matches = COMMANDS.filter(cmd =>
-    cmd.name === searchName || cmd.name.startsWith(searchName + ' ') || cmd.name === noun
+  const matches = COMMANDS.filter(
+    (cmd) => cmd.name === searchName || cmd.name.startsWith(searchName + ' ') || cmd.name === noun,
   );
 
   if (matches.length === 0) {
@@ -343,7 +371,7 @@ async function main(): Promise<void> {
 
   // --help flag
   if (hasFlag(remaining, '--help') || hasFlag(remaining, '-h')) {
-    const helpNoun = remaining.find(a => a !== '--help' && a !== '-h');
+    const helpNoun = remaining.find((a) => a !== '--help' && a !== '-h');
     if (helpNoun) {
       // Subcommand help — show command-specific info from manifest
       printCommandHelp(helpNoun, remaining);
@@ -380,55 +408,64 @@ async function main(): Promise<void> {
         debug,
       });
 
-    // -----------------------------------------------------------------
-    // Agent-friendly commands — structured output to stdout
-    // -----------------------------------------------------------------
+      // -----------------------------------------------------------------
+      // Agent-friendly commands — structured output to stdout
+      // -----------------------------------------------------------------
     } else if (noun === 'spec' && verb === 'lint') {
       const { specLint } = await import('./commands/spec-lint.js');
-      exitCode = await specLint({
-        spec: resolveSpecArg(rest, ctx),
-      }, ctx);
-
+      exitCode = await specLint(
+        {
+          spec: resolveSpecArg(rest, ctx),
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'split') {
       const { specSplit } = await import('./commands/spec-split.js');
-      exitCode = await specSplit({
-        spec: resolveSpecArg(rest, ctx),
-        output: getArg(rest, '--output'),
-        force: hasFlag(rest, '--force'),
-      }, ctx);
-
+      exitCode = await specSplit(
+        {
+          spec: resolveSpecArg(rest, ctx),
+          output: getArg(rest, '--output'),
+          force: hasFlag(rest, '--force'),
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'guide') {
       const { specGuide } = await import('./commands/spec-guide.js');
       exitCode = await specGuide(ctx);
-
     } else if (noun === 'spec' && verb === 'context') {
       const { specContext } = await import('./commands/spec-context.js');
-      exitCode = await specContext({
-        spec: resolveSpecArg(rest, ctx),
-        outDir: getArg(rest, '--out-dir'),
-        product: getArg(rest, '--product'),
-        design: getArg(rest, '--design'),
-        force: hasFlag(rest, '--force'),
-      }, ctx);
-
+      exitCode = await specContext(
+        {
+          spec: resolveSpecArg(rest, ctx),
+          outDir: getArg(rest, '--out-dir'),
+          product: getArg(rest, '--product'),
+          design: getArg(rest, '--design'),
+          force: hasFlag(rest, '--force'),
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'migrate-id') {
       const { specMigrateId } = await import('./commands/spec-migrate-id.js');
       const positionals = collectPositionals(rest, ['--spec']);
-      exitCode = await specMigrateId({
-        spec: resolveSpecArg(rest, ctx),
-        oldId: positionals[0] ?? '',
-        newId: positionals[1] ?? '',
-      }, ctx);
-
+      exitCode = await specMigrateId(
+        {
+          spec: resolveSpecArg(rest, ctx),
+          oldId: positionals[0] ?? '',
+          newId: positionals[1] ?? '',
+        },
+        ctx,
+      );
     } else if (noun === 'spec' && verb === 'compile') {
       const { specCompile } = await import('./commands/spec-compile.js');
-      exitCode = await specCompile({
-        spec: resolveSpecArg(rest, ctx),
-        behavior: getAllArgs(rest, '--behavior'),
-        force: hasFlag(rest, '--force'),
-        debug,
-      }, ctx);
-
+      exitCode = await specCompile(
+        {
+          spec: resolveSpecArg(rest, ctx),
+          behavior: getAllArgs(rest, '--behavior'),
+          force: hasFlag(rest, '--force'),
+          debug,
+        },
+        ctx,
+      );
     } else if (noun === 'capture') {
       // capture is a standalone command (no verb) — recombine args
       const captureArgs = verb ? [verb, ...rest] : rest;
@@ -440,19 +477,33 @@ async function main(): Promise<void> {
 
         // Specify IS the agent — use SDK runner for live capture
         if (!url) {
-          process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--url', hint: 'Provide the URL to capture' }) + '\n');
+          process.stdout.write(
+            JSON.stringify({
+              error: 'missing_parameter',
+              parameter: '--url',
+              hint: 'Provide the URL to capture',
+            }) + '\n',
+          );
           exitCode = ExitCode.PARSE_ERROR;
         } else {
           let validUrl = true;
           try {
             new URL(url);
           } catch {
-            process.stdout.write(JSON.stringify({ error: 'invalid_url', url, hint: 'Provide a valid URL (e.g. https://example.com)' }) + '\n');
+            process.stdout.write(
+              JSON.stringify({
+                error: 'invalid_url',
+                url,
+                hint: 'Provide a valid URL (e.g. https://example.com)',
+              }) + '\n',
+            );
             exitCode = ExitCode.PARSE_ERROR;
             validUrl = false;
           }
           if (validUrl && storageState) {
-            const resolved = await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'));
+            const resolved = await resolveStorageStateInput(storageState, (msg) =>
+              process.stderr.write(msg + '\n'),
+            );
             if (!resolved.ok) {
               process.stdout.write(JSON.stringify(resolved.error) + '\n');
               exitCode = ExitCode.PARSE_ERROR;
@@ -465,7 +516,9 @@ async function main(): Promise<void> {
             const outputDir = path.resolve(output || '.specify/capture');
             const specOutput = getArg(captureArgs, '--spec-output');
             const specName = getArg(captureArgs, '--spec-name');
-            const specOutputPath = path.resolve(specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'));
+            const specOutputPath = path.resolve(
+              specOutput ?? path.join(path.dirname(outputDir), 'spec.yaml'),
+            );
             const { loadExplorationHintsForSpecFile } = await import('../model/runner-hooks.js');
             const explorationHints = await loadExplorationHintsForSpecFile(specOutputPath);
             const prompt = getCapturePrompt(url, specOutputPath, explorationHints);
@@ -487,8 +540,17 @@ async function main(): Promise<void> {
 
               // Post-run validation: verify the spec file exists and parses
               if (!fs.existsSync(specOutputPath)) {
-                process.stderr.write(`Warning: agent did not write spec file at ${specOutputPath}\n`);
-                process.stdout.write(JSON.stringify({ error: 'spec_not_written', costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                process.stderr.write(
+                  `Warning: agent did not write spec file at ${specOutputPath}\n`,
+                );
+                process.stdout.write(
+                  JSON.stringify({
+                    error: 'spec_not_written',
+                    costUsd,
+                    outputDir,
+                    specOutput: specOutputPath,
+                  }) + '\n',
+                );
                 exitCode = ExitCode.PARSE_ERROR;
               } else {
                 try {
@@ -496,7 +558,15 @@ async function main(): Promise<void> {
                   const spec = loadSpec(specOutputPath);
                   const areaCount = spec.areas?.length ?? 0;
                   process.stderr.write(`Spec validated: ${specOutputPath} (${areaCount} areas)\n`);
-                  process.stdout.write(JSON.stringify({ result, costUsd, outputDir, specOutput: specOutputPath, areas: areaCount }) + '\n');
+                  process.stdout.write(
+                    JSON.stringify({
+                      result,
+                      costUsd,
+                      outputDir,
+                      specOutput: specOutputPath,
+                      areas: areaCount,
+                    }) + '\n',
+                  );
                   exitCode = ExitCode.SUCCESS;
 
                   process.stderr.write(`\n  To review the spec:\n`);
@@ -504,7 +574,15 @@ async function main(): Promise<void> {
                 } catch (parseErr) {
                   const parseMsg = parseErr instanceof Error ? parseErr.message : String(parseErr);
                   process.stderr.write(`Warning: agent wrote invalid spec: ${parseMsg}\n`);
-                  process.stdout.write(JSON.stringify({ error: 'invalid_spec', message: parseMsg, costUsd, outputDir, specOutput: specOutputPath }) + '\n');
+                  process.stdout.write(
+                    JSON.stringify({
+                      error: 'invalid_spec',
+                      message: parseMsg,
+                      costUsd,
+                      outputDir,
+                      specOutput: specOutputPath,
+                    }) + '\n',
+                  );
                   exitCode = ExitCode.PARSE_ERROR;
                 }
               }
@@ -517,11 +595,9 @@ async function main(): Promise<void> {
           }
         }
       }
-
     } else if (noun === 'schema') {
       const { schemaCommand } = await import('./commands/schema.js');
       exitCode = await schemaCommand(verb ?? '', ctx);
-
     } else if (noun === 'mcp') {
       const { startMcpServer } = await import('../mcp/server.js');
       await startMcpServer({
@@ -531,46 +607,51 @@ async function main(): Promise<void> {
       });
       // MCP server runs until client disconnects — don't exit
       return;
-
     } else if (noun === 'daemon') {
       // daemon runs forever until SIGINT/SIGTERM — do not exit
       const daemonArgs = verb ? [verb, ...rest] : rest;
       const { daemonCommand } = await import('./commands/daemon.js');
-      await daemonCommand({
-        port: getArg(daemonArgs, '--port'),
-        host: getArg(daemonArgs, '--host'),
-        noAuth: hasFlag(daemonArgs, '--no-auth'),
-        maxWorkers: getArg(daemonArgs, '--max-workers'),
-      }, ctx);
+      await daemonCommand(
+        {
+          port: getArg(daemonArgs, '--port'),
+          host: getArg(daemonArgs, '--host'),
+          noAuth: hasFlag(daemonArgs, '--no-auth'),
+          maxWorkers: getArg(daemonArgs, '--max-workers'),
+        },
+        ctx,
+      );
       return;
-
     } else if (noun === 'review') {
       // `--stop` needs no spec — skip auto-discovery to avoid noise.
       const reviewArgs = verb ? [verb, ...rest] : rest;
       const stop = hasFlag(reviewArgs, '--stop');
       const background = hasFlag(reviewArgs, '--background');
       const { review: reviewCmd } = await import('./commands/review.js');
-      exitCode = await reviewCmd({
-        spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
-        agentReport: getArg(reviewArgs, '--agent-report'),
-        port: getArg(reviewArgs, '--port'),
-        host: getArg(reviewArgs, '--host'),
-        noOpen: hasFlag(reviewArgs, '--no-open'),
-        background,
-        stop,
-      }, ctx);
-
+      exitCode = await reviewCmd(
+        {
+          spec: stop ? '' : resolveSpecArg(reviewArgs, ctx),
+          agentReport: getArg(reviewArgs, '--agent-report'),
+          port: getArg(reviewArgs, '--port'),
+          host: getArg(reviewArgs, '--host'),
+          noOpen: hasFlag(reviewArgs, '--no-open'),
+          background,
+          stop,
+        },
+        ctx,
+      );
     } else if (noun === 'prove') {
       // prove is a standalone command (no verb) — recombine args
       const proveArgs = verb ? [verb, ...rest] : rest;
       const { prove: proveCmd } = await import('./commands/prove.js');
-      exitCode = await proveCmd({
-        spec: resolveSpecArg(proveArgs, ctx),
-        input: getArg(proveArgs, '--input'),
-        output: getArg(proveArgs, '--output'),
-        maxScreenshotBytes: getArg(proveArgs, '--max-screenshot-bytes'),
-      }, ctx);
-
+      exitCode = await proveCmd(
+        {
+          spec: resolveSpecArg(proveArgs, ctx),
+          input: getArg(proveArgs, '--input'),
+          output: getArg(proveArgs, '--output'),
+          maxScreenshotBytes: getArg(proveArgs, '--max-screenshot-bytes'),
+        },
+        ctx,
+      );
     } else if (noun === 'create') {
       const { create: createCmd } = await import('./commands/create.js');
       exitCode = await createCmd({
@@ -578,9 +659,9 @@ async function main(): Promise<void> {
         narrative: getArg(rest, '--narrative'),
       });
 
-    // -----------------------------------------------------------------
-    // Top-level lifecycle aliases
-    // -----------------------------------------------------------------
+      // -----------------------------------------------------------------
+      // Top-level lifecycle aliases
+      // -----------------------------------------------------------------
     } else if (noun === 'verify') {
       // Agent-driven verification
       const verifyArgs = verb ? [verb, ...rest] : rest;
@@ -597,18 +678,35 @@ async function main(): Promise<void> {
       const storageStateCheck = storageState
         ? await resolveStorageStateInput(storageState, (msg) => process.stderr.write(msg + '\n'))
         : null;
-      const storageStateErr = storageStateCheck && !storageStateCheck.ok ? storageStateCheck.error : null;
+      const storageStateErr =
+        storageStateCheck && !storageStateCheck.ok ? storageStateCheck.error : null;
 
       if (!specPath) {
-        process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
+        process.stdout.write(
+          JSON.stringify({
+            error: 'missing_parameter',
+            parameter: '--spec',
+            hint: 'Provide a spec file to verify against',
+          }) + '\n',
+        );
         exitCode = ExitCode.PARSE_ERROR;
       } else if (verifyMode === 'formal') {
         const { formal } = await import('./commands/formal.js');
-        exitCode = await formal({ spec: specPath, manifest: getArg(verifyArgs, '--formal-manifest'),
-          binary: getArg(verifyArgs, '--quint-binary'), output: getArg(verifyArgs, '--output'),
-          traces: hasFlag(verifyArgs, '--generate-traces') });
+        exitCode = await formal({
+          spec: specPath,
+          manifest: getArg(verifyArgs, '--formal-manifest'),
+          binary: getArg(verifyArgs, '--quint-binary'),
+          output: getArg(verifyArgs, '--output'),
+          traces: hasFlag(verifyArgs, '--generate-traces'),
+        });
       } else if (verifyMode !== 'agent' && verifyMode !== 'scripted' && verifyMode !== 'auto') {
-        process.stdout.write(JSON.stringify({ error: 'invalid_parameter', parameter: '--mode', hint: 'Expected one of: agent, scripted, auto, formal' }) + '\n');
+        process.stdout.write(
+          JSON.stringify({
+            error: 'invalid_parameter',
+            parameter: '--mode',
+            hint: 'Expected one of: agent, scripted, auto, formal',
+          }) + '\n',
+        );
         exitCode = ExitCode.PARSE_ERROR;
       } else if (storageStateErr) {
         process.stdout.write(JSON.stringify(storageStateErr) + '\n');
@@ -619,8 +717,11 @@ async function main(): Promise<void> {
           const spec = loadSpec(path.resolve(specPath));
           const outputDir = path.resolve(getArg(verifyArgs, '--output') ?? '.specify/verify');
           // Determine target URL: explicit --url, or from spec target
-          const targetUrl = url
-            ?? ((spec.target.type === 'web' || spec.target.type === 'api') ? spec.target.url : undefined);
+          const targetUrl =
+            url ??
+            (spec.target.type === 'web' || spec.target.type === 'api'
+              ? spec.target.url
+              : undefined);
 
           // Seeded fault-scenario injection (resilience regression testing,
           // not simulation). Gated behind SPECIFY_ENABLE_FAULT_INJECTION —
@@ -633,16 +734,22 @@ async function main(): Promise<void> {
           if (faultArgs.length > 0) {
             const { faultInjectionEnabled } = await import('../agent/feature-flags.js');
             if (!faultInjectionEnabled()) {
-              process.stderr.write(`  ${c.dim('--fault specified but SPECIFY_ENABLE_FAULT_INJECTION is not set; ignoring.')}\n`);
+              process.stderr.write(
+                `  ${c.dim('--fault specified but SPECIFY_ENABLE_FAULT_INJECTION is not set; ignoring.')}\n`,
+              );
             } else if (verifyMode === 'scripted') {
-              process.stderr.write(`  ${c.dim('--fault has no effect in --mode scripted (no agent browser session); ignoring.')}\n`);
+              process.stderr.write(
+                `  ${c.dim('--fault has no effect in --mode scripted (no agent browser session); ignoring.')}\n`,
+              );
             } else {
               const { parseFaultArg } = await import('../agent/fault-injector.js');
               const rules: import('../agent/fault-injector.js').FaultRule[] = [];
               for (const arg of faultArgs) {
                 const rule = parseFaultArg(arg);
                 if (!rule) {
-                  process.stderr.write(`  ${c.dim(`Ignoring malformed --fault "${arg}" (expected <urlPattern>=<500|timeout|abort|empty>)`)}\n`);
+                  process.stderr.write(
+                    `  ${c.dim(`Ignoring malformed --fault "${arg}" (expected <urlPattern>=<500|timeout|abort|empty>)`)}\n`,
+                  );
                   continue;
                 }
                 rules.push(rule);
@@ -663,15 +770,25 @@ async function main(): Promise<void> {
             // the replay. Behaviors with no matching test are `skipped`
             // with an "untested:" rationale.
             // ---------------------------------------------------------------
-            const { runScriptedForSpec, scriptedModeExitCode } = await import('../agent/scripted-runner.js');
-            process.stderr.write(`${c.bold('Verifying (scripted)')} against ${c.cyan(spec.name)}\n`);
+            const { runScriptedForSpec, scriptedModeExitCode } =
+              await import('../agent/scripted-runner.js');
+            process.stderr.write(
+              `${c.bold('Verifying (scripted)')} against ${c.cyan(spec.name)}\n`,
+            );
             const scripted = await runScriptedForSpec(spec, outputDir);
 
             if (!scripted.ok) {
-              const message = scripted.reason === 'no_tests' ? 'no generated tests found in output dir' : scripted.message;
+              const message =
+                scripted.reason === 'no_tests'
+                  ? 'no generated tests found in output dir'
+                  : scripted.message;
               process.stderr.write(`Scripted verification failed: ${message}\n`);
-              process.stdout.write(JSON.stringify({ error: 'scripted_error', reason: scripted.reason, message }) + '\n');
-              exitCode = scripted.reason === 'no_tests' ? ExitCode.ALL_UNTESTED : ExitCode.BROWSER_ERROR;
+              process.stdout.write(
+                JSON.stringify({ error: 'scripted_error', reason: scripted.reason, message }) +
+                  '\n',
+              );
+              exitCode =
+                scripted.reason === 'no_tests' ? ExitCode.ALL_UNTESTED : ExitCode.BROWSER_ERROR;
             } else {
               const failed = scripted.results.filter((r) => r.status === 'failed').length;
               const passedCount = scripted.results.filter((r) => r.status === 'passed').length;
@@ -681,18 +798,29 @@ async function main(): Promise<void> {
                 spec: { name: spec.name, version: spec.version },
                 timestamp: new Date().toISOString(),
                 pass,
-                summary: { total: scripted.results.length, passed: passedCount, failed, skipped: skippedCount },
+                summary: {
+                  total: scripted.results.length,
+                  passed: passedCount,
+                  failed,
+                  skipped: skippedCount,
+                },
                 results: scripted.results,
               };
 
               exitCode = scriptedModeExitCode(scripted.matched, scripted.results);
 
-              process.stderr.write(`Scripted verification complete: ${passedCount} passed, ${failed} failed, ${skippedCount} untested/skipped\n`);
+              process.stderr.write(
+                `Scripted verification complete: ${passedCount} passed, ${failed} failed, ${skippedCount} untested/skipped\n`,
+              );
               process.stdout.write(JSON.stringify({ outputDir, pass, structuredOutput }) + '\n');
 
               const verifyResultPath = path.join(outputDir, 'verify-result.json');
               fs.mkdirSync(outputDir, { recursive: true });
-              fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput }, null, 2), 'utf-8');
+              fs.writeFileSync(
+                verifyResultPath,
+                JSON.stringify({ structuredOutput }, null, 2),
+                'utf-8',
+              );
             }
           } else {
             // ---------------------------------------------------------------
@@ -713,22 +841,32 @@ async function main(): Promise<void> {
               // Legacy auto behavior (--route-all-scripted): full scripted
               // suite first, escalate failures/untested. Kept as an A/B
               // lever against the confidence-driven routing below.
-              const { runScriptedForSpec, partitionScriptedResults } = await import('../agent/scripted-runner.js');
-              process.stderr.write(`${c.dim('Running scripted pass first (--mode auto, --route-all-scripted)...')}\n`);
+              const { runScriptedForSpec, partitionScriptedResults } =
+                await import('../agent/scripted-runner.js');
+              process.stderr.write(
+                `${c.dim('Running scripted pass first (--mode auto, --route-all-scripted)...')}\n`,
+              );
               const scripted = await runScriptedForSpec(spec, outputDir);
               if (scripted.ok) {
                 scriptedFullResults = scripted.results;
                 const { passed, escalate } = partitionScriptedResults(scripted.results);
                 scriptedPassed = passed;
-                process.stderr.write(`${c.dim(`Scripted: ${passed.length} passed (kept), ${escalate.length} escalated to agent`)}\n`);
+                process.stderr.write(
+                  `${c.dim(`Scripted: ${passed.length} passed (kept), ${escalate.length} escalated to agent`)}\n`,
+                );
                 if (escalate.length > 0) {
                   const { scopedSpec } = await import('../spec/scope.js');
-                  promptSpec = scopedSpec(spec, escalate.map((r) => r.id));
+                  promptSpec = scopedSpec(
+                    spec,
+                    escalate.map((r) => r.id),
+                  );
                 } else {
                   autoSkippedAgent = true;
                 }
               } else {
-                process.stderr.write(`${c.dim(`Scripted pass skipped (${scripted.reason}) — running agent on full spec`)}\n`);
+                process.stderr.write(
+                  `${c.dim(`Scripted pass skipped (${scripted.reason}) — running agent on full spec`)}\n`,
+                );
               }
             } else if (verifyMode === 'auto') {
               // Confidence-driven routing (SP-9kp): partition behaviors up
@@ -737,13 +875,18 @@ async function main(): Promise<void> {
               // — agent-routed behaviors, scripted failures, and behaviors
               // whose matched test never actually ran — to the agent tier.
               // Every behavior gets SOME technique; routing never drops one.
-              const { routeBehaviors, buildScopedGrep } = await import('../agent/technique-selector.js');
-              const { ConfidenceStore, defaultConfidencePath } = await import('../agent/confidence-store.js');
-              const { runScopedScriptedSuite, testsToBehaviorResults } = await import('../agent/scripted-runner.js');
+              const { routeBehaviors, buildScopedGrep } =
+                await import('../agent/technique-selector.js');
+              const { ConfidenceStore, defaultConfidencePath } =
+                await import('../agent/confidence-store.js');
+              const { runScopedScriptedSuite, testsToBehaviorResults } =
+                await import('../agent/scripted-runner.js');
 
               const store = new ConfidenceStore(defaultConfidencePath(path.resolve(specPath)));
               const partition = routeBehaviors(spec, (id) => store.get(id), outputDir);
-              process.stderr.write(`${c.dim(`Routing (--mode auto): ${partition.scripted.length} scripted, ${partition.agent.length} agent`)}\n`);
+              process.stderr.write(
+                `${c.dim(`Routing (--mode auto): ${partition.scripted.length} scripted, ${partition.agent.length} agent`)}\n`,
+              );
 
               const agentIds = new Set(partition.agent);
               if (partition.scripted.length > 0) {
@@ -763,7 +906,9 @@ async function main(): Promise<void> {
                     }
                   }
                 } else {
-                  process.stderr.write(`${c.dim(`Scoped scripted run skipped (${suite.reason}) — escalating scripted-routed behaviors to agent`)}\n`);
+                  process.stderr.write(
+                    `${c.dim(`Scoped scripted run skipped (${suite.reason}) — escalating scripted-routed behaviors to agent`)}\n`,
+                  );
                   for (const id of partition.scripted) agentIds.add(id);
                 }
               }
@@ -771,7 +916,9 @@ async function main(): Promise<void> {
               if (agentIds.size > 0) {
                 const { scopedSpec } = await import('../spec/scope.js');
                 promptSpec = scopedSpec(spec, [...agentIds]);
-                process.stderr.write(`${c.dim(`Scripted: ${scriptedPassed.length} passed (kept), ${agentIds.size} behavior(s) to agent`)}\n`);
+                process.stderr.write(
+                  `${c.dim(`Scripted: ${scriptedPassed.length} passed (kept), ${agentIds.size} behavior(s) to agent`)}\n`,
+                );
               } else {
                 autoSkippedAgent = true;
               }
@@ -796,7 +943,11 @@ async function main(): Promise<void> {
             // its memory/layered-context/skills text verbatim instead of
             // fetching live state, so the rendered system prompt reproduces
             // that run's byte-identically.
-            type ContextOverride = { memoryPreamble?: string; layeredContext?: string; skillsText?: string };
+            type ContextOverride = {
+              memoryPreamble?: string;
+              layeredContext?: string;
+              skillsText?: string;
+            };
             let contextOverride: ContextOverride | undefined;
             if (withContextPath) {
               try {
@@ -811,7 +962,9 @@ async function main(): Promise<void> {
                   layeredContext: bundle.layeredContext ?? undefined,
                   skillsText: bundle.skillsText ?? undefined,
                 };
-                process.stderr.write(`${c.dim(`Replaying recorded prompt context from ${withContextPath}`)}\n`);
+                process.stderr.write(
+                  `${c.dim(`Replaying recorded prompt context from ${withContextPath}`)}\n`,
+                );
               } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
                 process.stderr.write(`Failed to load --with-context bundle: ${msg}\n`);
@@ -824,19 +977,29 @@ async function main(): Promise<void> {
               let result: unknown;
 
               if (autoSkippedAgent) {
-                process.stderr.write(`${c.dim('All behaviors passed scripted replay — agent not invoked.')}\n`);
+                process.stderr.write(
+                  `${c.dim('All behaviors passed scripted replay — agent not invoked.')}\n`,
+                );
                 structuredOutput = {
                   spec: { name: spec.name, version: spec.version },
                   timestamp: new Date().toISOString(),
                   pass: true,
-                  summary: { total: scriptedPassed.length, passed: scriptedPassed.length, failed: 0, skipped: 0 },
+                  summary: {
+                    total: scriptedPassed.length,
+                    passed: scriptedPassed.length,
+                    failed: 0,
+                    skipped: 0,
+                  },
                   results: scriptedPassed,
                 };
               } else {
                 const { writeBehaviorProgress } = await import('./output.js');
                 const areas = promptSpec.areas?.length ?? 0;
-                const behaviors = promptSpec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
-                process.stderr.write(`${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`);
+                const behaviors =
+                  promptSpec.areas?.reduce((n, a) => n + (a.behaviors?.length ?? 0), 0) ?? 0;
+                process.stderr.write(
+                  `${c.bold('Verifying')} ${c.cyan(targetUrl ?? 'CLI')} against ${c.cyan(spec.name)} (${areas} areas, ${behaviors} behaviors)\n`,
+                );
                 process.stderr.write(`${c.dim('Launching agent...')}\n`);
                 const agentRun = await runSpecifyAgent({
                   task: 'verify',
@@ -860,9 +1023,12 @@ async function main(): Promise<void> {
 
                 if (verifyMode === 'auto' && scriptedPassed.length > 0) {
                   const { mergeResultsById } = await import('../spec/scope.js');
-                  const agentResults = structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
-                    ? (structuredOutput as { results: BehaviorResult[] }).results
-                    : [];
+                  const agentResults =
+                    structuredOutput &&
+                    typeof structuredOutput === 'object' &&
+                    Array.isArray((structuredOutput as { results?: unknown }).results)
+                      ? (structuredOutput as { results: BehaviorResult[] }).results
+                      : [];
                   const merged = mergeResultsById(scriptedPassed, agentResults);
                   const mergedFailed = merged.filter((r) => r.status === 'failed').length;
                   const mergedPassed = merged.filter((r) => r.status === 'passed').length;
@@ -870,7 +1036,12 @@ async function main(): Promise<void> {
                   structuredOutput = {
                     ...(structuredOutput as Record<string, unknown>),
                     results: merged,
-                    summary: { total: merged.length, passed: mergedPassed, failed: mergedFailed, skipped: mergedSkipped },
+                    summary: {
+                      total: merged.length,
+                      passed: mergedPassed,
+                      failed: mergedFailed,
+                      skipped: mergedSkipped,
+                    },
                     pass: mergedFailed === 0,
                   };
                 }
@@ -886,28 +1057,42 @@ async function main(): Promise<void> {
               // post-hoc — the agent never sees or produces this field —
               // so it can't be fabricated by the LLM.
               const resultsForConfirmation =
-                structuredOutput && typeof structuredOutput === 'object' && Array.isArray((structuredOutput as { results?: unknown }).results)
-                  ? ((structuredOutput as { results: Array<Record<string, unknown>> }).results)
+                structuredOutput &&
+                typeof structuredOutput === 'object' &&
+                Array.isArray((structuredOutput as { results?: unknown }).results)
+                  ? (structuredOutput as { results: Array<Record<string, unknown>> }).results
                   : [];
               const { SCRIPTED_METHOD } = await import('../agent/scripted-runner.js');
               const failedResults = resultsForConfirmation.filter(
-                (r) => r.status === 'failed' && typeof r.id === 'string' && r.method !== SCRIPTED_METHOD,
+                (r) =>
+                  r.status === 'failed' && typeof r.id === 'string' && r.method !== SCRIPTED_METHOD,
               );
               if (failedResults.length > 0) {
-                process.stderr.write(`${c.dim(`Confirming ${failedResults.length} failed behavior(s) against generated tests...`)}\n`);
+                process.stderr.write(
+                  `${c.dim(`Confirming ${failedResults.length} failed behavior(s) against generated tests...`)}\n`,
+                );
                 const { confirmBehavior } = await import('../agent/test-runner.js');
                 for (const r of failedResults) {
                   const behaviorId = r.id as string;
                   try {
-                    const confirmTimeoutMs = Number(process.env.SPECIFY_CONFIRM_TIMEOUT_MS) || 60_000;
-                    const repro = await confirmBehavior(behaviorId, { cwd: outputDir, timeoutMs: confirmTimeoutMs });
+                    const confirmTimeoutMs =
+                      Number(process.env.SPECIFY_CONFIRM_TIMEOUT_MS) || 60_000;
+                    const repro = await confirmBehavior(behaviorId, {
+                      cwd: outputDir,
+                      timeoutMs: confirmTimeoutMs,
+                    });
                     if (repro) {
                       r.repro = repro;
-                      process.stderr.write(`  ${behaviorId}: ${repro.confirmed ? c.green('confirmed') : c.yellow('unconfirmed')}\n`);
+                      process.stderr.write(
+                        `  ${behaviorId}: ${repro.confirmed ? c.green('confirmed') : c.yellow('unconfirmed')}\n`,
+                      );
                     }
                   } catch (err) {
                     const msg = err instanceof Error ? err.message : String(err);
-                    r.repro = { confirmed: false, output: `unconfirmable: confirmation run threw: ${msg}` };
+                    r.repro = {
+                      confirmed: false,
+                      output: `unconfirmable: confirmation run threw: ${msg}`,
+                    };
                     process.stderr.write(`  ${behaviorId}: ${c.yellow('unconfirmed')} (${msg})\n`);
                   }
                 }
@@ -919,7 +1104,9 @@ async function main(): Promise<void> {
               // the scripted pass already run above in auto mode instead
               // of re-running the suite.
               if (crossCheck) {
-                process.stderr.write(`${c.dim('Cross-checking agent verdicts against the generated suite...')}\n`);
+                process.stderr.write(
+                  `${c.dim('Cross-checking agent verdicts against the generated suite...')}\n`,
+                );
                 let diffResults = scriptedFullResults;
                 if (!diffResults) {
                   const { runScriptedForSpec } = await import('../agent/scripted-runner.js');
@@ -939,23 +1126,30 @@ async function main(): Promise<void> {
                     eventBus.send('crosscheck:result', { ...entry });
                     if (!entry.agreement) {
                       eventBus.send('crosscheck:mismatch', { ...entry });
-                      process.stderr.write(`  ${c.yellow('mismatch')} ${entry.id}: agent=${entry.agentStatus} test=${entry.testStatus}\n`);
+                      process.stderr.write(
+                        `  ${c.yellow('mismatch')} ${entry.id}: agent=${entry.agentStatus} test=${entry.testStatus}\n`,
+                      );
                     }
                   }
                 }
               }
 
-              process.stderr.write(`Verification complete${costUsd ? ` (cost: $${costUsd.toFixed(4)})` : ''}\n`);
-              process.stdout.write(JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n');
+              process.stderr.write(
+                `Verification complete${costUsd ? ` (cost: $${costUsd.toFixed(4)})` : ''}\n`,
+              );
+              process.stdout.write(
+                JSON.stringify({ result, costUsd, outputDir, pass, structuredOutput }) + '\n',
+              );
               // MONITOR_VIOLATION only when every failure was forced by an
               // approved formula's violation (LLM had passed them all); any
               // LLM-reported failure keeps ASSERTION_FAILURE.
               const { isMonitorOnlyFailure } = await import('../monitor/verdict-merge.js');
-              exitCode = pass === true
-                ? ExitCode.SUCCESS
-                : isMonitorOnlyFailure(structuredOutput)
-                  ? ExitCode.MONITOR_VIOLATION
-                  : ExitCode.ASSERTION_FAILURE;
+              exitCode =
+                pass === true
+                  ? ExitCode.SUCCESS
+                  : isMonitorOnlyFailure(structuredOutput)
+                    ? ExitCode.MONITOR_VIOLATION
+                    : ExitCode.ASSERTION_FAILURE;
 
               const verifyResultPath = path.join(outputDir, 'verify-result.json');
               fs.mkdirSync(outputDir, { recursive: true });
@@ -970,12 +1164,21 @@ async function main(): Promise<void> {
                 : undefined;
               fs.writeFileSync(
                 verifyResultPath,
-                JSON.stringify({ structuredOutput, ...(cliObservationsFile ? { observationsFile: cliObservationsFile } : {}) }, null, 2),
+                JSON.stringify(
+                  {
+                    structuredOutput,
+                    ...(cliObservationsFile ? { observationsFile: cliObservationsFile } : {}),
+                  },
+                  null,
+                  2,
+                ),
                 'utf-8',
               );
 
               process.stderr.write(`\n  To review interactively:\n`);
-              process.stderr.write(`  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`);
+              process.stderr.write(
+                `  $ specify review --spec ${specPath} --agent-report ${verifyResultPath}\n\n`,
+              );
               process.stderr.write(`  To run generated e2e tests:\n`);
               process.stderr.write(`  $ cd ${outputDir} && npx playwright test\n\n`);
             } catch (err) {
@@ -990,7 +1193,6 @@ async function main(): Promise<void> {
           exitCode = ExitCode.PARSE_ERROR;
         }
       }
-
     } else if (noun === 'deploy') {
       const { deployCommand } = await import('./commands/deploy.js');
       // Normalize --foo=bar to --foo bar so getArg picks it up.
@@ -1007,10 +1209,13 @@ async function main(): Promise<void> {
         format: formatArg === 'text' ? 'text' : 'json',
         preset: deployArgs.find((a) => !a.startsWith('--')),
       });
-
     } else {
       // Unknown command — structured error
-      const error = { error: 'unknown_command', command: `${noun} ${verb ?? ''}`.trim(), hint: 'Run "specify schema commands" for available commands' };
+      const error = {
+        error: 'unknown_command',
+        command: `${noun} ${verb ?? ''}`.trim(),
+        hint: 'Run "specify schema commands" for available commands',
+      };
       if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
         process.stdout.write(JSON.stringify(error) + '\n');
       } else {
@@ -1020,7 +1225,10 @@ async function main(): Promise<void> {
       exitCode = ExitCode.PARSE_ERROR;
     }
   } catch (err) {
-    const error = { error: 'internal_error', message: err instanceof Error ? err.message : String(err) };
+    const error = {
+      error: 'internal_error',
+      message: err instanceof Error ? err.message : String(err),
+    };
     if (ctx.outputFormat === 'json' || !process.stdout.isTTY) {
       process.stdout.write(JSON.stringify(error) + '\n');
     }

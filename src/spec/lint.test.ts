@@ -34,12 +34,16 @@ test('lintSpec detects duplicate area IDs', () => {
     target: { type: 'web', url: 'http://localhost:3000' },
     areas: [
       { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: 'User can log in' }] },
-      { id: 'auth', name: 'Auth Dup', behaviors: [{ id: 'logout', description: 'User can log out' }] },
+      {
+        id: 'auth',
+        name: 'Auth Dup',
+        behaviors: [{ id: 'logout', description: 'User can log out' }],
+      },
     ],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'duplicate-area-id'));
+  assert.ok(errors.some((err) => err.rule === 'duplicate-area-id'));
 });
 
 test('lintSpec detects duplicate behavior IDs within an area', () => {
@@ -60,7 +64,7 @@ test('lintSpec detects duplicate behavior IDs within an area', () => {
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'duplicate-behavior-id'));
+  assert.ok(errors.some((err) => err.rule === 'duplicate-behavior-id'));
 });
 
 test('lintSpec detects empty behavior descriptions', () => {
@@ -68,13 +72,11 @@ test('lintSpec detects empty behavior descriptions', () => {
     version: '2',
     name: 'Test Spec',
     target: { type: 'web', url: 'http://localhost:3000' },
-    areas: [
-      { id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: '   ' }] },
-    ],
+    areas: [{ id: 'auth', name: 'Auth', behaviors: [{ id: 'login', description: '   ' }] }],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'empty-behavior-description'));
+  assert.ok(errors.some((err) => err.rule === 'empty-behavior-description'));
 });
 
 test('lintSpec warns about ambiguous behavior IDs across areas', () => {
@@ -84,12 +86,16 @@ test('lintSpec warns about ambiguous behavior IDs across areas', () => {
     target: { type: 'web', url: 'http://localhost:3000' },
     areas: [
       { id: 'auth', name: 'Auth', behaviors: [{ id: 'submit', description: 'Submit login form' }] },
-      { id: 'settings', name: 'Settings', behaviors: [{ id: 'submit', description: 'Submit settings form' }] },
+      {
+        id: 'settings',
+        name: 'Settings',
+        behaviors: [{ id: 'submit', description: 'Submit settings form' }],
+      },
     ],
   };
 
   const errors = lintSpec(spec);
-  assert.ok(errors.some(err => err.rule === 'ambiguous-behavior-id'));
+  assert.ok(errors.some((err) => err.rule === 'ambiguous-behavior-id'));
 });
 
 test('lintSpec returns no errors for a valid spec', () => {
@@ -109,24 +115,30 @@ test('lintSpec returns no errors for a valid spec', () => {
 test('lintPath validates composed directory specs', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'spec.yaml'), [
-      'version: "2"',
-      'name: Directory Spec',
-      'target:',
-      '  type: web',
-      '  url: http://localhost:3000',
-      'areas:',
-      '  - areas/auth.yaml',
-      '',
-    ].join('\n'));
-    writeFile(path.join(dir, 'areas', 'auth.yaml'), [
-      'id: auth',
-      'name: Auth',
-      'behaviors:',
-      '  - id: login',
-      '    description: User can log in',
-      '',
-    ].join('\n'));
+    writeFile(
+      path.join(dir, 'spec.yaml'),
+      [
+        'version: "2"',
+        'name: Directory Spec',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - areas/auth.yaml',
+        '',
+      ].join('\n'),
+    );
+    writeFile(
+      path.join(dir, 'areas', 'auth.yaml'),
+      [
+        'id: auth',
+        'name: Auth',
+        'behaviors:',
+        '  - id: login',
+        '    description: User can log in',
+        '',
+      ].join('\n'),
+    );
 
     assert.deepEqual(lintPath(dir), { valid: true, errors: [] });
   } finally {
@@ -137,28 +149,40 @@ test('lintPath validates composed directory specs', () => {
 test('lintPath reports composed directory duplicate sources', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'spec.yaml'), [
-      'version: "2"',
-      'name: Directory Spec',
-      'target:',
-      '  type: web',
-      '  url: http://localhost:3000',
-      'areas:',
-      '  - areas/a.yaml',
-      '  - areas/b.yaml',
-      '',
-    ].join('\n'));
-    writeFile(path.join(dir, 'areas', 'a.yaml'), 'id: auth\nname: Auth\nbehaviors:\n  - id: login\n    description: Login\n');
-    writeFile(path.join(dir, 'areas', 'b.yaml'), 'id: auth\nname: Duplicate\nbehaviors:\n  - id: logout\n    description: Logout\n');
+    writeFile(
+      path.join(dir, 'spec.yaml'),
+      [
+        'version: "2"',
+        'name: Directory Spec',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - areas/a.yaml',
+        '  - areas/b.yaml',
+        '',
+      ].join('\n'),
+    );
+    writeFile(
+      path.join(dir, 'areas', 'a.yaml'),
+      'id: auth\nname: Auth\nbehaviors:\n  - id: login\n    description: Login\n',
+    );
+    writeFile(
+      path.join(dir, 'areas', 'b.yaml'),
+      'id: auth\nname: Duplicate\nbehaviors:\n  - id: logout\n    description: Logout\n',
+    );
 
     const result = lintPath(dir);
     assert.equal(result.valid, false);
-    assert.ok(result.errors.some((error) =>
-      error.rule === 'composition' &&
-      error.message.includes('Duplicate area ID "auth"') &&
-      error.message.includes('a.yaml') &&
-      error.message.includes('b.yaml'),
-    ));
+    assert.ok(
+      result.errors.some(
+        (error) =>
+          error.rule === 'composition' &&
+          error.message.includes('Duplicate area ID "auth"') &&
+          error.message.includes('a.yaml') &&
+          error.message.includes('b.yaml'),
+      ),
+    );
   } finally {
     cleanup();
   }
@@ -188,11 +212,14 @@ test('lintPath warns when a single-file spec is large enough to split', () => {
     const result = lintPath(specPath);
 
     assert.equal(result.valid, true);
-    assert.ok(result.errors.some((error) =>
-      error.rule === 'oversized-single-file-spec' &&
-      error.severity === 'warning' &&
-      error.message.includes('specify spec split'),
-    ));
+    assert.ok(
+      result.errors.some(
+        (error) =>
+          error.rule === 'oversized-single-file-spec' &&
+          error.severity === 'warning' &&
+          error.message.includes('specify spec split'),
+      ),
+    );
   } finally {
     cleanup();
   }
@@ -261,13 +288,16 @@ test('lintPath warns about a confidence.json row for a renamed/removed behavior'
   try {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
-    writeFile(path.join(dir, '.specify', 'confidence.json'), JSON.stringify({
-      version: 1,
-      rows: {
-        login: { accepts: 3, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' },
-        signin: { accepts: 1, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' },
-      },
-    }));
+    writeFile(
+      path.join(dir, '.specify', 'confidence.json'),
+      JSON.stringify({
+        version: 1,
+        rows: {
+          login: { accepts: 3, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' },
+          signin: { accepts: 1, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' },
+        },
+      }),
+    );
 
     const result = lintPath(specPath);
     const warnings = result.errors.filter((e) => e.rule === 'dangling-learned-state');
@@ -286,21 +316,24 @@ test('lintPath warns about a dangling observation scope', () => {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
     fs.mkdirSync(path.join(dir, '.specify'), { recursive: true });
-    writeFile(path.join(dir, 'specify.observations.yaml'), [
-      'version: 1',
-      'observations:',
-      '  - id: obs-1',
-      '    description: Known quirk',
-      '    area_id: auth',
-      '    behavior_id: login',
-      '    source: user_feedback',
-      '  - id: obs-2',
-      '    description: Orphaned by rename',
-      '    area_id: auth',
-      '    behavior_id: signin',
-      '    source: user_feedback',
-      '',
-    ].join('\n'));
+    writeFile(
+      path.join(dir, 'specify.observations.yaml'),
+      [
+        'version: 1',
+        'observations:',
+        '  - id: obs-1',
+        '    description: Known quirk',
+        '    area_id: auth',
+        '    behavior_id: login',
+        '    source: user_feedback',
+        '  - id: obs-2',
+        '    description: Orphaned by rename',
+        '    area_id: auth',
+        '    behavior_id: signin',
+        '    source: user_feedback',
+        '',
+      ].join('\n'),
+    );
 
     const result = lintPath(specPath);
     const warnings = result.errors.filter((e) => e.rule === 'dangling-learned-state');
@@ -316,15 +349,36 @@ test('lintPath warns about a dangling memory-store row', () => {
   try {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
-    writeFile(path.join(dir, '.specify', 'memory', 'myspec', 'web_localhost.json'), JSON.stringify({
-      version: 1,
-      spec_id: 'myspec',
-      target_key: 'web_localhost',
-      rows: [
-        { id: 'mem_1', type: 'playbook', area_id: 'auth', behavior_id: 'login', content: 'click sign in', contradicted_count: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-        { id: 'mem_2', type: 'playbook', area_id: 'auth', behavior_id: 'signin', content: 'stale playbook', contradicted_count: 0, created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z' },
-      ],
-    }));
+    writeFile(
+      path.join(dir, '.specify', 'memory', 'myspec', 'web_localhost.json'),
+      JSON.stringify({
+        version: 1,
+        spec_id: 'myspec',
+        target_key: 'web_localhost',
+        rows: [
+          {
+            id: 'mem_1',
+            type: 'playbook',
+            area_id: 'auth',
+            behavior_id: 'login',
+            content: 'click sign in',
+            contradicted_count: 0,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+          {
+            id: 'mem_2',
+            type: 'playbook',
+            area_id: 'auth',
+            behavior_id: 'signin',
+            content: 'stale playbook',
+            contradicted_count: 0,
+            created_at: '2026-01-01T00:00:00Z',
+            updated_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+      }),
+    );
 
     const result = lintPath(specPath);
     const warnings = result.errors.filter((e) => e.rule === 'dangling-learned-state');
@@ -340,10 +394,13 @@ test('lintPath reports no dangling-learned-state warnings once ids match the spe
   try {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
-    writeFile(path.join(dir, '.specify', 'confidence.json'), JSON.stringify({
-      version: 1,
-      rows: { login: { accepts: 3, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' } },
-    }));
+    writeFile(
+      path.join(dir, '.specify', 'confidence.json'),
+      JSON.stringify({
+        version: 1,
+        rows: { login: { accepts: 3, overrides: 0, lastUpdatedAt: '2026-01-01T00:00:00Z' } },
+      }),
+    );
 
     const result = lintPath(specPath);
     assert.ok(!result.errors.some((e) => e.rule === 'dangling-learned-state'));
@@ -355,27 +412,26 @@ test('lintPath reports no dangling-learned-state warnings once ids match the spe
 test('lintPath does not warn about aggregate size for directory specs', () => {
   const { dir, cleanup } = tmpDir();
   try {
-    writeFile(path.join(dir, 'spec.yaml'), [
-      'version: "2"',
-      'name: Directory Spec',
-      'target:',
-      '  type: web',
-      '  url: http://localhost:3000',
-      'areas:',
-      '  - areas/huge.yaml',
-      '',
-    ].join('\n'));
-    const behaviors = Array.from({ length: 121 }, (_, i) => [
-      `  - id: behavior-${i}`,
-      `    description: Behavior ${i} works`,
-    ].join('\n')).join('\n');
-    writeFile(path.join(dir, 'areas', 'huge.yaml'), [
-      'id: huge',
-      'name: Huge',
-      'behaviors:',
-      behaviors,
-      '',
-    ].join('\n'));
+    writeFile(
+      path.join(dir, 'spec.yaml'),
+      [
+        'version: "2"',
+        'name: Directory Spec',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - areas/huge.yaml',
+        '',
+      ].join('\n'),
+    );
+    const behaviors = Array.from({ length: 121 }, (_, i) =>
+      [`  - id: behavior-${i}`, `    description: Behavior ${i} works`].join('\n'),
+    ).join('\n');
+    writeFile(
+      path.join(dir, 'areas', 'huge.yaml'),
+      ['id: huge', 'name: Huge', 'behaviors:', behaviors, ''].join('\n'),
+    );
 
     const result = lintPath(dir);
 
@@ -408,7 +464,9 @@ test('lintPath is unaffected when there is no specify.formulas.yaml', () => {
     writeFile(specPath, specToYaml(makeAuthSpec()));
 
     const result = lintPath(specPath);
-    assert.ok(!result.errors.some((e) => e.rule.startsWith('formula') || e.rule === 'stale-formula'));
+    assert.ok(
+      !result.errors.some((e) => e.rule.startsWith('formula') || e.rule === 'stale-formula'),
+    );
     assert.equal(result.valid, true);
   } finally {
     cleanup();
@@ -438,7 +496,10 @@ test('lintPath reports an error when specify.formulas.yaml is malformed YAML', (
   try {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
-    writeFile(path.join(dir, 'specify.formulas.yaml'), 'formulas: [\n  - id: fml-abc\n    behavior: [unterminated');
+    writeFile(
+      path.join(dir, 'specify.formulas.yaml'),
+      'formulas: [\n  - id: fml-abc\n    behavior: [unterminated',
+    );
 
     const result = lintPath(specPath);
     const errors = result.errors.filter((e) => e.rule === 'formulas-file-invalid');
@@ -564,7 +625,10 @@ test('lintPath warns when description_hash is stale relative to the current beha
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
     // Compiled against an older description than the spec now has.
-    saveFormulas(path.join(dir, 'specify.formulas.yaml'), sampleFormulasFile('User can log in (old wording)'));
+    saveFormulas(
+      path.join(dir, 'specify.formulas.yaml'),
+      sampleFormulasFile('User can log in (old wording)'),
+    );
 
     const result = lintPath(specPath);
     const warnings = result.errors.filter((e) => e.rule === 'stale-formula');
@@ -670,17 +734,26 @@ test('lintPath warns with a plain-English counterexample when a parent_of decomp
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
     // Parent claims G(p & q); the only declared sub-check is G(p) — a hole.
-    saveFormulas(path.join(dir, 'specify.formulas.yaml'), decompositionFormulasFile({ soundLeaves: false }));
+    saveFormulas(
+      path.join(dir, 'specify.formulas.yaml'),
+      decompositionFormulasFile({ soundLeaves: false }),
+    );
 
     const result = lintPath(specPath);
     const warnings = result.errors.filter((e) => e.rule === 'entailment-refuted');
     assert.equal(warnings.length, 1);
     assert.equal(warnings[0].severity, 'warning');
     assert.ok(
-      warnings[0].message.includes('a scenario where every sub-check passes but the parent claim fails'),
+      warnings[0].message.includes(
+        'a scenario where every sub-check passes but the parent claim fails',
+      ),
       warnings[0].message,
     );
-    assert.equal(result.valid, true, 'advisory rule: a refuted decomposition is a warning, never an error');
+    assert.equal(
+      result.valid,
+      true,
+      'advisory rule: a refuted decomposition is a warning, never an error',
+    );
   } finally {
     cleanup();
   }
@@ -692,7 +765,10 @@ test('lintPath emits nothing for a sound parent_of decomposition', () => {
     const specPath = path.join(dir, 'spec.yaml');
     writeFile(specPath, specToYaml(makeAuthSpec()));
     // Parent G(p & q) decomposed into [G(p), G(q)] — no bounded counterexample.
-    saveFormulas(path.join(dir, 'specify.formulas.yaml'), decompositionFormulasFile({ soundLeaves: true }));
+    saveFormulas(
+      path.join(dir, 'specify.formulas.yaml'),
+      decompositionFormulasFile({ soundLeaves: true }),
+    );
 
     const result = lintPath(specPath);
     assert.ok(!result.errors.some((e) => e.rule === 'entailment-refuted'));
@@ -710,9 +786,7 @@ test('lintPath reports an error when parent_of references an unknown formula id'
     const base = decompositionFormulasFile({ soundLeaves: false });
     const broken = {
       ...base,
-      formulas: base.formulas.map((f) =>
-        f.parent_of ? { ...f, parent_of: ['fml-missing'] } : f,
-      ),
+      formulas: base.formulas.map((f) => (f.parent_of ? { ...f, parent_of: ['fml-missing'] } : f)),
     };
     saveFormulas(path.join(dir, 'specify.formulas.yaml'), broken);
 

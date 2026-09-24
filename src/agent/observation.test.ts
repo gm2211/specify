@@ -3,7 +3,12 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import test from 'node:test';
-import { ObservationRecorder, extractRecordableArgs, CliObservationRecorder, capOutput } from './observation.js';
+import {
+  ObservationRecorder,
+  extractRecordableArgs,
+  CliObservationRecorder,
+  capOutput,
+} from './observation.js';
 
 function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'observation-test-'));
@@ -17,7 +22,9 @@ function mockPage(overrides: Record<string, unknown> = {}) {
     locator: () => ({
       ariaSnapshot: async () => '- generic: body',
     }),
-    setUrl: (u: string) => { url = u; },
+    setUrl: (u: string) => {
+      url = u;
+    },
   };
   return { ...base, ...overrides } as any;
 }
@@ -30,7 +37,12 @@ function mockCollector(traffic: unknown[] = [], consoleLogs: unknown[] = []) {
 }
 
 test('extractRecordableArgs keeps only selector/url, never fill values or credentials', () => {
-  const args = extractRecordableArgs({ selector: '#pw', value: 'hunter2', text: 'secret', url: 'https://x.test' });
+  const args = extractRecordableArgs({
+    selector: '#pw',
+    value: 'hunter2',
+    text: 'secret',
+    url: 'https://x.test',
+  });
   assert.deepEqual(args, { selector: '#pw', url: 'https://x.test' });
   assert.equal('value' in (args ?? {}), false);
   assert.equal('text' in (args ?? {}), false);
@@ -79,7 +91,10 @@ test('step numbering increments across beginStep calls', async () => {
   await recorder.endStep({ success: true });
 
   const steps = recorder.getSteps();
-  assert.deepEqual(steps.map((s) => s.step), [0, 1]);
+  assert.deepEqual(
+    steps.map((s) => s.step),
+    [0, 1],
+  );
 });
 
 test('ax snapshot dedups by digest: unchanged body is not re-written', async () => {
@@ -109,7 +124,9 @@ test('mid-navigation ariaSnapshot failure is recorded, not thrown', async () => 
   const dir = tmpDir();
   const page = mockPage({
     locator: () => ({
-      ariaSnapshot: async () => { throw new Error('Execution context was destroyed'); },
+      ariaSnapshot: async () => {
+        throw new Error('Execution context was destroyed');
+      },
     }),
   });
   const collector = mockCollector();
@@ -150,7 +167,11 @@ test('traffic/console ranges close lazily at the next beginStep, capturing late-
 
   await recorder.beginStep('click', { selector: '#b' });
   step0 = recorder.getSteps()[0];
-  assert.equal(step0.trafficRange[1], 3, 'lazy close at next beginStep captures late-arriving entries');
+  assert.equal(
+    step0.trafficRange[1],
+    3,
+    'lazy close at next beginStep captures late-arriving entries',
+  );
 
   traffic.push({ url: 'https://example.com/api/4' });
   await recorder.endStep({ success: true });
@@ -240,7 +261,10 @@ test('CliObservationRecorder assigns incrementing step indices', () => {
 
   assert.equal(first.step, 0);
   assert.equal(second.step, 1);
-  assert.deepEqual(recorder.getSteps().map((s) => s.step), [0, 1]);
+  assert.deepEqual(
+    recorder.getSteps().map((s) => s.step),
+    [0, 1],
+  );
 });
 
 test('CliObservationRecorder.save() writes observations.json with every recorded step', () => {

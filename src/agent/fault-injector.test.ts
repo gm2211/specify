@@ -74,8 +74,8 @@ test('FaultInjector.decide: same seed reproduces identical decisions across sepa
   const injectorA = new FaultInjector(plan);
   const injectorB = new FaultInjector({ ...plan, rules: [...plan.rules] });
 
-  const resultsA: (boolean)[] = [];
-  const resultsB: (boolean)[] = [];
+  const resultsA: boolean[] = [];
+  const resultsB: boolean[] = [];
   for (let seq = 0; seq < 30; seq++) {
     resultsA.push(injectorA.decide('https://x.test/api/orders', 'GET', seq) !== null);
     resultsB.push(injectorB.decide('https://x.test/api/orders', 'GET', seq) !== null);
@@ -87,7 +87,10 @@ test('FaultInjector.decide: same seed reproduces identical decisions across sepa
 });
 
 test('FaultInjector.decide: rate 1.0 always fires on a match', () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/', fault: 'abort', rate: 1.0 }] });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/', fault: 'abort', rate: 1.0 }],
+  });
   for (let seq = 0; seq < 10; seq++) {
     const decision = injector.decide('https://x.test/api/orders', 'GET', seq);
     assert.equal(decision?.fault, 'abort');
@@ -95,7 +98,10 @@ test('FaultInjector.decide: rate 1.0 always fires on a match', () => {
 });
 
 test('FaultInjector.decide: non-matching URL never fires', () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }] });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/orders', fault: '500', rate: 1.0 }],
+  });
   assert.equal(injector.decide('https://x.test/other/path', 'GET', 0), null);
 });
 
@@ -133,7 +139,10 @@ test('FaultInjector.hasEverActivated: false for a rule-less session, sticky once
 });
 
 test('FaultInjector.hasEverActivated: true from construction when the plan has rules', () => {
-  const injector = new FaultInjector({ seed: 1, rules: [{ urlPattern: '/api/', fault: 'abort', rate: 1.0 }] });
+  const injector = new FaultInjector({
+    seed: 1,
+    rules: [{ urlPattern: '/api/', fault: 'abort', rate: 1.0 }],
+  });
   assert.equal(injector.hasEverActivated(), true);
 });
 

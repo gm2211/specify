@@ -29,19 +29,20 @@ function tmpDir(): { dir: string; cleanup: () => void } {
 }
 
 function writeSpecFile(specPath: string): void {
-  const yaml = [
-    'version: "2"',
-    'name: "Test Spec"',
-    'target:',
-    '  type: web',
-    '  url: http://localhost:3000',
-    'areas:',
-    '  - id: auth',
-    '    name: Auth',
-    '    behaviors:',
-    '      - id: login',
-    '        description: "User can log in with valid credentials"',
-  ].join('\n') + '\n';
+  const yaml =
+    [
+      'version: "2"',
+      'name: "Test Spec"',
+      'target:',
+      '  type: web',
+      '  url: http://localhost:3000',
+      'areas:',
+      '  - id: auth',
+      '    name: Auth',
+      '    behaviors:',
+      '      - id: login',
+      '        description: "User can log in with valid credentials"',
+    ].join('\n') + '\n';
   fs.writeFileSync(specPath, yaml, 'utf-8');
 }
 
@@ -144,7 +145,11 @@ test('listFormulas: recompileFlagged only surfaces for approved formulas, not dr
     // recompileFlagged until the formula is actually approved.
     const { formulas: whileDraft } = await listFormulas(specPath);
     assert.equal(whileDraft[0].recompileFlagged, false);
-    assert.equal(whileDraft[0].stats?.recompileFlagged, true, 'still recorded in the raw stats row');
+    assert.equal(
+      whileDraft[0].stats?.recompileFlagged,
+      true,
+      'still recorded in the raw stats row',
+    );
 
     // Approve it: now the same stats row should surface as recompileFlagged.
     const result = setFormulaStatus(specPath, id, 'approved');
@@ -256,7 +261,10 @@ test('setFormulaStatus returns conflict (no throw, no clobber) when a concurrent
     });
 
     assert.ok('error' in result && result.error === 'conflict', 'expected a conflict error result');
-    assert.match((result as { error: 'conflict'; message: string }).message, /could not be reloaded/);
+    assert.match(
+      (result as { error: 'conflict'; message: string }).message,
+      /could not be reloaded/,
+    );
     // The corrupted on-disk content must be left untouched, not overwritten
     // with the handler's stale in-memory copy.
     assert.equal(fs.readFileSync(formulasPath, 'utf-8'), corruptedYaml);
@@ -310,14 +318,13 @@ function pickServerPort(): number {
 
 function getRequest(port: number, urlPath: string): Promise<{ status: number; text: string }> {
   return new Promise((resolve, reject) => {
-    const req = http.request(
-      { host: '127.0.0.1', port, path: urlPath, method: 'GET' },
-      (res) => {
-        let buf = '';
-        res.on('data', (chunk) => { buf += chunk; });
-        res.on('end', () => resolve({ status: res.statusCode ?? 0, text: buf }));
-      },
-    );
+    const req = http.request({ host: '127.0.0.1', port, path: urlPath, method: 'GET' }, (res) => {
+      let buf = '';
+      res.on('data', (chunk) => {
+        buf += chunk;
+      });
+      res.on('end', () => resolve({ status: res.statusCode ?? 0, text: buf }));
+    });
     req.on('error', reject);
     req.end();
   });
@@ -356,7 +363,11 @@ test('startReviewServer defaults to loopback-only (127.0.0.1) when no host optio
   t.after(async () => {
     process.stderr.write = originalWrite;
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     cleanup();
   });
 
@@ -365,8 +376,11 @@ test('startReviewServer defaults to loopback-only (127.0.0.1) when no host optio
   assert.equal(res.status, 200);
 
   const banner = stderrChunks.join('');
-  assert.match(banner, /Server:\s+http:\/\/127\.0\.0\.1:/,
-    'server should report binding to loopback (127.0.0.1), not a wider interface');
+  assert.match(
+    banner,
+    /Server:\s+http:\/\/127\.0\.0\.1:/,
+    'server should report binding to loopback (127.0.0.1), not a wider interface',
+  );
 });
 
 test('startReviewServer honors an explicit host option', async (t) => {
@@ -387,7 +401,11 @@ test('startReviewServer honors an explicit host option', async (t) => {
   t.after(async () => {
     process.stderr.write = originalWrite;
     process.kill(process.pid, 'SIGTERM');
-    try { await serverPromise; } catch { /* ignore */ }
+    try {
+      await serverPromise;
+    } catch {
+      /* ignore */
+    }
     cleanup();
   });
 
