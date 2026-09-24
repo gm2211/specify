@@ -8,9 +8,8 @@ web, CLI, or API target. Review what passed, failed, or was skipped, together wi
 recorded during the run.
 
 Its value is a reusable contract and inspectable QA output. Better bug detection than a
-general-purpose agent using Playwright is **not established**; the live comparison is currently
-blocked on Claude subscription quota. See the
-[comparison protocol and results](docs/qa-comparison.md).
+general-purpose agent using Playwright is **not established**; the matched comparison has no
+completed runs. See the [comparison protocol and attempt records](docs/qa-comparison.md).
 
 ## When to reach for it
 
