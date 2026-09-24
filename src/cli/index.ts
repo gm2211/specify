@@ -602,8 +602,13 @@ async function main(): Promise<void> {
       if (!specPath) {
         process.stdout.write(JSON.stringify({ error: 'missing_parameter', parameter: '--spec', hint: 'Provide a spec file to verify against' }) + '\n');
         exitCode = ExitCode.PARSE_ERROR;
+      } else if (verifyMode === 'formal') {
+        const { formal } = await import('./commands/formal.js');
+        exitCode = await formal({ spec: specPath, manifest: getArg(verifyArgs, '--formal-manifest'),
+          binary: getArg(verifyArgs, '--quint-binary'), output: getArg(verifyArgs, '--output'),
+          traces: hasFlag(verifyArgs, '--generate-traces') });
       } else if (verifyMode !== 'agent' && verifyMode !== 'scripted' && verifyMode !== 'auto') {
-        process.stdout.write(JSON.stringify({ error: 'invalid_parameter', parameter: '--mode', hint: 'Expected one of: agent, scripted, auto' }) + '\n');
+        process.stdout.write(JSON.stringify({ error: 'invalid_parameter', parameter: '--mode', hint: 'Expected one of: agent, scripted, auto, formal' }) + '\n');
         exitCode = ExitCode.PARSE_ERROR;
       } else if (storageStateErr) {
         process.stdout.write(JSON.stringify(storageStateErr) + '\n');
