@@ -56,3 +56,21 @@ bd close <id>         # Complete work
 ## Landing the Plane (Session Completion)
 
 Same mandatory workflow as **Session Completion** above. Step 4 may alternatively run `bd sync` instead of `bd dolt push`.
+
+## Build & Test
+
+_Add your build and test commands here_
+
+```bash
+# Example:
+# npm install
+# npm test
+```
+
+## Architecture Overview
+
+_Add a brief overview of your project architecture_
+
+## Conventions & Patterns
+
+_Add your project-specific conventions here_
