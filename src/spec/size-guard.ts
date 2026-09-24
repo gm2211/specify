@@ -20,8 +20,12 @@ export interface SpecSizeMetrics {
 
 export interface SpecSizeAssessment {
   metrics: SpecSizeMetrics;
+  /** True when the soft (advisory) thresholds are exceeded. */
   overLimit: boolean;
   reasons: string[];
+  /** True when the hard thresholds are exceeded — a blocking lint error. */
+  overHardLimit: boolean;
+  hardReasons: string[];
 }
 
 export const DEFAULT_SPEC_SIZE_THRESHOLDS: SpecSizeThresholds = {
@@ -31,10 +35,25 @@ export const DEFAULT_SPEC_SIZE_THRESHOLDS: SpecSizeThresholds = {
   maxBehaviors: 120,
 };
 
+/**
+ * Hard thresholds — double the advisory ones. Past this point a single-file
+ * spec stops being a style preference and becomes unreviewable, so lint
+ * reports an error instead of a warning. Splitting is always available:
+ * every command that takes `--spec` resolves a directory spec through
+ * loadSpec, so `specify spec split` is a non-breaking remedy.
+ */
+export const HARD_SPEC_SIZE_THRESHOLDS: SpecSizeThresholds = {
+  maxBytes: 80 * 1024,
+  maxLines: 1600,
+  maxAreas: 24,
+  maxBehaviors: 240,
+};
+
 export function assessSpecSize(
   content: string,
   spec: Spec,
   thresholds: SpecSizeThresholds = DEFAULT_SPEC_SIZE_THRESHOLDS,
+  hardThresholds: SpecSizeThresholds = HARD_SPEC_SIZE_THRESHOLDS,
 ): SpecSizeAssessment {
   const metrics: SpecSizeMetrics = {
     bytes: Buffer.byteLength(content, 'utf-8'),
@@ -42,6 +61,19 @@ export function assessSpecSize(
     areas: spec.areas.length,
     behaviors: spec.areas.reduce((count, area) => count + area.behaviors.length, 0),
   };
+  const reasons = exceedances(metrics, thresholds);
+  const hardReasons = exceedances(metrics, hardThresholds);
+
+  return {
+    metrics,
+    overLimit: reasons.length > 0 || hardReasons.length > 0,
+    reasons,
+    overHardLimit: hardReasons.length > 0,
+    hardReasons,
+  };
+}
+
+function exceedances(metrics: SpecSizeMetrics, thresholds: SpecSizeThresholds): string[] {
   const reasons: string[] = [];
 
   if (metrics.bytes > thresholds.maxBytes) {
@@ -57,11 +89,7 @@ export function assessSpecSize(
     reasons.push(`${metrics.behaviors} behaviors exceeds ${thresholds.maxBehaviors}`);
   }
 
-  return {
-    metrics,
-    overLimit: reasons.length > 0,
-    reasons,
-  };
+  return reasons;
 }
 
 export function defaultSplitOutputPath(specPath: string): string {
