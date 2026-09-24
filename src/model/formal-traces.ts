@@ -28,6 +28,8 @@ export async function generateFormalTraces(options: SuiteOptions) {
           options.binary,
           'run',
           source,
+          '--main',
+          model.main,
           '--backend',
           'typescript',
           '--seed',

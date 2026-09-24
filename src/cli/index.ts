@@ -227,19 +227,19 @@ function printHelp(asJson: boolean): void {
   } else {
     // Human-readable to stderr
     process.stderr.write(`
-${c.boldCyan('Specify')} ${c.dim('—')} contract lifecycle for web applications
+${c.boldCyan('Specify')} ${c.dim('—')} behavioral contracts and recorded QA evidence
 
 ${c.bold('Usage:')} specify ${c.cyan('<command>')} ${c.dim('[options]')}
 
 ${c.bold('Primary Flows:')}
   ${c.cyan('create')}            Create a contract from human intent
-  ${c.cyan('capture')}           Capture a contract from a live system or codebase
+  ${c.cyan('capture')}           Draft a candidate contract from a live system
   ${c.cyan('review')}            Launch the review webapp ${c.dim('(--background to daemonize, --stop to kill)')}
   ${c.cyan('verify')}            Verify an implementation against a contract
-  ${c.cyan('prove')}             Write a self-contained proof.html from a verify run
+  ${c.cyan('prove')}             Package a verify run as an HTML evidence report
 
 ${c.bold('Advanced:')}
-  ${c.cyan('spec lint')}         Validate contract structure ${c.dim('(no captures needed)')}
+  ${c.cyan('spec lint')}         Validate contract structure
   ${c.cyan('spec split')}        Break a large spec file into a directory spec
   ${c.cyan('spec guide')}       Authoring guide for LLM spec writers
   ${c.cyan('spec context')}     Generate/refresh PRODUCT.md and DESIGN.md from the spec
@@ -257,7 +257,7 @@ ${c.bold('Common tasks:')}
   ${c.dim('New project:')}       specify create
   ${c.dim('Check it works:')}    specify verify --spec spec.yaml
   ${c.dim('See the contract:')}  specify review --spec spec.yaml
-  ${c.dim('Prove it works:')}    specify prove
+  ${c.dim('Inspect evidence:')}    specify prove
 
 ${c.bold('Global Options:')}
   ${c.yellow('--json')}                                        Force JSON output to stdout
@@ -268,8 +268,8 @@ ${c.bold('Global Options:')}
 
 ${c.bold('Examples:')}
   ${c.dim('$')} specify create
-  ${c.dim('$')} specify capture --url http://localhost:3000 --output ./captures
-  ${c.dim('$')} specify verify --spec ./spec.yaml --capture ./captures/latest
+  ${c.dim('$')} specify spec lint --spec ./spec.yaml
+  ${c.dim('$')} specify verify --spec ./spec.yaml --url http://localhost:3000
   ${c.dim('$')} specify review --spec ./spec.yaml
 `.trimStart());
   }

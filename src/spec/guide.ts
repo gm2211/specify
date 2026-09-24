@@ -65,9 +65,9 @@ function loadExamples(): AuthoringGuide['examples'] {
   const files = fs.readdirSync(dir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml')).sort();
 
   const descriptions: Record<string, string> = {
-    'login-page.yaml': 'Simple single-page spec with form interactions, scenarios (success + error paths), and template variables',
-    'dashboard-api.yaml': 'Page with API request assertions, JSON Schema validation on responses, interactive scenarios with wait_for_request',
-    'multi-page-flow.yaml': 'Multi-page e-commerce flow with setup/teardown hooks, navigation steps, and cross-page assertions',
+    'login-page.yaml': 'Authentication behaviors with success and rejection cases and template variables',
+    'dashboard-api.yaml': 'Dashboard and API behavior claims, including authorization and response expectations',
+    'multi-page-flow.yaml': 'Checkout behavior claims with preconditions and cross-feature expectations',
   };
 
   return files.map(f => ({
@@ -171,6 +171,9 @@ hooks:
     },
 
     tips: [
+      'Review captured or inferred behavior against intended requirements; existing bugs are not requirements.',
+      'Keep behavior IDs stable across edits; use spec migrate-id when a rename is necessary.',
+      'Areas and tags organize requirements, not code-change impact or feature dependencies.',
       'Start with the minimal spec (version + name + target + one area) and build up incrementally.',
       'Use "specify spec lint" to validate structure before running against a live app.',
       'Areas group behaviors by feature, not by page — think "authentication" or "shopping cart" rather than "/login" or "/cart".',

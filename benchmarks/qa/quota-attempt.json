@@ -1,0 +1,29 @@
+{
+  "date": "2026-09-09",
+  "authentication": "successful",
+  "status": "blocked_subscription_quota",
+  "completedRuns": 0,
+  "resetUtc": "2026-09-13T18:00:00.000Z",
+  "runs": [
+    {
+      "status": "error",
+      "arm": "baseline",
+      "variant": "healthy",
+      "elapsedMs": 1879,
+      "error": "Error: Claude Code returned an error result: You've hit your limit \u00b7 resets Sep 13, 2pm (America/New_York)"
+    },
+    {
+      "status": "error",
+      "arm": "specify",
+      "variant": "healthy",
+      "elapsedMs": 1592,
+      "error": "SubscriptionLimitError: Claude subscription rate limit reached (seven_day) \u2014 resets at 1970-01-21T17:02:02.400Z. Aborting immediately instead of waiting for the SDK to stall."
+    }
+  ],
+  "availabilityProbe": {
+    "model": "claude-sonnet-4-6",
+    "result": "You've hit your limit \u00b7 resets Sep 13, 2pm (America/New_York)",
+    "reportedCostUsd": 0
+  },
+  "interpretation": "Authentication is resolved. Both comparison arms and a Sonnet availability probe were quota-rejected before QA. The Specify error preserved here includes the reset-date formatting bug fixed alongside this record."
+}

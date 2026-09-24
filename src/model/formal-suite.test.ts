@@ -26,7 +26,7 @@ const manifest = {
   models: [
     {
       id: 'sample',
-      main: 'sample',
+      main: 'CustomModel',
       file: 'sample.qnt',
       behavior: 'test/safety',
       invariant: 'safe',
@@ -170,6 +170,7 @@ test('trace generation uses existing ITF decoder, collapses stutters and enforce
   options.output = path.join(options.cwd, 'traces.json');
   const exec: QuintExec = async (argv) => {
     if (argv[1] === '--version') return result(0, '0.32.0');
+    assert.equal(argv[argv.indexOf('--main') + 1], 'CustomModel');
     const pattern = argv[argv.indexOf('--out-itf') + 1];
     for (let i = 0; i < 2; i++) {
       const state = { n: { '#bigint': String(i) }, s: { '#set': [i] } };

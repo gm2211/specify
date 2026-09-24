@@ -39,6 +39,13 @@ test('SubscriptionLimitError message names the limit type and reset time', () =>
   assert.equal(err.resetsAt, resetsAt);
 });
 
+test('SubscriptionLimitError formats SDK Unix seconds without changing the raw timestamp', () => {
+  const resetsAt = Date.parse('2026-09-13T18:00:00.000Z') / 1000;
+  const err = new SubscriptionLimitError('seven_day', resetsAt);
+  assert.match(err.message, /resets at 2026-09-13T18:00:00.000Z/);
+  assert.equal(err.resetsAt, resetsAt);
+});
+
 test('SubscriptionLimitError still produces a clear message with no rateLimitType/resetsAt', () => {
   const err = new SubscriptionLimitError(undefined, undefined);
   assert.match(err.message, /subscription rate limit reached/i);

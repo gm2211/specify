@@ -4,7 +4,7 @@ import type { CommandDefinition } from './types.js';
 export const COMMANDS: CommandDefinition[] = [
   {
     name: 'capture',
-    description: 'Capture a contract from a live system or codebase',
+    description: 'Explore a live system and draft a candidate behavioral contract for review',
     parameters: [
       { name: '--url', type: 'string', required: true, description: 'URL to capture' },
       { name: '--output', type: 'string', required: false, description: 'Output directory for capture data' },

@@ -1,7 +1,9 @@
 id: capture
-name: Capture
+name: Candidate spec discovery
 prose: >
-  An autonomous agent explores a URL and generates a spec.
+  An agent explores a URL and drafts a candidate behavioral spec. Review observed
+  behavior against intended requirements before treating this draft as authoritative.
+  Website cloning, replay, and comparison belong to Mockify.
 behaviors:
   - id: capture-requires-url
     description: |
