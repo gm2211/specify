@@ -615,14 +615,31 @@ function lintSingleFileSize(content: string, spec: Spec, specPath?: string): Lin
   const assessment = assessSpecSize(content, spec);
   if (!assessment.overLimit) return [];
 
-  const suggestion = specPath
-    ? ` ${splitSuggestion(specPath)}`
-    : ' Split this into a directory spec with one area file per feature.';
+  const remedy = specPath
+    ? splitSuggestion(specPath)
+    : 'Split this into a directory spec with one area file per feature.';
+
+  if (assessment.overHardLimit) {
+    return [
+      {
+        path: '/',
+        severity: 'error',
+        message:
+          `Single-file spec exceeds the hard size limit (${assessment.hardReasons.join('; ')}) ` +
+          `and must be split before lint can pass. Every command that takes --spec accepts a ` +
+          `directory spec, so splitting is safe. ${remedy}`,
+        rule: 'oversized-single-file-spec',
+      },
+    ];
+  }
+
   return [
     {
       path: '/',
       severity: 'warning',
-      message: `Single-file spec is getting large (${assessment.reasons.join('; ')}). ${suggestion}`,
+      message:
+        `Single-file spec is getting large (${assessment.reasons.join('; ')}). ` +
+        `At double these limits this becomes a lint error. ${remedy}`,
       rule: 'oversized-single-file-spec',
     },
   ];
