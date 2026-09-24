@@ -2,10 +2,19 @@
 
 ## Status
 
-**Authentication succeeded on 2026-09-09, but Claude subscription quota blocks the comparison. No
-completed agent runs; no bug-detection comparison can be reported.**
+**No completed agent runs or paired comparison as of 2026-09-24. No bug-detection comparison can be
+reported.**
 
-After login, the baseline and Specify runner were both retried. The baseline reported:
+On 2026-09-24, a fresh run reached the healthy baseline with authenticated Claude access. It used
+the published four-minute deadline and produced browser screenshots, but the run reached that
+deadline before returning structured results. The SDK then raised an unhandled abort error; the
+parent harness recorded `process exit 1` and stopped before the Specify arm. Its cost and behavior
+verdicts are unavailable. This establishes that the earlier quota blocker was no longer the reason
+for this attempt's failure; it says nothing about relative QA quality. See the
+[sanitized attempt record](../benchmarks/qa/timeout-attempt-20260924.json).
+
+The earlier 2026-09-09 attempt failed for a different reason: Claude subscription quota. After
+login, the baseline and Specify runner were both retried. The baseline reported:
 
 ```text
 You've hit your limit · resets Sep 13, 2pm (America/New_York)
@@ -20,16 +29,16 @@ The retry also reproduced SP-bzl: Specify interpreted Unix seconds as millisecon
 1970 reset date. Its error formatter now handles seconds and retains millisecond compatibility;
 regression tests cover both forms. This corrects the message, not the quota itself.
 
-See [authenticated execution record](../benchmarks/qa/quota-attempt.json) and the
+See the [authenticated quota execution record](../benchmarks/qa/quota-attempt.json) and the
 [earlier login failure](../benchmarks/qa/auth-attempt.json). The raw Specify error in the
 authenticated record is intentionally unchanged, including the original 1970 formatting bug. Full
-local retry artifacts remain under `.specify/qa-comparison-authenticated/`.
+local quota-retry artifacts remain under `.specify/qa-comparison-authenticated/`.
 
 The independent fixture checks passed: all eight expected outcomes in both builds, a scorer check
 for omitted/duplicated IDs, and browser checks of healthy/defective permission behavior (four
 automated tests total). These establish that the experiment can exercise its target; they do not
-establish either agent's quality. No performance claim is inferred from authentication or quota
-failures.
+establish either agent's quality. No performance claim is inferred from authentication, quota, or
+deadline failures.
 
 ## Question
 
