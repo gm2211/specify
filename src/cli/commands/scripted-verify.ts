@@ -2,6 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { BehaviorResult, Spec, VerificationReport } from '../../spec/types.js';
 import { loadSpec } from '../../spec/parser.js';
+import { lintPath } from '../../spec/lint.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
 import { runPlaywright, type PlaywrightTestResult } from '../../adapters/playwright.js';
@@ -43,9 +44,31 @@ export async function scriptedVerify(
   options: ScriptedVerifyOptions,
   _ctx: CliContext,
 ): Promise<number> {
+  const outputDir = path.resolve(options.output ?? '.specify/verify');
+  const verifyResultPath = path.join(outputDir, 'verify-result.json');
+  try {
+    // A failed attempt must never leave a previous successful result looking current.
+    fs.rmSync(verifyResultPath, { force: true });
+  } catch (error) {
+    return fail(
+      `could not invalidate previous result: ${error instanceof Error ? error.message : String(error)}`,
+      'runner_error',
+      ExitCode.RUNNER_ERROR,
+    );
+  }
+
   let spec: Spec;
   const specPath = path.resolve(options.spec);
   try {
+    const lint = lintPath(specPath);
+    if (!lint.valid) {
+      throw new Error(
+        lint.errors
+          .filter((error) => error.severity === 'error')
+          .map((error) => `${error.path}: ${error.message} (${error.rule})`)
+          .join('\n'),
+      );
+    }
     spec = loadSpec(specPath);
   } catch (error) {
     return fail(
@@ -55,7 +78,6 @@ export async function scriptedVerify(
     );
   }
 
-  const outputDir = path.resolve(options.output ?? '.specify/verify');
   const run = await runPlaywright({ cwd: outputDir, timeoutMs: options.timeoutMs });
   if (!run.ok) {
     const code =
@@ -137,10 +159,7 @@ export async function scriptedVerify(
   };
 
   fs.mkdirSync(outputDir, { recursive: true });
-  fs.writeFileSync(
-    path.join(outputDir, 'verify-result.json'),
-    JSON.stringify({ structuredOutput: report }, null, 2) + '\n',
-  );
+  fs.writeFileSync(verifyResultPath, JSON.stringify({ structuredOutput: report }, null, 2) + '\n');
   if (!_ctx.quiet) {
     process.stderr.write(
       `Scripted verification complete: ${passed} passed, ${failed} failed, ${skipped} untested/skipped` +

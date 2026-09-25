@@ -46,6 +46,7 @@ interface ReporterReport {
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
+const MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 const UNRESOLVABLE =
   /cannot find (package|module).*playwright|ERR_MODULE_NOT_FOUND|Cannot find package ['"]@playwright\/test/i;
 
@@ -95,7 +96,7 @@ function flatten(report: ReporterReport): PlaywrightTestResult[] {
         .map((r) => r.error?.message)
         .filter((v): v is string => typeof v === 'string');
       const status: PlaywrightTestStatus =
-        spec.ok === false || statuses.includes('failed')
+        spec.ok === false || statuses.includes('failed') || statuses.includes('timedOut')
           ? 'failed'
           : statuses.includes('skipped') || statuses.includes('interrupted')
             ? 'skipped'
@@ -132,28 +133,72 @@ export async function runPlaywright(opts: RunPlaywrightOptions): Promise<Playwri
     let stdout = '';
     let stderr = '';
     let settled = false;
-    const child = spawn(process.execPath, [cli, 'test', '--reporter=json'], {
-      cwd,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(process.execPath, [cli, 'test', '--reporter=json'], {
+        cwd,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        detached: process.platform !== 'win32',
+      });
+    } catch (error) {
+      resolve({ ok: false, reason: 'error', message: String(error) });
+      return;
+    }
     const finish = (result: PlaywrightRunResult) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       resolve(result);
     };
+    const killRunner = () => {
+      try {
+        if (process.platform !== 'win32' && child.pid !== undefined) {
+          process.kill(-child.pid, 'SIGKILL');
+        } else {
+          child.kill('SIGKILL');
+        }
+      } catch {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Best effort: the process may already have exited.
+        }
+      }
+    };
     const timer = setTimeout(() => {
-      child.kill('SIGKILL');
+      killRunner();
       finish({
         ok: false,
         reason: 'timeout',
         message: `Playwright test timed out after ${timeoutMs}ms`,
       });
     }, timeoutMs);
-    child.stdout.on('data', (data: Buffer) => {
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    const onOutputLimit = () => {
+      killRunner();
+      finish({
+        ok: false,
+        reason: 'error',
+        message: `Playwright output exceeded the ${MAX_OUTPUT_BYTES} byte limit`,
+      });
+    };
+    child.stdout?.on('data', (data: Buffer) => {
+      if (settled) return;
+      stdoutBytes += data.length;
+      if (stdoutBytes + stderrBytes > MAX_OUTPUT_BYTES) {
+        onOutputLimit();
+        return;
+      }
       stdout += data.toString();
     });
-    child.stderr.on('data', (data: Buffer) => {
+    child.stderr?.on('data', (data: Buffer) => {
+      if (settled) return;
+      stderrBytes += data.length;
+      if (stdoutBytes + stderrBytes > MAX_OUTPUT_BYTES) {
+        onOutputLimit();
+        return;
+      }
       stderr += data.toString();
     });
     child.on('error', (error) => finish({ ok: false, reason: 'error', message: error.message }));

@@ -90,6 +90,19 @@ test('rejects unknown behavior IDs instead of silently dropping evidence', async
   }
 });
 
+test('semantic spec lint rejects duplicate IDs before replay', async () => {
+  const f = fixture(['add', 'add'], [passed('add')]);
+  try {
+    assert.equal(
+      await scriptedVerify({ spec: f.specFile, output: f.output }, ctx),
+      ExitCode.PARSE_ERROR,
+    );
+    assert.equal(fs.existsSync(path.join(f.output, 'verify-result.json')), false);
+  } finally {
+    f.cleanup();
+  }
+});
+
 test('a duplicate failure wins over a passing retry', async () => {
   const f = fixture(
     ['add'],
@@ -150,6 +163,27 @@ test('empty/unresolvable runner paths are nonzero', async () => {
       await scriptedVerify({ spec: f.specFile, output: f.output }, ctx),
       ExitCode.RUNNER_ERROR,
     );
+  } finally {
+    f.cleanup();
+  }
+});
+
+test('a failed later invocation removes a stale successful result', async () => {
+  const f = fixture(['add'], [passed('add')]);
+  try {
+    assert.equal(
+      await scriptedVerify({ spec: f.specFile, output: f.output }, ctx),
+      ExitCode.SUCCESS,
+    );
+    const resultFile = path.join(f.output, 'verify-result.json');
+    assert.equal(JSON.parse(fs.readFileSync(resultFile, 'utf8')).structuredOutput.pass, true);
+
+    fs.rmSync(path.join(f.output, 'node_modules'), { recursive: true, force: true });
+    assert.equal(
+      await scriptedVerify({ spec: f.specFile, output: f.output }, ctx),
+      ExitCode.RUNNER_ERROR,
+    );
+    assert.equal(fs.existsSync(resultFile), false);
   } finally {
     f.cleanup();
   }
