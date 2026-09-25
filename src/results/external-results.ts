@@ -2,6 +2,8 @@ import type {
   ActionTraceEntry,
   BehaviorResult,
   Evidence,
+  GuaranteeCheck,
+  MonitorVerdict,
   Spec,
   VerificationReport,
 } from '../spec/types.js';
@@ -140,12 +142,120 @@ function readTrace(
   return trace;
 }
 
+function rejectRecordedMetadata(
+  entry: Record<string, unknown>,
+  path: string,
+  errors: ExternalResultError[],
+): Partial<BehaviorResult> {
+  if (entry.repro !== undefined) {
+    errors.push({
+      path: `${path}/repro`,
+      message: 'external results cannot assert runner reproduction',
+    });
+  }
+  if (entry.monitor !== undefined || entry.verdict_source !== undefined) {
+    errors.push({ path, message: 'external results cannot assert monitor verdicts' });
+  }
+  if (entry.guarantees !== undefined || entry.guarantee_source !== undefined) {
+    errors.push({ path, message: 'external results cannot assert session guarantees' });
+  }
+  return {};
+}
+
+function readRecordedMetadata(
+  entry: Record<string, unknown>,
+  path: string,
+  errors: ExternalResultError[],
+): Partial<BehaviorResult> {
+  const recorded: Partial<BehaviorResult> = {};
+  if (entry.repro !== undefined) {
+    const repro = record(entry.repro);
+    if (!repro || typeof repro.confirmed !== 'boolean' || typeof repro.output !== 'string') {
+      errors.push({
+        path: `${path}/repro`,
+        message: 'must contain confirmed boolean and output string',
+      });
+    } else {
+      const test = optionalString(repro, 'test', `${path}/repro`, errors);
+      recorded.repro = {
+        confirmed: repro.confirmed,
+        output: repro.output,
+        ...(test === undefined ? {} : { test }),
+      };
+    }
+  }
+  if (entry.monitor !== undefined) {
+    if (
+      !Array.isArray(entry.monitor) ||
+      !entry.monitor.every(
+        (item) =>
+          record(item) &&
+          typeof item.formula_id === 'string' &&
+          ['draft', 'approved'].includes(item.status) &&
+          ['satisfied', 'violated', 'inconclusive', 'unevaluable'].includes(item.verdict) &&
+          typeof item.trace_length === 'number' &&
+          Number.isFinite(item.trace_length),
+      )
+    ) {
+      errors.push({ path: `${path}/monitor`, message: 'must be an array of monitor verdicts' });
+    } else {
+      recorded.monitor = entry.monitor as MonitorVerdict[];
+    }
+  }
+  if (entry.verdict_source !== undefined) {
+    if (['monitor', 'llm', 'monitor+llm'].includes(entry.verdict_source as string)) {
+      recorded.verdict_source = entry.verdict_source as BehaviorResult['verdict_source'];
+    } else {
+      errors.push({ path: `${path}/verdict_source`, message: 'invalid verdict source' });
+    }
+  }
+  if (entry.guarantees !== undefined) {
+    if (
+      !Array.isArray(entry.guarantees) ||
+      !entry.guarantees.every(
+        (item) =>
+          record(item) &&
+          typeof item.guarantee === 'string' &&
+          typeof item.entity === 'string' &&
+          ['holds', 'violated', 'inconclusive'].includes(item.verdict) &&
+          Array.isArray(item.witness) &&
+          typeof item.detail === 'string',
+      )
+    ) {
+      errors.push({ path: `${path}/guarantees`, message: 'must be an array of guarantee checks' });
+    } else {
+      recorded.guarantees = entry.guarantees as GuaranteeCheck[];
+    }
+  }
+  if (entry.guarantee_source !== undefined) {
+    if (['guarantee', 'llm', 'guarantee+llm'].includes(entry.guarantee_source as string)) {
+      recorded.guarantee_source = entry.guarantee_source as BehaviorResult['guarantee_source'];
+    } else {
+      errors.push({ path: `${path}/guarantee_source`, message: 'invalid guarantee source' });
+    }
+  }
+  return recorded;
+}
+
 /**
  * Validate a result supplied by another agent/test runner against a contract.
  * This is deliberately separate from the permissive reader for historical
  * `verify-result.json` archives used by `specify prove`.
  */
 export function validateExternalResults(spec: Spec, raw: unknown): ExternalResultsValidation {
+  return validateResults(spec, raw, false);
+}
+
+/** Read older verify bundles while retaining their recorded runner metadata. */
+export function validateArchivedResults(spec: Spec, raw: unknown): ExternalResultsValidation {
+  return validateResults(spec, raw, true);
+}
+
+function validateResults(
+  spec: Spec,
+  raw: unknown,
+  allowRecordedMetadata: boolean,
+): ExternalResultsValidation {
   const errors: ExternalResultError[] = [];
   const outer = record(raw);
   const data = outer && 'structuredOutput' in outer ? record(outer.structuredOutput) : outer;
@@ -158,11 +268,25 @@ export function validateExternalResults(spec: Spec, raw: unknown): ExternalResul
   }
 
   const contract = new Map<string, string>();
+  const areaIds = new Set<string>();
   for (const area of spec.areas) {
+    if (areaIds.has(area.id)) {
+      errors.push({ path: '/spec/areas', message: `duplicate contract area ID: ${area.id}` });
+    }
+    areaIds.add(area.id);
     for (const behavior of area.behaviors) {
-      contract.set(`${area.id}/${behavior.id}`, behavior.description);
+      const id = `${area.id}/${behavior.id}`;
+      if (contract.has(id)) {
+        errors.push({ path: '/spec/areas', message: `duplicate contract behavior ID: ${id}` });
+      } else {
+        contract.set(id, behavior.description);
+      }
     }
   }
+  if (contract.size === 0) {
+    errors.push({ path: '/spec/areas', message: 'contract must contain at least one behavior' });
+  }
+  if (errors.length > 0) return { valid: false, errors };
   const seen = new Set<string>();
   const results: BehaviorResult[] = [];
   data.results.forEach((item, index) => {
@@ -183,15 +307,9 @@ export function validateExternalResults(spec: Spec, raw: unknown): ExternalResul
     if (!STATUS.has(entry.status as string)) {
       errors.push({ path: `${itemPath}/status`, message: 'must be passed, failed, or skipped' });
     }
-    const description = optionalString(entry, 'description', itemPath, errors);
-    if (
-      typeof id === 'string' &&
-      contract.has(id) &&
-      description !== undefined &&
-      description !== contract.get(id)
-    ) {
-      errors.push({ path: `${itemPath}/description`, message: 'does not match the contract' });
-    }
+    optionalString(entry, 'description', itemPath, errors);
+    // The ID is stable; prose may have changed since this run. Render the
+    // current contract description while accepting a historical string.
     const method = optionalString(entry, 'method', itemPath, errors);
     const rationale = optionalString(entry, 'rationale', itemPath, errors);
     const evidence = readEvidence(entry.evidence, `${itemPath}/evidence`, errors);
@@ -208,18 +326,9 @@ export function validateExternalResults(spec: Spec, raw: unknown): ExternalResul
         errors.push({ path: `${itemPath}/duration_ms`, message: 'must be a nonnegative number' });
       }
     }
-    if (entry.repro !== undefined) {
-      errors.push({
-        path: `${itemPath}/repro`,
-        message: 'external results cannot assert runner reproduction',
-      });
-    }
-    if (entry.monitor !== undefined || entry.verdict_source !== undefined) {
-      errors.push({ path: itemPath, message: 'external results cannot assert monitor verdicts' });
-    }
-    if (entry.guarantees !== undefined || entry.guarantee_source !== undefined) {
-      errors.push({ path: itemPath, message: 'external results cannot assert session guarantees' });
-    }
+    const recorded = allowRecordedMetadata
+      ? readRecordedMetadata(entry, itemPath, errors)
+      : rejectRecordedMetadata(entry, itemPath, errors);
     if (typeof id === 'string' && contract.has(id) && STATUS.has(entry.status as string)) {
       results.push({
         id,
@@ -230,6 +339,7 @@ export function validateExternalResults(spec: Spec, raw: unknown): ExternalResul
         ...(evidence === undefined ? {} : { evidence }),
         ...(actionTrace === undefined ? {} : { action_trace: actionTrace }),
         ...(duration === undefined ? {} : { duration_ms: duration }),
+        ...recorded,
       });
     }
   });

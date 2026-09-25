@@ -116,7 +116,7 @@ test('malformed nested evidence and forged runner verdicts are rejected', () => 
   );
 });
 
-test('stale descriptions and malformed timestamps are rejected', () => {
+test('stale descriptions are replaced by contract prose while malformed timestamps are rejected', () => {
   const checked = validateExternalResults(spec, {
     timestamp: 123,
     results: [{ id: 'account/logs-in', status: 'passed', description: 'An older claim.' }],
@@ -125,8 +125,15 @@ test('stale descriptions and malformed timestamps are rejected', () => {
   if (checked.valid) return;
   assert.deepEqual(
     checked.errors.map((error) => error.path),
-    ['/timestamp', '/results/0/description'],
+    ['/timestamp'],
   );
+  const accepted = validateExternalResults(spec, {
+    results: [{ id: 'account/logs-in', status: 'passed', description: 'An older claim.' }],
+  });
+  assert.equal(accepted.valid, true);
+  if (accepted.valid) {
+    assert.equal(accepted.report.results[0].description, 'A member can log in.');
+  }
 });
 
 test('a complete all-passed result yields a passing normalized report', () => {
@@ -140,4 +147,27 @@ test('a complete all-passed result yields a passing normalized report', () => {
   if (!checked.valid) return;
   assert.equal(checked.report.pass, true);
   assert.equal(checked.summary.passed, 2);
+});
+
+test('empty contracts cannot pass vacuously', () => {
+  const checked = validateExternalResults({ ...spec, areas: [] }, { results: [] });
+  assert.equal(checked.valid, false);
+  if (!checked.valid) {
+    assert.match(checked.errors[0].message, /at least one behavior/);
+  }
+});
+
+test('duplicate contract identities cannot silently collapse in result lookup', () => {
+  const duplicateArea: Spec = { ...spec, areas: [spec.areas[0], spec.areas[0]] };
+  const checked = validateExternalResults(duplicateArea, {
+    results: [
+      { id: 'account/logs-in', status: 'passed' },
+      { id: 'account/logs-out', status: 'passed' },
+    ],
+  });
+  assert.equal(checked.valid, false);
+  if (!checked.valid) {
+    assert.ok(checked.errors.some((error) => /duplicate contract area ID/.test(error.message)));
+    assert.ok(checked.errors.some((error) => /duplicate contract behavior ID/.test(error.message)));
+  }
 });

@@ -101,7 +101,16 @@ function buildCliFixture(): { dir: string; cleanup: () => void; spec: Spec } {
     version: '2',
     name: 'CLI Fixture',
     target: { type: 'cli', binary: './specify' },
-    areas: [],
+    areas: [
+      {
+        id: 'unmatched',
+        name: 'Fixture',
+        behaviors: [
+          { id: 'cli-evidence-behavior', description: 'CLI evidence matching' },
+          { id: 'scripted-behavior', description: 'scripted replay behavior' },
+        ],
+      },
+    ],
   };
 
   return { dir, cleanup, spec };
@@ -326,7 +335,18 @@ test('a cli-target spec with a recorded browser session gets runner-recorded scr
       version: '2',
       name: 'CLI Target, Web Evidence',
       target: { type: 'cli', binary: './specify' },
-      areas: [],
+      areas: [
+        {
+          id: 'unmatched',
+          name: 'Fixture',
+          behaviors: [
+            {
+              id: 'cli-target-screenshot-behavior',
+              description: 'a cli-target behavior whose agent also drove a browser',
+            },
+          ],
+        },
+      ],
     };
 
     const input = loadProofInput({
@@ -427,7 +447,16 @@ function buildWebFixture(): { dir: string; cleanup: () => void; spec: Spec } {
     version: '2',
     name: 'Web Fixture',
     target: { type: 'web', url: 'http://localhost:3000' },
-    areas: [],
+    areas: [
+      {
+        id: 'unmatched',
+        name: 'Fixture',
+        behaviors: [
+          { id: 'web-behavior', description: 'web behavior' },
+          { id: 'web-no-frames', description: 'web behavior with no derivable filmstrip' },
+        ],
+      },
+    ],
   };
 
   return { dir, cleanup, spec };
@@ -631,7 +660,13 @@ test('malformed cli/observations.json entries (null, partial, non-object junk) a
       version: '2',
       name: 'Malformed CLI Observations',
       target: { type: 'cli', binary: './specify' },
-      areas: [],
+      areas: [
+        {
+          id: 'sample',
+          name: 'Sample',
+          behaviors: [{ id: 'untested', description: 'No result was recorded.' }],
+        },
+      ],
     };
 
     const input = loadProofInput({
@@ -664,4 +699,130 @@ test('malformed cli/observations.json entries (null, partial, non-object junk) a
 test('normalizeOutput strips ANSI escapes and collapses internal whitespace', () => {
   const withAnsi = '[32m✓ Spec[0m   is    valid\r\n\r\n  trailing line  \n';
   assert.equal(normalizeOutput(withAnsi), '✓ Spec is valid\ntrailing line');
+});
+
+test('prove rejects duplicate and unknown result IDs instead of overwriting or appending them', () => {
+  const { dir, cleanup, spec } = buildWebFixture();
+  try {
+    const file = path.join(dir, 'verify-result.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    const report = raw.structuredOutput;
+    report.results.push({ ...report.results[0] });
+    report.results.push({ id: 'old-area/old-behavior', status: 'passed' });
+    writeJson(file, raw);
+    assert.throws(
+      () =>
+        loadProofInput({
+          spec,
+          specPath: '/tmp/spec.yaml',
+          inputDir: dir,
+          outputPath: path.join(dir, 'proof.html'),
+          generatorVersion: '0.0.0-test',
+        }),
+      /duplicate behavior ID.*must be a known area\/behavior ID/s,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('prove rejects malformed statuses and evidence', () => {
+  const { dir, cleanup, spec } = buildWebFixture();
+  try {
+    const file = path.join(dir, 'verify-result.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    raw.structuredOutput.results[0].status = 'green';
+    raw.structuredOutput.results[1].evidence = [{ type: 'text', label: 'bad', content: 1 }];
+    writeJson(file, raw);
+    assert.throws(
+      () =>
+        loadProofInput({
+          spec,
+          specPath: '/tmp/spec.yaml',
+          inputDir: dir,
+          outputPath: path.join(dir, 'proof.html'),
+          generatorVersion: '0.0.0-test',
+        }),
+      /status.*evidence/s,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('prove derives pass and counts from contract results, not a stale supplied summary', () => {
+  const { dir, cleanup, spec } = buildWebFixture();
+  try {
+    const file = path.join(dir, 'verify-result.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    raw.structuredOutput.results.pop();
+    raw.structuredOutput.pass = true;
+    raw.structuredOutput.summary = { total: 2, passed: 2, failed: 0, skipped: 0 };
+    writeJson(file, raw);
+    const input = loadProofInput({
+      spec,
+      specPath: '/tmp/spec.yaml',
+      inputDir: dir,
+      outputPath: path.join(dir, 'proof.html'),
+      generatorVersion: '0.0.0-test',
+    });
+    assert.equal(input.run.pass, false);
+    assert.deepEqual(input.run.summary, {
+      total: 2,
+      passed: 1,
+      failed: 0,
+      skipped: 0,
+      untested: 1,
+    });
+    assert.equal(input.areas[0].behaviors[1].status, 'untested');
+  } finally {
+    cleanup();
+  }
+});
+
+test('prove preserves well-formed historical runner metadata as reported fields', () => {
+  const { dir, cleanup, spec } = buildWebFixture();
+  try {
+    const file = path.join(dir, 'verify-result.json');
+    const raw = JSON.parse(fs.readFileSync(file, 'utf-8'));
+    raw.structuredOutput.results[0].description = 'Previous wording';
+    raw.structuredOutput.results[0].repro = { confirmed: true, output: 'Recorded replay passed' };
+    raw.structuredOutput.results[0].monitor = [
+      {
+        formula_id: 'f1',
+        status: 'approved',
+        verdict: 'satisfied',
+        trace_length: 2,
+      },
+    ];
+    raw.structuredOutput.results[0].verdict_source = 'monitor+llm';
+    raw.structuredOutput.results[0].guarantees = [
+      {
+        guarantee: 'read-your-writes',
+        entity: 'item',
+        verdict: 'holds',
+        witness: [],
+        detail: 'Recorded check held',
+      },
+    ];
+    raw.structuredOutput.results[0].guarantee_source = 'guarantee+llm';
+    writeJson(file, raw);
+    const input = loadProofInput({
+      spec,
+      specPath: '/tmp/spec.yaml',
+      inputDir: dir,
+      outputPath: path.join(dir, 'proof.html'),
+      generatorVersion: '0.0.0-test',
+    });
+    const behavior = input.areas[0].behaviors[0];
+    assert.equal(behavior.description, 'web behavior');
+    assert.equal(behavior.repro?.confirmed, true);
+    assert.equal(behavior.monitor[0].formula_id, 'f1');
+    assert.equal(behavior.guarantees[0].entity, 'item');
+    const html = renderProofHtml(input);
+    assert.match(html, /reported repro confirmed/);
+    assert.match(html, /not independently attested here/);
+  } finally {
+    cleanup();
+  }
 });

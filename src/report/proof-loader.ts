@@ -20,14 +20,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 
-import type {
-  Spec,
-  VerificationReport,
-  BehaviorResult,
-  Evidence,
-  ActionTraceEntry,
-} from '../spec/types.js';
+import type { Spec, BehaviorResult, Evidence, ActionTraceEntry } from '../spec/types.js';
 import type { StepObservation, CliStepObservation } from '../results/formats.js';
+import { validateArchivedResults } from '../results/external-results.js';
 import type {
   ProofInput,
   ProofArea,
@@ -271,7 +266,13 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
       `Failed to read/parse ${verifyResultPath}: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
-  const report = unwrapVerificationReport(verifyResultRaw);
+  const checked = validateArchivedResults(spec, verifyResultRaw);
+  if (!checked.valid) {
+    throw new Error(
+      `Invalid verify-result.json: ${checked.errors.map((issue) => `${issue.path}: ${issue.message}`).join('; ')}`,
+    );
+  }
+  const { report } = checked;
 
   // 2. observation traces — best-effort. A missing/unparseable file yields
   // [], and a parseable-but-malformed one (non-array, or entries missing
@@ -317,7 +318,6 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
   for (const result of report.results ?? []) {
     resultsById.set(result.id, result);
   }
-  const matchedIds = new Set<string>();
 
   const orderedScreenshotKeys: string[] = [];
   const seenKeys = new Set<string>();
@@ -331,7 +331,6 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     const behaviors: ProofBehavior[] = area.behaviors.map((behavior) => {
       const fqId = `${area.id}/${behavior.id}`;
       const result = resultsById.get(fqId);
-      if (result) matchedIds.add(fqId);
       const proofBehavior = buildBehavior(
         fqId,
         behavior.description,
@@ -350,33 +349,6 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     });
     return { id: area.id, name: area.name, prose: area.prose, behaviors };
   });
-
-  // Results with no matching spec behavior -> synthetic trailing area.
-  const unmatched = (report.results ?? []).filter((r) => !matchedIds.has(r.id));
-  if (unmatched.length > 0) {
-    const behaviors = unmatched.map((result) => {
-      const pb = buildBehavior(
-        result.id,
-        result.description,
-        undefined,
-        result,
-        cliObservations,
-        webObservations,
-        availableShots,
-        shotToObservation,
-        hasScreenshotEvidence,
-      );
-      for (const f of pb.frames) noteKey(f.key);
-      for (const t of pb.trace) noteKey(t.screenshotKey);
-      for (const e of pb.evidence) noteKey(e.screenshotKey);
-      return pb;
-    });
-    areas.push({
-      id: 'unmatched-results',
-      name: 'Results without a matching spec behavior',
-      behaviors,
-    });
-  }
 
   // Full runner-recorded web film, step order.
   const sessionFrames: ProofFrame[] = webObservations
@@ -449,9 +421,7 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     regenerateCommand: buildRegenerateCommand(specPath, inputDir, outputPath),
   };
 
-  // Summary — tallied from the assembled behaviors, not report.summary,
-  // since report.summary has no `untested` bucket (spec behaviors with no
-  // matching result are untested and only exist post-join).
+  // Summary comes from rendered contract behaviors, never the supplied report.
   const summary = { total: 0, passed: 0, failed: 0, skipped: 0, untested: 0 };
   for (const area of areas) {
     for (const b of area.behaviors) {
@@ -473,24 +443,13 @@ export function loadProofInput(options: LoadProofOptions): ProofInput {
     },
     spec: { name: spec.name, version: spec.version, description: spec.description, path: specPath },
     target: targetValue,
-    run: { timestamp: report.timestamp, pass: report.pass, summary },
+    run: { timestamp: report.timestamp, pass: checked.report.pass, summary },
     areas,
     screenshots,
     sessionFrames,
     cliSession,
     integrity,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Internal: report shape tolerance
-// ---------------------------------------------------------------------------
-
-function unwrapVerificationReport(raw: unknown): VerificationReport {
-  if (raw && typeof raw === 'object' && 'structuredOutput' in raw) {
-    return (raw as { structuredOutput: VerificationReport }).structuredOutput;
-  }
-  return raw as VerificationReport;
 }
 
 // ---------------------------------------------------------------------------
