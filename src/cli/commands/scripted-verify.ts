@@ -63,7 +63,7 @@ export async function scriptedVerify(
         ? ExitCode.ALL_UNTESTED
         : run.reason === 'timeout'
           ? ExitCode.TIMEOUT
-          : ExitCode.BROWSER_ERROR;
+          : ExitCode.RUNNER_ERROR;
     return fail(
       run.reason === 'no_tests' ? 'no generated tests found in output dir' : run.message,
       run.reason,
@@ -165,5 +165,5 @@ export async function scriptedVerify(
       ? ExitCode.SUCCESS
       : passed === 0
         ? ExitCode.ALL_UNTESTED
-        : ExitCode.BROWSER_ERROR;
+        : ExitCode.RUNNER_ERROR;
 }

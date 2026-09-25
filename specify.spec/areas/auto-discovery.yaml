@@ -1,7 +1,8 @@
 id: auto-discovery
 name: Spec Auto-Discovery
-prose: |
-  When --spec is omitted, commands that need a spec look for one in cwd instead of failing immediately.
+prose: >
+  When --spec is omitted, commands that need a spec look for one in cwd instead of failing
+  immediately.
 behaviors:
   - id: auto-discovery-patterns
     description: >
@@ -16,6 +17,4 @@ behaviors:
       When more than one spec file/directory matches, discovery fails with an error listing the
       candidates instead of guessing
   - id: auto-discovery-applied-to
-    description: >
-      Applies to: human, spec lint, spec split, spec migrate-id, spec compile, review (skipped when
-      --stop is given), and verify
+    description: Applies to spec lint, spec split, spec context, prove, and verify.

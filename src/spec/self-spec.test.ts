@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import yaml from 'js-yaml';
 
+import { COMMANDS } from '../cli/commands-manifest.js';
 import { lintPath } from './lint.js';
 import { loadSpecWithProvenance } from './parser.js';
 
@@ -58,13 +59,36 @@ test('repo spec manifest references every area file and nothing else', () => {
   assert.deepEqual(referenced, actual);
 });
 
-test('repo spec composes to a non-trivial contract', () => {
+test('repo spec covers every supported command and no removed command area', () => {
   const { spec, provenance } = loadSpecWithProvenance(specDir);
-
   assert.equal(provenance.kind, 'directory');
   assert.equal(spec.target.type, 'cli');
-  assert.ok(spec.areas.length >= 10, `expected >= 10 areas, got ${spec.areas.length}`);
-
-  const totalBehaviors = spec.areas.reduce((sum, area) => sum + area.behaviors.length, 0);
-  assert.ok(totalBehaviors >= 50, `expected >= 50 behaviors total, got ${totalBehaviors}`);
+  const commandAreas = new Set(spec.areas.map((area) => area.id));
+  for (const command of COMMANDS) {
+    const area = command.name === 'mcp' ? 'mcp-server' : command.name.replaceAll(' ', '-');
+    assert.ok(commandAreas.has(area), `Missing contract area for ${command.name}`);
+  }
+  for (const removed of [
+    'capture',
+    'create',
+    'human-mode',
+    'review',
+    'daemon',
+    'deploy',
+    'spec-compile',
+    'spec-migrate-id',
+  ]) {
+    assert.ok(!commandAreas.has(removed), `Removed feature still promised: ${removed}`);
+  }
+  const ids = new Set(
+    spec.areas.flatMap((area) => area.behaviors.map((behavior) => `${area.id}/${behavior.id}`)),
+  );
+  for (const id of [
+    'verify/results-reject-invalid-identity',
+    'verify/results-incomplete-never-pass',
+    'verify/scripted-suite-pass-is-not-contract-pass',
+    'spec-lint/lint-ignores-legacy-sidecars',
+  ]) {
+    assert.ok(ids.has(id), `Missing scope-reduction contract: ${id}`);
+  }
 });

@@ -1,7 +1,5 @@
 import eslint from '@eslint/js';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import reactHooks from 'eslint-plugin-react-hooks';
-import reactRefresh from 'eslint-plugin-react-refresh';
 import security from 'eslint-plugin-security';
 import sonarjs from 'eslint-plugin-sonarjs';
 import unicorn from 'eslint-plugin-unicorn';
@@ -11,11 +9,6 @@ import tseslint from 'typescript-eslint';
 const nodeGlobals = {
   ...globals.es2022,
   ...globals.node,
-};
-
-const browserGlobals = {
-  ...globals.es2022,
-  ...globals.browser,
 };
 
 const ignores = [
@@ -172,15 +165,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/**/*.ts', 'scripts/**/*.ts', 'webapp/src/**/*.{ts,tsx}', 'webapp/vite.config.ts'],
+    files: ['src/**/*.ts'],
     extends: [eslint.configs.recommended, ...tseslint.configs.recommended],
     languageOptions: {
       ecmaVersion: 'latest',
       globals: nodeGlobals,
       parserOptions: {
-        projectService: {
-          allowDefaultProject: ['webapp/vite.config.ts'],
-        },
+        projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
       sourceType: 'module',
@@ -195,21 +186,6 @@ export default tseslint.config(
       ...typeAwareRules,
       ...localStaticAnalysisRules,
       ...unicornRules,
-    },
-  },
-  {
-    files: ['webapp/src/**/*.{ts,tsx}'],
-    languageOptions: {
-      globals: browserGlobals,
-    },
-    plugins: {
-      'react-hooks': reactHooks,
-      'react-refresh': reactRefresh,
-    },
-    rules: {
-      'react-hooks/exhaustive-deps': 'error',
-      'react-hooks/rules-of-hooks': 'error',
-      'react-refresh/only-export-components': ['error', { allowConstantExport: true }],
     },
   },
   {

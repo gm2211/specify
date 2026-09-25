@@ -148,7 +148,7 @@ test('empty/unresolvable runner paths are nonzero', async () => {
     fs.rmSync(path.join(f.output, 'node_modules'), { recursive: true, force: true });
     assert.equal(
       await scriptedVerify({ spec: f.specFile, output: f.output }, ctx),
-      ExitCode.BROWSER_ERROR,
+      ExitCode.RUNNER_ERROR,
     );
   } finally {
     f.cleanup();

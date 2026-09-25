@@ -4,11 +4,7 @@ dist/
 .auth/
 *.log
 
-# Specify runtime data (all ephemeral data lives under .specify/)
-# .specify/evidence/   — behavioral requirement evidence
-# .specify/history/    — verification run history
-# .specify/agent-runs/ — agent verification output
-# .specify/captures/   — capture command output
+# Local evidence bundles and legacy runtime data (never removed by migration)
 .specify/
 
 # Legacy paths (before consolidation into .specify/)
