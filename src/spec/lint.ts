@@ -5,12 +5,18 @@
  *   - Duplicate area IDs
  *   - Duplicate behavior IDs within and across areas
  *   - Empty behavior descriptions
+ *
+ * Migration note: lint validates contract sources only. It no longer reads or
+ * executes learned-state or formula sidecars (`.specify/confidence.json`,
+ * `specify.observations.yaml`, `.specify/memory/**`, `specify.formulas.yaml`).
+ * Retiring the draft store also removes its Quint sidecar loader. Existing
+ * sidecar files, including `specify.quint.yaml`, remain untouched; migrate or
+ * archive them explicitly if an external consumer still depends on them.
  */
 
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import * as fs from 'fs';
-import * as path from 'path';
 import { specSchema } from './schema.js';
 import type { Spec } from './types.js';
 import {
@@ -20,16 +26,6 @@ import {
   type SpecSourceIssue,
 } from './parser.js';
 import { assessSpecSize, splitSuggestion } from './size-guard.js';
-import { specRootDir } from './paths.js';
-import {
-  loadFormulas,
-  defaultFormulasPath,
-  collectPredicateNames,
-  hashDescription,
-  FormulasLoadError,
-  type FormulaEntry,
-} from './formulas.js';
-import { checkEntailment } from '../monitor/entailment.js';
 
 const ajv = new Ajv({ allErrors: true });
 const validate = ajv.compile(specSchema);
@@ -56,23 +52,6 @@ export interface LintResult {
   errors: LintError[];
 }
 
-/**
- * Optional extra inputs for lint rules that need something the caller can
- * only obtain asynchronously (e.g. dynamically importing an optional
- * module). lintRaw/lintPath/lintSpec themselves stay synchronous; callers
- * that want the unknown-predicate rule active resolve the registry once
- * (typically at the CLI layer, which is already async) and pass it in here.
- */
-export interface LintOptions {
-  /**
-   * Known predicate names (src/monitor/predicates.ts's registry), used by
-   * the unknown-predicate formulas rule. Omit to skip that rule — this is
-   * the default so lint works standalone when the registry module doesn't
-   * exist yet or the caller hasn't wired it up.
-   */
-  predicateRegistry?: ReadonlySet<string>;
-}
-
 // ---------------------------------------------------------------------------
 // Raw lint (parse + schema + semantic)
 // ---------------------------------------------------------------------------
@@ -81,12 +60,7 @@ export interface LintOptions {
  * Lint a spec from raw YAML/JSON string.
  * Combines parse errors, schema validation errors, and semantic lint rules.
  */
-export function lintRaw(
-  content: string,
-  _sourceName = '<string>',
-  _specPath?: string,
-  options?: LintOptions,
-): LintResult {
+export function lintRaw(content: string, _sourceName = '<string>'): LintResult {
   const errors: LintError[] = [];
 
   // 1. Parse
@@ -137,7 +111,7 @@ export function lintRaw(
 
   // 3. Semantic lint
   const spec = data as Spec;
-  errors.push(...lintSpec(spec, _specPath, options));
+  errors.push(...lintSpec(spec));
   const sourcePath = _sourceName !== '-' && _sourceName !== '<string>' ? _sourceName : undefined;
   errors.push(...lintSingleFileSize(content, spec, sourcePath));
 
@@ -149,10 +123,10 @@ export function lintRaw(
  * Lint a spec source path. The source may be one file or a composed spec
  * directory. Use lintRaw for stdin/string input.
  */
-export function lintPath(specPath: string, options?: LintOptions): LintResult {
+export function lintPath(specPath: string): LintResult {
   try {
     const { spec, provenance } = loadSpecWithProvenance(specPath);
-    const errors = lintSpec(spec, specPath, options);
+    const errors = lintSpec(spec);
     if (provenance.kind === 'file') {
       const content = fs.readFileSync(specPath, 'utf-8');
       errors.push(...lintSingleFileSize(content, spec, specPath));
@@ -207,7 +181,7 @@ function sourceIssueToLintError(issue: SpecSourceIssue): LintError {
  * Run semantic lint rules on a parsed and schema-validated spec.
  * Returns warnings and errors beyond what JSON Schema can catch.
  */
-export function lintSpec(spec: Spec, _specPath?: string, options?: LintOptions): LintError[] {
+export function lintSpec(spec: Spec): LintError[] {
   const errors: LintError[] = [];
 
   // Rule: duplicate area IDs
@@ -273,356 +247,10 @@ export function lintSpec(spec: Spec, _specPath?: string, options?: LintOptions):
     }
   }
 
-  if (_specPath) {
-    errors.push(...lintDanglingLearnedState(spec, _specPath));
-    errors.push(...lintFormulas(spec, _specPath, undefined, options?.predicateRegistry));
-  }
-
   return errors;
 }
 
-// ---------------------------------------------------------------------------
-// Rule: formulas (specify.formulas.yaml)
-// ---------------------------------------------------------------------------
-
-/**
- * Lint the compiled-formulas sibling file (specify.formulas.yaml), if
- * present, against the current spec. Follows the wiring pattern of
- * lintDanglingLearnedState: called from lintSpec whenever a specPath is
- * available, no-ops when the file doesn't exist.
- *
- * ERROR  — the formulas file itself is unparseable/schema-invalid (surfaced
- *          as a lint error rather than letting the strict loader throw and
- *          crash the whole lint run); a formula's `behavior` doesn't resolve
- *          to a fully-qualified behavior id in the spec; duplicate formula
- *          ids within the file.
- * WARNING — a predicate name not found in the predicate registry. The
- *          registry (src/monitor/predicates.ts) is being built concurrently
- *          on another branch and may not exist here, and resolving it
- *          requires an async import — so this rule stays entirely opt-in:
- *          pass a `predicateRegistry` set (see LintOptions) to activate it.
- *          With no registry supplied, this rule contributes no rows, which
- *          keeps this module synchronous and lint usable standalone before
- *          the registry lands; description_hash no longer matches the
- *          current behavior description ("stale formula — recompile").
- */
-export function lintFormulas(
-  spec: Spec,
-  specPath: string,
-  formulasPathOverride?: string,
-  predicateRegistry?: ReadonlySet<string>,
-): LintError[] {
-  const errors: LintError[] = [];
-  const formulasPath = formulasPathOverride ?? defaultFormulasPath(specPath);
-  if (!fs.existsSync(formulasPath)) return errors;
-
-  let file;
-  try {
-    file = loadFormulas(formulasPath);
-  } catch (err) {
-    if (err instanceof FormulasLoadError) {
-      errors.push({
-        path: '/',
-        severity: 'error',
-        message: `${formulasPath}: ${err.message}`,
-        rule: 'formulas-file-invalid',
-      });
-      return errors;
-    }
-    throw err;
-  }
-  if (!file) return errors;
-
-  const fqBehaviors = new Map<string, string>(); // "area/behavior" -> description
-  for (const area of spec.areas) {
-    for (const behavior of area.behaviors) {
-      fqBehaviors.set(`${area.id}/${behavior.id}`, behavior.description);
-    }
-  }
-
-  const seenIds = new Map<string, number>();
-  file.formulas.forEach((entry: FormulaEntry, i: number) => {
-    if (seenIds.has(entry.id)) {
-      errors.push({
-        path: `/formulas/${i}/id`,
-        severity: 'error',
-        message: `Duplicate formula id "${entry.id}" (first at /formulas/${seenIds.get(entry.id)})`,
-        rule: 'duplicate-formula-id',
-      });
-    } else {
-      seenIds.set(entry.id, i);
-    }
-
-    const description = fqBehaviors.get(entry.behavior);
-    if (description === undefined) {
-      errors.push({
-        path: `/formulas/${i}/behavior`,
-        severity: 'error',
-        message: `Formula "${entry.id}" references behavior "${entry.behavior}" which does not exist in the spec.`,
-        rule: 'formula-behavior-not-found',
-      });
-    } else if (hashDescription(description) !== entry.description_hash) {
-      errors.push({
-        path: `/formulas/${i}/description_hash`,
-        severity: 'warning',
-        message: `Formula "${entry.id}" was compiled against a different description of "${entry.behavior}" — stale formula, recompile.`,
-        rule: 'stale-formula',
-      });
-    }
-
-    if (predicateRegistry) {
-      errors.push(...lintUnknownPredicates(entry, i, predicateRegistry));
-    }
-  });
-
-  errors.push(...lintEntailment(file.formulas));
-
-  return errors;
-}
-
-// ---------------------------------------------------------------------------
-// Rule: entailment-refuted (advisory, refutation-only)
-// ---------------------------------------------------------------------------
-
-/** Per-check wall-clock budget for the bounded entailment search. */
-const ENTAILMENT_BUDGET_MS = 2000;
-
-/**
- * For every formula entry carrying a `parent_of: [formula-ids]` decomposition
- * marker, run the bounded refutation-only entailment check from
- * src/monitor/entailment.ts: does AND(children) imply the parent on every
- * trace up to the searched bound?
- *
- * ADVISORY by design — this rule can only ever produce WARNINGS:
- *   - refuted        -> warning carrying the plain-English counterexample.
- *   - not refuted    -> silence. The check never proves entailment (its
- *     coverage is bounded), so "no counterexample found" is not a clean bill
- *     of health and gets no lint row.
- *   - budget exceeded -> silence (each check is capped at 2s so lint stays
- *     fast; an aborted search says nothing either way).
- * The only ERROR this rule emits is structural: a `parent_of` id that
- * doesn't resolve to a formula in the file (a broken reference, not a
- * semantic verdict).
- */
-function lintEntailment(formulas: FormulaEntry[]): LintError[] {
-  const errors: LintError[] = [];
-  const byId = new Map(formulas.map((f) => [f.id, f]));
-
-  formulas.forEach((entry, i) => {
-    if (!entry.parent_of || entry.parent_of.length === 0) return;
-
-    const leaves = [];
-    let broken = false;
-    for (const childId of entry.parent_of) {
-      const child = byId.get(childId);
-      if (!child) {
-        errors.push({
-          path: `/formulas/${i}/parent_of`,
-          severity: 'error',
-          message: `Formula "${entry.id}" lists "${childId}" in parent_of, but no formula with that id exists in the file.`,
-          rule: 'entailment-parent-of-unknown-id',
-        });
-        broken = true;
-        continue;
-      }
-      leaves.push(child.formula);
-    }
-    if (broken || leaves.length === 0) return;
-
-    const result = checkEntailment(entry.formula, leaves, {
-      timeBudgetMs: ENTAILMENT_BUDGET_MS,
-    });
-    if (result.refuted) {
-      errors.push({
-        path: `/formulas/${i}/parent_of`,
-        severity: 'warning',
-        message:
-          `Formula "${entry.id}" is not implied by its sub-checks (${entry.parent_of.join(', ')}): ` +
-          `found ${result.witness.description} This is an advisory bounded check — review the decomposition.`,
-        rule: 'entailment-refuted',
-      });
-    }
-    // Not refuted (whether exhaustive-to-k, sampled, or timed out): emit
-    // nothing. The bounded search cannot prove entailment, so silence is the
-    // only honest output.
-  });
-
-  return errors;
-}
-
-/**
- * Warn about predicate names not found in the given predicate registry.
- * Only called when a registry was supplied (see lintFormulas above) — this
- * function itself doesn't attempt to resolve one.
- */
-function lintUnknownPredicates(
-  entry: FormulaEntry,
-  index: number,
-  registry: ReadonlySet<string>,
-): LintError[] {
-  const errors: LintError[] = [];
-  for (const name of collectPredicateNames(entry.formula)) {
-    if (!registry.has(name)) {
-      errors.push({
-        path: `/formulas/${index}/formula`,
-        severity: 'warning',
-        message: `Formula "${entry.id}" uses unknown predicate "${name}" — not found in the predicate registry.`,
-        rule: 'unknown-predicate',
-      });
-    }
-  }
-  return errors;
-}
-
-// ---------------------------------------------------------------------------
-// Rule: dangling-learned-state
-// ---------------------------------------------------------------------------
-
-/**
- * Warn when learned state (confidence.json, specify.observations.yaml,
- * .specify/memory/**) references an area/behavior id that no longer exists
- * in the spec. Renaming a behavior orphans its accumulated confidence,
- * observations, and playbooks — this rule surfaces that drift so it can be
- * fixed with `specify spec migrate-id <old-fq-id> <new-fq-id>`.
- *
- * WARNING severity only (learned state is advisory, not structural), and
- * skipped entirely when the spec has no `.specify` dir yet, so a fresh spec
- * or CI checkout without any learned state stays lint-clean and deterministic.
- */
-function lintDanglingLearnedState(spec: Spec, specPath: string): LintError[] {
-  const errors: LintError[] = [];
-  const rootDir = specRootDir(specPath);
-  const specifyDir = path.join(rootDir, '.specify');
-  if (!fs.existsSync(specifyDir)) return errors;
-
-  const areaIds = new Set<string>();
-  const fqIds = new Set<string>(); // "area/behavior"
-  const bareBehaviorIds = new Set<string>(); // behavior id regardless of area
-  for (const area of spec.areas) {
-    areaIds.add(area.id);
-    for (const behavior of area.behaviors) {
-      fqIds.add(`${area.id}/${behavior.id}`);
-      bareBehaviorIds.add(behavior.id);
-    }
-  }
-
-  const isKnownScope = (areaId?: string, behaviorId?: string): boolean => {
-    if (areaId && behaviorId) return fqIds.has(`${areaId}/${behaviorId}`);
-    if (areaId) return areaIds.has(areaId);
-    if (behaviorId) return bareBehaviorIds.has(behaviorId);
-    return true; // nothing scoped to check
-  };
-
-  const danglingWarning = (message: string): LintError => ({
-    path: '/',
-    severity: 'warning',
-    message: `${message} It may be orphaned by a rename; see "specify spec migrate-id".`,
-    rule: 'dangling-learned-state',
-  });
-
-  // 1. confidence.json — rows keyed by bare behavior id or "area/behavior".
-  const confidencePath = path.join(specifyDir, 'confidence.json');
-  if (fs.existsSync(confidencePath)) {
-    try {
-      const raw = JSON.parse(fs.readFileSync(confidencePath, 'utf-8')) as { rows?: unknown } | null;
-      const rows = raw && typeof raw === 'object' ? raw.rows : undefined;
-      if (rows && typeof rows === 'object') {
-        for (const key of Object.keys(rows as Record<string, unknown>)) {
-          const known = key.includes('/') ? fqIds.has(key) : bareBehaviorIds.has(key);
-          if (!known) {
-            errors.push(
-              danglingWarning(
-                `confidence.json has a row for unknown behavior "${key}" — no matching behavior in the current spec.`,
-              ),
-            );
-          }
-        }
-      }
-    } catch {
-      // Corrupt confidence.json isn't this rule's concern.
-    }
-  }
-
-  // 2. specify.observations.yaml — area_id/behavior_id per observation.
-  const observationsPath = path.join(rootDir, 'specify.observations.yaml');
-  if (fs.existsSync(observationsPath)) {
-    try {
-      const raw = yaml.load(fs.readFileSync(observationsPath, 'utf-8')) as {
-        observations?: unknown;
-      } | null;
-      const observations = raw && Array.isArray(raw.observations) ? raw.observations : [];
-      for (const o of observations) {
-        if (!o || typeof o !== 'object') continue;
-        const areaId = (o as Record<string, unknown>).area_id as string | undefined;
-        const behaviorId = (o as Record<string, unknown>).behavior_id as string | undefined;
-        if (!areaId && !behaviorId) continue;
-        if (!isKnownScope(areaId, behaviorId)) {
-          const id = (o as Record<string, unknown>).id ?? '?';
-          errors.push(
-            danglingWarning(
-              `Observation "${id}" references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
-            ),
-          );
-        }
-      }
-    } catch {
-      // Corrupt observations file isn't this rule's concern.
-    }
-  }
-
-  // 3. .specify/memory/<spec_id>/<target>.json — area_id/behavior_id per row.
-  const memoryRoot = path.join(specifyDir, 'memory');
-  if (fs.existsSync(memoryRoot)) {
-    for (const specIdDir of safeReaddir(memoryRoot)) {
-      const specIdPath = path.join(memoryRoot, specIdDir);
-      if (!safeIsDirectory(specIdPath)) continue;
-      for (const file of safeReaddir(specIdPath)) {
-        if (!file.endsWith('.json')) continue;
-        const filePath = path.join(specIdPath, file);
-        try {
-          const raw = JSON.parse(fs.readFileSync(filePath, 'utf-8')) as { rows?: unknown } | null;
-          const rows = raw && Array.isArray(raw.rows) ? raw.rows : [];
-          for (const row of rows) {
-            if (!row || typeof row !== 'object') continue;
-            const areaId = (row as Record<string, unknown>).area_id as string | undefined;
-            const behaviorId = (row as Record<string, unknown>).behavior_id as string | undefined;
-            if (!areaId && !behaviorId) continue;
-            if (!isKnownScope(areaId, behaviorId)) {
-              const id = (row as Record<string, unknown>).id ?? '?';
-              const rel = path.relative(rootDir, filePath);
-              errors.push(
-                danglingWarning(
-                  `Memory row "${id}" in ${rel} references unknown scope "${areaId ?? '?'}/${behaviorId ?? '?'}" — no matching area/behavior in the current spec.`,
-                ),
-              );
-            }
-          }
-        } catch {
-          // Corrupt memory file isn't this rule's concern.
-        }
-      }
-    }
-  }
-
-  return errors;
-}
-
-function safeReaddir(dir: string): string[] {
-  try {
-    return fs.readdirSync(dir);
-  } catch {
-    return [];
-  }
-}
-
-function safeIsDirectory(p: string): boolean {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
+// Rule: single-file size
 function lintSingleFileSize(content: string, spec: Spec, specPath?: string): LintError[] {
   const assessment = assessSpecSize(content, spec);
   if (!assessment.overLimit) return [];

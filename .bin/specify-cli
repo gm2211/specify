@@ -9,6 +9,7 @@
  * Exit codes: 0=ok, 1=usage/bad-args, 2=auth, 3=daemon-unreachable, 4=not-found
  */
 
+import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +22,7 @@ const BEADS_FILE = resolve(REPO_ROOT, '.beads/issues.jsonl');
 const SPECIFY_DIR = resolve(REPO_ROOT, '.specify');
 const ADDRESSED_FILE = resolve(SPECIFY_DIR, 'addressed-items.jsonl');
 const ACTIVITY_FILE = resolve(SPECIFY_DIR, 'activity-log.jsonl');
-const SPEC_PATH = resolve(REPO_ROOT, 'specify.spec.yaml');
+const SPEC_PATH = resolve(REPO_ROOT, 'specify.spec');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -160,25 +161,32 @@ function cmdMarkAddressed(flags) {
   process.exit(0);
 }
 
-function cmdVerify(flags) {
+function cmdVerify(_flags) {
   const verifyResultPath = resolve(SPECIFY_DIR, 'verify/verify-result.json');
   if (!existsSync(verifyResultPath)) {
-    out({ verified: true, missingMarkers: [] });
+    out({ verified: false, missingMarkers: [], reason: 'No recorded results' });
     return;
   }
+  const checked = spawnSync(
+    resolve(REPO_ROOT, 'specify'),
+    ['verify', '--spec', SPEC_PATH, '--report', verifyResultPath, '--json'],
+    { encoding: 'utf8', timeout: 60000 },
+  );
   try {
-    const result = JSON.parse(readFileSync(verifyResultPath, 'utf8'));
-    const so = result.structuredOutput || {};
-    const failed = (so.results || []).filter((r) => r.status === 'failed');
+    const result = JSON.parse(checked.stdout);
+    const missing = result.valid
+      ? [
+          ...result.missingIds,
+          ...result.report.results.filter((r) => r.status !== 'passed').map((r) => r.id),
+        ]
+      : [];
     out({
-      verified: so.pass === true,
-      missingMarkers: failed.map((r) => ({
-        section: r.id.split('/')[0] || r.id,
-        expectedMarker: r.id,
-      })),
+      verified: checked.status === 0 && result.valid === true && result.report.pass === true,
+      missingMarkers: missing.map((id) => ({ section: id.split('/')[0], expectedMarker: id })),
+      ...(result.valid ? {} : { reason: 'Invalid recorded results' }),
     });
   } catch {
-    out({ verified: false, missingMarkers: [] });
+    out({ verified: false, missingMarkers: [], reason: 'Results validation failed' });
   }
 }
 

@@ -6,10 +6,10 @@ prose: >
 behaviors:
   - id: lint-valid-spec-exits-zero
     description: |
-      Linting a valid spec outputs JSON result and exits 0
+      Linting a valid spec exits 0; JSON/NDJSON modes emit a structured result, while text mode reports status on stderr
   - id: lint-invalid-spec-exits-nonzero
     description: |
-      Linting an invalid spec outputs JSON with errors array and exits 10
+      Linting an invalid spec exits 10; JSON/NDJSON modes emit an errors array, while text mode reports errors on stderr
   - id: lint-auto-discovers-spec
     description: |
       Without --spec, auto-discovers spec file (or spec directory) from cwd
@@ -17,11 +17,19 @@ behaviors:
     description: |
       --spec - reads spec YAML from stdin
   - id: lint-warns-oversized-single-file
-    description: >
-      Linting a single-file spec that exceeds 40KiB, 800 lines, 12 areas, or 120 behaviors adds a
-      non-fatal "oversized-single-file-spec" warning suggesting `spec split`; the spec still reports
-      valid if otherwise correct
+    description: >-
+      Single-file contracts above 40 KiB, 800 lines, 12 areas, or 120 behaviors warn; above 80 KiB,
+      1600 lines, 24 areas, or 240 behaviors fail lint and recommend splitting.
   - id: lint-directory-spec-no-size-warning
     description: >
       A directory spec (manifest + area files) never triggers the oversized-single-file-spec
       warning, regardless of its total size
+  - id: lint-ignores-legacy-sidecars
+    description: >-
+      Lint validates the contract only. It neither evaluates nor mutates adjacent formula,
+      learned-state, or inferred Quint sidecars.
+  - id: lint-stable-ids-and-composition
+    description: >
+      Duplicate area IDs and duplicate behavior IDs within an area fail lint. Bare behavior ID
+      collisions across areas warn because fully-qualified IDs remain distinct. Invalid or
+      conflicting directory fragments fail rather than silently overriding another area.

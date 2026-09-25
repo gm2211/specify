@@ -97,8 +97,7 @@ export type ProofEvidenceActual =
       exitCode: number | null;
       signal?: string;
     }
-  | { kind: 'screenshot'; key: string; step?: number; url?: string }
-  | { kind: 'scripted' };
+  | { kind: 'screenshot'; key: string; step?: number; url?: string };
 
 export interface ProofTraceStep {
   type:
@@ -376,17 +375,17 @@ function renderBehavior(b: ProofBehavior): string {
 
   let verdictBadge = '';
   if (b.verdictSource) {
-    const title = `Verdict source: ${b.verdictSource}`;
-    verdictBadge = `<span class="badge badge--verdict" title="${escapeHtml(title)}">${escapeHtml(b.verdictSource)}</span>`;
+    const title = `Archived report's verdict source: ${b.verdictSource}`;
+    verdictBadge = `<span class="badge badge--verdict" title="${escapeHtml(title)}">reported ${escapeHtml(b.verdictSource)}</span>`;
   } else if (b.guaranteeSource) {
-    const title = `Guarantee source: ${b.guaranteeSource}`;
-    verdictBadge = `<span class="badge badge--verdict" title="${escapeHtml(title)}">${escapeHtml(b.guaranteeSource)}</span>`;
+    const title = `Archived report's guarantee source: ${b.guaranteeSource}`;
+    verdictBadge = `<span class="badge badge--verdict" title="${escapeHtml(title)}">reported ${escapeHtml(b.guaranteeSource)}</span>`;
   }
 
   let reproBadge = '';
   if (b.repro) {
     const cls = b.repro.confirmed ? 'badge--repro-confirmed' : 'badge--repro-unconfirmed';
-    const label = b.repro.confirmed ? 'repro confirmed' : 'repro unconfirmed';
+    const label = b.repro.confirmed ? 'reported repro confirmed' : 'reported repro unconfirmed';
     reproBadge = `<span class="badge ${cls}" title="${escapeHtml(b.repro.output)}">${label}</span>`;
   }
 
@@ -430,6 +429,7 @@ function renderMonitorAndGuarantees(b: ProofBehavior): string {
     )
     .join('');
   return `<div class="b-checks">
+    <p class="dim">Checks recorded in the input report; not independently attested here.</p>
     ${b.monitor.length ? `<ul class="monitor-list">${monitorItems}</ul>` : ''}
     ${b.guarantees.length ? `<ul class="guarantee-list">${guaranteeItems}</ul>` : ''}
   </div>`;
@@ -494,7 +494,7 @@ function renderActualCol(actual: ProofEvidenceActual): string {
     const caption = `<p class="ev-shot-caption"><code>${escapeHtml(actual.key)}</code>${meta ? ` <span class="dim">${escapeHtml(meta)}</span>` : ''}</p>`;
     return `<div class="ev-col"><h4>Actual — runner-recorded screenshot${escapeHtml(stepLabel)}</h4><img class="ev-shot" data-key="${escapeHtml(actual.key)}" alt="${escapeHtml(actual.key)}" loading="lazy">${caption}</div>`;
   }
-  return `<div class="ev-col"><h4>Actual — scripted replay</h4><p>Produced by the deterministic Playwright replay tier — no LLM in the loop.</p></div>`;
+  return '';
 }
 
 // ---------------------------------------------------------------------------

@@ -65,18 +65,17 @@ instead of `bd dolt push`.
 
 ## Build & Test
 
-_Add your build and test commands here_
+Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`.
 
-```bash
-# Example:
-# npm install
-# npm test
-```
+## Architecture and scope
 
-## Architecture Overview
+Specify owns behavioral contracts, stable IDs, structural linting, deterministic context projection,
+and external results/evidence mapping. External coding agents and test tools own execution.
+`src/spec` contains contract tooling, `src/results` validates external results, `src/report` renders
+static evidence, and `src/adapters` contains the caller-owned Playwright compatibility adapter.
+`src/mcp` exposes authoring tools over stdio only.
 
-_Add a brief overview of your project architecture_
-
-## Conventions & Patterns
-
-_Add your project-specific conventions here_
+Keep `specify.spec/` up to date whenever supported behavior changes. Preserve stable IDs for
+retained behavior; remove promises for deleted features. Do not reintroduce a bundled agent, daemon,
+learning system, or deployment stack. See `docs/migration-0.3.md` for compatibility and evidence
+boundaries.

@@ -4,9 +4,9 @@
 # Auto-builds TypeScript if needed, then runs the CLI.
 #
 #   ./specify --help
-#   ./specify spec validate --spec spec.yaml --capture ./captures
-#   ./specify cli run --spec spec.yaml
-#   ./specify human
+#   ./specify spec lint --spec spec.yaml
+#   ./specify verify --spec spec.yaml --report results.json
+#   ./specify prove --spec spec.yaml --input run/
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ if needs_build; then
   # Use specify's own tsc, not whatever the caller's cwd resolves to.
   # `npx tsc` from another project picks up the registry placeholder
   # package whose only output is "this is not the tsc you are looking for".
-  "$SCRIPT_DIR/node_modules/.bin/tsc" --project "$SCRIPT_DIR/tsconfig.json"
+  npm --prefix "$SCRIPT_DIR" run build >&2
 fi
 
 exec node "$DIST" "$@"

@@ -1,20 +1,17 @@
 id: prove
-name: Proof of Validation
-prose: >
-  Turns a completed verify run into one self-contained HTML artifact a reader can open and be
-  convinced by. Every behavior carries its verdict, rationale, and expected-vs-actual evidence, and
-  every evidence item is badged by provenance: runner-recorded when it cross-references the
-  deterministic observation trace, agent-reported when it is only the agent's own testimony. Web
-  runs get a screenshot filmstrip, CLI runs an animated terminal replay, and the footer carries
-  source-file hashes so the artifact can be checked against the run that produced it.
+name: Recorded Evidence Report
+prose: >-
+  Render external results and recorded artifacts into self-contained HTML. Artifact matching and
+  file hashes support inspection, not independent attestation of execution or assertion correctness.
 behaviors:
   - id: prove-writes-self-contained-html
     description: >
       Writes one HTML file (default <input>/proof.html) that opens from file:// with no external
       requests — screenshots inlined as base64 data URIs, CSS and JS inline
   - id: prove-requires-verify-output
-    description: |
-      A missing --input directory, or one with no verify-result.json, outputs a structured JSON error and exits 10
+    description: >
+      A missing --input directory, or one with no verify-result.json, outputs a structured JSON
+      error and exits 10
   - id: prove-defaults-input-and-output
     description: >
       Without --input, reads .specify/verify; without --output, writes proof.html inside the input
@@ -25,10 +22,10 @@ behaviors:
       verdict_source / monitor / repro / guarantees the run recorded; spec behaviors with no result
       are shown as untested
   - id: prove-badges-evidence-provenance
-    description: >
-      Each evidence item is badged runner-recorded when it cross-references a recorded observation —
-      a cli_run step whose stdout/stderr or argv it matches, or a screenshot that exists under
-      capture/screenshots/ — and agent-reported otherwise
+    description: >-
+      Evidence is marked recorded only when supported by a matching local observation or screenshot
+      artifact. A method label or free-text step number alone does not establish recorded
+      provenance.
   - id: prove-replays-the-run
     description: >
       Web runs render a keyboard-navigable screenshot filmstrip with prev/next and an autoplay
@@ -44,5 +41,10 @@ behaviors:
       Total inlined screenshot bytes are capped (40 MiB by default); screenshots past the cap are
       referenced as relative file:// links instead of inlined, and the footer reports how many
   - id: prove-succeeds-on-failing-runs
-    description: |
-      A verify run with failing behaviors still produces a proof and exits 0 — prove documents the verdict, it does not adopt it
+    description: >
+      A verify run with failing behaviors still produces a proof and exits 0 — prove documents the
+      verdict, it does not adopt it
+  - id: prove-rejects-invalid-results
+    description: >-
+      Malformed, duplicate, or unknown-ID result entries fail rendering rather than silently
+      overwriting or dropping conflicting claims.

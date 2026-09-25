@@ -2,7 +2,7 @@
  * src/spec/types.ts — Spec format types (v2 behavioral)
  *
  * V2 specs describe WHAT should be true about a system, not HOW to verify it.
- * The agent figures out verification. Behaviors are plain-language claims
+ * External tools own verification. Behaviors are plain-language claims
  * grouped into areas. No matchers, no selectors, no step sequences.
  */
 
@@ -22,28 +22,17 @@ export interface CliTarget {
   timeout_ms?: number;
 }
 
+/** Legacy probe/production fields are metadata only; Specify never mutates a target. */
 export interface ApiTarget {
   type: 'api';
   url: string;
   headers?: Record<string, string>;
-  /**
-   * Session-guarantee probes (epic SP-jdb) actively MUTATE target state:
-   * they issue marker-tagged CRUD against approved endpoints. Because that is
-   * destructive, probes are OFF unless the target explicitly opts in here AND
-   * the run is invoked with the probe flag. See src/agent/probe-workload.ts.
-   */
+  /** Legacy runner probe configuration; not executed. */
   probes?: {
     /** Opt-in switch. Probes never run against a target where this is falsy. */
     enabled?: boolean;
   };
-  /**
-   * Marks this target as a production system. Probes mutate state and must
-   * NEVER touch production: `true` hard-blocks probing even when
-   * `probes.enabled` and the runtime flag are both set. The gate is
-   * FAIL-CLOSED — when probes are enabled, this field must be EXPLICITLY set
-   * to `false` for probes to run; leaving it absent also refuses, so an
-   * unmarked production target can never be probed by omission.
-   */
+  /** Legacy target classification; no probing occurs. */
   production?: boolean;
 }
 
@@ -141,12 +130,13 @@ export interface VerificationReport {
   results: BehaviorResult[];
 }
 
+/** Optional legacy verdict metadata records historical claims, never trusted execution proof. */
 export interface BehaviorResult {
   /** Fully-qualified: "area-id/behavior-id". */
   id: string;
   description: string;
   status: 'passed' | 'failed' | 'skipped';
-  /** How the agent verified this behavior. */
+  /** Producer-reported method; not independently authenticated. */
   method?: string;
   evidence?: Evidence[];
   /**
@@ -157,18 +147,7 @@ export interface BehaviorResult {
   action_trace?: ActionTraceEntry[];
   rationale?: string;
   duration_ms?: number;
-  /**
-   * Deterministic confirmation, added POST-HOC by the CLI after the agent
-   * finishes — NEVER produced by the agent itself (it is not part of the
-   * SDK output schema). For a "failed" behavior, the CLI runs the matching
-   * generated Playwright test and records whether it independently
-   * reproduces the failure.
-   *
-   * `confirmed: false` means "unconfirmed" — it must never be read as, or
-   * used to flip, a passing status. The generated test itself can be wrong
-   * (bad selector, missing setup), so this is metadata, not a verdict
-   * override.
-   */
+  /** Legacy recorded reproduction claim, displayed without independent attestation. */
   repro?: {
     /** Title of the matched generated test, if any (absent when no matching test was found). */
     test?: string;
@@ -176,13 +155,7 @@ export interface BehaviorResult {
     /** Human-readable summary of the confirmation run. */
     output: string;
   };
-  /**
-   * Deterministic monitor verdicts, added POST-HOC by the runner after the
-   * agent finishes — NEVER produced by the agent itself (deliberately not
-   * part of the SDK output schema, same pattern as `repro`). One entry per
-   * compiled LTLf formula attached to this behavior; see
-   * src/monitor/verdict-merge.ts for the asymmetric reconciliation policy.
-   */
+  /** Legacy recorded temporal verdicts; no monitor is run. */
   monitor?: MonitorVerdict[];
   /**
    * Who decided this behavior's final status. Absent when no formulas
@@ -193,14 +166,7 @@ export interface BehaviorResult {
    * satisfied that cannot overturn an LLM fail).
    */
   verdict_source?: 'monitor' | 'llm' | 'monitor+llm';
-  /**
-   * Deterministic session-guarantee checks, added POST-HOC by the runner after
-   * a probe workload finishes — NEVER produced by the agent itself (same
-   * pattern as `monitor` / `repro`). Present only on behaviors that bind to a
-   * data-consistency guarantee (see src/agent/session-guarantees.ts). Each
-   * entry is one guarantee verdict over the marker-tagged probe op log, with
-   * the op-level witness chain that decided it.
-   */
+  /** Legacy recorded session checks; no target probes are run. */
   guarantees?: GuaranteeCheck[];
   /**
    * Who decided this behavior's status when guarantees bound to it. Absent when
@@ -219,7 +185,7 @@ export interface BehaviorResult {
 
 /**
  * The session guarantees the probe-log checker deterministically verifies.
- * See src/agent/session-guarantees.ts.
+ * Legacy archive vocabulary; no checker runs in this package.
  *  - `read-your-writes`: a read after a completed create/update must reflect
  *    the written marker.
  *  - `monotonic-reads`: once a marker is observed in a read/list, a later read
@@ -282,7 +248,7 @@ export interface GuaranteeCheck {
 
 /**
  * One formula's verdict over the recorded run trace, attached post-hoc to a
- * BehaviorResult by the monitor merge (src/monitor/verdict-merge.ts).
+ * BehaviorResult by a legacy producer. This is untrusted recorded metadata.
  */
 export interface MonitorVerdict {
   formula_id: string;
@@ -306,7 +272,7 @@ export interface MonitorVerdict {
   /**
    * Set when 'satisfied' rests on a never-fired antecedent (an `implies`
    * whose left side never held anywhere in the trace) — see
-   * src/monitor/vacuity.ts. A vacuous pass is real but hollow: report it,
+   * the legacy evaluator. A vacuous pass is real but hollow: report it,
    * never count it as evidence the formula was meaningfully exercised.
    */
   vacuous?: boolean;
@@ -349,37 +315,3 @@ export interface ActionTraceEntry {
 // ---------------------------------------------------------------------------
 // Gap analysis report
 // ---------------------------------------------------------------------------
-
-export interface GapAnalysisReport {
-  spec: { name: string; version: string };
-  timestamp: string;
-  summary: {
-    total_behaviors: number;
-    covered: number;
-    uncovered: number;
-    coverage_pct: number;
-    unmapped_tests: number;
-  };
-  behaviors: BehaviorCoverage[];
-  unmapped_tests: UnmappedTest[];
-}
-
-export interface BehaviorCoverage {
-  id: string;
-  description: string;
-  covered: boolean;
-  matched_tests: MatchedTest[];
-  suggested_test?: string;
-}
-
-export interface MatchedTest {
-  file: string;
-  test: string;
-  rationale: string;
-}
-
-export interface UnmappedTest {
-  file: string;
-  test_name: string;
-  framework?: string;
-}

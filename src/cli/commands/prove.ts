@@ -1,13 +1,13 @@
 /**
  * src/cli/commands/prove.ts — `specify prove`
  *
- * Turns a completed `specify verify` output directory into one
+ * Turns a completed external-results directory into one
  * self-contained proof.html — see src/report/proof-html.ts (renderer) and
  * src/report/proof-loader.ts (fs + evidence-matching layer) for the actual
  * work. This command is just argument parsing, structured error reporting,
  * and wiring the two together.
  *
- * A failing verify run still produces a proof and exits 0 — prove documents
+ * A failing result set still produces a proof and exits 0 — prove documents
  * the verdict the run reached (pass or fail), it does not adopt one itself.
  * Only prove's own preconditions (missing input, unreadable spec, malformed
  * verify-result.json, …) produce a non-zero exit.
@@ -92,7 +92,7 @@ export async function prove(options: ProveOptions, ctx: CliContext): Promise<num
       error: 'input_not_found',
       parameter: '--input',
       path: inputDir,
-      hint: 'Run "specify verify" first, or pass --input <verify output dir>',
+      hint: 'Provide a directory containing verify-result.json with --input',
     });
     if (!ctx.quiet) process.stderr.write(`Error: input directory not found: ${inputDir}\n`);
     return ExitCode.PARSE_ERROR;
@@ -103,7 +103,7 @@ export async function prove(options: ProveOptions, ctx: CliContext): Promise<num
     emitError({
       error: 'verify_result_not_found',
       path: verifyResultPath,
-      hint: 'Expected verify-result.json in the --input directory. Run "specify verify --output <dir>" first.',
+      hint: 'Place externally produced results in verify-result.json under the --input directory.',
     });
     if (!ctx.quiet) process.stderr.write(`Error: verify-result.json not found under ${inputDir}\n`);
     return ExitCode.PARSE_ERROR;

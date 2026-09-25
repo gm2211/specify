@@ -1,8 +1,8 @@
 # Large specs
 
 For larger products, `--spec` may point at a directory instead of one YAML file. Specify composes
-the directory into one logical behavioral contract before linting, review, verify, daemon runs, and
-agent memory:
+the directory into one logical behavioral contract before linting, results validation, context
+projection, and evidence rendering:
 
 ```text
 spec/
@@ -40,8 +40,8 @@ When `areas` is omitted from the manifest, `areas/**/*.yaml`, `areas/**/*.yml`, 
 
 ```bash
 specify spec lint --spec spec/
-specify verify --spec spec/ --url http://localhost:3000
-specify review --spec spec/
+specify verify --spec spec/ --report results.json
+specify prove --spec spec/ --input run/
 ```
 
 `specify spec lint` warns when a single YAML/JSON spec starts getting unwieldy (more than about 40
@@ -52,7 +52,8 @@ specify spec split --spec spec.yaml --output spec/
 ```
 
 The split command writes `spec/spec.yaml` plus one file per area under `spec/areas/`. Directory
-specs do not trigger the single-file size warning.
+specs do not trigger single-file size limits. Files above 80 KiB, 1600 lines, 24 areas, or 240
+behaviors fail lint; split them before continuing.
 
 `specify spec context` regenerates `PRODUCT.md` and `DESIGN.md` straight from the composed spec — a
 deterministic projection, no LLM call, so the spec's own area prose and behavior descriptions ARE

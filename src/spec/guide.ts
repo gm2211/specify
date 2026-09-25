@@ -146,7 +146,8 @@ areas:
       },
       {
         name: 'Assumptions and hooks',
-        description: 'Preconditions and setup/teardown for the spec',
+        description:
+          'Legacy precondition and hook metadata for external runners; Specify does not execute these commands',
         yaml_snippet: `assumptions:
   - description: Application is running at the target URL
     check: "curl -sf http://localhost:3000"
@@ -177,15 +178,15 @@ hooks:
     template_variables: {
       syntax: '{{variable_name}} for spec variables, ${ENV_VAR} for environment variables',
       description:
-        'Variables defined in the "variables" section can be referenced anywhere in the spec using {{name}}. Environment variables use ${NAME} syntax. Hook steps with "save_as" create variables accessible as {{saved_name.field}}.',
+        'Variables defined in the "variables" section can be referenced anywhere in the spec using {{name}}. Environment variables use ${NAME} syntax. Legacy hook save_as names can be referenced as {{saved_name.field}}; execution and substitution are the external runner responsibility.',
     },
 
     tips: [
-      'Review captured or inferred behavior against intended requirements; existing bugs are not requirements.',
-      'Keep behavior IDs stable across edits; use spec migrate-id when a rename is necessary.',
+      'Review proposed requirements against intended behavior; existing bugs are not requirements.',
+      'Keep behavior IDs stable across edits; coordinate renamed IDs with all external result producers; historical IDs are not rewritten.',
       'Areas and tags organize requirements, not code-change impact or feature dependencies.',
       'Start with the minimal spec (version + name + target + one area) and build up incrementally.',
-      'Use "specify spec lint" to validate structure before running against a live app.',
+      'Use "specify spec lint" to validate structure before external tests or review.',
       'Areas group behaviors by feature, not by page — think "authentication" or "shopping cart" rather than "/login" or "/cart".',
       'Behaviors are plain-language claims: describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
       'Use kebab-case IDs for areas and behaviors (e.g., "add-item-to-cart", not "addItemToCart").',
@@ -193,7 +194,7 @@ hooks:
       'Use the "description" field liberally — it helps both humans and LLMs understand intent.',
       'Add assumptions to prevent false failures (e.g., assert the target URL is reachable first).',
       'Template variables keep specs portable — use ${ENV_VAR} for environment-specific values.',
-      'Use "specify spec generate --input <capture-dir>" to generate a spec from captured traffic.',
+      'Draft contracts with your preferred editor or coding agent; Specify validates structure and maps external results.',
       'Write descriptions as if briefing an agent: clear enough that an agent can read the requirement, make a plan to validate it, and provide structured evidence without needing to ask for clarification.',
     ],
   };
