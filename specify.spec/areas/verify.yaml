@@ -58,3 +58,8 @@ behaviors:
     description: >-
       Any failed test for a behavior prevents that behavior from passing; skipped or interrupted
       tests cannot be treated as passed, and unknown behavior IDs fail validation.
+  - id: scripted-errors-cannot-reuse-stale-success
+    description: >
+      A failed new scripted run cannot leave a prior verify-result.json available as current
+      success. Timeout terminates the runner process group, oversized reporter output fails, and
+      interrupted or timed-out attempts cannot be hidden by a later passing retry.
