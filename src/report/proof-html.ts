@@ -97,8 +97,7 @@ export type ProofEvidenceActual =
       exitCode: number | null;
       signal?: string;
     }
-  | { kind: 'screenshot'; key: string; step?: number; url?: string }
-  | { kind: 'scripted' };
+  | { kind: 'screenshot'; key: string; step?: number; url?: string };
 
 export interface ProofTraceStep {
   type:
@@ -494,7 +493,7 @@ function renderActualCol(actual: ProofEvidenceActual): string {
     const caption = `<p class="ev-shot-caption"><code>${escapeHtml(actual.key)}</code>${meta ? ` <span class="dim">${escapeHtml(meta)}</span>` : ''}</p>`;
     return `<div class="ev-col"><h4>Actual — runner-recorded screenshot${escapeHtml(stepLabel)}</h4><img class="ev-shot" data-key="${escapeHtml(actual.key)}" alt="${escapeHtml(actual.key)}" loading="lazy">${caption}</div>`;
   }
-  return `<div class="ev-col"><h4>Actual — scripted replay</h4><p>Produced by the deterministic Playwright replay tier — no LLM in the loop.</p></div>`;
+  return '';
 }
 
 // ---------------------------------------------------------------------------

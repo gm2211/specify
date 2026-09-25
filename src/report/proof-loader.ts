@@ -27,8 +27,7 @@ import type {
   Evidence,
   ActionTraceEntry,
 } from '../spec/types.js';
-import type { StepObservation, CliStepObservation } from '../agent/observation.js';
-import { SCRIPTED_METHOD } from '../agent/scripted-runner.js';
+import type { StepObservation, CliStepObservation } from '../results/formats.js';
 import type {
   ProofInput,
   ProofArea,
@@ -82,17 +81,8 @@ export function matchCliEvidence(
     };
   }
 
-  // Rule 1 — explicit "step N" citation.
-  const haystack = `${ev.label}\n${ev.content}`;
-  const stepMatch = /\bstep\s+(\d+)\b/i.exec(haystack);
-  if (stepMatch) {
-    const n = Number(stepMatch[1]);
-    if (n < observations.length) {
-      return { step: n, reason: `cites recorded step ${n}` };
-    }
-  }
-
-  // Rule 2 — normalized output substring match.
+  // Only the recorded output can corroborate a command-output claim. A free-text
+  // step number or command name identifies an invocation but proves no output.
   const a = normalizeOutput(ev.content);
   if (a.length > 0) {
     let bestStep: number | undefined;
@@ -100,7 +90,7 @@ export function matchCliEvidence(
       const b = normalizeOutput(`${obs.stdout}\n${obs.stderr}`);
       if (b.length === 0) continue;
       if (Math.min(a.length, b.length) < MIN_MATCH_CHARS) continue;
-      if (b.includes(a) || a.includes(b)) {
+      if (b.includes(a)) {
         if (bestStep === undefined || obs.step < bestStep) bestStep = obs.step;
       }
     }
@@ -109,17 +99,7 @@ export function matchCliEvidence(
     }
   }
 
-  // Rule 3 — argv naming.
-  const firstLine = (ev.content.split('\n')[0] ?? '').replace(/^\$\s*/, '');
-  for (const obs of observations) {
-    const argvStr = obs.argv.join(' ');
-    if (argvStr.length === 0) continue;
-    if (firstLine === argvStr || (obs.argv.length >= 2 && ev.content.includes(argvStr))) {
-      return { step: obs.step, reason: `names recorded step ${obs.step} argv` };
-    }
-  }
-
-  return { reason: 'no recorded cli_run step matches this text' };
+  return { reason: 'no recorded cli_run output contains this text' };
 }
 
 export function matchScreenshotEvidence(
@@ -562,9 +542,8 @@ function buildBehavior(
     };
   }
 
-  const isScripted = result.method === SCRIPTED_METHOD;
   const evidence: ProofEvidenceItem[] = (result.evidence ?? []).map((ev) =>
-    buildEvidenceItem(ev, isScripted, cliObservations, availableShots, hasScreenshotEvidence),
+    buildEvidenceItem(ev, cliObservations, availableShots, hasScreenshotEvidence),
   );
 
   const matchedCliSteps = new Set<number>();
@@ -620,22 +599,10 @@ function buildBehavior(
 
 function buildEvidenceItem(
   ev: Evidence,
-  isScripted: boolean,
   cliObservations: readonly CliStepObservation[],
   availableShots: ReadonlySet<string>,
   hasScreenshotEvidence: boolean,
 ): ProofEvidenceItem {
-  if (isScripted) {
-    return {
-      type: ev.type,
-      label: ev.label,
-      content: ev.content,
-      provenance: 'runner-recorded',
-      matchReason: 'produced by the scripted replay tier — a Playwright run, no LLM in the loop',
-      actual: { kind: 'scripted' },
-    };
-  }
-
   // Data-driven, not keyed off spec.target.type: the CLI rules apply
   // whenever this run actually recorded any cli_run invocations, and the
   // screenshot rules apply whenever there's a screenshot to cross-reference

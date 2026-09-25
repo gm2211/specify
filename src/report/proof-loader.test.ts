@@ -6,7 +6,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 
 import type { Spec, VerificationReport } from '../spec/types.js';
-import { SCRIPTED_METHOD } from '../agent/scripted-runner.js';
+import { SCRIPTED_METHOD } from '../results/formats.js';
 import { loadProofInput, normalizeOutput, DEFAULT_SCREENSHOT_BYTE_CAP } from './proof-loader.js';
 import { renderProofHtml } from './proof-html.js';
 
@@ -78,6 +78,12 @@ function buildCliFixture(): { dir: string; cleanup: () => void; spec: Spec } {
             content: 'a summary unrelated to the recorded output',
           },
           { type: 'command_output', label: 'short', content: 'ok' },
+          {
+            type: 'command_output',
+            label: 'embellished',
+            content:
+              'I saw ✓ Spec is valid and an additional confirmation that was never recorded.',
+          },
         ],
       },
       {
@@ -146,7 +152,7 @@ test('CLI evidence: unrelated narration is agent-reported', () => {
   }
 });
 
-test('CLI evidence: argv-naming rule matches "$ argv..." content', () => {
+test('CLI evidence: naming an invocation does not establish its output', () => {
   const { dir, cleanup, spec } = buildCliFixture();
   try {
     const input = loadProofInput({
@@ -160,13 +166,13 @@ test('CLI evidence: argv-naming rule matches "$ argv..." content', () => {
       (b) => b.id === 'unmatched/cli-evidence-behavior',
     )!;
     const ev = behavior.evidence.find((e) => e.label === 'invocation')!;
-    assert.equal(ev.provenance, 'runner-recorded');
+    assert.equal(ev.provenance, 'agent-reported');
   } finally {
     cleanup();
   }
 });
 
-test('CLI evidence: explicit "step N" label wins even without output overlap', () => {
+test('CLI evidence: citing a recorded step without output overlap stays agent-reported', () => {
   const { dir, cleanup, spec } = buildCliFixture();
   try {
     const input = loadProofInput({
@@ -180,8 +186,8 @@ test('CLI evidence: explicit "step N" label wins even without output overlap', (
       (b) => b.id === 'unmatched/cli-evidence-behavior',
     )!;
     const ev = behavior.evidence.find((e) => e.label === 'step 0')!;
-    assert.equal(ev.provenance, 'runner-recorded');
-    assert.equal(ev.observationStep, 0);
+    assert.equal(ev.provenance, 'agent-reported');
+    assert.equal(ev.observationStep, undefined);
   } finally {
     cleanup();
   }
@@ -207,7 +213,27 @@ test('CLI evidence: short content below MIN_MATCH_CHARS stays agent-reported', (
   }
 });
 
-test('scripted-replay results: every evidence item is runner-recorded with a scripted actual', () => {
+test('CLI evidence: a claim containing real output plus unrecorded assertions stays agent-reported', () => {
+  const { dir, cleanup, spec } = buildCliFixture();
+  try {
+    const input = loadProofInput({
+      spec,
+      specPath: '/tmp/spec.yaml',
+      inputDir: dir,
+      outputPath: path.join(dir, 'proof.html'),
+      generatorVersion: '0.0.0-test',
+    });
+    const behavior = input.areas[0].behaviors.find(
+      (b) => b.id === 'unmatched/cli-evidence-behavior',
+    )!;
+    const ev = behavior.evidence.find((e) => e.label === 'embellished')!;
+    assert.equal(ev.provenance, 'agent-reported');
+  } finally {
+    cleanup();
+  }
+});
+
+test('scripted-replay method alone cannot establish evidence provenance', () => {
   const { dir, cleanup, spec } = buildCliFixture();
   try {
     const input = loadProofInput({
@@ -219,8 +245,8 @@ test('scripted-replay results: every evidence item is runner-recorded with a scr
     });
     const behavior = input.areas[0].behaviors.find((b) => b.id === 'unmatched/scripted-behavior')!;
     assert.equal(behavior.evidence.length, 1);
-    assert.equal(behavior.evidence[0].provenance, 'runner-recorded');
-    assert.equal(behavior.evidence[0].actual?.kind, 'scripted');
+    assert.equal(behavior.evidence[0].provenance, 'agent-reported');
+    assert.equal(behavior.evidence[0].actual, undefined);
   } finally {
     cleanup();
   }
