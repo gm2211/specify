@@ -32,6 +32,11 @@ test('CLI manifest, help and version expose only the reduced product', () => {
   assert.equal(manifest.status, 0, manifest.stderr);
   const names = JSON.parse(manifest.stdout).commands.map((c: { name: string }) => c.name);
   assert.deepEqual(names, [
+    'intent init',
+    'intent capture',
+    'intent context',
+    'intent reconcile',
+    'intent check',
     'spec lint',
     'spec split',
     'spec context',

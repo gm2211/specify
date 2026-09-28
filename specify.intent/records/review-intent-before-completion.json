@@ -1,0 +1,15 @@
+{
+  "id": "review-intent-before-completion",
+  "statement": "Require agents to account for intent before finishing changes, bind reviews to the actual changed content, and expose unmet requirements without rewriting intent to match implementation.",
+  "kind": "decision",
+  "source": {
+    "text": "cool, do it",
+    "reference": "2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and completion reconciliation proposal."
+  },
+  "rationale": "Approved proposal requires changed, preserved, and unmet intent to be visible. Deterministic checks establish recorded process; semantic fidelity and test execution need separate review and evidence.",
+  "appliesTo": [],
+  "behaviorIds": [
+    "intent-check/intent-check-validates-review-binding",
+    "intent-check/intent-check-unmet-fails"
+  ]
+}

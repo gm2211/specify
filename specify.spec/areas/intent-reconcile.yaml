@@ -1,0 +1,50 @@
+id: intent-reconcile
+name: Intent Review Reconciliation
+prose: >-
+  Bind a human or coding-agent-authored review of changed files to an explicit Git base SHA and
+  snapshot fingerprint. Reconciliation records process evidence, not semantic proof.
+behaviors:
+  - id: intent-reconcile-explicit-base
+    description: >-
+      'intent reconcile' requires --base git-ref and resolves it to a commit SHA
+  - id: intent-reconcile-input-file-or-stdin
+    description: >-
+      --input file.json reads review JSON from a file and --input - reads stdin
+  - id: intent-reconcile-review-shape
+    description: >-
+      Review input contains summary and files; each file entry contains path, intentIds, outcome,
+      and reason; optional unmet entries contain intentId and reason
+  - id: intent-reconcile-exact-snapshot-coverage
+    description: >-
+      Review entries account for exactly every changed tracked or untracked file, with no missing or
+      extra paths
+  - id: intent-reconcile-rejects-partial-staging
+    description: >-
+      Review rejects a file with both staged and unstaged changes
+  - id: intent-reconcile-none-requires-no-ids
+    description: >-
+      Outcome none is valid only when intentIds is empty; all other outcomes require one or more IDs
+  - id: intent-reconcile-outcome-enum
+    description: >-
+      File outcomes are limited to preserved, changed, unmet, or none
+  - id: intent-reconcile-binds-review-to-snapshot
+    description: >-
+      Written review records the resolved base SHA and fingerprint of changed tracked and untracked
+      files, excluding only the exact review file
+  - id: intent-reconcile-writes-review
+    description: >-
+      Reconciliation writes <pack>/review.json
+  - id: intent-reconcile-unmet-fails
+    description: >-
+      Any unmet intent item fails the review gate
+  - id: intent-reconcile-requires-applicable-active-decisions
+    description: >-
+      Each changed file must name every applicable active decision in intentIds or in the unmet
+      list; assumptions and proposals are optional, and outcome none cannot bypass a decision
+  - id: intent-reconcile-review-is-durable
+    description: >-
+      The persisted pack/review.json can be committed with reviewed changes and checked after clone;
+      only that exact review file is excluded from the snapshot
+  - id: intent-reconcile-supports-root-and-pack
+    description: >-
+      --root DIR and --pack DIR select repository root and intent pack locations

@@ -19,3 +19,8 @@ areas:
   - areas/mcp-server.yaml
   - areas/error-handling.yaml
   - areas/auto-discovery.yaml
+  - areas/intent-init.yaml
+  - areas/intent-capture.yaml
+  - areas/intent-context.yaml
+  - areas/intent-reconcile.yaml
+  - areas/intent-check.yaml

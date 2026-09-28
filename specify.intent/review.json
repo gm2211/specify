@@ -1,0 +1,287 @@
+{
+  "version": 1,
+  "base": "66bb562b65b072d1c3f397d59d1229ef79e1e7cd",
+  "fingerprint": "b2b3979510d4a5ea9cea05b2ce9926288a2cb5169a8b667768341dfa723e0f12",
+  "summary": "Deliver the first intent maintenance workflow and pilot it in Specify: sourced decisions, distinct assumptions/proposals, retrieval, focused records, installed agent instructions, and a revision-bound CI completion gate. Existing contract/evidence tooling remains available. Quality gates passed; 144 tests passed with one optional Playwright integration skipped.",
+  "files": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "CI fetches full history and checks the committed review against the PR base on the actual PR head after quality and tests."
+    },
+    {
+      "path": "AGENTS.md",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Integrates retrieval, immediate capture, focused authoring, and honest completion review into instructions agents already read."
+    },
+    {
+      "path": "README.md",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Documents the approved intent workflow with runnable capture and review examples, preserved compatibility, and explicit limits of structural process checks."
+    },
+    {
+      "path": "docs/intent-workflow.md",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Documents the approved intent workflow with runnable capture and review examples, preserved compatibility, and explicit limits of structural process checks."
+    },
+    {
+      "path": "docs/migration-0.3.md",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Documents the approved intent workflow with runnable capture and review examples, preserved compatibility, and explicit limits of structural process checks."
+    },
+    {
+      "path": "package.json",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Updates product description to foreground durable intent and maintained specs; dependency and execution behavior stays unchanged."
+    },
+    {
+      "path": "specify.intent/records/keep-specs-focused.json",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Records this conversation’s approved direction with stable IDs, explicit decision kind, scope, and the approval source."
+    },
+    {
+      "path": "specify.intent/records/preserve-user-intent.json",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Records this conversation’s approved direction with stable IDs, explicit decision kind, scope, and the approval source."
+    },
+    {
+      "path": "specify.intent/records/review-intent-before-completion.json",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Records this conversation’s approved direction with stable IDs, explicit decision kind, scope, and the approval source."
+    },
+    {
+      "path": "specify.spec/areas/intent-capture.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/intent-check.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/intent-context.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/intent-init.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/intent-reconcile.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/mcp-server.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/areas/overview.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "specify.spec/spec.yaml",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Keeps the self-contract aligned with the new supported intent behavior and preserves existing behavior IDs."
+    },
+    {
+      "path": "src/cli/commands-manifest.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Makes the intent lifecycle discoverable and callable from agents and CI; invalid input and unmet or stale review do not report success."
+    },
+    {
+      "path": "src/cli/commands/intent.test.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/cli/commands/intent.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Makes the intent lifecycle discoverable and callable from agents and CI; invalid input and unmet or stale review do not report success."
+    },
+    {
+      "path": "src/cli/index.test.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/cli/index.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Makes the intent lifecycle discoverable and callable from agents and CI; invalid input and unmet or stale review do not report success."
+    },
+    {
+      "path": "src/intent/records.test.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/intent/records.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Implements focused sourced records, deterministic retrieval, safe instruction installation, or content-bound completion review without adding an agent runtime."
+    },
+    {
+      "path": "src/intent/review.test.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/intent/review.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Implements focused sourced records, deterministic retrieval, safe instruction installation, or content-bound completion review without adding an agent runtime."
+    },
+    {
+      "path": "src/intent/workspace.test.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/intent/workspace.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Implements focused sourced records, deterministic retrieval, safe instruction installation, or content-bound completion review without adding an agent runtime."
+    },
+    {
+      "path": "src/mcp/intent-tools.test.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/mcp/intent-tools.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Exposes the same validated intent operations through local stdio MCP while retaining existing contract authoring tools."
+    },
+    {
+      "path": "src/mcp/tools.test.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Regression coverage checks failure boundaries and preserved behavior, including source fidelity, kind separation, stale reviews, scoped decision coverage, and Git checkout portability where applicable."
+    },
+    {
+      "path": "src/mcp/tools.ts",
+      "intentIds": ["preserve-user-intent", "review-intent-before-completion"],
+      "outcome": "changed",
+      "reason": "Exposes the same validated intent operations through local stdio MCP while retaining existing contract authoring tools."
+    },
+    {
+      "path": "src/spec/guide.ts",
+      "intentIds": [
+        "keep-specs-focused",
+        "preserve-user-intent",
+        "review-intent-before-completion"
+      ],
+      "outcome": "changed",
+      "reason": "Integrates retrieval, immediate capture, focused authoring, and honest completion review into instructions agents already read."
+    }
+  ],
+  "unmet": []
+}

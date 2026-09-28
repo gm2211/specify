@@ -13,9 +13,45 @@ const flag = (name: string, description: string): ParameterDefinition => ({
   type: 'boolean',
 });
 const spec = string('--spec', 'Contract file or directory; auto-discovered when omitted');
+const intentLocation = [
+  string('--root', 'Repository root (default current directory)'),
+  string('--pack', 'Tracked intent directory inside root (default specify.intent)'),
+];
+const base = string('--base', 'Task start commit or PR base SHA, an ancestor of HEAD', true);
+const input = string('--input', 'JSON file or - for stdin', true);
 
 /** Public surface: contract tools and caller-owned evidence, without an agent runtime. */
 export const COMMANDS: CommandDefinition[] = [
+  {
+    name: 'intent init',
+    description:
+      'Install intent workflow instructions without replacing existing guidance or hooks',
+    parameters: intentLocation,
+  },
+  {
+    name: 'intent capture',
+    description: 'Record a sourced decision, assumption, or proposal without overwriting history',
+    parameters: [...intentLocation, input],
+  },
+  {
+    name: 'intent context',
+    description: 'Retrieve relevant intent while retaining global decisions',
+    parameters: [
+      ...intentLocation,
+      string('--query', 'Task words'),
+      string('--paths', 'Comma-separated repository-relative files or directory prefixes'),
+    ],
+  },
+  {
+    name: 'intent reconcile',
+    description: 'Record per-file intent review bound to current changes',
+    parameters: [...intentLocation, base, input],
+  },
+  {
+    name: 'intent check',
+    description: 'Gate completion on current intent review and unresolved gaps; not semantic proof',
+    parameters: [...intentLocation, base],
+  },
   {
     name: 'spec lint',
     description: 'Validate contract schema, IDs, composition, and size',

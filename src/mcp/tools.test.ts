@@ -11,10 +11,15 @@ test('MCP exposes only local contract authoring and discovery', async () => {
     },
   } as unknown as McpServer);
   assert.deepEqual([...tools.keys()].sort(), [
+    'capture_intent',
+    'check_intent_review',
     'get_authoring_guide',
+    'get_intent_context',
+    'initialize_intent',
     'lint_spec',
     'list_commands',
     'parse_spec',
+    'reconcile_intent',
     'spec_to_yaml',
   ]);
   const guideResult = await tools.get('get_authoring_guide')!();

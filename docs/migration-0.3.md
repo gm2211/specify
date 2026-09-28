@@ -3,6 +3,10 @@
 Version 0.3 reduces Specify to behavioral contracts, stable IDs, structural linting, deterministic
 context projection, and external results/evidence mapping. This is a breaking scope reduction.
 
+The subsequent [intent workflow](intent-workflow.md) adds tracked decisions, agent instructions,
+context retrieval, and revision-bound completion reviews. It retains the execution boundaries below;
+it does not restore the removed agent runtime or learning system.
+
 ## Retained interfaces
 
 - v2 YAML/JSON contracts, composed directory specs, and `area/behavior` IDs.

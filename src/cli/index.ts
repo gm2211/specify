@@ -13,6 +13,7 @@ import { specGuide } from './commands/spec-guide.js';
 import { schemaCommand } from './commands/schema.js';
 import { prove } from './commands/prove.js';
 import { scriptedVerify } from './commands/scripted-verify.js';
+import { intentCommand } from './commands/intent.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -42,7 +43,7 @@ function parse(args: string[], valueFlags: Set<string>, flags: Set<string>): Map
 }
 
 function help(): void {
-  process.stdout.write('Specify — behavioral contracts and external evidence\n\n');
+  process.stdout.write('Specify — durable intent, maintained specs, and external evidence\n\n');
   for (const command of COMMANDS) {
     process.stdout.write(`  ${command.name.padEnd(15)} ${command.description}\n`);
   }
@@ -97,7 +98,7 @@ async function main(args: string[]): Promise<number> {
     quiet: global.has('--quiet') || global.has('-q'),
   };
   const first = rest.shift();
-  const name = first === 'spec' ? `spec ${rest.shift() ?? ''}` : first;
+  const name = first === 'spec' || first === 'intent' ? `${first} ${rest.shift() ?? ''}` : first;
   const command = COMMANDS.find((entry) => entry.name === name);
   if (!command) {
     throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.3.md`);
@@ -113,6 +114,9 @@ async function main(args: string[]): Promise<number> {
     new Set(command.parameters.filter((p) => p.type === 'boolean').map((p) => p.name)),
   );
   const get = (key: string): string | undefined => options.get(key);
+  if (command.name.startsWith('intent ')) {
+    return intentCommand(command.name, options, ctx);
+  }
   const getSpec = (): string => {
     const result = resolveSpecPath(get('--spec'));
     if (!result.path) {

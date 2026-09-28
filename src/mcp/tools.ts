@@ -13,8 +13,10 @@ import { parseSpec, specToYaml } from '../spec/parser.js';
 import { lintRaw } from '../spec/lint.js';
 import { getAuthoringGuide } from '../spec/guide.js';
 import { COMMANDS } from '../cli/commands-manifest.js';
+import { registerIntentTools } from './intent-tools.js';
 
 export function registerTools(server: McpServer): void {
+  registerIntentTools(server);
   // -------------------------------------------------------------------------
   // get_authoring_guide — Everything an LLM needs to write specs
   // -------------------------------------------------------------------------
