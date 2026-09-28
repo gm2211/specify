@@ -1,0 +1,32 @@
+id: intent-init
+name: Intent Initialization
+prose: >-
+  Initialize a repository intent pack and install managed agent instructions. Intent preserves
+  decisions, assumptions, and proposals without requiring behavioral contracts to change on every
+  commit.
+behaviors:
+  - id: intent-init-default-locations
+    description: >-
+      'intent init' defaults root to cwd and pack to <root>/specify.intent, and creates the pack's
+      records directory
+  - id: intent-init-appends-managed-instructions
+    description: >-
+      Initialization appends a managed intent instruction block to root AGENTS.md while preserving
+      all existing text
+  - id: intent-init-is-idempotent
+    description: >-
+      Repeated initialization does not duplicate managed instructions or overwrite user text
+  - id: intent-init-supports-root-and-pack
+    description: >-
+      --root DIR and --pack DIR select repository root and intent pack locations
+  - id: intent-agent-session-workflow
+    description: >-
+      Managed instructions require agents to retrieve relevant context before editing and reconcile
+      changed files before declaring work complete; they do not require editing specs every commit
+  - id: intent-init-does-not-install-hooks
+    description: >-
+      Initialization does not install Git hooks or modify repository CI configuration
+  - id: intent-preserves-kind-and-authority
+    description: >-
+      Explicit user instructions are decisions, uncertain premises remain assumptions, unapproved
+      options remain proposals, and requirements are not weakened to match implementation

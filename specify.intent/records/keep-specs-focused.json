@@ -1,0 +1,11 @@
+{
+  "id": "keep-specs-focused",
+  "statement": "Keep intent and specs focused, organized, and small enough to inspect. Preserve stable IDs; update existing records instead of accumulating contradictory copies.",
+  "kind": "decision",
+  "source": {
+    "text": "cool, do it",
+    "reference": "2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and completion reconciliation proposal."
+  },
+  "rationale": "Approved proposal called for small navigable specs and focused feature requirements. The first iteration retains area-split contracts and adds bounded individual intent records.",
+  "appliesTo": ["src/spec/", "src/intent/", "specify.spec/", "specify.intent/records/", "docs/"]
+}

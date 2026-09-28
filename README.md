@@ -1,10 +1,11 @@
 # Specify
 
-Behavioral contracts with stable IDs, structural linting, and external test evidence.
+Capture the intent behind changes, retrieve relevant decisions while coding, and check that reviews
+account for those decisions alongside behavioral contracts and external test evidence.
 
-Specify keeps intended behavior explicit and checks whether recorded results cover that contract.
-Your coding agent writes code and tests. Your test runner executes them. Specify does not provide an
-LLM, browser agent, daemon, formal checker, or deployment platform.
+Specify keeps intent records and behavioral contracts explicit. Your coding agent still writes code
+and tests, and your test runner executes them. Specify does not provide an LLM, browser agent,
+daemon, formal checker, or deployment platform.
 
 ## Quick start
 
@@ -13,9 +14,35 @@ Requires Node.js 22 or newer.
 ```bash
 npm ci
 npm run build
-./specify spec guide
-./specify spec lint --spec specify.spec
+./specify intent init
 ```
+
+`intent init` creates `specify.intent/records/` and appends managed agent instructions to the root
+`AGENTS.md`, preserving existing text. Capture a durable decision, then retrieve it while working:
+
+```json
+{
+  "id": "keep-export-format-stable",
+  "statement": "Existing exports remain readable by the current importer.",
+  "kind": "decision",
+  "source": { "text": "Keep existing customer exports importable during the redesign." },
+  "appliesTo": ["src/export/", "src/import/legacy.ts"]
+}
+```
+
+```bash
+./specify intent capture --input intent-record.json
+./specify intent context --paths src/export/writer.ts
+```
+
+Capture once: records are create-only by ID. Keep records in Git with the code they guide. After
+editing, stage the complete change, reconcile every changed file against the pull request base SHA,
+and run the check. Commit `specify.intent/review.json` with the reviewed change so the same review
+survives clone and CI. Initialization does not install hooks; add `intent check` to your CI or hook
+explicitly. See the [intent workflow](docs/intent-workflow.md) for review input and gate details.
+
+Behavioral contracts remain available for stable requirements and external test evidence. To author
+or lint one, run `./specify spec guide` and `./specify spec lint --spec specify.spec`.
 
 Write a contract:
 
@@ -79,8 +106,11 @@ failed.
 
 - `spec split`: split large contracts into one file per area.
 - `spec context`: project contract prose into managed `PRODUCT.md` and `DESIGN.md` documents.
+- `intent init|capture|context|reconcile|check`: preserve decisions, assumptions, and proposals;
+  retrieve relevant intent and check change coverage.
 - `schema spec` / `schema commands`: inspect supported structures and CLI parameters.
-- `mcp`: local stdio tools for contract authoring, parsing, linting, and command discovery.
+- `mcp`: local stdio tools for contract and intent authoring, retrieval, reconciliation, review, and
+  discovery.
 - `verify --mode scripted`: compatibility adapter for existing caller-owned Playwright suites.
 
 The scripted adapter uses the caller's installed `@playwright/test`; it does not install a runner or

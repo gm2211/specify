@@ -182,6 +182,8 @@ hooks:
     },
 
     tips: [
+      'Before authoring or implementing behavior, retrieve applicable decisions with intent context or get_intent_context. Capture durable user direction with exact source wording; keep decisions, assumptions, and proposals distinct.',
+      'Keep one focused intent per record and one feature per contract area. Preserve stable IDs when editing. Reconcile changed files against intent before finishing; never weaken a requirement to match implementation.',
       'Review proposed requirements against intended behavior; existing bugs are not requirements.',
       'Keep behavior IDs stable across edits; coordinate renamed IDs with all external result producers; historical IDs are not rewritten.',
       'Areas and tags organize requirements, not code-change impact or feature dependencies.',

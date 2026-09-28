@@ -1,0 +1,47 @@
+id: intent-check
+name: Intent Review Check
+prose: >-
+  Check intent records and structural lint, discover the current changed-file snapshot, validate
+  review coverage and binding, and report intent gaps against an explicit base.
+behaviors:
+  - id: intent-check-explicit-base
+    description: >-
+      'intent check' requires --base git-ref and resolves it to a commit SHA
+  - id: intent-check-lints-records
+    description: >-
+      Check validates intent record shape, IDs, references, and record-level consistency
+  - id: intent-check-reports-snapshot
+    description: >-
+      Check discovers changed tracked and untracked files and reports their paths and fingerprint,
+      including when review.json is missing so review input can be prepared
+  - id: intent-check-validates-review-binding
+    description: >-
+      Check requires a review bound to the resolved base SHA and current changed-file fingerprint
+  - id: intent-check-validates-complete-coverage
+    description: >-
+      Check rejects missing or extra paths, invalid outcomes or intent references, and none outcomes
+      with intent IDs
+  - id: intent-check-requires-applicable-active-decisions
+    description: >-
+      Every changed file accounts for all applicable active decisions through intentIds or unmet;
+      none outcomes cannot bypass decision coverage, while assumptions and proposals are optional
+  - id: intent-check-unmet-fails
+    description: >-
+      Any top-level unmet item or file outcome unmet makes the check fail
+  - id: intent-check-rejects-partial-staging
+    description: >-
+      Check rejects a changed file that has both staged and unstaged edits
+  - id: intent-check-review-survives-clone
+    description: >-
+      A committed review remains checkable after clone when base SHA, reviewed files, and content
+      fingerprint match
+  - id: intent-check-reports-intent-gaps
+    description: >-
+      Check reports applicable intent records without a corresponding file review outcome
+  - id: intent-check-supports-root-and-pack
+    description: >-
+      --root DIR and --pack DIR select repository root and intent pack locations
+  - id: intent-check-does-not-claim-semantic-proof
+    description: >-
+      A passing check establishes recorded structure and snapshot coverage only; semantic intent
+      satisfaction remains a user or coding-agent judgment

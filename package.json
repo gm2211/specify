@@ -1,7 +1,7 @@
 {
   "name": "specify",
   "version": "0.3.0",
-  "description": "Behavioral contracts, stable IDs, structural linting, and external test evidence",
+  "description": "Durable intent, maintained specs, and revision-bound agent reviews",
   "type": "module",
   "bin": {
     "specify": "dist/src/cli/index.js"

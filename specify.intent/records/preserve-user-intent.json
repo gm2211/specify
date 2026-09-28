@@ -1,0 +1,15 @@
+{
+  "id": "preserve-user-intent",
+  "statement": "Make durable user intent the main workflow: capture explicit decisions with their source, keep assumptions and proposals distinct, and retrieve applicable intent before agent work.",
+  "kind": "decision",
+  "source": {
+    "text": "cool, do it",
+    "reference": "2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and completion reconciliation proposal."
+  },
+  "rationale": "User reported repeatedly telling agents things without knowing whether intent was being tracked. Existing contract and external evidence interfaces remain available.",
+  "appliesTo": [],
+  "behaviorIds": [
+    "intent-capture/intent-capture-preserves-source",
+    "intent-context/intent-context-keeps-kinds-distinct"
+  ]
+}
