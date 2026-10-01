@@ -1,10 +1,7 @@
-/** Stable exit codes for contract and evidence consumers. */
+/** Exit codes for spec authoring and review checks. */
 export const ExitCode = {
   SUCCESS: 0,
-  ASSERTION_FAILURE: 1,
-  ALL_UNTESTED: 2,
+  REVIEW_REQUIRED: 1,
   PARSE_ERROR: 10,
-  TIMEOUT: 12,
-  RUNNER_ERROR: 14,
 } as const;
 export type ExitCodeValue = (typeof ExitCode)[keyof typeof ExitCode];

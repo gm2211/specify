@@ -13,44 +13,21 @@ const flag = (name: string, description: string): ParameterDefinition => ({
   type: 'boolean',
 });
 const spec = string('--spec', 'Contract file or directory; auto-discovered when omitted');
-const intentLocation = [
-  string('--root', 'Repository root (default current directory)'),
-  string('--pack', 'Tracked intent directory inside root (default specify.intent)'),
-];
-const base = string('--base', 'Task start commit or PR base SHA, an ancestor of HEAD', true);
-const input = string('--input', 'JSON file or - for stdin', true);
-
-/** Public surface: contract tools and caller-owned evidence, without an agent runtime. */
+/** Public surface: spec authoring and maintenance, without an agent runtime. */
 export const COMMANDS: CommandDefinition[] = [
   {
-    name: 'intent init',
-    description:
-      'Install intent workflow instructions without replacing existing guidance or hooks',
-    parameters: intentLocation,
+    name: 'spec init',
+    description: 'Install concise agent instructions for an existing spec',
+    parameters: [spec, string('--agents', 'Agent instruction file (default AGENTS.md)')],
   },
   {
-    name: 'intent capture',
-    description: 'Record a sourced decision, assumption, or proposal without overwriting history',
-    parameters: [...intentLocation, input],
-  },
-  {
-    name: 'intent context',
-    description: 'Retrieve relevant intent while retaining global decisions',
+    name: 'spec check',
+    description: 'Lint specs and require a spec change or explicit unchanged reason',
     parameters: [
-      ...intentLocation,
-      string('--query', 'Task words'),
-      string('--paths', 'Comma-separated repository-relative files or directory prefixes'),
+      spec,
+      string('--base', 'Git base commit for this change', true),
+      string('--reason', 'Why this change preserves existing intent'),
     ],
-  },
-  {
-    name: 'intent reconcile',
-    description: 'Record per-file intent review bound to current changes',
-    parameters: [...intentLocation, base, input],
-  },
-  {
-    name: 'intent check',
-    description: 'Gate completion on current intent review and unresolved gaps; not semantic proof',
-    parameters: [...intentLocation, base],
   },
   {
     name: 'spec lint',
@@ -86,29 +63,6 @@ export const COMMANDS: CommandDefinition[] = [
     name: 'schema',
     description: 'Print spec or commands schema',
     parameters: [string('target', 'spec or commands', true)],
-  },
-  {
-    name: 'verify',
-    description:
-      'Check external results against every contract ID; scripted mode runs a caller-owned suite',
-    parameters: [
-      spec,
-      string('--report', 'External JSON results file'),
-      string('--mode', 'results (default) or scripted'),
-      string('--output', 'Scripted suite directory (default .specify/verify)'),
-      string('--timeout', 'Scripted suite timeout in milliseconds'),
-    ],
-  },
-  {
-    name: 'prove',
-    description:
-      'Render recorded results as self-contained HTML; rendering success is not verification success',
-    parameters: [
-      spec,
-      string('--input', 'Directory containing verify-result.json'),
-      string('--output', 'HTML destination'),
-      string('--max-screenshot-bytes', 'Maximum embedded screenshot bytes'),
-    ],
   },
   { name: 'mcp', description: 'Serve contract authoring tools over local stdio', parameters: [] },
 ];

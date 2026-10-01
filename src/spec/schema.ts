@@ -176,6 +176,26 @@ export const specSchema = {
         },
         description: { type: 'string', description: 'The behavioral claim — what should be true.' },
         details: { type: 'string', description: 'Additional context, edge cases.' },
+        source: {
+          type: 'object',
+          required: ['text'],
+          additionalProperties: false,
+          description: 'Exact wording that motivated this requirement, when available.',
+          properties: {
+            text: {
+              type: 'string',
+              minLength: 1,
+              pattern: '\\S',
+              description: 'Original user wording; preserve exactly and never paraphrase.',
+            },
+            reference: {
+              type: 'string',
+              minLength: 1,
+              pattern: '\\S',
+              description: 'Optional source location or conversation reference.',
+            },
+          },
+        },
         tags: {
           type: 'array',
           items: { type: 'string' },

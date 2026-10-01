@@ -116,6 +116,17 @@ export function getAuthoringGuide(): AuthoringGuide {
         description: Items in the cart survive a page reload`,
       },
       {
+        name: 'Behavior with source wording',
+        description:
+          'Keep canonical intent in the behavior and preserve original wording as optional source metadata.',
+        yaml_snippet: `behaviors:
+  - id: search-stays-local
+    description: Search terms remain in the browser and are never sent to a server
+    source:
+      text: "Please keep search terms in this browser."
+      reference: "product discussion, 2026-10-01"`,
+      },
+      {
         name: 'Behavior with tags',
         description:
           'Use kebab-case IDs. Behaviors describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
@@ -182,10 +193,12 @@ hooks:
     },
 
     tips: [
-      'Before authoring or implementing behavior, retrieve applicable decisions with intent context or get_intent_context. Capture durable user direction with exact source wording; keep decisions, assumptions, and proposals distinct.',
-      'Keep one focused intent per record and one feature per contract area. Preserve stable IDs when editing. Reconcile changed files against intent before finishing; never weaken a requirement to match implementation.',
-      'Review proposed requirements against intended behavior; existing bugs are not requirements.',
-      'Keep behavior IDs stable across edits; coordinate renamed IDs with all external result producers; historical IDs are not rewritten.',
+      'Read existing specs and repository instructions before changing behavior. Keep one focused feature in each area and preserve stable IDs.',
+      'Record explicit user decisions in the relevant behavior description, details, or area prose, including decisions made in conversation without code changes. Keep uncertainty and proposals clearly labeled in prose.',
+      'When available, add behavior.source.text with the exact wording that motivated the requirement and source.reference with a useful location. Never paraphrase quoted wording or invent a source.',
+      'Never rewrite a requirement to match buggy or incomplete code. Keep the intended behavior and describe implementation gaps honestly.',
+      'Keep behavior IDs stable across edits; rename only when behavior itself changes, and update references in specs and tests.',
+      'Large directory area fragments get advisory size warnings; keep area requirements readable and preserve behavior IDs instead of splitting one area across duplicate IDs.',
       'Areas and tags organize requirements, not code-change impact or feature dependencies.',
       'Start with the minimal spec (version + name + target + one area) and build up incrementally.',
       'Use "specify spec lint" to validate structure before external tests or review.',
@@ -196,8 +209,8 @@ hooks:
       'Use the "description" field liberally — it helps both humans and LLMs understand intent.',
       'Add assumptions to prevent false failures (e.g., assert the target URL is reachable first).',
       'Template variables keep specs portable — use ${ENV_VAR} for environment-specific values.',
-      'Draft contracts with your preferred editor or coding agent; Specify validates structure and maps external results.',
-      'Write descriptions as if briefing an agent: clear enough that an agent can read the requirement, make a plan to validate it, and provide structured evidence without needing to ask for clarification.',
+      'Draft contracts with your preferred editor or coding agent; Specify validates structure while people and external tools own implementation and testing.',
+      'Write descriptions as if briefing an agent: clear enough to guide implementation and external testing without needing to ask for clarification.',
     ],
   };
 }

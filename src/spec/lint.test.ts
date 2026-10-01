@@ -250,7 +250,7 @@ test('lintPath fails when a single-file spec is past the hard size limit', () =>
   }
 });
 
-test('lintPath does not warn about aggregate size for directory specs', () => {
+test('lintPath warns when one area fragment exceeds the advisory size threshold', () => {
   const { dir, cleanup } = tmpDir();
   try {
     writeFile(
@@ -277,7 +277,93 @@ test('lintPath does not warn about aggregate size for directory specs', () => {
     const result = lintPath(dir);
 
     assert.equal(result.valid, true);
-    assert.ok(!result.errors.some((error) => error.rule === 'oversized-single-file-spec'));
+    assert.ok(
+      result.errors.some(
+        (error) =>
+          error.rule === 'oversized-area-fragment' &&
+          error.severity === 'warning' &&
+          error.message.includes('121 behaviors exceeds 120'),
+      ),
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath keeps an oversized area fragment advisory even past the hard threshold', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    writeFile(
+      path.join(dir, 'spec.yaml'),
+      [
+        'version: "2"',
+        'name: Directory Spec',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - areas/huge.yaml',
+        '',
+      ].join('\n'),
+    );
+    const behaviors = Array.from({ length: 241 }, (_, i) =>
+      [`  - id: behavior-${i}`, `    description: Behavior ${i} works`].join('\n'),
+    ).join('\n');
+    writeFile(
+      path.join(dir, 'areas', 'huge.yaml'),
+      ['id: huge', 'name: Huge', 'behaviors:', behaviors, ''].join('\n'),
+    );
+
+    const result = lintPath(dir);
+
+    assert.equal(result.valid, true);
+    assert.ok(
+      result.errors.some(
+        (error) =>
+          error.rule === 'oversized-area-fragment' &&
+          error.severity === 'warning' &&
+          error.message.includes('241 behaviors exceeds 240'),
+      ),
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('lintPath ignores aggregate size when each directory fragment stays focused', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    writeFile(
+      path.join(dir, 'spec.yaml'),
+      [
+        'version: "2"',
+        'name: Directory Spec',
+        'target:',
+        '  type: web',
+        '  url: http://localhost:3000',
+        'areas:',
+        '  - areas/first.yaml',
+        '  - areas/second.yaml',
+        '',
+      ].join('\n'),
+    );
+    for (const [file, id] of [
+      ['first.yaml', 'first'],
+      ['second.yaml', 'second'],
+    ]) {
+      const behaviors = Array.from({ length: 61 }, (_, i) =>
+        [`  - id: ${id}-behavior-${i}`, `    description: Behavior ${i} works`].join('\n'),
+      ).join('\n');
+      writeFile(
+        path.join(dir, 'areas', file),
+        [`id: ${id}`, `name: ${id}`, 'behaviors:', behaviors, ''].join('\n'),
+      );
+    }
+
+    const result = lintPath(dir);
+
+    assert.equal(result.valid, true);
+    assert.deepEqual(result.errors, []);
   } finally {
     cleanup();
   }

@@ -5,8 +5,8 @@
 #
 #   ./specify --help
 #   ./specify spec lint --spec spec.yaml
-#   ./specify verify --spec spec.yaml --report results.json
-#   ./specify prove --spec spec.yaml --input run/
+#   ./specify spec check --spec spec.yaml --base origin/main
+#   ./specify spec init --spec spec.yaml
 
 set -euo pipefail
 

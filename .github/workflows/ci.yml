@@ -20,8 +20,13 @@ jobs:
       - run: npm ci
       - run: npm run quality
       - run: npm test
-      - name: Check intent review against PR base
+      - name: Check spec review against PR base
         if: github.event_name == 'pull_request'
         env:
-          INTENT_BASE: ${{ github.event.pull_request.base.sha }}
-        run: node dist/src/cli/index.js intent check --base "$INTENT_BASE"
+          SPEC_BASE: ${{ github.event.pull_request.base.sha }}
+          SPEC_PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          reason=$(printf '%s\n' "$SPEC_PR_BODY" | sed -n 's/^Spec review: //p' | head -n 1)
+          args=()
+          if [ -n "$reason" ]; then args=(--reason "$reason"); fi
+          node dist/src/cli/index.js spec check --spec specify.spec --base "$SPEC_BASE" "${args[@]}"

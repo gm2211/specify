@@ -1,0 +1,61 @@
+id: product-direction
+name: Product Direction
+prose: >-
+  This area records Specify's own product decisions. Existing local IDs, exact source wording, and
+  rationale are retained from earlier direction; superseded workflow promises are labeled as such.
+behaviors:
+  - id: keep-specs-focused
+    description: >-
+      Keep intent and specs focused, organized, and small enough to inspect. Preserve stable IDs;
+      update existing records instead of accumulating contradictory copies.
+    details: >-
+      Historical rationale: Approved proposal called for small navigable specs and focused feature
+      requirements. The first iteration retains area-split contracts and adds bounded individual
+      intent records. The record-ledger portion is superseded by single-spec-authority.
+    source:
+      text: cool, do it
+      reference:
+        '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
+        completion reconciliation proposal.'
+  - id: preserve-user-intent
+    description: >-
+      Make durable user intent the main workflow: capture explicit decisions with their source, keep
+      assumptions and proposals distinct, and retrieve applicable intent before agent work.
+    details: >-
+      Historical rationale (superseded): User reported repeatedly telling agents things without
+      knowing whether intent was being tracked. Existing contract and external evidence interfaces
+      remain available. The separate ledger and its capture and retrieval commands are superseded by
+      single-spec-authority; preserve this behavior as product history, not as a current command
+      promise.
+    source:
+      text: cool, do it
+      reference:
+        '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
+        completion reconciliation proposal.'
+  - id: review-intent-before-completion
+    description: >-
+      Require agents to account for intent before finishing changes, bind reviews to the actual
+      changed content, and expose unmet requirements without rewriting intent to match
+      implementation.
+    details: >-
+      Historical rationale (superseded): Approved proposal requires changed, preserved, and unmet
+      intent to be visible. Deterministic checks establish recorded process; semantic fidelity and
+      test execution need separate review and evidence. Its separate completion-review and evidence
+      layer is superseded by single-spec-authority.
+    source:
+      text: cool, do it
+      reference:
+        '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
+        completion reconciliation proposal.'
+  - id: single-spec-authority
+    description: >-
+      Keep product direction in the behavioral spec. Remove the separate intent ledger, its capture,
+      retrieval, and reconciliation commands and MCP tools, and the completion-evidence layer.
+    details: >-
+      Supersedes preserve-user-intent and review-intent-before-completion as command and workflow
+      promises. Existing external intent packs and evidence files remain untouched.
+    source:
+      text: ok so? do the thing
+      reference:
+        '2026-10-01 approval of the pruning proposal; supersedes the earlier intent-ledger and
+        completion-review direction'

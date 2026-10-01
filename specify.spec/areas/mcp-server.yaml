@@ -1,7 +1,7 @@
 id: mcp-server
 name: MCP Server
 prose: >-
-  Local stdio contract and intent tools. No HTTP listener, event stream, daemon client, or model
+  Five local stdio contract-authoring tools. No HTTP listener, event stream, daemon client, or model
   credentials.
 behaviors:
   - id: mcp-starts-stdio
@@ -14,7 +14,3 @@ behaviors:
   - id: mcp-exposes-discovery-tool
     description: |
       Exposes list_commands, returning the same command manifest as 'specify schema commands'
-  - id: mcp-exposes-intent-tools
-    description: >-
-      Exposes initialize_intent, capture_intent, get_intent_context, reconcile_intent, and
-      check_intent_review as wrappers over the same intent operations and validation as the CLI

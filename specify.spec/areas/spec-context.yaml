@@ -2,14 +2,15 @@ id: spec-context
 name: Product/Design Context Generation
 prose: >
   `spec context` regenerates PRODUCT.md and DESIGN.md directly from the composed spec — a
-  deterministic projection, no LLM call, so the spec's own area prose and behavior descriptions ARE
-  the content. Every generated claim carries an inline `[area/behavior]` anchor back to its source.
-  DESIGN.md additionally separates spec-derived product constraints (behaviors tagged
-  design/ui/ux/visual/accessibility/a11y/style/layout/branding/theme) from an optional pass that
-  extracts real visual tokens from code (tokens.json/design-tokens.json, CSS custom properties) —
-  nothing is ever invented to fill either section. Regeneration is non-destructive: content stays
-  inside `<!-- specify:begin/end -->` managed-region markers so hand edits outside them survive
-  every run, and a target file that predates the markers is never silently overwritten.
+  deterministic projection, no LLM call. Content comes from the spec's area prose, behavior
+  descriptions, and optional source wording and references. Every generated claim carries an inline
+  `[area/behavior]` anchor back to its source. DESIGN.md additionally separates spec-derived product
+  constraints (behaviors tagged design/ui/ux/visual/accessibility/a11y/style/layout/branding/theme)
+  from an optional pass that extracts real visual tokens from code (tokens.json/design-tokens.json,
+  CSS custom properties) — nothing is ever invented to fill either section. Regeneration is
+  non-destructive: content stays inside `<!-- specify:begin/end -->` managed-region markers so hand
+  edits outside them survive every run, and a target file that predates the markers is never
+  silently overwritten.
 behaviors:
   - id: context-projects-every-area-and-behavior-into-product-md
     description: >
@@ -44,7 +45,8 @@ behaviors:
       --out-dir, --product, and --design control where PRODUCT.md and DESIGN.md are written
   - id: context-auto-discovers-spec
     description: |
-      Without --spec, auto-discovers the spec file or spec directory from cwd, same as spec lint and verify
+      Without --spec, auto-discovers the spec file or spec directory from cwd, same as spec lint
+      and spec split
   - id: context-json-emits-structured-projection
     description: >
       In JSON output mode, emits the structured product/design projection (areas, claims, anchors,
