@@ -1,7 +1,6 @@
 #!/usr/bin/env node
-import { readFileSync } from 'node:fs';
 import { COMMANDS } from './commands-manifest.js';
-import { detectOutputFormat, writeOutput } from './output.js';
+import { detectOutputFormat } from './output.js';
 import { resolveSpecPath } from './spec-finder.js';
 import { ExitCode } from './exit-codes.js';
 import type { CliContext, OutputFormat } from './types.js';
@@ -11,9 +10,9 @@ import { specSplit } from './commands/spec-split.js';
 import { specContext } from './commands/spec-context.js';
 import { specGuide } from './commands/spec-guide.js';
 import { schemaCommand } from './commands/schema.js';
-import { prove } from './commands/prove.js';
-import { scriptedVerify } from './commands/scripted-verify.js';
-import { intentCommand } from './commands/intent.js';
+import { version } from '../version.js';
+import { specInit } from './commands/spec-init.js';
+import { specCheck } from './commands/spec-check.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -43,19 +42,18 @@ function parse(args: string[], valueFlags: Set<string>, flags: Set<string>): Map
 }
 
 function help(): void {
-  process.stdout.write('Specify — durable intent, maintained specs, and external evidence\n\n');
+  process.stdout.write('Specify — maintained specs for coding agents\n\n');
   for (const command of COMMANDS) {
     process.stdout.write(`  ${command.name.padEnd(15)} ${command.description}\n`);
   }
   process.stdout.write(
-    '\nGlobal options: --format json|text|markdown|ndjson, --fields paths, --quiet\nUse schema commands for command parameters. Migration: docs/migration-0.3.md\n',
+    '\nGlobal options: --format json|text|markdown|ndjson, --fields paths, --quiet\nUse schema commands for command parameters. Migration: docs/migration-0.4.md\n',
   );
 }
 
 async function main(args: string[]): Promise<number> {
   if (args.includes('--version') || args.includes('-V')) {
-    const { readGeneratorVersion } = await import('../report/proof-loader.js');
-    process.stdout.write(readGeneratorVersion() + '\n');
+    process.stdout.write(version + '\n');
     return 0;
   }
   if (args.length === 0) {
@@ -98,10 +96,10 @@ async function main(args: string[]): Promise<number> {
     quiet: global.has('--quiet') || global.has('-q'),
   };
   const first = rest.shift();
-  const name = first === 'spec' || first === 'intent' ? `${first} ${rest.shift() ?? ''}` : first;
+  const name = first === 'spec' ? `${first} ${rest.shift() ?? ''}` : first;
   const command = COMMANDS.find((entry) => entry.name === name);
   if (!command) {
-    throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.3.md`);
+    throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.4.md`);
   }
   const target = name === 'schema' ? (rest.shift() ?? '') : '';
   const options = parse(
@@ -114,9 +112,6 @@ async function main(args: string[]): Promise<number> {
     new Set(command.parameters.filter((p) => p.type === 'boolean').map((p) => p.name)),
   );
   const get = (key: string): string | undefined => options.get(key);
-  if (command.name.startsWith('intent ')) {
-    return intentCommand(command.name, options, ctx);
-  }
   const getSpec = (): string => {
     const result = resolveSpecPath(get('--spec'));
     if (!result.path) {
@@ -128,6 +123,13 @@ async function main(args: string[]): Promise<number> {
     return result.path;
   };
   switch (command.name) {
+    case 'spec init':
+      return specInit({ spec: getSpec(), agents: get('--agents') }, ctx);
+    case 'spec check':
+      if (!get('--base')) {
+        throw new Error('Missing --base: use the task start commit or PR base SHA');
+      }
+      return specCheck({ spec: getSpec(), base: get('--base')!, reason: get('--reason') }, ctx);
     case 'spec lint':
       return specLint({ spec: get('--spec') === '-' ? '-' : getSpec() }, ctx);
     case 'spec split':
@@ -150,62 +152,12 @@ async function main(args: string[]): Promise<number> {
       return specGuide(ctx);
     case 'schema':
       return schemaCommand(target, ctx);
-    case 'prove':
-      return prove(
-        {
-          spec: get('--spec') ?? resolveSpecPath(undefined).path ?? '',
-          input: get('--input'),
-          output: get('--output'),
-          maxScreenshotBytes: get('--max-screenshot-bytes'),
-        },
-        ctx,
-      );
     case 'mcp':
       {
         const { startMcpServer } = await import('../mcp/server.js');
         await startMcpServer();
       }
       return 0;
-    case 'verify': {
-      const mode = get('--mode') ?? 'results';
-      if (mode === 'scripted') {
-        if (get('--report')) {
-          throw new Error('--report is only supported in results mode');
-        }
-        const timeoutMs = get('--timeout') === undefined ? undefined : Number(get('--timeout'));
-        if (timeoutMs !== undefined && (!Number.isFinite(timeoutMs) || timeoutMs <= 0)) {
-          throw new Error('--timeout must be positive milliseconds');
-        }
-        return scriptedVerify({ spec: getSpec(), output: get('--output'), timeoutMs }, ctx);
-      }
-      if (mode !== 'results') {
-        throw new Error(
-          `Verification mode ${mode} removed. Run your own tests, then use verify --report results.json.`,
-        );
-      }
-      if (get('--output') || get('--timeout')) {
-        throw new Error('--output and --timeout require --mode scripted');
-      }
-      if (!get('--report')) {
-        throw new Error(
-          'Missing --report. Specify checks external results; it no longer runs a QA agent.',
-        );
-      }
-      const { loadSpec } = await import('../spec/parser.js');
-      const { validateExternalResults } = await import('../results/external-results.js');
-      const result = validateExternalResults(
-        loadSpec(getSpec()),
-        JSON.parse(readFileSync(get('--report')!, 'utf8')),
-      );
-      writeOutput(result, ctx);
-      if (!result.valid) {
-        return ExitCode.PARSE_ERROR;
-      }
-      if (result.summary.failed > 0) {
-        return ExitCode.ASSERTION_FAILURE;
-      }
-      return result.report.pass ? ExitCode.SUCCESS : ExitCode.ALL_UNTESTED;
-    }
     default:
       throw new Error(`Unknown command: ${name}`);
   }

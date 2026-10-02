@@ -1,8 +1,8 @@
 id: spec-lint
 name: Spec Linting
 prose: >
-  Validates spec file structure without requiring captures. Schema validation plus semantic checks
-  (duplicate IDs, empty descriptions, oversized single files).
+  Validates spec file structure. Schema validation plus semantic checks (duplicate IDs, empty
+  descriptions, oversized single files).
 behaviors:
   - id: lint-valid-spec-exits-zero
     description: |
@@ -20,10 +20,10 @@ behaviors:
     description: >-
       Single-file contracts above 40 KiB, 800 lines, 12 areas, or 120 behaviors warn; above 80 KiB,
       1600 lines, 24 areas, or 240 behaviors fail lint and recommend splitting.
-  - id: lint-directory-spec-no-size-warning
+  - id: lint-directory-fragment-size-warning-is-advisory
     description: >
-      A directory spec (manifest + area files) never triggers the oversized-single-file-spec
-      warning, regardless of its total size
+      Directory spec source fragments may trigger advisory size warnings regardless of thresholds;
+      fragment warnings never fail lint and aggregate directory size does not trigger a warning
   - id: lint-ignores-legacy-sidecars
     description: >-
       Lint validates the contract only. It neither evaluates nor mutates adjacent formula,

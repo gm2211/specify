@@ -1,0 +1,27 @@
+id: spec-init
+name: Spec Workflow Initialization
+prose: >-
+  Install concise managed agent instructions that identify the selected spec as product authority.
+behaviors:
+  - id: spec-init-selects-spec
+    description: >-
+      'spec init' selects a spec with --spec PATH or auto-discovers one using the normal spec
+      discovery rules
+  - id: spec-init-default-agents-path
+    description: >-
+      Without --agents, initialization manages AGENTS.md in the current working directory
+  - id: spec-init-agents-override
+    description: >-
+      --agents PATH selects the instructions file to update
+  - id: spec-init-preserves-surrounding-text
+    description: >-
+      Initialization adds or updates only its managed instruction region and preserves all text
+      outside that region
+  - id: spec-init-idempotent
+    description: >-
+      Repeated initialization updates the same managed region without duplicating it
+  - id: spec-init-guides-spec-authority
+    description: >-
+      Managed instructions direct agents to preserve user wording in behavior source metadata,
+      distinguish proposals and assumptions from accepted decisions, and maintain stable IDs in the
+      selected spec

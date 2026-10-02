@@ -27,7 +27,7 @@
  * simply omitted, never backfilled with invented text.
  */
 
-import type { Spec, Area } from './types.js';
+import type { BehaviorSource, Spec, Area } from './types.js';
 import type { DesignTokenExtraction } from './design-tokens.js';
 
 // ---------------------------------------------------------------------------
@@ -39,6 +39,8 @@ export interface ProductClaim {
   text: string;
   /** Fully-qualified source id: "area-id" (prose) or "area-id/behavior-id" (behavior). */
   anchor: string;
+  /** Exact source wording retained from the behavior, when available. */
+  source?: BehaviorSource;
 }
 
 export interface ProductAreaSection {
@@ -117,6 +119,7 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
     behaviorClaims: behaviors.map((b) => ({
       text: b.description.trim(),
       anchor: `${area.id}/${b.id}`,
+      ...(b.source ? { source: b.source } : {}),
     })),
   };
 }
@@ -126,7 +129,12 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
 // ---------------------------------------------------------------------------
 
 function claimLine(claim: ProductClaim, prefix: string): string {
-  return `${prefix}${claim.text} [${claim.anchor}]`;
+  const line = `${prefix}${claim.text} [${claim.anchor}]`;
+  if (!claim.source) return line;
+  const reference = claim.source.reference
+    ? `\n  - Source reference: ${JSON.stringify(claim.source.reference)}`
+    : '';
+  return `${line}\n  - Source wording: ${JSON.stringify(claim.source.text)}${reference}`;
 }
 
 /** Render PRODUCT.md's managed-region body (the content between the markers, not the surrounding file). */

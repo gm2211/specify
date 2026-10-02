@@ -1,28 +1,15 @@
 id: error-handling
 name: Error Handling & Exit Codes
 prose: >-
-  Stable exit codes distinguish successful processing, failed assertions, missing coverage, and
-  invalid input. Removed runtime options fail explicitly.
+  Invalid input and unsupported commands fail explicitly with stable exit codes.
 behaviors:
+  - id: exit-code-one-review-required
+    description: Exit 1 means repository changes require an explicit reason for unchanged specs.
   - id: exit-code-zero-success
-    description: >-
-      Exit 0 means success for the invoked operation; prove rendering and scripted selected-suite
-      success do not imply whole-contract verification.
-  - id: exit-code-one-assertion-failure
-    description: Exit 1 = behavioral verification failed
-  - id: exit-code-two-all-untested
-    description: >-
-      Exit 2 means results-mode missing/skipped coverage or scripted mode with no matched behavior
-      tests.
+    description: Exit 0 means the invoked authoring or validation operation succeeded.
   - id: exit-code-ten-parse-error
     description: Exit 10 = argument parsing, file not found, or invalid YAML
-  - id: exit-code-twelve-timeout
-    description: Exit 12 indicates the caller-owned scripted suite exceeded its timeout.
   - id: invalid-options-fail
     description: >-
       Unknown options, repeated options, missing option values, and invalid output formats fail with
       exit 10 rather than being silently ignored.
-  - id: exit-code-fourteen-runner-error
-    description:
-      Exit 14 indicates a caller-owned scripted runner failure, such as missing tools or invalid
-      reporter output.

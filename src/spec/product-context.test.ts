@@ -24,6 +24,10 @@ function fixtureSpec(): Spec {
           {
             id: 'capture-agent-generates-spec',
             description: 'The capture agent generates a spec from observed behavior.',
+            source: {
+              text: 'Keep these words exact.\nSecond line remains.  ',
+              reference: 'conversation:turn-4',
+            },
           },
           {
             id: 'capture-writes-output',
@@ -69,6 +73,10 @@ test('buildProductContext includes every area and behavior, verbatim, with fully
   );
   assert.ok(genSpec);
   assert.equal(genSpec!.text, 'The capture agent generates a spec from observed behavior.');
+  assert.deepEqual(genSpec!.source, {
+    text: 'Keep these words exact.\nSecond line remains.  ',
+    reference: 'conversation:turn-4',
+  });
 
   const noProse = ctx.areas.find((a) => a.areaId === 'no-prose-area')!;
   assert.equal(noProse.proseClaim, undefined);
@@ -80,6 +88,12 @@ test('renderProductMarkdown emits inline [area/behavior] anchors and never fabri
 
   assert.match(md, /\[capture\/capture-agent-generates-spec\]/);
   assert.match(md, /Capture drives a live browser to record behavior\. \[capture\]/);
+  assert.ok(
+    md.includes(
+      `Source wording: ${JSON.stringify('Keep these words exact.\nSecond line remains.  ')}`,
+    ),
+  );
+  assert.ok(md.includes(`Source reference: ${JSON.stringify('conversation:turn-4')}`));
   assert.match(md, /## No Prose Area/);
   // No-prose area has a heading but no invented body text before the next heading.
   const noProseSection = md.split('## No Prose Area')[1].split('## ')[0];

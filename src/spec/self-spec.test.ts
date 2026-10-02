@@ -69,6 +69,13 @@ test('repo spec covers every supported command and no removed command area', () 
     assert.ok(commandAreas.has(area), `Missing contract area for ${command.name}`);
   }
   for (const removed of [
+    'intent-capture',
+    'intent-init',
+    'intent-check',
+    'intent-context',
+    'intent-reconcile',
+    'verify',
+    'prove',
     'capture',
     'create',
     'human-mode',
@@ -83,12 +90,7 @@ test('repo spec covers every supported command and no removed command area', () 
   const ids = new Set(
     spec.areas.flatMap((area) => area.behaviors.map((behavior) => `${area.id}/${behavior.id}`)),
   );
-  for (const id of [
-    'verify/results-reject-invalid-identity',
-    'verify/results-incomplete-never-pass',
-    'verify/scripted-suite-pass-is-not-contract-pass',
-    'spec-lint/lint-ignores-legacy-sidecars',
-  ]) {
+  for (const id of ['spec-lint/lint-ignores-legacy-sidecars']) {
     assert.ok(ids.has(id), `Missing scope-reduction contract: ${id}`);
   }
 });

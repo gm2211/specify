@@ -1,8 +1,7 @@
 id: overview
 name: Overview & Help
 prose: >-
-  Discover the supported intent, contract, and evidence commands through JSON introspection or
-  human-readable help.
+  Discover contract-authoring commands through JSON introspection or human-readable help.
 behaviors:
   - id: no-args-returns-json-manifest
     description: >-

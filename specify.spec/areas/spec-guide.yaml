@@ -1,6 +1,10 @@
 id: spec-guide
 name: Spec Authoring Guide
 behaviors:
+  - id: guide-documents-behavior-source
+    description: >-
+      The guide explains optional behavior source.text and source.reference fields for preserving
+      exact user wording and its reference
   - id: guide-outputs-json
     description: |
       Outputs JSON guide with schema, examples, patterns, and tips

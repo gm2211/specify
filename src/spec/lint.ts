@@ -23,6 +23,7 @@ import {
   loadSpecWithProvenance,
   SpecCompositionError,
   SpecValidationError,
+  type SpecProvenance,
   type SpecSourceIssue,
 } from './parser.js';
 import { assessSpecSize, splitSuggestion } from './size-guard.js';
@@ -130,6 +131,8 @@ export function lintPath(specPath: string): LintResult {
     if (provenance.kind === 'file') {
       const content = fs.readFileSync(specPath, 'utf-8');
       errors.push(...lintSingleFileSize(content, spec, specPath));
+    } else {
+      errors.push(...lintAreaFragmentSizes(spec, provenance));
     }
     const hasErrors = errors.some((e) => e.severity === 'error');
     return { valid: !hasErrors, errors };
@@ -161,6 +164,25 @@ export function lintPath(specPath: string): LintResult {
       ],
     };
   }
+}
+
+function lintAreaFragmentSizes(spec: Spec, provenance: SpecProvenance): LintError[] {
+  const sources = [...new Set(Object.values(provenance.areaSources))];
+  return sources.flatMap((sourcePath) => {
+    const areas = spec.areas.filter((area) => provenance.areaSources[area.id] === sourcePath);
+    if (areas.length === 0) return [];
+    const content = fs.readFileSync(sourcePath, 'utf-8');
+    const assessment = assessSpecSize(content, { ...spec, areas });
+    if (!assessment.overLimit) return [];
+    return [
+      {
+        path: sourcePath,
+        severity: 'warning' as const,
+        message: `Area fragment exceeds recommended review size (${(assessment.overHardLimit ? assessment.hardReasons : assessment.reasons).join('; ')}). This directory-spec finding is advisory; keep behavior IDs stable.`,
+        rule: 'oversized-area-fragment',
+      },
+    ];
+  });
 }
 
 function sourceIssueToLintError(issue: SpecSourceIssue): LintError {

@@ -7,10 +7,12 @@ import * as path from 'node:path';
 import {
   loadSpec,
   loadSpecWithProvenance,
+  parseSpec,
   SpecCompositionError,
   specToYaml,
   writeSpec,
 } from './parser.js';
+import { splitSpecFileToDirectory } from './size-guard.js';
 
 function tmpDir(): { dir: string; cleanup: () => void } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'specify-spec-dir-'));
@@ -69,6 +71,85 @@ test('loadSpec composes a directory manifest with explicit area order', () => {
   } finally {
     cleanup();
   }
+});
+
+test('behavior source wording survives parse, YAML serialization, and directory split', () => {
+  const { dir, cleanup } = tmpDir();
+  try {
+    const sourceText = 'Please keep this phrase exactly.\nSecond line stays.  ';
+    const spec = {
+      version: '2' as const,
+      name: 'Sourced requirement',
+      target: { type: 'web' as const, url: 'http://localhost:3000' },
+      areas: [
+        {
+          id: 'account',
+          name: 'Account',
+          behaviors: [
+            {
+              id: 'keeps-source',
+              description: 'Account change remains explicit.',
+              source: { text: sourceText, reference: 'conversation:turn-12' },
+            },
+          ],
+        },
+      ],
+    };
+    const specPath = path.join(dir, 'source.spec.yaml');
+    writeFile(specPath, specToYaml(spec));
+
+    assert.equal(loadSpec(specPath).areas[0].behaviors[0].source?.text, sourceText);
+    const split = splitSpecFileToDirectory(specPath, { outputDir: path.join(dir, 'split') });
+    assert.equal(
+      loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].source?.text,
+      sourceText,
+    );
+    assert.equal(
+      loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].source?.reference,
+      'conversation:turn-12',
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('behavior source requires nonblank text and reference when supplied', () => {
+  const base = {
+    version: '2',
+    name: 'Sourced requirement',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      {
+        id: 'account',
+        name: 'Account',
+        behaviors: [
+          {
+            id: 'keeps-source',
+            description: 'Account change remains explicit.',
+            source: { text: '  ', reference: 'conversation:turn-4' },
+          },
+        ],
+      },
+    ],
+  };
+  assert.throws(() => parseSpec(JSON.stringify(base)), /source\/text/);
+  assert.throws(
+    () =>
+      parseSpec(
+        JSON.stringify({
+          ...base,
+          areas: [
+            {
+              ...base.areas[0],
+              behaviors: [
+                { ...base.areas[0].behaviors[0], source: { text: 'A phrase', reference: '  ' } },
+              ],
+            },
+          ],
+        }),
+      ),
+    /source\/reference/,
+  );
 });
 
 test('loadSpec composes areas directory in stable sorted order when manifest omits areas', () => {

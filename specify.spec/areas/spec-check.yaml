@@ -1,0 +1,26 @@
+id: spec-check
+name: Spec Change Check
+prose: >-
+  Lint the selected spec and ensure repository changes either update the authoritative spec or carry
+  an explicit reason for leaving it unchanged.
+behaviors:
+  - id: spec-check-selects-spec-and-requires-base
+    description: >-
+      'spec check' selects a spec with --spec PATH or auto-discovers one, and requires --base REF
+  - id: spec-check-lints-selected-spec
+    description: >-
+      Check lints the selected file or composed spec directory and fails when lint fails
+  - id: spec-check-requires-ancestor-base
+    description: >-
+      --base must resolve to an ancestor commit of the current HEAD
+  - id: spec-check-accepts-spec-change
+    description: >-
+      A repository change that includes the selected spec source satisfies the spec-change
+      requirement without --reason
+  - id: spec-check-requires-reason-without-spec-change
+    description: >-
+      When repository files changed but the selected spec source did not, a nonblank --reason is
+      required
+  - id: spec-check-allows-no-change
+    description: >-
+      With no repository changes and a valid spec, check succeeds without --reason

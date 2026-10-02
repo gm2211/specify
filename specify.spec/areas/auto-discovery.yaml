@@ -17,4 +17,4 @@ behaviors:
       When more than one spec file/directory matches, discovery fails with an error listing the
       candidates instead of guessing
   - id: auto-discovery-applied-to
-    description: Applies to spec lint, spec split, spec context, prove, and verify.
+    description: Applies to spec init, spec check, spec lint, spec split, and spec context.

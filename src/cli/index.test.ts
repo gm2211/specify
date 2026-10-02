@@ -32,25 +32,30 @@ test('CLI manifest, help and version expose only the reduced product', () => {
   assert.equal(manifest.status, 0, manifest.stderr);
   const names = JSON.parse(manifest.stdout).commands.map((c: { name: string }) => c.name);
   assert.deepEqual(names, [
-    'intent init',
-    'intent capture',
-    'intent context',
-    'intent reconcile',
-    'intent check',
+    'spec init',
+    'spec check',
     'spec lint',
     'spec split',
     'spec context',
     'spec guide',
     'schema',
-    'verify',
-    'prove',
     'mcp',
   ]);
-  assert.match(run(['--version']).stdout, /^0\.3\.\d+\n$/);
+  assert.match(run(['--version']).stdout, /^0\.4\.\d+\n$/);
   const help = run(['--help']);
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /external evidence/);
-  for (const removed of ['capture', 'create', 'human', 'review', 'daemon', 'deploy']) {
+  assert.match(help.stdout, /maintained specs/);
+  for (const removed of [
+    'capture',
+    'create',
+    'human',
+    'review',
+    'daemon',
+    'deploy',
+    'verify',
+    'prove',
+    'intent',
+  ]) {
     const result = run([removed]);
     assert.equal(result.status, 10, result.stderr);
     assert.match(result.stdout, /migration/);
@@ -60,6 +65,7 @@ test('CLI manifest, help and version expose only the reduced product', () => {
 test('CLI fails closed on removed, unknown, duplicate and malformed options', () => {
   for (const args of [
     ['mcp', '--http'],
+    ['spec', 'check'],
     ['verify', '--url', 'http://example.test'],
     ['spec', 'lint', '--spec'],
     ['spec', 'lint', '--spec', 'a', '--spec', 'b'],
@@ -69,33 +75,6 @@ test('CLI fails closed on removed, unknown, duplicate and malformed options', ()
     const result = run(args);
     assert.equal(result.status, 10, args.join(' '));
     assert.ok(JSON.parse(result.stdout).error);
-  }
-});
-
-test('results CLI gates external coverage and preserves input without model credentials', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'specify-results-cli-'));
-  try {
-    writeFileSync(join(dir, 'spec.json'), JSON.stringify(contract));
-    const report = join(dir, 'results.json');
-    const check = (results: unknown[]) => {
-      writeFileSync(report, JSON.stringify({ pass: true, summary: { passed: 999 }, results }));
-      return run(['verify', '--report', report], dir);
-    };
-    const row = (id: string, status = 'passed') => ({ id: `account/${id}`, status });
-    const passed = check([row('login'), row('logout')]);
-    assert.equal(passed.status, 0, passed.stderr);
-    assert.equal(JSON.parse(passed.stdout).summary.passed, 2);
-    assert.equal(check([row('login')]).status, 2);
-    assert.equal(check([row('login'), row('logout', 'skipped')]).status, 2);
-    assert.equal(check([row('login', 'failed')]).status, 1);
-    assert.equal(check([row('login'), row('login')]).status, 10);
-    assert.equal(check([row('unknown')]).status, 10);
-    for (const mode of ['agent', 'auto', 'formal']) {
-      assert.equal(run(['verify', '--mode', mode], dir).status, 10);
-    }
-    assert.equal(run(['verify'], dir).status, 10);
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
   }
 });
 

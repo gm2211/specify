@@ -1,9 +1,8 @@
 version: '2'
 name: Specify CLI
 description: >-
-  Behavioral contracts with stable IDs, structural linting, deterministic context projection,
-  external result validation, and static evidence reports. External tools own implementation and
-  test execution.
+  Focused behavioral contracts with stable IDs, user-source attribution, structural linting, and
+  deterministic spec-to-context projection. External tools own implementation and test execution.
 target:
   type: cli
   binary: ./specify
@@ -14,13 +13,9 @@ areas:
   - areas/spec-guide.yaml
   - areas/spec-context.yaml
   - areas/schema.yaml
-  - areas/verify.yaml
-  - areas/prove.yaml
   - areas/mcp-server.yaml
   - areas/error-handling.yaml
   - areas/auto-discovery.yaml
-  - areas/intent-init.yaml
-  - areas/intent-capture.yaml
-  - areas/intent-context.yaml
-  - areas/intent-reconcile.yaml
-  - areas/intent-check.yaml
+  - areas/product-direction.yaml
+  - areas/spec-init.yaml
+  - areas/spec-check.yaml
