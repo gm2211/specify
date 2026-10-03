@@ -27,7 +27,7 @@
  * simply omitted, never backfilled with invented text.
  */
 
-import type { BehaviorSource, Spec, Area } from './types.js';
+import type { BehaviorSource, FormalCheck, Spec, Area } from './types.js';
 import type { DesignTokenExtraction } from './design-tokens.js';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +41,8 @@ export interface ProductClaim {
   anchor: string;
   /** Exact source wording retained from the behavior, when available. */
   source?: BehaviorSource;
+  /** Native formal references, preserved without claiming they were checked. */
+  formal?: FormalCheck[];
 }
 
 export interface ProductAreaSection {
@@ -120,6 +122,7 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
       text: b.description.trim(),
       anchor: `${area.id}/${b.id}`,
       ...(b.source ? { source: b.source } : {}),
+      ...(b.formal ? { formal: b.formal } : {}),
     })),
   };
 }
@@ -130,11 +133,16 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
 
 function claimLine(claim: ProductClaim, prefix: string): string {
   const line = `${prefix}${claim.text} [${claim.anchor}]`;
-  if (!claim.source) return line;
-  const reference = claim.source.reference
-    ? `\n  - Source reference: ${JSON.stringify(claim.source.reference)}`
+  const source = claim.source
+    ? `\n  - Source wording: ${JSON.stringify(claim.source.text)}` +
+      (claim.source.reference
+        ? `\n  - Source reference: ${JSON.stringify(claim.source.reference)}`
+        : '')
     : '';
-  return `${line}\n  - Source wording: ${JSON.stringify(claim.source.text)}${reference}`;
+  const formal = (claim.formal ?? [])
+    .map((ref) => `\n  - Formal reference (not checked by this projection): ${JSON.stringify(ref)}`)
+    .join('');
+  return `${line}${source}${formal}`;
 }
 
 /** Render PRODUCT.md's managed-region body (the content between the markers, not the surrounding file). */

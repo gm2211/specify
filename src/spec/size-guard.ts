@@ -144,7 +144,24 @@ export function splitSpecFileToDirectory(
   for (const area of spec.areas) {
     const fileName = uniqueAreaFileName(area, seenFileNames);
     const areaPath = path.join(areasDir, fileName);
-    fs.writeFileSync(areaPath, yaml.dump(area, yamlOptions()), 'utf-8');
+    const relocated = {
+      ...area,
+      behaviors: area.behaviors.map((behavior) => ({
+        ...behavior,
+        ...(behavior.formal
+          ? {
+              formal: behavior.formal.map((ref) => ({
+                ...ref,
+                file: path
+                  .relative(outputDir, path.resolve(path.dirname(inputPath), ref.file))
+                  .split(path.sep)
+                  .join('/'),
+              })),
+            }
+          : {}),
+      })),
+    };
+    fs.writeFileSync(areaPath, yaml.dump(relocated, yamlOptions()), 'utf-8');
     areaPaths.push(areaPath);
   }
 

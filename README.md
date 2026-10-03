@@ -15,5 +15,8 @@ and requires a spec change or an explicit reason when repository files change wi
 [workflow](docs/workflow.md) and [0.4 migration notes](docs/migration-0.4.md).
 
 Use `spec guide` to author a v2 YAML or JSON contract. `spec lint`, `spec split`, `spec context`,
-`schema`, and local stdio MCP tools support authoring. Specify does not run tests or manage a
-separate intent ledger.
+`formal check`, `schema`, and local stdio MCP tools support authoring and bounded checks of
+explicitly linked formal models. Formal checks report properties of those models, not semantic
+agreement with the prose or correctness of the application. See [formal checks](docs/formal.md) for
+tool setup, examples, and limits. Specify does not run application tests or manage a separate intent
+ledger.

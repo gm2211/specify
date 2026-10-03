@@ -13,6 +13,7 @@ import { schemaCommand } from './commands/schema.js';
 import { version } from '../version.js';
 import { specInit } from './commands/spec-init.js';
 import { specCheck } from './commands/spec-check.js';
+import { formalCheck } from './commands/formal-check.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -96,7 +97,7 @@ async function main(args: string[]): Promise<number> {
     quiet: global.has('--quiet') || global.has('-q'),
   };
   const first = rest.shift();
-  const name = first === 'spec' ? `${first} ${rest.shift() ?? ''}` : first;
+  const name = first === 'spec' || first === 'formal' ? `${first} ${rest.shift() ?? ''}` : first;
   const command = COMMANDS.find((entry) => entry.name === name);
   if (!command) {
     throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.4.md`);
@@ -123,6 +124,16 @@ async function main(args: string[]): Promise<number> {
     return result.path;
   };
   switch (command.name) {
+    case 'formal check':
+      return formalCheck(
+        {
+          spec: getSpec(),
+          timeoutMs: get('--timeout-ms'),
+          quintBin: get('--quint-bin'),
+          leanBin: get('--lean-bin'),
+        },
+        ctx,
+      );
     case 'spec init':
       return specInit({ spec: getSpec(), agents: get('--agents') }, ctx);
     case 'spec check':

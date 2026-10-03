@@ -17,6 +17,7 @@
 import yaml from 'js-yaml';
 import Ajv from 'ajv';
 import * as fs from 'fs';
+import * as path from 'node:path';
 import { specSchema } from './schema.js';
 import type { Spec } from './types.js';
 import {
@@ -244,6 +245,21 @@ export function lintSpec(spec: Spec): LintError[] {
           message: `Behavior "${behavior.id}" in area "${area.id}" has an empty description`,
           rule: 'empty-behavior-description',
         });
+      }
+      for (const ref of Array.isArray(behavior.formal) ? behavior.formal : []) {
+        if (
+          typeof ref?.file === 'string' &&
+          (path.isAbsolute(ref.file) ||
+            /^[A-Za-z]:[/\\]/.test(ref.file) ||
+            ref.file.startsWith('\\'))
+        ) {
+          errors.push({
+            path: `/areas/${i}/behaviors/${j}/formal`,
+            severity: 'error',
+            message: 'Formal source files must be relative to the spec root.',
+            rule: 'formal-file-relative',
+          });
+        }
       }
     }
   }

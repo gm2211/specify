@@ -20,3 +20,17 @@ test('guide centers existing specs as durable intent source', () => {
   assert.match(tips, /Never rewrite a requirement to match buggy or incomplete code/);
   assert.doesNotMatch(tips, /intent context|get_intent_context|intent record/i);
 });
+
+test('guide documents linked model checks without claiming application proof', () => {
+  const guide = getAuthoringGuide();
+  const pattern = guide.patterns.find(
+    (item) => item.name === 'Behavior with linked formal properties',
+  );
+  assert.ok(pattern);
+  assert.match(pattern.yaml_snippet, /tool: quint/);
+  assert.match(pattern.yaml_snippet, /tool: lean/);
+  assert.match(pattern.yaml_snippet, /samples: 20\n\s+seed: 17/);
+  assert.match(pattern.description, /bounded verification/);
+  assert.match(pattern.description, /not the prose or application/);
+  assert.match(guide.tips.join('\n'), /specify formal check --spec PATH/);
+});

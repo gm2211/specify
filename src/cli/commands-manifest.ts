@@ -16,6 +16,19 @@ const spec = string('--spec', 'Contract file or directory; auto-discovered when 
 /** Public surface: spec authoring and maintenance, without an agent runtime. */
 export const COMMANDS: CommandDefinition[] = [
   {
+    name: 'formal check',
+    description: 'Check linked Quint models and Lean theorems with external tools',
+    parameters: [
+      spec,
+      string(
+        '--timeout-ms',
+        'Deadline per formal reference, 1–600000 milliseconds (default 60000)',
+      ),
+      string('--quint-bin', 'Quint executable (default quint on PATH)'),
+      string('--lean-bin', 'Lean executable (default lean on PATH)'),
+    ],
+  },
+  {
     name: 'spec init',
     description: 'Install concise agent instructions for an existing spec',
     parameters: [spec, string('--agents', 'Agent instruction file (default AGENTS.md)')],

@@ -32,6 +32,7 @@ test('CLI manifest, help and version expose only the reduced product', () => {
   assert.equal(manifest.status, 0, manifest.stderr);
   const names = JSON.parse(manifest.stdout).commands.map((c: { name: string }) => c.name);
   assert.deepEqual(names, [
+    'formal check',
     'spec init',
     'spec check',
     'spec lint',
@@ -41,7 +42,7 @@ test('CLI manifest, help and version expose only the reduced product', () => {
     'schema',
     'mcp',
   ]);
-  assert.match(run(['--version']).stdout, /^0\.4\.\d+\n$/);
+  assert.match(run(['--version']).stdout, /^0\.5\.\d+\n$/);
   const help = run(['--help']);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /maintained specs/);
@@ -71,10 +72,32 @@ test('CLI fails closed on removed, unknown, duplicate and malformed options', ()
     ['spec', 'lint', '--spec', 'a', '--spec', 'b'],
     ['--format', 'garbage', 'schema', 'spec'],
     ['schema', 'commands', '--format'],
+    ['formal', 'check', '--timeout-ms', '0'],
   ]) {
     const result = run(args);
     assert.equal(result.status, 10, args.join(' '));
     assert.ok(JSON.parse(result.stdout).error);
+  }
+});
+
+test('formal CLI reports unlinked requirements and rejects invalid timeout values', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'specify-formal-cli-'));
+  try {
+    const spec = join(dir, 'contract.json');
+    writeFileSync(spec, JSON.stringify(contract));
+    const result = run(['formal', 'check', '--spec', spec]);
+    assert.equal(result.status, 1, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.valid, false);
+    assert.equal(report.scope, 'formal-models-only');
+    assert.deepEqual(report.unlinkedBehaviorIds, ['account/login', 'account/logout']);
+    for (const value of ['0', '1.5', '600001', '10seconds']) {
+      const invalid = run(['formal', 'check', '--spec', spec, '--timeout-ms', value]);
+      assert.equal(invalid.status, 10, value);
+      assert.match(invalid.stderr, /timeout-ms/);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
 
