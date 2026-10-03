@@ -1,0 +1,33 @@
+id: formal-check
+name: Linked Formal Model Checks
+prose: >-
+  Behaviors may link explicitly authored Quint properties and Lean theorems. Formal check evaluates
+  those model references; it does not infer formal properties from prose or execute the application.
+behaviors:
+  - id: formal-links-are-typed
+    description: >-
+      A behavior's optional formal references identify a Quint or Lean source file and a property;
+      Quint references select seeded simulation or bounded verification, while Lean references name
+      a public fully qualified theorem.
+  - id: formal-check-requires-references
+    description: >-
+      'formal check --spec PATH' checks every linked reference and fails when the selected spec has
+      no formal references. Behavior identifiers without formal links remain visible in the report.
+  - id: formal-check-bounded-quint
+    description: >-
+      Quint simulation uses its TypeScript backend with the required seed and sample count;
+      verification invokes bounded Apalache checking through the configured maximum step bound.
+      Neither mode is an unbounded proof.
+  - id: formal-check-lean-theorem
+    description: >-
+      Lean checks the selected source and named public theorem, including its transitive axioms;
+      sorry and custom axioms fail, while propext, Classical.choice, and Quot.sound are allowed.
+  - id: formal-check-tool-ownership
+    description: >-
+      Formal check invokes caller-provided Quint and Lean tools without downloading them. Lean
+      project dependencies are caller-managed, and checks run without a Specify sandbox.
+  - id: formal-check-evidence-boundary
+    description: >-
+      Formal check reports formal-model results only. A passing check does not establish that a
+      model faithfully encodes its behavior description or that the running application satisfies
+      the model.

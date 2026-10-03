@@ -19,3 +19,4 @@ areas:
   - areas/product-direction.yaml
   - areas/spec-init.yaml
   - areas/spec-check.yaml
+  - areas/formal-check.yaml

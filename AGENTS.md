@@ -70,10 +70,12 @@ Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`.
 ## Architecture and scope
 
 Specify owns behavioral contracts, stable behavior IDs, behavior source attribution, structural
-linting, and deterministic context projection. External coding agents implement behavior and test
-runners execute tests. `src/spec` contains contract tooling; `src/mcp` exposes five authoring tools
-over stdio. Specify does not provide an intent ledger, test runner, report pipeline, or deployment
-stack.
+linting, deterministic context projection, and checks of explicitly linked Quint and Lean models.
+These checks establish results about the authored models only; they do not establish that a model
+captures prose faithfully or that an application satisfies it. External coding agents implement
+behavior and test runners execute application tests. `src/spec` contains contract tooling; `src/mcp`
+exposes five authoring tools over stdio. Specify does not provide an intent ledger, application test
+runner, report pipeline, or deployment stack.
 
 Keep `specify.spec/` current whenever supported behavior changes. Preserve IDs for retained behavior
 and remove promises for deleted features. See `docs/migration-0.4.md` for compatibility boundaries.
@@ -98,5 +100,8 @@ Canonical spec: "specify.spec". Run commands from "." relative to this file.
   `--reason 'why existing requirements still cover this change'` instead of making a token spec
   edit. Include that explanation in the PR.
 - Run project tests separately. This check enforces spec lint and a recorded review reason or source
-change, not semantic correctness or execution proof.
+  change, not semantic correctness or execution proof.
+- For formal properties explicitly linked from behaviors, use `specify formal check --spec PATH` as
+described in `docs/formal.md`. Review the report as model-only evidence; do not present it as proof
+that prose or the running application is correct.
 <!-- specify:end:spec-workflow -->

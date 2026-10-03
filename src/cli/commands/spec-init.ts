@@ -62,6 +62,7 @@ Canonical spec: ${JSON.stringify(spec)}. Run commands from ${JSON.stringify(path
 - Update specs when intent changes. Never rewrite requirements to excuse incomplete implementation. Report unmet requirements in the handoff and issue tracker.
 - Before finishing, run \`${command} spec check --spec ${quotedSpec} --base BASE\`. Use the task start commit or PR base. If intent is unchanged, pass \`--reason 'why existing requirements still cover this change'\` instead of making a token spec edit. Include that explanation in the PR.
 - Run project tests separately. This check enforces spec lint and a recorded review reason or source change, not semantic correctness or execution proof.
+- For properties linked from behaviors, run \`${command} formal check --spec ${quotedSpec}\` with caller-installed Quint or Lean. A passing model check does not establish that the model captures prose or that the application satisfies it.
 `;
   const content = begins
     ? mergeManagedRegion(existing, region, body).content

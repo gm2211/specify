@@ -5,6 +5,14 @@
  * No matchers, no selectors, no step sequences.
  */
 
+const quintProperties = {
+  tool: { const: 'quint' },
+  file: { type: 'string', minLength: 1, pattern: '\\.qnt$' },
+  property: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$' },
+  main: { type: 'string', pattern: '^[A-Za-z_][A-Za-z0-9_]*$' },
+  maxSteps: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+} as const;
+
 export const specSchema = {
   $schema: 'http://json-schema.org/draft-07/schema#',
   title: 'Specify Spec',
@@ -194,6 +202,46 @@ export const specSchema = {
               pattern: '\\S',
               description: 'Optional source location or conversation reference.',
             },
+          },
+        },
+        formal: {
+          type: 'array',
+          minItems: 1,
+          description:
+            'Native properties linked to this requirement. Files are relative to the spec directory or single-file parent. Results concern models and proofs, not application correctness.',
+          items: {
+            oneOf: [
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['tool', 'file', 'property', 'mode', 'maxSteps', 'samples', 'seed'],
+                properties: {
+                  ...quintProperties,
+                  mode: { const: 'simulate' },
+                  samples: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+                  seed: { type: 'integer', minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
+                },
+              },
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['tool', 'file', 'property', 'mode', 'maxSteps'],
+                properties: { ...quintProperties, mode: { const: 'verify' } },
+              },
+              {
+                type: 'object',
+                additionalProperties: false,
+                required: ['tool', 'file', 'property'],
+                properties: {
+                  tool: { const: 'lean' },
+                  file: { type: 'string', minLength: 1, pattern: '\\.lean$' },
+                  property: {
+                    type: 'string',
+                    pattern: "^[A-Za-z_][A-Za-z0-9_']*(\\.[A-Za-z_][A-Za-z0-9_']*)*$",
+                  },
+                },
+              },
+            ],
           },
         },
         tags: {

@@ -74,6 +74,8 @@ function loadExamples(): AuthoringGuide['examples'] {
       'Dashboard and API behavior claims, including authorization and response expectations',
     'multi-page-flow.yaml':
       'Checkout behavior claims with preconditions and cross-feature expectations',
+    'formal.yaml':
+      'A behavior linked to Quint simulation and bounded verification plus a Lean theorem',
   };
 
   return files.map((f) => ({
@@ -136,6 +138,30 @@ export function getAuthoringGuide(): AuthoringGuide {
     tags: [search, relevance]
   - id: empty-search-shows-prompt
     description: Submitting an empty search query shows a helpful prompt instead of an error`,
+      },
+      {
+        name: 'Behavior with linked formal properties',
+        description:
+          'Link authored model properties explicitly. Quint checks are seeded simulations or bounded verification; Lean links a public theorem. Results concern these models, not the prose or application.',
+        yaml_snippet: `behaviors:
+  - id: count-never-negative
+    description: The counter starts at zero, stays nonnegative, and each increment increases it by one.
+    formal:
+      - tool: quint
+        file: formal/Counter.qnt
+        property: nonNegative
+        mode: verify
+        maxSteps: 8
+      - tool: quint
+        file: formal/Counter.qnt
+        property: nonNegative
+        mode: simulate
+        maxSteps: 8
+        samples: 20
+        seed: 17
+      - tool: lean
+        file: formal/Counter.lean
+        property: Counter.incrementPreservesNonnegative`,
       },
       {
         name: 'CLI target',
@@ -210,6 +236,7 @@ hooks:
       'Add assumptions to prevent false failures (e.g., assert the target URL is reachable first).',
       'Template variables keep specs portable — use ${ENV_VAR} for environment-specific values.',
       'Draft contracts with your preferred editor or coding agent; Specify validates structure while people and external tools own implementation and testing.',
+      'Link Quint and Lean properties only when a model or theorem has been authored and reviewed. Run "specify formal check --spec PATH"; read docs/formal.md for tool setup and limits. A passing model check is not proof that prose or application behavior is correct.',
       'Write descriptions as if briefing an agent: clear enough to guide implementation and external testing without needing to ask for clarification.',
     ],
   };

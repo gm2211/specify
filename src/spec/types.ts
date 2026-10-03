@@ -95,7 +95,33 @@ export interface Behavior {
 
   /** Exact source wording for this requirement, when recorded. */
   source?: BehaviorSource;
+
+  /** Native formal properties linked to this behavior, not implementation proof. */
+  formal?: FormalCheck[];
 }
+
+export interface QuintFormalCheck {
+  tool: 'quint';
+  /** Relative to the spec directory or single-file spec's parent. */
+  file: string;
+  property: string;
+  mode: 'simulate' | 'verify';
+  maxSteps: number;
+  main?: string;
+  /** Required for simulation; forbidden for bounded verification. */
+  samples?: number;
+  seed?: number;
+}
+
+export interface LeanFormalCheck {
+  tool: 'lean';
+  /** Relative to the spec directory or single-file spec's parent. */
+  file: string;
+  /** Public, fully qualified theorem name. */
+  property: string;
+}
+
+export type FormalCheck = QuintFormalCheck | LeanFormalCheck;
 
 export interface BehaviorSource {
   /** Preserve user's wording exactly; do not paraphrase or normalize it. */

@@ -1,0 +1,28 @@
+version: '2'
+name: Counter with linked formal properties
+target:
+  type: cli
+  binary: ./counter
+areas:
+  - id: counter
+    name: Counter
+    behaviors:
+      - id: count-never-negative
+        description:
+          The counter starts at zero, stays nonnegative, and each increment increases it by one.
+        formal:
+          - tool: quint
+            file: formal/Counter.qnt
+            property: nonNegative
+            mode: verify
+            maxSteps: 8
+          - tool: quint
+            file: formal/Counter.qnt
+            property: nonNegative
+            mode: simulate
+            maxSteps: 8
+            samples: 20
+            seed: 17
+          - tool: lean
+            file: formal/Counter.lean
+            property: Counter.incrementPreservesNonnegative
