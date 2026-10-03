@@ -1,6 +1,6 @@
 {
   "name": "specify",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Focused specs, agent guidance, and structural linting",
   "type": "module",
   "bin": {
