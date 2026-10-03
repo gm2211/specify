@@ -4,6 +4,40 @@ prose: >-
   This area records Specify's own product decisions. Existing local IDs, exact source wording, and
   rationale are retained from earlier direction; superseded workflow promises are labeled as such.
 behaviors:
+  - id: agent-companion-purpose
+    description: >-
+      Specify's intended purpose is to accompany coding agents through intent capture, spec-driven
+      development, conflict detection for new behavior, feature smoke testing, regression detection,
+      and formal property encoding.
+    details: >-
+      User clarification of the original product purpose, not a claim that version 0.4 delivers all
+      these outcomes. Current tooling supports structured contracts, source attribution, context,
+      and structural review; it does not automatically capture conversation intent, detect semantic
+      conflicts, or connect smoke-test and regression results back into an agent feedback loop.
+      External tools remain responsible for test execution. The shape of any missing integration is
+      undecided; this clarification does not approve restoring the removed ledger or execution
+      stack.
+    source:
+      text: >-
+        ok, here's my thing I had built specify to be a companion to agents to make sure we captured
+        intent and did spec-driven development, were able to detect conflicts for new behavior, were
+        able to smoke test features and catch regressions
+      reference: '2026-10-03 Specify conversation: clarification after the OpenSpec comparison'
+  - id: formal-property-authoring
+    description: >-
+      Help coding agents encode intended properties in formal validation languages such as Quint or
+      Lean.
+    details: >-
+      This is part of the user's intended agent-companion scope, not a claim of current formal-tool
+      integration in version 0.4. The authoring workflow, tool selection, and connection to existing
+      requirements and implementation evidence remain to be designed. Formal models and proofs do
+      not by themselves establish that the encoded properties faithfully represent user intent or
+      that the running implementation satisfies them.
+    source:
+      text: >-
+        also I wanted it to be a companion that helped encode properties in formal validation
+        languages like quint.sh or Lean
+      reference: '2026-10-03 Specify conversation: formal property encoding clarification'
   - id: keep-specs-focused
     description: >-
       Keep intent and specs focused, organized, and small enough to inspect. Preserve stable IDs;
