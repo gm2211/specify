@@ -1,0 +1,40 @@
+id: view
+name: Spec Browser
+prose: >-
+  Visual access is part of the normal Specify installation. The viewer reads existing contracts;
+  external agents remain responsible for editing and application validation. It is a local reader,
+  not a separate requirements store or an evidence dashboard.
+behaviors:
+  - id: bundled-entry-point
+    description: Open a bundled browser UI with specify view in any project with a supported spec.
+    details: >-
+      Reuse automatic discovery and explicit --spec selection for YAML, JSON, or directory specs.
+      Refuse missing or ambiguous sources with the existing actionable errors. Print a local URL,
+      open the default browser, and support --no-open for headless use and --port for an explicit
+      port. Default to an available port. Stop the server on Ctrl-C or SIGTERM.
+    source:
+      text: >-
+        I guess  my main problem is that I want all my projects and all the users of specify to
+        seamlessly be able to get a ui to see the spec
+      reference: '2026-10-04 Specify conversation; implementation approved with "ok, do it"'
+  - id: navigate-behaviors
+    description:
+      Browse areas and search behavior IDs, intent, details, source, tags, and formal links.
+    details: >-
+      Page large result sets. Show full behavior descriptions and details, area prose, project
+      assumptions, original source quotations, and declared formal reference configuration. Preserve
+      stable behavior IDs in browser fragments. Support narrow screens and keyboard navigation.
+  - id: live-source-updates
+    description: Refresh after spec changes while preserving the current search and selection.
+    details: >-
+      Poll the selected source. Keep the last readable data on invalid edits or connection failure,
+      visibly mark it out of date, and recover automatically when valid data returns. Deleted
+      behavior selections display a clear missing-behavior message.
+  - id: read-only-local-content
+    description:
+      Serve the selected spec locally without executing content or exposing a file browser.
+    details: >-
+      Bind only to loopback. Reject foreign Host and Origin headers and unsupported methods/routes.
+      Send no-cache responses and a restrictive content security policy. Render spec text as text;
+      exclude target configuration, variables, and hooks from the browser payload. Display linked
+      formal models as references only; do not imply checks were run or implementation is correct.

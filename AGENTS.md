@@ -69,15 +69,15 @@ Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`.
 
 ## Architecture and scope
 
-Specify owns behavioral contracts, stable behavior IDs, behavior source attribution, structural
-linting, deterministic context projection, and checks of explicitly linked Quint and Lean models.
-Agent guidance covers intent capture, conflict review, and code/test reconciliation. Agents perform
-semantic review; Specify does not observe conversations or certify implementation correctness.
-Formal checks establish results about the authored models only; they do not establish that a model
-captures prose faithfully or that an application satisfies it. External coding agents implement
-behavior and test runners execute application tests. `src/spec` contains contract tooling; `src/mcp`
-exposes five authoring tools over stdio. Specify does not provide an intent ledger, application test
-runner, report pipeline, or deployment stack.
+Specify owns a bundled local spec browser, behavioral contracts, stable behavior IDs, behavior
+source attribution, structural linting, deterministic context projection, and checks of explicitly
+linked Quint and Lean models. Agent guidance covers intent capture, conflict review, and code/test
+reconciliation. Agents perform semantic review; Specify does not observe conversations or certify
+implementation correctness. Formal checks establish results about the authored models only; they do
+not establish that a model captures prose faithfully or that an application satisfies it. External
+coding agents implement behavior and test runners execute application tests. `src/spec` contains
+contract tooling; `src/mcp` exposes five authoring tools over stdio. Specify does not provide an
+intent ledger, application test runner, report pipeline, or deployment stack.
 
 Keep `specify.spec/` current whenever supported behavior changes. Preserve IDs for retained behavior
 and remove promises for deleted features. See `docs/migration-0.4.md` for compatibility boundaries.

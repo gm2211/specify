@@ -21,3 +21,4 @@ areas:
   - areas/spec-check.yaml
   - areas/formal-check.yaml
   - areas/agent-integration.yaml
+  - areas/view.yaml

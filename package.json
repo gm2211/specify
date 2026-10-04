@@ -1,6 +1,6 @@
 {
   "name": "specify",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Focused specs, agent guidance, and structural linting",
   "type": "module",
   "bin": {
@@ -18,7 +18,8 @@
     "test": "npm run build && find dist/src -name '*.test.js' -not -path '*/node_modules/*' | sort | xargs node --test",
     "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc",
     "specify": "node --import tsx src/cli/index.ts",
-    "prepare": "git config core.hooksPath .githooks"
+    "prepare": "git config core.hooksPath .githooks",
+    "prepack": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -41,5 +42,12 @@
     "tsx": "^4.22.4",
     "typescript": "^5.4.5",
     "typescript-eslint": "^8.59.4"
-  }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "docs",
+    "integrations",
+    "src/spec/examples"
+  ]
 }

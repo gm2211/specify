@@ -73,6 +73,15 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [],
   },
   {
+    name: 'view',
+    description: 'Open a local read-only viewer for a spec',
+    parameters: [
+      spec,
+      string('--port', 'Local port (default: choose an available port)'),
+      flag('--no-open', 'Print the URL without opening a browser'),
+    ],
+  },
+  {
     name: 'schema',
     description: 'Print spec or commands schema',
     parameters: [string('target', 'spec or commands', true)],

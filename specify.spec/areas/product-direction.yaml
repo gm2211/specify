@@ -8,11 +8,10 @@ behaviors:
     description: >-
       Give every Specify user a seamless UI for browsing the canonical spec in each project.
     details: >-
-      Product requirement; currently unmet and tracked in SP-cti. Visual browsing should be part of
-      the normal Specify experience across projects. A bundled browser UI with a discoverable CLI
-      entry point is a proposed implementation, not a selected architecture. Evaluate reuse of spek
-      or SpecLens before choosing implementation. Preserve one authoritative spec; a viewer must not
-      require users to maintain a duplicate requirements set. No viewer is shipped by this change.
+      The bundled view command discovers and reads the canonical spec, opens a local browser, and
+      refreshes after source changes. Native YAML/JSON and directory composition use the same parser
+      as the CLI. A focused read-only viewer avoids OpenSpec conversion and a separate desktop app.
+      Preserve one authoritative spec; users must not maintain a duplicate requirements set.
     source:
       text: >-
         I guess  my main problem is that I want all my projects and all the users of specify to

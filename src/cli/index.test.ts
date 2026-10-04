@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -39,10 +39,11 @@ test('CLI manifest, help and version expose only the reduced product', () => {
     'spec split',
     'spec context',
     'spec guide',
+    'view',
     'schema',
     'mcp',
   ]);
-  assert.match(run(['--version']).stdout, /^0\.6\.\d+\n$/);
+  assert.match(run(['--version']).stdout, /^0\.7\.\d+\n$/);
   const help = run(['--help']);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /maintained specs/);
@@ -116,6 +117,64 @@ test('contract lint accepts stdin and discovery refuses ambiguous contracts', ()
     assert.equal(result.status, 10);
     assert.match(result.stderr, /one.spec.json/);
     assert.match(result.stderr, /two.spec.json/);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('view CLI prints its discovered URL, serves the spec, and shuts down on SIGTERM', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'specify-view-cli-'));
+  const spec = join(dir, 'contract.json');
+  writeFileSync(spec, JSON.stringify(contract));
+  const child = spawn(process.execPath, [cli, 'view', '--spec', spec, '--no-open']);
+  let output = '';
+  try {
+    const url = await new Promise<string>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error(`Viewer URL not printed: ${output}`)),
+        5000,
+      );
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (chunk: string) => {
+        output += chunk;
+        const match = /Specify viewer: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(output);
+        if (match) {
+          clearTimeout(timeout);
+          resolve(match[1]);
+        }
+      });
+      child.once('error', (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once('exit', (code) => {
+        clearTimeout(timeout);
+        reject(new Error(`Viewer exited before printing URL (${code}): ${output}`));
+      });
+    });
+    const response = await fetch(`${url}spec`);
+    assert.equal(response.status, 200);
+    const payload = await response.json();
+    assert.equal(payload.name, 'Fixture');
+  } finally {
+    child.kill('SIGTERM');
+    await new Promise<void>((resolve) => {
+      if (child.exitCode !== null) resolve();
+      else child.once('exit', () => resolve());
+    });
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('view CLI rejects malformed port values', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'specify-view-port-'));
+  const spec = join(dir, 'contract.json');
+  writeFileSync(spec, JSON.stringify(contract));
+  try {
+    const result = run(['view', '--spec', spec, '--port', '65536', '--no-open']);
+    assert.equal(result.status, 10);
+    assert.match(result.stderr, /port must be an integer/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
