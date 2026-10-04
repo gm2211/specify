@@ -25,3 +25,8 @@ behaviors:
       Managed instructions direct agents to preserve user wording in behavior source metadata,
       distinguish proposals and assumptions from accepted decisions, and maintain stable IDs in the
       selected spec
+  - id: spec-init-installs-review-loop
+    description: >-
+      Managed instructions route agents through conversational intent capture, conflict review
+      before implementation, and behavior-level code/test reconciliation before completion. These
+      are agent instructions, not automatic conversation capture or semantic verification.

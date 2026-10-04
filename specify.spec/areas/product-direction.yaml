@@ -10,13 +10,12 @@ behaviors:
       development, conflict detection for new behavior, feature smoke testing, regression detection,
       and formal property encoding.
     details: >-
-      User clarification of the original product purpose, not a claim that version 0.4 delivers all
-      these outcomes. Current tooling supports structured contracts, source attribution, context,
-      and structural review; it does not automatically capture conversation intent, detect semantic
-      conflicts, or connect smoke-test and regression results back into an agent feedback loop.
-      External tools remain responsible for test execution. The shape of any missing integration is
-      undecided; this clarification does not approve restoring the removed ledger or execution
-      stack.
+      User clarification of the original product purpose. Current tooling supplies structured
+      contracts, source attribution, context, structural checks, linked formal validation, and an
+      agent-executed capture/review/reconcile protocol. Agents perform semantic review and connect
+      external smoke/regression evidence to behavior IDs. Specify does not automatically observe
+      conversations or determine semantic correctness; it does not restore the removed ledger or
+      application execution stack.
     source:
       text: >-
         ok, here's my thing I had built specify to be a companion to agents to make sure we captured
@@ -50,6 +49,17 @@ behaviors:
     source:
       text: merge all then implement formal integration
       reference: '2026-10-03 user approval for the initial formal integration'
+  - id: reuse-agent-workflow
+    description: >-
+      Borrow Spec Kit's conflict-review and implementation-reconciliation workflow while retaining
+      one authoritative behavioral spec, with an optional thin Spec Kit adapter.
+    details: >-
+      Plans and existing task trackers reference behavior IDs. Agent findings and execution evidence
+      stay in existing PR/task records. No duplicate Markdown requirements, new intent store, or
+      application test runner is introduced. Spec Kit and Specify retain distinct executable paths.
+    source:
+      text: Cool. Apply your recommendations.
+      reference: '2026-10-03 approval following Specify versus GitHub Spec Kit comparison'
   - id: keep-specs-focused
     description: >-
       Keep intent and specs focused, organized, and small enough to inspect. Preserve stable IDs;

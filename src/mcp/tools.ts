@@ -24,7 +24,8 @@ export function registerTools(server: McpServer): void {
       title: 'Get Spec Authoring Guide',
       description:
         'Returns the complete Specify spec authoring guide: JSON Schema, ' +
-        'annotated examples, behavioral patterns, and best practices. Call this first when writing a new spec.',
+        'annotated examples, behavioral patterns, and the capture, review, and reconcile agent workflow. ' +
+        'Call this before changing intent or reviewing implementation against a spec.',
     },
     async () => {
       const guide = getAuthoringGuide();

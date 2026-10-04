@@ -40,6 +40,9 @@ export interface AuthoringGuide {
 
   /** Best practices and tips. */
   tips: string[];
+
+  /** Agent-executed review protocol; not a semantic checker or test runner. */
+  workflow: Record<'capture' | 'review' | 'reconcile', string[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -219,10 +222,6 @@ hooks:
     },
 
     tips: [
-      'Read existing specs and repository instructions before changing behavior. Keep one focused feature in each area and preserve stable IDs.',
-      'Record explicit user decisions in the relevant behavior description, details, or area prose, including decisions made in conversation without code changes. Keep uncertainty and proposals clearly labeled in prose.',
-      'When available, add behavior.source.text with the exact wording that motivated the requirement and source.reference with a useful location. Never paraphrase quoted wording or invent a source.',
-      'Never rewrite a requirement to match buggy or incomplete code. Keep the intended behavior and describe implementation gaps honestly.',
       'Keep behavior IDs stable across edits; rename only when behavior itself changes, and update references in specs and tests.',
       'Large directory area fragments get advisory size warnings; keep area requirements readable and preserve behavior IDs instead of splitting one area across duplicate IDs.',
       'Areas and tags organize requirements, not code-change impact or feature dependencies.',
@@ -239,5 +238,28 @@ hooks:
       'Link Quint and Lean properties only when a model or theorem has been authored and reviewed. Run "specify formal check --spec PATH"; read docs/formal.md for tool setup and limits. A passing model check is not proof that prose or application behavior is correct.',
       'Write descriptions as if briefing an agent: clear enough to guide implementation and external testing without needing to ask for clarification.',
     ],
+
+    workflow: {
+      capture: [
+        'Read existing specs and repository instructions. Resolve the canonical spec before writing; use the configured path or unambiguous discovery, and ask only if competing authorities cannot be resolved.',
+        'Record explicit user decisions in the relevant behavior description, details, or area prose, including decisions made in conversation without code changes. Add behavior.source.text with the exact wording and source.reference when available; never invent a source. Keep proposals and assumptions clearly labeled.',
+        'Compare new intent with existing behavior and global constraints. An explicit authorized change updates the same behavior and preserves its ID; retain relevant rationale in details or Git history. Surface unresolved contradictions with both sources before dependent implementation. Continue independent work.',
+        'Report which area/behavior IDs captured the decision, then lint the spec. Plans and existing task trackers reference those IDs; do not create a second requirements document or intent ledger.',
+      ],
+      review: [
+        'Before implementation, read the canonical spec, applicable global constraints, requested change, and existing plan/tasks. Review relevant behaviors across areas; do not limit review to edited files. State scope and unavailable inputs.',
+        'Check for conflicting requirements, ambiguous acceptance criteria, missing failure cases, tasks without a requirement, and requirements omitted from the plan. Distinguish explicit decisions from assumptions; resolve routine choices using existing authority.',
+        'Keep this review read-only. For each finding give area/behavior ID (or unmapped), both relevant source locations, conflict or gap, severity, and concrete next action. Separate unresolved intent decisions from implementation work; route authorized corrections through capture or normal implementation.',
+        'Report no findings only within the inspected scope. This is agent judgment, not deterministic semantic validation. Structural lint and spec check cannot establish agreement between prose, code, or tasks.',
+      ],
+      reconcile: [
+        'After implementation, compare current code and actual execution evidence with every affected behavior, global constraint, and potentially regressed behavior. Inspect existing completed tasks too: a checked box is not evidence. State the reviewed revision and scope.',
+        'Run relevant project smoke and regression tests through existing runners; for bug fixes rerun the original reproduction. Record exact command, outcome, environment, and evidence location in the existing PR or task tracker. If execution is unavailable, say why and mark affected behavior unverified.',
+        'For each reviewed area/behavior ID report satisfied, gap, or unverified with code locations and supporting evidence. Identify missing, partial, contradictory, and unrequested implementation. A test-file name alone, an old passing run, or a suite unrelated to the claim cannot establish satisfaction.',
+        'Run linked formal checks when relevant and report simulation, bounded verification, and proof separately from application evidence. A passing model does not prove the implementation matches it. An absent formal link means no formal evidence, not failed application verification; missing required application evidence means unverified.',
+        'Never rewrite a requirement to match buggy or incomplete code. Keep the review itself read-only for code and intent; put corrective work in the existing issue tracker, then implement authorized fixes and repeat reconciliation. Ask only for new authority or unresolved intent, and report exact external blockers.',
+        'Before handoff, run spec check against the task start or PR base with an honest unchanged-intent reason when needed. Report outstanding gaps and unverified behaviors; do not call the task complete while required checks fail or required verification is missing. Keep evidence in existing PR/task records, not another spec or report store.',
+      ],
+    },
   };
 }
