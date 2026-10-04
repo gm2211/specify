@@ -20,6 +20,7 @@ test('MCP exposes only local contract authoring and discovery', async () => {
   const guideResult = await tools.get('get_authoring_guide')!();
   const guide = JSON.parse(guideResult.content[0].text);
   assert.ok(guide.examples.length > 0);
+  assert.deepEqual(Object.keys(guide.workflow), ['capture', 'review', 'reconcile']);
   const content = guide.examples[0].yaml;
   const parsed = await tools.get('parse_spec')!({ content });
   assert.ok(!parsed.isError);

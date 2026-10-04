@@ -13,7 +13,7 @@ test('every complete authoring-guide example parses with the supported spec sche
 
 test('guide centers existing specs as durable intent source', () => {
   const guide = getAuthoringGuide();
-  const tips = guide.tips.join('\n');
+  const tips = Object.values(guide.workflow).flat().join('\n');
   assert.match(tips, /Read existing specs and repository instructions/);
   assert.match(tips, /conversation without code changes/);
   assert.match(tips, /behavior\.source\.text with the exact wording/);

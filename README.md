@@ -20,3 +20,8 @@ explicitly linked formal models. Formal checks report properties of those models
 agreement with the prose or correctness of the application. See [formal checks](docs/formal.md) for
 tool setup, examples, and limits. Specify does not run application tests or manage a separate intent
 ledger.
+
+Agents use the guide's capture → review → reconcile protocol to record conversational decisions,
+surface conflicts before implementation, and check behavior IDs against current code and actual test
+evidence. [Spec Kit adapter](docs/spec-kit.md) exposes the same workflow as optional agent commands
+while retaining the existing spec as the only requirements source.

@@ -1,0 +1,23 @@
+schema_version: '1.0'
+extension:
+  id: behavior-contracts
+  name: Specify Behavior Contracts
+  version: 0.1.0
+  description: Capture, review, and reconcile changes against a Specify behavioral contract.
+  author: Specify contributors
+  repository: https://github.com/gm2211/specify
+  license: MIT
+  homepage: https://github.com/gm2211/specify
+requires:
+  speckit_version: '>=1.1.1.dev0'
+provides:
+  commands:
+    - name: speckit.behavior-contracts.capture
+      file: commands/capture.md
+      description: Capture accepted decisions in the canonical Specify contract.
+    - name: speckit.behavior-contracts.review
+      file: commands/review.md
+      description: Review planned work against the canonical Specify contract.
+    - name: speckit.behavior-contracts.reconcile
+      file: commands/reconcile.md
+      description: Reconcile implementation and execution evidence against Specify behaviors.

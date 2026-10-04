@@ -42,7 +42,7 @@ test('CLI manifest, help and version expose only the reduced product', () => {
     'schema',
     'mcp',
   ]);
-  assert.match(run(['--version']).stdout, /^0\.5\.\d+\n$/);
+  assert.match(run(['--version']).stdout, /^0\.6\.\d+\n$/);
   const help = run(['--help']);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /maintained specs/);
