@@ -4,28 +4,35 @@ prose: >-
   Install concise managed agent instructions that identify the selected spec as product authority.
 behaviors:
   - id: spec-init-selects-spec
+    title: Spec selection for initialization
     description: >-
       'spec init' selects a spec with --spec PATH or auto-discovers one using the normal spec
       discovery rules
   - id: spec-init-default-agents-path
+    title: Default agent guidance location
     description: >-
       Without --agents, initialization manages AGENTS.md in the current working directory
   - id: spec-init-agents-override
+    title: Custom agent guidance location
     description: >-
       --agents PATH selects the instructions file to update
   - id: spec-init-preserves-surrounding-text
+    title: Preserved text around managed guidance
     description: >-
       Initialization adds or updates only its managed instruction region and preserves all text
       outside that region
   - id: spec-init-idempotent
+    title: Repeatable guidance updates
     description: >-
       Repeated initialization updates the same managed region without duplicating it
   - id: spec-init-guides-spec-authority
+    title: Canonical spec guidance
     description: >-
       Managed instructions direct agents to preserve user wording in behavior source metadata,
       distinguish proposals and assumptions from accepted decisions, and maintain stable IDs in the
       selected spec
   - id: spec-init-installs-review-loop
+    title: Intent review and reconciliation guidance
     description: >-
       Managed instructions route agents through conversational intent capture, conflict review
       before implementation, and behavior-level code/test reconciliation before completion. These

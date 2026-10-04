@@ -5,7 +5,36 @@ prose: >-
   external agents remain responsible for editing and application validation. It is a local reader,
   not a separate requirements store or an evidence dashboard.
 behaviors:
+  - id: theme-selection
+    title: Comfortable reading in light and dark
+    description: Readers can choose a light, dark, or system-following theme.
+    details: >-
+      Follow the system by default. Save explicit choices in browser storage for the viewer origin
+      when available, and remain usable when storage is blocked. Apply the palette to navigation,
+      details, search, and error states.
+    source:
+      text: >-
+        One can this be can you have also like a dark mode coming like dark theme light theme
+        switch?
+      reference: '2026-10-04 Specify viewer feedback'
+  - id: purpose-before-detail
+    title: See the purpose behind each contract
+    description: >-
+      Present project and area purpose before behavioral detail, with authored titles and rationale
+      distinct from the exact contract.
+    details: >-
+      The project overview links to area summaries. Each area presents its purpose and behavior
+      links. Behavior details show the authored title, area context, optional rationale, and exact
+      description. Older specs without these optional fields remain readable. Never fabricate
+      rationale or imply that displaying a contract establishes validation status.
+    source:
+      text: >-
+        I don't know, like some sort of ra like rationale and like understanding why is this
+        important, why is this a thing, like 'cause I'm like I I feel like otherwise we might be
+        missing the forest for the tree.
+      reference: '2026-10-04 Specify viewer feedback'
   - id: bundled-entry-point
+    title: Open any project spec
     description: Open a bundled browser UI with specify view in any project with a supported spec.
     details: >-
       Reuse automatic discovery and explicit --spec selection for YAML, JSON, or directory specs.
@@ -18,6 +47,7 @@ behaviors:
         seamlessly be able to get a ui to see the spec
       reference: '2026-10-04 Specify conversation; implementation approved with "ok, do it"'
   - id: navigate-behaviors
+    title: Find and inspect behavior
     description:
       Browse areas and search behavior IDs, intent, details, source, tags, and formal links.
     details: >-
@@ -25,12 +55,14 @@ behaviors:
       assumptions, original source quotations, and declared formal reference configuration. Preserve
       stable behavior IDs in browser fragments. Support narrow screens and keyboard navigation.
   - id: live-source-updates
+    title: Keep the reader current
     description: Refresh after spec changes while preserving the current search and selection.
     details: >-
       Poll the selected source. Keep the last readable data on invalid edits or connection failure,
       visibly mark it out of date, and recover automatically when valid data returns. Deleted
       behavior selections display a clear missing-behavior message.
   - id: read-only-local-content
+    title: Read safely on your machine
     description:
       Serve the selected spec locally without executing content or exposing a file browser.
     details: >-

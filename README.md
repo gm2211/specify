@@ -29,6 +29,17 @@ The server binds to `127.0.0.1` on an available port and prints its URL. Use `--
 manually or `--port 4310` for a fixed port. Keep the command running while browsing; Ctrl-C stops
 it.
 
+Choose System, Light, or Dark in the reader. Explicit choices are remembered for that viewer address
+when browser storage is available. Project and area overviews explain purpose before individual
+contracts. Optional behavior `title` fields provide short labels; `rationale` explains why a rule
+matters. Keep `description` as the precise promise and `details` for edge cases. Existing specs
+remain compatible, and generated product context includes the new fields.
+
+Validate contracts with your normal application test suite, referencing stable behavior IDs in test
+names. Record actual commands, results, and the tested revision in the existing PR or task tracker.
+The viewer does not calculate coverage: structural lint validates spec shape, and linked formal
+checks validate authored models. Neither replaces tests of the implementation.
+
 Use `spec guide` to author a v2 YAML or JSON contract. `spec lint`, `spec split`, `spec context`,
 `formal check`, `schema`, and local stdio MCP tools support authoring and bounded checks of
 explicitly linked formal models. Formal checks report properties of those models, not semantic

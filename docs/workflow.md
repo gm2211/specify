@@ -7,6 +7,12 @@ Label unresolved assumptions and unapproved proposals plainly in prose; do not t
 accepted behavior. Edit the same behavior when direction changes instead of maintaining a separate
 decision ledger.
 
+Use the project description and area prose to explain outcomes and purpose. A behavior `title` is an
+optional human-readable label; `description` remains the required, precise contract; optional
+`rationale` explains why it matters and known tradeoffs. Write rationale only from known intent,
+label assumptions, and do not use it for test evidence or source quotations. Keep exact source
+wording in `source.text`.
+
 Initialize agent guidance once:
 
 ```bash
@@ -21,7 +27,9 @@ Example behavior:
 
 ```yaml
 - id: keep-export-format
+  title: Preserve existing exports
   description: Existing exports remain readable by the current importer.
+  rationale: Customers need to keep using files created before the redesign.
   source:
     text: Keep existing customer exports importable during the redesign.
     reference: issue-42
@@ -67,10 +75,12 @@ managed block; hand-written instructions outside it remain untouched.
    global constraints, including other areas. Give source-linked conflict, ambiguity, and coverage
    findings. The review itself changes neither requirements nor code.
 3. **Reconcile after implementation.** Compare affected and potentially regressed behaviors with
-   current code, original bug reproductions, and real smoke/regression results. Report each behavior
-   as `satisfied`, `gap`, or `unverified`, with revision, code locations, command/results, and
-   evidence. Track corrections in the existing issue tracker, implement authorized fixes, and
-   repeat.
+   current code, original bug reproductions, and real smoke/regression results. Tests should cite
+   the behavior IDs they cover. Report each behavior as `satisfied`, `gap`, or `unverified`, with
+   revision, code locations, command/results, and evidence in the existing PR or task tracker.
+   Missing coverage evidence is unverified. Specify does not automatically verify semantic agreement
+   between prose, code, and tests. Track corrections in the existing issue tracker, implement
+   authorized fixes, and repeat.
 
 For example, if `exports/old-files-readable` requires backward compatibility, a passing lint check
 does not establish it. Run the existing importer against representative old files. A rejected old

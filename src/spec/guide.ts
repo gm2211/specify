@@ -121,6 +121,16 @@ export function getAuthoringGuide(): AuthoringGuide {
         description: Items in the cart survive a page reload`,
       },
       {
+        name: 'Behavior with title and rationale',
+        description:
+          'Use title as a human label and rationale to record why the behavior matters. Keep the precise contract in description.',
+        yaml_snippet: `behaviors:
+  - id: search-stays-local
+    title: Keep searches private
+    description: Search terms remain in the browser and are never sent to a server
+    rationale: People may search for sensitive topics and need confidence their queries stay private.`,
+      },
+      {
         name: 'Behavior with source wording',
         description:
           'Keep canonical intent in the behavior and preserve original wording as optional source metadata.',
@@ -231,7 +241,8 @@ hooks:
       'Behaviors are plain-language claims: describe WHAT should be true, not HOW to verify it. No selectors, matchers, or step sequences.',
       'Use kebab-case IDs for areas and behaviors (e.g., "add-item-to-cart", not "addItemToCart").',
       'Use descriptive IDs that read like sentences: "login-valid-credentials", "search-returns-results".',
-      'Use the "description" field liberally — it helps both humans and LLMs understand intent.',
+      'Project description and area prose explain the outcome and purpose. A behavior title is a short human label; description is the precise contract; rationale explains why it matters and any known tradeoffs.',
+      'Write rationale only from known intent. Label assumptions clearly; rationale is not test evidence or a place to copy source wording.',
       'Add assumptions to prevent false failures (e.g., assert the target URL is reachable first).',
       'Template variables keep specs portable — use ${ENV_VAR} for environment-specific values.',
       'Draft contracts with your preferred editor or coding agent; Specify validates structure while people and external tools own implementation and testing.',
@@ -242,7 +253,7 @@ hooks:
     workflow: {
       capture: [
         'Read existing specs and repository instructions. Resolve the canonical spec before writing; use the configured path or unambiguous discovery, and ask only if competing authorities cannot be resolved.',
-        'Record explicit user decisions in the relevant behavior description, details, or area prose, including decisions made in conversation without code changes. Add behavior.source.text with the exact wording and source.reference when available; never invent a source. Keep proposals and assumptions clearly labeled.',
+        'Record explicit user decisions in project description or relevant area prose and behavior fields, including decisions made in conversation without code changes. Project description and area prose explain outcome and purpose; behavior.title is a human label; behavior.description is the precise contract; behavior.rationale explains why and known tradeoffs. Add behavior.source.text with the exact wording and source.reference when available; never invent a source. Write rationale only from known intent and label assumptions clearly. Rationale is not test evidence or source quotation.',
         'Compare new intent with existing behavior and global constraints. An explicit authorized change updates the same behavior and preserves its ID; retain relevant rationale in details or Git history. Surface unresolved contradictions with both sources before dependent implementation. Continue independent work.',
         'Report which area/behavior IDs captured the decision, then lint the spec. Plans and existing task trackers reference those IDs; do not create a second requirements document or intent ledger.',
       ],
@@ -254,7 +265,7 @@ hooks:
       ],
       reconcile: [
         'After implementation, compare current code and actual execution evidence with every affected behavior, global constraint, and potentially regressed behavior. Inspect existing completed tasks too: a checked box is not evidence. State the reviewed revision and scope.',
-        'Run relevant project smoke and regression tests through existing runners; for bug fixes rerun the original reproduction. Record exact command, outcome, environment, and evidence location in the existing PR or task tracker. If execution is unavailable, say why and mark affected behavior unverified.',
+        'Run relevant project smoke and regression tests through existing runners; tests should cite the behavior IDs they cover. For bug fixes rerun the original reproduction. Record exact command, outcome, environment, and revision in the existing PR or task tracker. If execution or coverage evidence is missing, mark affected behavior unverified. Specify does not automatically verify semantic agreement between prose, code, and tests.',
         'For each reviewed area/behavior ID report satisfied, gap, or unverified with code locations and supporting evidence. Identify missing, partial, contradictory, and unrequested implementation. A test-file name alone, an old passing run, or a suite unrelated to the claim cannot establish satisfaction.',
         'Run linked formal checks when relevant and report simulation, bounded verification, and proof separately from application evidence. A passing model does not prove the implementation matches it. An absent formal link means no formal evidence, not failed application verification; missing required application evidence means unverified.',
         'Never rewrite a requirement to match buggy or incomplete code. Keep the review itself read-only for code and intent; put corrective work in the existing issue tracker, then implement authorized fixes and repeat reconciliation. Ask only for new authority or unresolved intent, and report exact external blockers.',

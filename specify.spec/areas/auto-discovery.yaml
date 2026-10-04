@@ -5,17 +5,21 @@ prose: >
   immediately.
 behaviors:
   - id: auto-discovery-patterns
+    title: Recognized spec locations
     description: >
       Searches spec.yaml, spec.yml, *.spec.yaml (and .json equivalents) in cwd, plus directories
       named "spec"/"specs" or ending in ".spec" that contain a recognized manifest file (spec.yaml,
       spec.yml, spec.json, specify.spec.yaml/.yml/.json, or manifest.yaml/.yml/.json)
   - id: auto-discovery-logs
+    title: Visible discovery feedback
     description: |
       Logs "Using auto-discovered spec: <path>" to stderr
   - id: auto-discovery-multiple-candidates-fails
+    title: Safe handling of ambiguous specs
     description: >
       When more than one spec file/directory matches, discovery fails with an error listing the
       candidates instead of guessing
   - id: auto-discovery-applied-to
+    title: Consistent discovery across commands
     description:
       Applies to view, formal check, spec init, spec check, spec lint, spec split, and spec context.

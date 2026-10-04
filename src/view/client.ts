@@ -5,6 +5,33 @@ type Entry = { area: Area; behavior: Behavior; id: string };
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const search = byId<HTMLInputElement>('search');
 const areaSelect = byId<HTMLSelectElement>('area-select');
+const themeSelect = byId<HTMLSelectElement>('theme');
+const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
+let theme = 'system';
+try {
+  const saved = localStorage.getItem('specify-theme');
+  if (saved === 'light' || saved === 'dark') {
+    theme = saved;
+  }
+} catch {
+  // The reader still works when browser storage is disabled.
+}
+function applyTheme(): void {
+  document.documentElement.dataset.theme =
+    theme === 'system' ? (systemTheme.matches ? 'dark' : 'light') : theme;
+  themeSelect.value = theme;
+}
+themeSelect.addEventListener('change', () => {
+  theme = themeSelect.value;
+  applyTheme();
+  try {
+    localStorage.setItem('specify-theme', theme);
+  } catch {
+    // An explicit choice still applies for this session.
+  }
+});
+systemTheme.addEventListener('change', applyTheme);
+applyTheme();
 let spec: ViewSpec;
 let entries: Entry[] = [];
 let areaId = '';
@@ -30,8 +57,11 @@ function selectedId(): string {
 function chooseArea(id: string): void {
   areaId = id;
   page = 0;
+  const hash = id ? `#area=${encodeURIComponent(id)}` : '#';
+  location.hash = hash;
   renderAreas();
   renderList();
+  renderDetail();
 }
 
 function renderAreas(): void {
@@ -39,6 +69,7 @@ function renderAreas(): void {
   nav.replaceChildren();
   const overview = element('a', 'Project overview', 'area');
   overview.href = '#';
+  overview.setAttribute('aria-current', String(!selectedId()));
   nav.append(overview);
   areaSelect.replaceChildren();
   const groups = [
@@ -48,7 +79,7 @@ function renderAreas(): void {
   for (const area of groups) {
     const button = element('button', '', 'area');
     button.append(element('span', area.name), element('span', String(area.count), 'count'));
-    button.setAttribute('aria-current', String(areaId === area.id));
+    button.setAttribute('aria-current', String(areaId === area.id && Boolean(selectedId())));
     button.addEventListener('click', () => chooseArea(area.id));
     nav.append(button);
     const option = element('option', `${area.name} (${area.count})`);
@@ -77,7 +108,13 @@ function renderList(): void {
     const link = element('a', '', 'behavior');
     link.href = `#${encodeURIComponent(entry.id)}`;
     link.setAttribute('aria-current', String(selectedId() === entry.id));
-    link.append(element('code', entry.id), element('span', entry.behavior.description, 'summary'));
+    link.append(
+      element('span', entry.behavior.title ?? entry.behavior.description, 'behavior-title'),
+    );
+    if (entry.behavior.title) {
+      link.append(element('span', entry.behavior.description, 'summary'));
+    }
+    link.append(element('code', entry.id));
     list.append(link);
   }
   if (!matches.length) {
@@ -103,9 +140,21 @@ function renderOverview(detail: HTMLElement): void {
   detail.append(
     element(
       'p',
-      `${spec.areas.length} areas · ${entries.length} behaviors. Select a behavior to inspect its intent, source, and linked formal properties.`,
+      'Start with an area to understand its purpose, then inspect the precise contracts that support it.',
     ),
   );
+  const areas = element('div', '', 'area-overview');
+  for (const area of spec.areas) {
+    const card = element('a', '', 'area-card');
+    card.href = `#area=${encodeURIComponent(area.id)}`;
+    card.append(element('h2', area.name));
+    if (area.prose) {
+      card.append(element('p', area.prose));
+    }
+    card.append(element('span', `${area.behaviors.length} behavioral contracts →`, 'reference'));
+    areas.append(card);
+  }
+  detail.append(areas);
   for (const assumption of spec.assumptions ?? []) {
     section(detail, 'Assumption', assumption.description);
     if (assumption.check) {
@@ -114,9 +163,29 @@ function renderOverview(detail: HTMLElement): void {
   }
 }
 
+function renderArea(detail: HTMLElement, area: Area): void {
+  detail.append(element('span', 'AREA PURPOSE', 'label'), element('h1', area.name));
+  if (area.prose) {
+    detail.append(element('p', area.prose, 'purpose'));
+  }
+  detail.append(element('h2', 'Behavioral contracts'));
+  for (const behavior of area.behaviors) {
+    const link = element('a', behavior.title ?? behavior.description, 'contract-link');
+    link.href = `#${encodeURIComponent(`${area.id}/${behavior.id}`)}`;
+    detail.append(link);
+  }
+}
+
 function renderDetail(): void {
   const detail = byId('detail');
   detail.replaceChildren();
+  if (selectedId().startsWith('area=')) {
+    const area = spec.areas.find((item) => item.id === selectedId().slice(5));
+    if (area) {
+      renderArea(detail, area);
+      return;
+    }
+  }
   const entry = entries.find((item) => item.id === selectedId());
   if (!entry) {
     if (selectedId()) {
@@ -132,7 +201,22 @@ function renderDetail(): void {
     return;
   }
   const { behavior, area, id } = entry;
-  detail.append(element('code', id, 'id'), element('h1', behavior.description));
+  const parentLink = element('a', `← ${area.name}`, 'parent-link');
+  parentLink.href = `#area=${encodeURIComponent(area.id)}`;
+  detail.append(parentLink, element('h1', behavior.title ?? behavior.description));
+  if (area.prose) {
+    const context = element('div', '', 'context');
+    context.append(element('span', 'AREA PURPOSE', 'label'), element('p', area.prose));
+    detail.append(context);
+  }
+  if (behavior.rationale) {
+    section(detail, 'Why this matters', behavior.rationale);
+  }
+  const contract = element('section', '', 'contract');
+  contract.append(element('h2', 'Behavioral contract'), element('code', id, 'id'));
+  // Old specs keep their original heading; the precise assertion is never inferred from an ID.
+  contract.append(element('p', behavior.description));
+  detail.append(contract);
   for (const tag of behavior.tags ?? []) {
     detail.append(element('span', tag, 'tag'));
   }
@@ -170,9 +254,13 @@ function renderDetail(): void {
       ),
     );
   }
-  if (area.prose) {
-    section(detail, `About ${area.name}`, area.prose);
-  }
+  detail.append(
+    element(
+      'p',
+      'Validation is not assessed here. Spec lint checks structure; application tests check behavior. A test reference or formal model alone is not proof of this contract.',
+      'notice',
+    ),
+  );
   for (const assumption of spec.assumptions ?? []) {
     section(detail, 'Project assumption', assumption.description);
     if (assumption.check) {
@@ -190,6 +278,7 @@ async function refresh(): Promise<void> {
       throw new Error(failure.error ?? 'Could not load spec');
     }
     if (text !== lastResponse) {
+      const firstLoad = lastResponse === '';
       spec = JSON.parse(text) as ViewSpec;
       lastResponse = text;
       entries = spec.areas.flatMap((area) =>
@@ -197,6 +286,9 @@ async function refresh(): Promise<void> {
       );
       if (areaId && !spec.areas.some((area) => area.id === areaId)) {
         areaId = '';
+      }
+      if (firstLoad) {
+        alignAreaWithSelection();
       }
       document.title = `${spec.name} · Specify`;
       byId('name').textContent = spec.name;
@@ -233,12 +325,24 @@ byId('next').addEventListener('click', () => {
 });
 window.addEventListener('hashchange', () => {
   if (spec) {
+    alignAreaWithSelection();
+    renderAreas();
     renderList();
     renderDetail();
     byId('reader').scrollTop = 0;
     byId('reader').focus();
   }
 });
+function alignAreaWithSelection(): void {
+  const selected = selectedId();
+  const selectedArea = selected.startsWith('area=')
+    ? selected.slice(5)
+    : entries.find((entry) => entry.id === selected)?.area.id;
+  if (selectedArea !== areaId) {
+    areaId = selectedArea ?? '';
+    page = 0;
+  }
+}
 document.querySelector('.skip')?.addEventListener('click', (event) => {
   event.preventDefault();
   byId('reader').focus();

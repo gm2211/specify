@@ -182,7 +182,20 @@ export const specSchema = {
           description: 'Kebab-case identifier, unique within area.',
           pattern: '^[a-z0-9]+(-[a-z0-9]+)*$',
         },
+        title: {
+          type: 'string',
+          minLength: 1,
+          pattern: '\\S',
+          description: 'Optional human-readable label; the stable ID remains the reference.',
+        },
         description: { type: 'string', description: 'The behavioral claim — what should be true.' },
+        rationale: {
+          type: 'string',
+          minLength: 1,
+          pattern: '\\S',
+          description:
+            'Why this behavior matters, based on known intent; not test evidence or source wording.',
+        },
         details: { type: 'string', description: 'Additional context, edge cases.' },
         source: {
           type: 'object',

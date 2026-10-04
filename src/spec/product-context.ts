@@ -37,6 +37,10 @@ import type { DesignTokenExtraction } from './design-tokens.js';
 export interface ProductClaim {
   /** Verbatim text from the spec (area prose or behavior description). */
   text: string;
+  /** Optional human-readable behavior label. */
+  title?: string;
+  /** Why the behavior matters, when documented. */
+  rationale?: string;
   /** Fully-qualified source id: "area-id" (prose) or "area-id/behavior-id" (behavior). */
   anchor: string;
   /** Exact source wording retained from the behavior, when available. */
@@ -120,6 +124,8 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
     proseClaim: area.prose?.trim() ? { text: area.prose.trim(), anchor: area.id } : undefined,
     behaviorClaims: behaviors.map((b) => ({
       text: b.description.trim(),
+      ...(b.title ? { title: b.title } : {}),
+      ...(b.rationale ? { rationale: b.rationale } : {}),
       anchor: `${area.id}/${b.id}`,
       ...(b.source ? { source: b.source } : {}),
       ...(b.formal ? { formal: b.formal } : {}),
@@ -132,7 +138,8 @@ function areaSection(area: Area, behaviors: Area['behaviors']): ProductAreaSecti
 // ---------------------------------------------------------------------------
 
 function claimLine(claim: ProductClaim, prefix: string): string {
-  const line = `${prefix}${claim.text} [${claim.anchor}]`;
+  const line = `${prefix}${claim.title ? `**${claim.title}:** ` : ''}${claim.text} [${claim.anchor}]`;
+  const rationale = claim.rationale ? `\n  - Rationale: ${JSON.stringify(claim.rationale)}` : '';
   const source = claim.source
     ? `\n  - Source wording: ${JSON.stringify(claim.source.text)}` +
       (claim.source.reference
@@ -142,7 +149,7 @@ function claimLine(claim: ProductClaim, prefix: string): string {
   const formal = (claim.formal ?? [])
     .map((ref) => `\n  - Formal reference (not checked by this projection): ${JSON.stringify(ref)}`)
     .join('');
-  return `${line}${source}${formal}`;
+  return `${line}${rationale}${source}${formal}`;
 }
 
 /** Render PRODUCT.md's managed-region body (the content between the markers, not the surrounding file). */

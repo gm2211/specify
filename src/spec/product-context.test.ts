@@ -23,7 +23,9 @@ function fixtureSpec(): Spec {
         behaviors: [
           {
             id: 'capture-agent-generates-spec',
+            title: 'Capture observed behavior',
             description: 'The capture agent generates a spec from observed behavior.',
+            rationale: 'A durable spec helps agents coordinate implementation.',
             source: {
               text: 'Keep these words exact.\nSecond line remains.  ',
               reference: 'conversation:turn-4',
@@ -73,6 +75,8 @@ test('buildProductContext includes every area and behavior, verbatim, with fully
   );
   assert.ok(genSpec);
   assert.equal(genSpec!.text, 'The capture agent generates a spec from observed behavior.');
+  assert.equal(genSpec!.title, 'Capture observed behavior');
+  assert.equal(genSpec!.rationale, 'A durable spec helps agents coordinate implementation.');
   assert.deepEqual(genSpec!.source, {
     text: 'Keep these words exact.\nSecond line remains.  ',
     reference: 'conversation:turn-4',
@@ -87,6 +91,8 @@ test('renderProductMarkdown emits inline [area/behavior] anchors and never fabri
   const md = renderProductMarkdown(buildProductContext(fixtureSpec()), 'spec.yaml');
 
   assert.match(md, /\[capture\/capture-agent-generates-spec\]/);
+  assert.match(md, /\*\*Capture observed behavior:\*\* The capture agent generates a spec/);
+  assert.match(md, /Rationale: "A durable spec helps agents coordinate implementation\."/);
   assert.match(md, /Capture drives a live browser to record behavior\. \[capture\]/);
   assert.ok(
     md.includes(

@@ -1,17 +1,32 @@
 id: overview
 name: Overview & Help
 prose: >-
-  Discover contract-authoring commands through JSON introspection or human-readable help.
+  Agents can discover supported commands without guessing; humans get readable help. The no-argument
+  JSON manifest gives tools a predictable way to inspect commands, global options, and exit codes,
+  while help flags serve people working at the command line.
 behaviors:
   - id: no-args-returns-json-manifest
+    title: Agent-readable command discovery
+    rationale:
+      A structured manifest lets agents discover supported commands and global options predictably
+      without parsing prose or guessing.
     description: >-
       Running with no arguments exits 0 and outputs JSON with commands, global options, and exit
       codes.
   - id: help-flag-shows-text
+    title: Human-readable command help
+    rationale: >-
+      People at the command line can get supported-command guidance without parsing the agent-facing
+      JSON manifest.
     description: '--help or -h prints human-readable supported commands to stdout and exits 0.'
   - id: version-flag-shows-version
+    title: CLI version reporting
     description: |
       --version or -V outputs semver to stdout and exits 0
   - id: unknown-command-fails
+    title: Clear guidance for unsupported commands
+    rationale: >-
+      Migration guidance helps users of removed commands find the supported workflow without
+      implying the old command still works.
     description:
       Unknown or removed commands output an error, point to migration guidance, and exit 10.
