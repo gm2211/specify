@@ -14,6 +14,7 @@ import { version } from '../version.js';
 import { specInit } from './commands/spec-init.js';
 import { specCheck } from './commands/spec-check.js';
 import { formalCheck } from './commands/formal-check.js';
+import { view } from './commands/view.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -169,6 +170,8 @@ async function main(args: string[]): Promise<number> {
         await startMcpServer();
       }
       return 0;
+    case 'view':
+      return view({ spec: getSpec(), port: get('--port'), noOpen: options.has('--no-open') }, ctx);
     default:
       throw new Error(`Unknown command: ${name}`);
   }
