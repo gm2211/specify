@@ -4,6 +4,20 @@ prose: >-
   This area records Specify's own product decisions. Existing local IDs, exact source wording, and
   rationale are retained from earlier direction; superseded workflow promises are labeled as such.
 behaviors:
+  - id: accessible-spec-viewer
+    description: >-
+      Give every Specify user a seamless UI for browsing the canonical spec in each project.
+    details: >-
+      Product requirement; currently unmet and tracked in SP-cti. Visual browsing should be part of
+      the normal Specify experience across projects. A bundled browser UI with a discoverable CLI
+      entry point is a proposed implementation, not a selected architecture. Evaluate reuse of spek
+      or SpecLens before choosing implementation. Preserve one authoritative spec; a viewer must not
+      require users to maintain a duplicate requirements set. No viewer is shipped by this change.
+    source:
+      text: >-
+        I guess  my main problem is that I want all my projects and all the users of specify to
+        seamlessly be able to get a ui to see the spec
+      reference: '2026-10-04 Specify conversation: shared UI requirement after viewer comparison'
   - id: agent-companion-purpose
     description: >-
       Specify's intended purpose is to accompany coding agents through intent capture, spec-driven
