@@ -35,8 +35,8 @@ bash scripts/record-demo.sh
 asciinema play docs/media/demo.cast
 ```
 
-The script builds Specify, records a 96 × 28 terminal, and renders a looping GIF with Menlo at 16 px
-and a dark palette. Use a locally available monospace font in the agg command if Menlo is absent.
+The script builds Specify, records a 104 × 20 terminal, and renders a looping GIF with Menlo at 15
+px and a dark palette. Use a locally available monospace font in the agg command if Menlo is absent.
 The original cast remains available for pausing, replaying, and selecting terminal text.
 
 ## Refresh screenshots

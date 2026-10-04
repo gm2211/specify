@@ -9,9 +9,9 @@ if [[ "${1:-}" != --session ]]; then
   command -v agg >/dev/null
   npm run build
   asciinema rec --headless --return --overwrite --output-format asciicast-v2 \
-    --window-size 96x28 --title 'Specify: intent to readable contracts' \
+    --window-size 104x20 --title 'Specify: intent to readable contracts' \
     --capture-env '' --command 'bash scripts/record-demo.sh --session' docs/media/demo.cast
-  agg --theme github-dark --font-family Menlo --font-size 16 --fps-cap 12 \
+  agg --theme github-dark --font-family Menlo --font-size 15 --fps-cap 12 \
     --idle-time-limit 8 --last-frame-duration 4 docs/media/demo.cast docs/media/demo.gif
   exit
 fi
