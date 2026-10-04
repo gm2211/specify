@@ -11,7 +11,9 @@ behaviors:
     details: >-
       Follow the system by default. Save explicit choices in browser storage for the viewer origin
       when available, and remain usable when storage is blocked. Apply the palette to navigation,
-      details, search, and error states.
+      details, search, and error states. Use graphical buttons for system, light, and dark with
+      accessible names, keyboard activation, and a visible selected state. User refinement
+      (2026-10-04): "graphical button switch instead of text".
     source:
       text: >-
         One can this be can you have also like a dark mode coming like dark theme light theme

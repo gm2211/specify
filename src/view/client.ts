@@ -5,7 +5,9 @@ type Entry = { area: Area; behavior: Behavior; id: string };
 const byId = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const search = byId<HTMLInputElement>('search');
 const areaSelect = byId<HTMLSelectElement>('area-select');
-const themeSelect = byId<HTMLSelectElement>('theme');
+const themeButtons = Array.from(
+  document.querySelectorAll<HTMLButtonElement>('[data-theme-choice]'),
+);
 const systemTheme = window.matchMedia('(prefers-color-scheme: dark)');
 let theme = 'system';
 try {
@@ -19,17 +21,21 @@ try {
 function applyTheme(): void {
   document.documentElement.dataset.theme =
     theme === 'system' ? (systemTheme.matches ? 'dark' : 'light') : theme;
-  themeSelect.value = theme;
-}
-themeSelect.addEventListener('change', () => {
-  theme = themeSelect.value;
-  applyTheme();
-  try {
-    localStorage.setItem('specify-theme', theme);
-  } catch {
-    // An explicit choice still applies for this session.
+  for (const button of themeButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.themeChoice === theme));
   }
-});
+}
+for (const button of themeButtons) {
+  button.addEventListener('click', () => {
+    theme = button.dataset.themeChoice ?? 'system';
+    applyTheme();
+    try {
+      localStorage.setItem('specify-theme', theme);
+    } catch {
+      // An explicit choice still applies for this session.
+    }
+  });
+}
 systemTheme.addEventListener('change', applyTheme);
 applyTheme();
 let spec: ViewSpec;
