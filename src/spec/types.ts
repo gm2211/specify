@@ -84,8 +84,14 @@ export interface Behavior {
   /** Kebab-case identifier, unique within area. Fully-qualified: area-id/behavior-id. */
   id: string;
 
+  /** Optional human-readable label; the stable ID remains the reference. */
+  title?: string;
+
   /** The behavioral claim — what should be true. */
   description: string;
+
+  /** Why this behavior matters, including known purpose or tradeoffs. */
+  rationale?: string;
 
   /** Additional context, edge cases, or clarifications. */
   details?: string;

@@ -21,6 +21,17 @@ test('guide centers existing specs as durable intent source', () => {
   assert.doesNotMatch(tips, /intent context|get_intent_context|intent record/i);
 });
 
+test('guide distinguishes contract, title, rationale, and test evidence', () => {
+  const guide = getAuthoringGuide();
+  assert.ok(guide.patterns.some((item) => item.name === 'Behavior with title and rationale'));
+  const workflow = Object.values(guide.workflow).flat().join('\n');
+  assert.match(workflow, /behavior\.title is a human label/);
+  assert.match(workflow, /behavior\.description is the precise contract/);
+  assert.match(workflow, /behavior\.rationale explains why/);
+  assert.match(workflow, /tests should cite the behavior IDs/);
+  assert.match(workflow, /does not automatically verify semantic agreement/);
+});
+
 test('guide documents linked model checks without claiming application proof', () => {
   const guide = getAuthoringGuide();
   const pattern = guide.patterns.find(

@@ -5,30 +5,38 @@ prose: >
   descriptions, oversized single files).
 behaviors:
   - id: lint-valid-spec-exits-zero
+    title: Successful validation feedback
     description: |
       Linting a valid spec exits 0; JSON/NDJSON modes emit a structured result, while text mode reports status on stderr
   - id: lint-invalid-spec-exits-nonzero
+    title: Actionable validation failures
     description: |
       Linting an invalid spec exits 10; JSON/NDJSON modes emit an errors array, while text mode reports errors on stderr
   - id: lint-auto-discovers-spec
+    title: Spec discovery for linting
     description: |
       Without --spec, auto-discovers spec file (or spec directory) from cwd
   - id: lint-accepts-stdin
+    title: Piped spec input
     description: |
       --spec - reads spec YAML from stdin
   - id: lint-warns-oversized-single-file
+    title: Readable single-file contract limits
     description: >-
       Single-file contracts above 40 KiB, 800 lines, 12 areas, or 120 behaviors warn; above 80 KiB,
       1600 lines, 24 areas, or 240 behaviors fail lint and recommend splitting.
   - id: lint-directory-fragment-size-warning-is-advisory
+    title: Advisory sizing for directory specs
     description: >
       Directory spec source fragments may trigger advisory size warnings regardless of thresholds;
       fragment warnings never fail lint and aggregate directory size does not trigger a warning
   - id: lint-ignores-legacy-sidecars
+    title: Contract-only validation
     description: >-
       Lint validates the contract only. It neither evaluates nor mutates adjacent formula,
       learned-state, or inferred Quint sidecars.
   - id: lint-stable-ids-and-composition
+    title: Stable IDs and unambiguous composition
     description: >
       Duplicate area IDs and duplicate behavior IDs within an area fail lint. Bare behavior ID
       collisions across areas warn because fully-qualified IDs remain distinct. Invalid or

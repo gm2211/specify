@@ -5,22 +5,28 @@ prose: >-
   an explicit reason for leaving it unchanged.
 behaviors:
   - id: spec-check-selects-spec-and-requires-base
+    title: Selected spec and comparison base
     description: >-
       'spec check' selects a spec with --spec PATH or auto-discovers one, and requires --base REF
   - id: spec-check-lints-selected-spec
+    title: Lint before accepting spec changes
     description: >-
       Check lints the selected file or composed spec directory and fails when lint fails
   - id: spec-check-requires-ancestor-base
+    title: Comparable repository history
     description: >-
       --base must resolve to an ancestor commit of the current HEAD
   - id: spec-check-accepts-spec-change
+    title: Spec updates satisfy review accounting
     description: >-
       A repository change that includes the selected spec source satisfies the spec-change
       requirement without --reason
   - id: spec-check-requires-reason-without-spec-change
+    title: Reason for leaving the spec unchanged
     description: >-
       When repository files changed but the selected spec source did not, a nonblank --reason is
       required
   - id: spec-check-allows-no-change
+    title: No-change check succeeds cleanly
     description: >-
       With no repository changes and a valid spec, check succeeds without --reason

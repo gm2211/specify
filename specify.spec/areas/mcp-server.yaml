@@ -5,12 +5,15 @@ prose: >-
   credentials.
 behaviors:
   - id: mcp-starts-stdio
+    title: Local stdio server startup
     description: |
       'specify mcp' starts MCP server on stdio transport
   - id: mcp-exposes-spec-tools
+    title: Contract authoring tools
     description: >
       Exposes get_authoring_guide, lint_spec, parse_spec, and spec_to_yaml — spec authoring and
       validation without shelling out to the CLI
   - id: mcp-exposes-discovery-tool
+    title: Command discovery for agents
     description: |
       Exposes list_commands, returning the same command manifest as 'specify schema commands'

@@ -1,16 +1,23 @@
 id: agent-integration
 name: Optional Agent Workflow Integration
+prose: >-
+  Optional agent commands reuse Specify's canonical contract for capture, review, and
+  reconciliation. They keep implementation guidance and test evidence with the existing plans,
+  tasks, and pull requests rather than creating a second requirements or evidence system.
 behaviors:
   - id: spec-kit-reuses-canonical-contract
+    title: Reuse of the canonical contract
     description: >-
       The optional Spec Kit extension exposes capture, review, and reconcile agent commands that
       read Specify's guide and existing canonical behavior contract without generating a competing
       spec.md or copying requirements into plans and tasks.
   - id: spec-kit-resolves-cli-collision
+    title: Unambiguous CLI selection
     description: >-
       Integration guidance distinguishes GitHub Spec Kit's executable from this Specify executable
       and requires an explicit resolved path rather than guessing which specify command is on PATH.
   - id: integration-keeps-evidence-external
+    title: Evidence stays with existing work records
     description: >-
       Agent findings and actual test evidence use existing PR/task records. The adapter does not
       provide a new test runner, evidence store, semantic checker, or automatic conversation

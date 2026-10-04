@@ -6,26 +6,33 @@ prose: >
   of as one growing file.
 behaviors:
   - id: split-writes-directory-spec
+    title: Readable per-area spec files
     description: >
       Writes <output>/spec.yaml (the manifest, with areas referencing relative file paths) and one
       <output>/areas/<area-id>.yaml per area
   - id: split-defaults-output-dir
+    title: Predictable default output location
     description: >
       Without --output, the target directory is the source spec's path with its .yaml/.yml/.json
       extension stripped, in the same parent directory
   - id: split-requires-empty-output-dir
+    title: Protection for existing output
     description: |
       Fails if the output directory already exists and is non-empty, unless --force is given
   - id: split-force-overwrites
+    title: Explicit replacement of existing output
     description: |
       --force allows splitting into a pre-existing, non-empty output directory
   - id: split-rejects-stdin-spec
+    title: On-disk input requirement
     description: |
       --spec - fails; splitting requires a real spec file on disk
   - id: split-rejects-directory-source
+    title: Single-file source requirement
     description: |
       Fails if --spec already points at a directory (it is already split)
   - id: split-does-not-delete-source
+    title: Preserved source contract
     description: >
       The original single-file spec is left on disk untouched after a successful split — callers
       that want a directory-only repo must remove it themselves

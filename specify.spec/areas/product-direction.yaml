@@ -5,6 +5,7 @@ prose: >-
   rationale are retained from earlier direction; superseded workflow promises are labeled as such.
 behaviors:
   - id: accessible-spec-viewer
+    title: A reader for every Specify project
     description: >-
       Give every Specify user a seamless UI for browsing the canonical spec in each project.
     details: >-
@@ -18,6 +19,7 @@ behaviors:
         seamlessly be able to get a ui to see the spec
       reference: '2026-10-04 Specify conversation: shared UI requirement after viewer comparison'
   - id: agent-companion-purpose
+    title: Keep agent work grounded in intent
     description: >-
       Specify's intended purpose is to accompany coding agents through intent capture, spec-driven
       development, conflict detection for new behavior, feature smoke testing, regression detection,
@@ -36,6 +38,7 @@ behaviors:
         able to smoke test features and catch regressions
       reference: '2026-10-03 Specify conversation: clarification after the OpenSpec comparison'
   - id: formal-property-authoring
+    title: Express important properties precisely
     description: >-
       Help coding agents encode intended properties in formal validation languages such as Quint or
       Lean.
@@ -50,6 +53,7 @@ behaviors:
         languages like quint.sh or Lean
       reference: '2026-10-03 Specify conversation: formal property encoding clarification'
   - id: bounded-formal-checks
+    title: Check linked formal models
     description: >-
       Help agents author and run bounded checks for Quint and Lean properties explicitly linked to
       behavioral requirements.
@@ -63,6 +67,7 @@ behaviors:
       text: merge all then implement formal integration
       reference: '2026-10-03 user approval for the initial formal integration'
   - id: reuse-agent-workflow
+    title: Reuse the agent review workflow
     description: >-
       Borrow Spec Kit's conflict-review and implementation-reconciliation workflow while retaining
       one authoritative behavioral spec, with an optional thin Spec Kit adapter.
@@ -74,6 +79,7 @@ behaviors:
       text: Cool. Apply your recommendations.
       reference: '2026-10-03 approval following Specify versus GitHub Spec Kit comparison'
   - id: keep-specs-focused
+    title: Keep specs focused and navigable
     description: >-
       Keep intent and specs focused, organized, and small enough to inspect. Preserve stable IDs;
       update existing records instead of accumulating contradictory copies.
@@ -87,6 +93,7 @@ behaviors:
         '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
         completion reconciliation proposal.'
   - id: preserve-user-intent
+    title: Preserve explicit decisions
     description: >-
       Make durable user intent the main workflow: capture explicit decisions with their source, keep
       assumptions and proposals distinct, and retrieve applicable intent before agent work.
@@ -102,6 +109,7 @@ behaviors:
         '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
         completion reconciliation proposal.'
   - id: review-intent-before-completion
+    title: Reconcile work with intent
     description: >-
       Require agents to account for intent before finishing changes, bind reviews to the actual
       changed content, and expose unmet requirements without rewriting intent to match
@@ -117,6 +125,7 @@ behaviors:
         '2026-09-27 Specify conversation: user approval of capture, retrieval, focused specs, and
         completion reconciliation proposal.'
   - id: single-spec-authority
+    title: One authoritative spec
     description: >-
       Keep product direction in the behavioral spec. Remove the separate intent ledger, its capture,
       retrieval, and reconciliation commands and MCP tools, and the completion-evidence layer.

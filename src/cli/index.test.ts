@@ -27,27 +27,96 @@ const contract = {
   ],
 };
 
-test('CLI manifest, help and version expose only the reduced product', () => {
-  const manifest = run([]);
-  assert.equal(manifest.status, 0, manifest.stderr);
-  const names = JSON.parse(manifest.stdout).commands.map((c: { name: string }) => c.name);
-  assert.deepEqual(names, [
-    'formal check',
-    'spec init',
-    'spec check',
-    'spec lint',
-    'spec split',
-    'spec context',
-    'spec guide',
-    'view',
-    'schema',
-    'mcp',
+test('overview/no-args-returns-json-manifest exposes a typed discovery manifest', () => {
+  const result = run([]);
+  assert.equal(result.status, 0, result.stderr);
+  const manifest: unknown = JSON.parse(result.stdout);
+  assert.ok(manifest && typeof manifest === 'object' && !Array.isArray(manifest));
+  assert.deepEqual(Object.keys(manifest).sort(), ['commands', 'exit_codes', 'global_options']);
+  const payload = manifest as {
+    commands: Array<{
+      name: string;
+      description: string;
+      parameters: Array<{
+        name: string;
+        description: string;
+        required: boolean;
+        type: string;
+      }>;
+    }>;
+    global_options: string[];
+    exit_codes: Record<string, number>;
+  };
+  assert.ok(Array.isArray(payload.commands) && payload.commands.length > 0);
+  for (const command of payload.commands) {
+    assert.equal(typeof command.name, 'string');
+    assert.ok(command.name.length > 0);
+    assert.equal(typeof command.description, 'string');
+    assert.ok(Array.isArray(command.parameters));
+    for (const option of command.parameters) {
+      assert.deepEqual(Object.keys(option).sort(), ['description', 'name', 'required', 'type']);
+      assert.equal(typeof option.name, 'string');
+      assert.equal(typeof option.description, 'string');
+      assert.equal(typeof option.required, 'boolean');
+      assert.ok(['string', 'boolean'].includes(option.type));
+    }
+  }
+  assert.deepEqual(
+    payload.commands.map(({ name }) => name),
+    [
+      'formal check',
+      'spec init',
+      'spec check',
+      'spec lint',
+      'spec split',
+      'spec context',
+      'spec guide',
+      'view',
+      'schema',
+      'mcp',
+    ],
+  );
+  assert.deepEqual(payload.global_options, [
+    '--format',
+    '--output-format',
+    '--fields',
+    '--json',
+    '--quiet',
+    '-q',
   ]);
-  assert.match(run(['--version']).stdout, /^0\.7\.\d+\n$/);
-  const help = run(['--help']);
-  assert.equal(help.status, 0);
-  assert.match(help.stdout, /maintained specs/);
-  for (const removed of [
+  assert.deepEqual(payload.exit_codes, { SUCCESS: 0, REVIEW_REQUIRED: 1, PARSE_ERROR: 10 });
+  assert.ok(
+    payload.commands
+      .find(({ name }) => name === 'spec check')
+      ?.parameters.some(({ name, required }) => name === '--base' && required),
+  );
+  assert.ok(
+    payload.commands
+      .find(({ name }) => name === 'spec split')
+      ?.parameters.some(({ name, type }) => name === '--force' && type === 'boolean'),
+  );
+});
+
+test('overview/help-flag-shows-text supports both help flags', () => {
+  for (const flag of ['--help', '-h']) {
+    const help = run([flag]);
+    assert.equal(help.status, 0, help.stderr);
+    assert.match(help.stdout, /maintained specs/);
+    assert.match(help.stdout, /spec check/);
+  }
+});
+
+test('overview/version-flag-shows-version supports both version flags', () => {
+  for (const flag of ['--version', '-V']) {
+    const version = run([flag]);
+    assert.equal(version.status, 0, version.stderr);
+    assert.match(version.stdout, /^0\.8\.\d+\n$/);
+  }
+});
+
+test('overview/unknown-command-fails points to migration guidance', () => {
+  for (const command of [
+    'unknown-command',
     'capture',
     'create',
     'human',
@@ -58,7 +127,7 @@ test('CLI manifest, help and version expose only the reduced product', () => {
     'prove',
     'intent',
   ]) {
-    const result = run([removed]);
+    const result = run([command]);
     assert.equal(result.status, 10, result.stderr);
     assert.match(result.stdout, /migration/);
   }

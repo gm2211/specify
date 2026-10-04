@@ -1,23 +1,37 @@
 id: spec-guide
 name: Spec Authoring Guide
 behaviors:
+  - id: guide-separates-purpose-and-contract
+    title: Explain outcomes before precise rules
+    description: >-
+      Guide authors to distinguish project purpose, area outcomes, short titles, exact contracts,
+      and rationale, and connect external tests to stable behavior IDs.
+    details: >-
+      Ground rationale in known intent or label assumptions. Record test commands, results, and
+      revision in the existing PR or tracker. Treat missing coverage as unverified; structural lint
+      and formal models do not prove application behavior.
   - id: guide-documents-behavior-source
+    title: Preserve the source of intent
     description: >-
       The guide explains optional behavior source.text and source.reference fields for preserving
       exact user wording and its reference
   - id: guide-outputs-json
+    title: An authoring guide for agents
     description: |
       Outputs JSON guide with schema, examples, patterns, tips, and a capture/review/reconcile
       workflow for the calling agent
   - id: guide-reviews-conflicts
+    title: Review conflicting intent
     description: >-
       The guide directs read-only agent review of new intent against relevant behaviors,
       constraints, and plans, with source-linked findings and unresolved decisions made explicit.
   - id: guide-reconciles-evidence
+    title: Reconcile implementation evidence
     description: >-
       The guide directs agents to reconcile behavior IDs against current implementation and actual
       smoke/regression evidence, report satisfied, gap, or unverified, and repeat authorized fixes
       using the existing task tracker without weakening requirements or creating another store.
   - id: guide-exits-zero
+    title: Read the guide successfully
     description: |
       Exits 0

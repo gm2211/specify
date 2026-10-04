@@ -88,7 +88,9 @@ test('behavior source wording survives parse, YAML serialization, and directory 
           behaviors: [
             {
               id: 'keeps-source',
+              title: 'Keep account changes clear',
               description: 'Account change remains explicit.',
+              rationale: 'People need to understand when account settings take effect.',
               source: { text: sourceText, reference: 'conversation:turn-12' },
             },
           ],
@@ -99,6 +101,11 @@ test('behavior source wording survives parse, YAML serialization, and directory 
     writeFile(specPath, specToYaml(spec));
 
     assert.equal(loadSpec(specPath).areas[0].behaviors[0].source?.text, sourceText);
+    assert.equal(loadSpec(specPath).areas[0].behaviors[0].title, 'Keep account changes clear');
+    assert.equal(
+      loadSpec(specPath).areas[0].behaviors[0].rationale,
+      'People need to understand when account settings take effect.',
+    );
     const split = splitSpecFileToDirectory(specPath, { outputDir: path.join(dir, 'split') });
     assert.equal(
       loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].source?.text,
@@ -108,8 +115,42 @@ test('behavior source wording survives parse, YAML serialization, and directory 
       loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].source?.reference,
       'conversation:turn-12',
     );
+    assert.equal(
+      loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].title,
+      'Keep account changes clear',
+    );
+    assert.equal(
+      loadSpec(path.dirname(split.manifestPath)).areas[0].behaviors[0].rationale,
+      'People need to understand when account settings take effect.',
+    );
   } finally {
     cleanup();
+  }
+});
+
+test('optional behavior title and rationale must contain non-whitespace text', () => {
+  const base = {
+    version: '2',
+    name: 'Optional behavior metadata',
+    target: { type: 'web', url: 'http://localhost:3000' },
+    areas: [
+      {
+        id: 'account',
+        name: 'Account',
+        behaviors: [{ id: 'save', description: 'Settings save.' }],
+      },
+    ],
+  };
+  assert.doesNotThrow(() => parseSpec(JSON.stringify(base)));
+  for (const field of ['title', 'rationale'] as const) {
+    const behavior = { ...base.areas[0].behaviors[0], [field]: '  \n  ' };
+    assert.throws(
+      () =>
+        parseSpec(
+          JSON.stringify({ ...base, areas: [{ ...base.areas[0], behaviors: [behavior] }] }),
+        ),
+      field === 'title' ? /title/ : /rationale/,
+    );
   }
 });
 

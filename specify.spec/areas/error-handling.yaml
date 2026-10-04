@@ -4,12 +4,16 @@ prose: >-
   Invalid input and unsupported commands fail explicitly with stable exit codes.
 behaviors:
   - id: exit-code-one-review-required
+    title: Review required for unchanged specs
     description: Exit 1 means repository changes require an explicit reason for unchanged specs.
   - id: exit-code-zero-success
+    title: Successful operation status
     description: Exit 0 means the invoked authoring or validation operation succeeded.
   - id: exit-code-ten-parse-error
+    title: Input and parsing failures
     description: Exit 10 = argument parsing, file not found, or invalid YAML
   - id: invalid-options-fail
+    title: Explicit rejection of invalid options
     description: >-
       Unknown options, repeated options, missing option values, and invalid output formats fail with
       exit 10 rather than being silently ignored.
