@@ -12,7 +12,6 @@ const nodeGlobals = {
 };
 
 const ignores = [
-  '.beads/**',
   '.claude/**',
   '.codex/**',
   '.dolt/**',

@@ -15,12 +15,8 @@ cli-report/
 # Generated review files
 *.review.html
 
-# Dolt database files (added by bd init)
-.dolt/
 *.db
 
-# Beads / Dolt files (added by bd init)
-.beads-credential-key
 
 # Terraform local state
 deploy/terraform/**/.terraform/
@@ -30,6 +26,3 @@ deploy/terraform/**/*.auto.tfvars
 
 .last-update-check
 
-.beads/issues.jsonl
-.beads/interactions.jsonl
-.beads/export-state.json
