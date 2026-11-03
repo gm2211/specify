@@ -14,7 +14,6 @@ const nodeGlobals = {
 const ignores = [
   '.claude/**',
   '.codex/**',
-  '.dolt/**',
   '.specify/**',
   '.specify-self-verify/**',
   '.worktrees/**',

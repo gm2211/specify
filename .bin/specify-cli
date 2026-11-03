@@ -2,15 +2,12 @@
 /**
  * .bin/specify-cli — Argos specify-cli contract implementation for the specify repo.
  *
- * Backing store: .beads/issues.jsonl (open issues → flagged items)
- * Addressed tracking: .specify/addressed-items.jsonl (local, gitignored via .specify/)
- *
- * Implements: status, list-flagged, mark-addressed, verify, activity, open, flag
+ * Implements: status, verify, activity, open
  * Exit codes: 0=ok, 1=usage/bad-args, 2=auth, 3=daemon-unreachable, 4=not-found
  */
 
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, appendFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -18,9 +15,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 
 // Store paths
-const BEADS_FILE = resolve(REPO_ROOT, '.beads/issues.jsonl');
 const SPECIFY_DIR = resolve(REPO_ROOT, '.specify');
-const ADDRESSED_FILE = resolve(SPECIFY_DIR, 'addressed-items.jsonl');
 const ACTIVITY_FILE = resolve(SPECIFY_DIR, 'activity-log.jsonl');
 const SPEC_PATH = resolve(REPO_ROOT, 'specify.spec');
 
@@ -50,51 +45,6 @@ function out(obj) {
   process.stdout.write(JSON.stringify(obj) + '\n');
 }
 
-function loadBeadsItems() {
-  if (!existsSync(BEADS_FILE)) return [];
-  return readFileSync(BEADS_FILE, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l));
-}
-
-function loadAddressed() {
-  if (!existsSync(ADDRESSED_FILE)) return new Set();
-  return new Set(
-    readFileSync(ADDRESSED_FILE, 'utf8')
-      .split('\n')
-      .filter(Boolean)
-      .map((l) => JSON.parse(l).id),
-  );
-}
-
-function ensureSpecifyDir() {
-  if (!existsSync(SPECIFY_DIR)) mkdirSync(SPECIFY_DIR, { recursive: true });
-}
-
-function appendActivity(kind, ref, summary) {
-  ensureSpecifyDir();
-  const entry = { ts: new Date().toISOString(), kind, ref, summary };
-  appendFileSync(ACTIVITY_FILE, JSON.stringify(entry) + '\n');
-}
-
-function issueTypeToKind(issueType) {
-  if (issueType === 'bug') return 'regression';
-  if (issueType === 'feature') return 'spec-drift';
-  if (issueType === 'task') return 'spec-drift';
-  return 'spec-drift';
-}
-
-function issueToFlaggedItem(issue) {
-  return {
-    id: issue.id,
-    title: issue.title,
-    evidence: issue.description || '(no description)',
-    kind: issueTypeToKind(issue.issue_type),
-    createdAt: issue.created_at,
-  };
-}
-
 // ── subcommands ───────────────────────────────────────────────────────────────
 
 function cmdStatus() {
@@ -109,56 +59,6 @@ function cmdStatus() {
         )?.[1] ?? null)
       : null,
   });
-}
-
-function cmdListFlagged(flags) {
-  const limit = flags.limit ? parseInt(flags.limit, 10) : 50;
-  const since = flags.since || null;
-
-  const addressed = loadAddressed();
-  let items = loadBeadsItems()
-    .filter((i) => i._type === 'issue' && i.status === 'open')
-    .filter((i) => !addressed.has(i.id))
-    .map(issueToFlaggedItem);
-
-  // Cursor-based pagination (cursor = last id seen)
-  if (since) {
-    const idx = items.findIndex((i) => i.id === since);
-    if (idx !== -1) items = items.slice(idx + 1);
-  }
-
-  const page = items.slice(0, limit);
-  const cursor = page.length >= limit && items.length > limit ? page[page.length - 1].id : '';
-
-  out({ items: page, cursor });
-}
-
-function cmdMarkAddressed(flags) {
-  const id = flags.id;
-  if (!id) die('missing --id', 1);
-
-  ensureSpecifyDir();
-
-  // Verify item exists
-  const addressed = loadAddressed();
-  if (addressed.has(id)) {
-    // Already addressed — idempotent success
-    process.exit(0);
-  }
-
-  const allItems = loadBeadsItems();
-  const found = allItems.find((i) => i.id === id);
-  if (!found) {
-    // Check if it was ever an open issue
-    die(`item not found: ${id}`, 4);
-  }
-
-  appendFileSync(
-    ADDRESSED_FILE,
-    JSON.stringify({ id, addressedAt: new Date().toISOString() }) + '\n',
-  );
-  appendActivity('addressed', id, `Addressed: ${found.title}`);
-  process.exit(0);
 }
 
 function cmdVerify(_flags) {
@@ -216,17 +116,6 @@ function cmdOpen(flags) {
   process.exit(0);
 }
 
-function cmdFlag(flags) {
-  const beadId = flags['bead-id'];
-  const note = flags.note;
-  if (!beadId) die('missing --bead-id', 1);
-  if (!note) die('missing --note', 1);
-
-  ensureSpecifyDir();
-  appendActivity('flag', beadId, `Flagged by bead ${beadId}: ${note}`);
-  process.exit(0);
-}
-
 // ── main ──────────────────────────────────────────────────────────────────────
 
 const [, , subcmd, ...rest] = process.argv;
@@ -235,12 +124,6 @@ const flags = parseArgs(rest);
 switch (subcmd) {
   case 'status':
     cmdStatus();
-    break;
-  case 'list-flagged':
-    cmdListFlagged(flags);
-    break;
-  case 'mark-addressed':
-    cmdMarkAddressed(flags);
     break;
   case 'verify':
     cmdVerify(flags);
@@ -251,13 +134,9 @@ switch (subcmd) {
   case 'open':
     cmdOpen(flags);
     break;
-  case 'flag':
-    cmdFlag(flags);
-    break;
   default:
     die(
-      `Usage: specify-cli <subcommand> [flags]\n` +
-        `Subcommands: status, list-flagged, mark-addressed, verify, activity, open, flag`,
+      `Usage: specify-cli <subcommand> [flags]\n` + `Subcommands: status, verify, activity, open`,
       1,
     );
 }

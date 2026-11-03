@@ -2,9 +2,7 @@
 /**
  * .bin/external-feedback-cli — Argos external-feedback-cli contract implementation for the specify repo.
  *
- * Backing stores (merged, deduped by id):
- *   1. .beads/issues.jsonl        — open issues → unvetted feedback items (vetted: false)
- *   2. .specify/feedback-items.jsonl — seeded/imported vetted items (vetted: true/false per record)
+ * Backing store: .specify/feedback-items.jsonl — seeded/imported items (vetted: true/false per record)
  *
  * Addressed tracking: .specify/ef-addressed.jsonl
  *
@@ -19,7 +17,6 @@ import { fileURLToPath } from 'node:url';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..');
 
-const BEADS_FILE = resolve(REPO_ROOT, '.beads/issues.jsonl');
 const SPECIFY_DIR = resolve(REPO_ROOT, '.specify');
 const FEEDBACK_ITEMS_FILE = resolve(SPECIFY_DIR, 'feedback-items.jsonl');
 const EF_ADDRESSED_FILE = resolve(SPECIFY_DIR, 'ef-addressed.jsonl');
@@ -54,14 +51,6 @@ function ensureSpecifyDir() {
   if (!existsSync(SPECIFY_DIR)) mkdirSync(SPECIFY_DIR, { recursive: true });
 }
 
-function loadBeadsItems() {
-  if (!existsSync(BEADS_FILE)) return [];
-  return readFileSync(BEADS_FILE, 'utf8')
-    .split('\n')
-    .filter(Boolean)
-    .map((l) => JSON.parse(l));
-}
-
 function loadSeedItems() {
   if (!existsSync(FEEDBACK_ITEMS_FILE)) return [];
   return readFileSync(FEEDBACK_ITEMS_FILE, 'utf8')
@@ -80,25 +69,6 @@ function loadAddressed() {
   );
 }
 
-function issueTypeToKind(issueType) {
-  if (issueType === 'bug') return 'bug';
-  if (issueType === 'feature') return 'feature';
-  return 'spec-drift';
-}
-
-function issueToExternalFeedbackItem(issue) {
-  return {
-    id: issue.id,
-    title: issue.title,
-    description: issue.description || '(no description)',
-    kind: issueTypeToKind(issue.issue_type),
-    priority: typeof issue.priority === 'number' ? issue.priority : 2,
-    labels: issue.labels || [],
-    createdAt: issue.created_at,
-    vetted: false,
-  };
-}
-
 // ── subcommands ───────────────────────────────────────────────────────────────
 
 function cmdList(flags) {
@@ -108,18 +78,8 @@ function cmdList(flags) {
 
   const addressed = loadAddressed();
 
-  // Build merged item map (seed items override bead items if same id)
+  // Dedupe by id (later records win)
   const itemMap = new Map();
-
-  // Load open bead items first (lower priority)
-  for (const issue of loadBeadsItems()) {
-    if (issue._type === 'issue' && issue.status === 'open') {
-      const item = issueToExternalFeedbackItem(issue);
-      itemMap.set(item.id, item);
-    }
-  }
-
-  // Load seed items (higher priority — override beads if same id)
   for (const item of loadSeedItems()) {
     if (item.id) itemMap.set(item.id, item);
   }
@@ -157,13 +117,8 @@ function cmdMarkAddressed(flags) {
     process.exit(0); // idempotent
   }
 
-  // Verify item exists in either store
-  const beadsItems = loadBeadsItems();
-  const seedItems = loadSeedItems();
-  const allIds = new Set([
-    ...beadsItems.filter((i) => i._type === 'issue' && i.status === 'open').map((i) => i.id),
-    ...seedItems.map((i) => i.id),
-  ]);
+  // Verify item exists
+  const allIds = new Set(loadSeedItems().map((i) => i.id));
 
   if (!allIds.has(id)) {
     die(`item not found: ${id}`, 4);
