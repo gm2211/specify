@@ -10,7 +10,8 @@ gh issue create --title "..." --body "..."          # File a task
 gh issue close <n> --comment "Completed in #<pr>"   # Complete work
 ```
 
-For follow-up work discovered along the way, file a new issue and reference the parent issue number (for example "Follow-up to #12") in the body.
+For follow-up work discovered along the way, file a new issue and reference the parent issue number
+(for example "Follow-up to #12") in the body.
 
 ## Landing the Plane (Session Completion)
 

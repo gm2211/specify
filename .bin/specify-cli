@@ -136,8 +136,7 @@ switch (subcmd) {
     break;
   default:
     die(
-      `Usage: specify-cli <subcommand> [flags]\n` +
-        `Subcommands: status, verify, activity, open`,
+      `Usage: specify-cli <subcommand> [flags]\n` + `Subcommands: status, verify, activity, open`,
       1,
     );
 }
