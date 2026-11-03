@@ -1,48 +1,30 @@
 # Agent Instructions
 
-This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
+## Issue tracking
 
-## Quick Reference
-
-See the Quick Reference in Beads Issue Tracker below. Also available:
-`bd update <id> --status in_progress` (alternate claim syntax) and `bd sync` (sync with git).
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and
-commands.
-
-### Quick Reference
+Tasks are GitHub Issues, managed with the `gh` CLI:
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
+gh issue list                                       # Find open work
+gh issue create --title "..." --body "..."          # File a task
+gh issue close <n> --comment "Completed in #<pr>"   # Complete work
 ```
 
-### Rules
+For follow-up work discovered along the way, file a new issue and reference the parent issue number (for example "Follow-up to #12") in the body.
 
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
-
-## Session Completion
+## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until
 `git push` succeeds.
 
 **MANDATORY WORKFLOW:**
 
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
+1. **File issues for remaining work** - Create GitHub Issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
+3. **Update issue status** - Close finished issues, comment on in-progress ones
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
-   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
@@ -56,12 +38,6 @@ bd close <id>         # Complete work
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->
-
-## Landing the Plane (Session Completion)
-
-Same mandatory workflow as **Session Completion** above. Step 4 may alternatively run `bd sync`
-instead of `bd dolt push`.
 
 ## Build & Test
 
