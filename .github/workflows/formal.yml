@@ -73,7 +73,16 @@ jobs:
       - name: Install Specify
         env:
           REF: ${{ inputs.specify-ref }}
-        run: npm install --global "github:gm2211/specify#${REF}"
+        # Built from source and packed: npm cannot build git dependencies in a global install.
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/specify-src"
+          git init -q "$src"
+          git -C "$src" fetch -q --depth 1 https://github.com/gm2211/specify.git "$REF"
+          git -C "$src" checkout -q FETCH_HEAD
+          (cd "$src" && npm ci --ignore-scripts --no-audit && npm pack --silent --pack-destination "$RUNNER_TEMP")
+          npm install --global "$RUNNER_TEMP"/specify-*.tgz
+          specify --version
       - name: Install Quint and Apalache/TLC (checksum-verified)
         if: contains(inputs.tools, 'quint')
         env:

@@ -7,7 +7,7 @@ and run every linked check with one command.
 ## Set up a project
 
 ```bash
-npm install --global github:gm2211/specify#v0.8.1   # the npm package named "specify" is unrelated
+npm install --global https://github.com/gm2211/specify/releases/download/v0.8.1/specify-0.8.1.tgz
 specify init           # openspec init, formal/, AGENTS.md instructions, Claude Code skill
 specify formal check   # runs every Formal: line and prints requirement → result
 ```
@@ -21,7 +21,9 @@ jobs:
     uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
 ```
 
-Bumping the tag in that line (and in the install command) is how a project picks up a new Specify.
+The npm package named `specify` is unrelated; install from the GitHub release as above, or in a Node
+project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.8.1`. Bumping the tag
+is how a project picks up a new Specify.
 
 ## What a link looks like
 

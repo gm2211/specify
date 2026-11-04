@@ -47,3 +47,13 @@ the checks under `lake env`.
 
 - **WHEN** the root has a `lakefile.toml`
 - **THEN** checks run with the project's compiled dependencies available
+
+### Requirement: Release tarballs
+
+Pushing a `v*` tag that matches `package.json` SHALL publish a GitHub release with the packed
+`specify-<version>.tgz` and its `SHA256SUMS`, so projects can install a pinned version globally.
+
+#### Scenario: Tag push
+
+- **WHEN** `v0.8.1` is pushed
+- **THEN** `releases/download/v0.8.1/specify-0.8.1.tgz` installs with `npm install --global`
