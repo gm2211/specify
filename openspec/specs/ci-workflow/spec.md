@@ -50,10 +50,11 @@ the checks under `lake env`.
 
 ### Requirement: Release tarballs
 
-Pushing a `v*` tag that matches `package.json` SHALL publish a GitHub release with the packed
-`specify-<version>.tgz` and its `SHA256SUMS`, so projects can install a pinned version globally.
+A push to `main` whose `package.json` version has no release yet SHALL publish a GitHub release
+tagged `v<version>` with the packed `specify-<version>.tgz` and its `SHA256SUMS`, so projects can
+install a pinned version globally.
 
-#### Scenario: Tag push
+#### Scenario: Version bump merged
 
-- **WHEN** `v0.8.2` is pushed
+- **WHEN** a merge to `main` sets the version to `0.8.2`
 - **THEN** `releases/download/v0.8.2/specify-0.8.2.tgz` installs with `npm install --global`
