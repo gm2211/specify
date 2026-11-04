@@ -7,7 +7,7 @@ and run every linked check with one command.
 ## Set up a project
 
 ```bash
-npm install --global https://github.com/gm2211/specify/releases/download/v0.8.1/specify-0.8.1.tgz
+npm install --global https://github.com/gm2211/specify/releases/download/v0.8.2/specify-0.8.2.tgz
 specify init           # openspec init, formal/, AGENTS.md instructions, Claude Code skill
 specify formal check   # runs every Formal: line and prints requirement → result
 ```
@@ -18,11 +18,11 @@ in the job summary:
 ```yaml
 jobs:
   formal:
-    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.2
 ```
 
 The npm package named `specify` is unrelated; install from the GitHub release as above, or in a Node
-project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.8.1`. Bumping the tag
+project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.8.2`. Bumping the tag
 is how a project picks up a new Specify.
 
 ## What a link looks like

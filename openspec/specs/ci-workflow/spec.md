@@ -55,5 +55,5 @@ Pushing a `v*` tag that matches `package.json` SHALL publish a GitHub release wi
 
 #### Scenario: Tag push
 
-- **WHEN** `v0.8.1` is pushed
-- **THEN** `releases/download/v0.8.1/specify-0.8.1.tgz` installs with `npm install --global`
+- **WHEN** `v0.8.2` is pushed
+- **THEN** `releases/download/v0.8.2/specify-0.8.2.tgz` installs with `npm install --global`

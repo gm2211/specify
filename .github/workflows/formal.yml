@@ -4,7 +4,7 @@
 #
 #   jobs:
 #     formal:
-#       uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.8.2
 #
 # Set `specify-ref` to the same tag. Results appear in the job summary as a requirement → result
 # table. Override the tool versions and checksums together.
@@ -31,7 +31,7 @@ on:
       specify-ref:
         description: Git ref of gm2211/specify to install
         type: string
-        default: v0.8.1
+        default: v0.8.2
       quint-version:
         type: string
         default: 0.33.1

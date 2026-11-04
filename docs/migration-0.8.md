@@ -63,9 +63,9 @@ The npm package named `specify` is unrelated to this project. Install the releas
 a tag:
 
 ```bash
-npm install --global https://github.com/gm2211/specify/releases/download/v0.8.1/specify-0.8.1.tgz
+npm install --global https://github.com/gm2211/specify/releases/download/v0.8.2/specify-0.8.2.tgz
 ```
 
 In a Node project, a dev dependency also works:
-`npm install --save-dev github:gm2211/specify#v0.8.1` (npm cannot build a GitHub dependency in a
+`npm install --save-dev github:gm2211/specify#v0.8.2` (npm cannot build a GitHub dependency in a
 global install). In CI, use the reusable workflow described in [formal checks](formal.md#ci).

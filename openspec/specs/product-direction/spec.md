@@ -43,7 +43,7 @@ validation languages like quint.sh or Lean".
 Every project SHALL be able to adopt the same setup with `specify init` plus a shared CI workflow,
 so a Specify version bump updates all of them.
 
-Source (2026-11-04): "how do I replicate this setup across all projects". Delivered in 0.8.1 as
+Source (2026-11-04): "how do I replicate this setup across all projects". Delivered in 0.8.2 as
 `specify init` (OpenSpec, `formal/`, AGENTS.md, Claude Code skill) plus the reusable workflow
 `gm2211/specify/.github/workflows/formal.yml`. Specify installs from GitHub because the npm package
 named `specify` belongs to someone else.

@@ -82,12 +82,12 @@ lake env specify formal check --tool lean
 ```yaml
 jobs:
   formal:
-    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.2
     with: # all optional
       root: .
       tools: quint,lean
       change: '' # an OpenSpec change to include
-      specify-ref: v0.8.1 # keep equal to the tag above
+      specify-ref: v0.8.2 # keep equal to the tag above
 ```
 
 The workflow installs Specify from GitHub, Quint from the npm registry tarball (sha512 checked),
