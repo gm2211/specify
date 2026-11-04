@@ -111,6 +111,7 @@ async function main(args: string[]): Promise<number> {
         {
           root: get('--root'),
           tool: get('--tool'),
+          change: get('--change'),
           timeoutMs: get('--timeout-ms'),
           quintBin: get('--quint-bin'),
           leanBin: get('--lean-bin'),

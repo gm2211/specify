@@ -1,0 +1,143 @@
+# Reusable workflow: run `specify formal check` with checksum-pinned tools.
+#
+# In another repository:
+#
+#   jobs:
+#     formal:
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
+#
+# Set `specify-ref` to the same tag. Results appear in the job summary as a requirement → result
+# table. Override the tool versions and checksums together.
+name: Formal checks
+on:
+  workflow_call:
+    inputs:
+      root:
+        description: Project root containing openspec/
+        type: string
+        default: '.'
+      tools:
+        description: Comma-separated tools to install and run (quint, lean)
+        type: string
+        default: quint,lean
+      change:
+        description: Also check this OpenSpec change's delta specs
+        type: string
+        default: ''
+      timeout-ms:
+        description: Deadline per check
+        type: string
+        default: '600000'
+      specify-ref:
+        description: Git ref of gm2211/specify to install
+        type: string
+        default: v0.8.1
+      quint-version:
+        type: string
+        default: 0.33.1
+      quint-integrity:
+        description: npm sha512 integrity of the Quint tarball
+        type: string
+        default: sha512-EYsgxr9SEsumYiix6pD8jbXPiPJoNbQaUxnrLE+dSVL+B9eQHPkVjSW7CBFEoBeMhau/1n70DAQOKvgxa1pVfw==
+      apalache-version:
+        description: Apalache release (also provides TLC); must be the one this Quint version uses
+        type: string
+        default: 0.62.4
+      apalache-sha256:
+        type: string
+        default: 8ac8488422c30d552735bae11b92a2d014d8e02e8608702acc08f9a2d8a9abb2
+      lean-version:
+        type: string
+        default: 4.35.0
+      lean-sha256:
+        description: sha256 of lean-<version>-linux.tar.zst
+        type: string
+        default: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
+permissions:
+  contents: read
+jobs:
+  formal:
+    runs-on: ubuntu-latest
+    env:
+      TOOLS: ${{ inputs.tools }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        if: contains(inputs.tools, 'quint')
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install Specify
+        env:
+          REF: ${{ inputs.specify-ref }}
+        run: npm install --global "github:gm2211/specify#${REF}"
+      - name: Install Quint and Apalache/TLC (checksum-verified)
+        if: contains(inputs.tools, 'quint')
+        env:
+          QUINT_VERSION: ${{ inputs.quint-version }}
+          QUINT_INTEGRITY: ${{ inputs.quint-integrity }}
+          APALACHE_VERSION: ${{ inputs.apalache-version }}
+          APALACHE_SHA256: ${{ inputs.apalache-sha256 }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/quint"
+          mkdir -p "$work"
+          curl -sSLfo "$work/quint.tgz" \
+            "https://registry.npmjs.org/@informalsystems/quint/-/quint-${QUINT_VERSION}.tgz"
+          actual="sha512-$(openssl dgst -sha512 -binary "$work/quint.tgz" | base64 -w0)"
+          if [ "$actual" != "$QUINT_INTEGRITY" ]; then
+            echo "Quint tarball checksum mismatch: $actual" >&2; exit 1
+          fi
+          npm install --global "$work/quint.tgz"
+          curl -sSLfo "$work/apalache.tgz" \
+            "https://github.com/apalache-mc/apalache/releases/download/v${APALACHE_VERSION}/apalache.tgz"
+          echo "${APALACHE_SHA256}  $work/apalache.tgz" | sha256sum --check --strict
+          dist="$HOME/.quint/apalache-dist-${APALACHE_VERSION}"
+          mkdir -p "$dist"
+          tar -xzf "$work/apalache.tgz" -C "$dist"
+          quint --version
+      - name: Install Lean (checksum-verified)
+        if: contains(inputs.tools, 'lean')
+        env:
+          LEAN_VERSION: ${{ inputs.lean-version }}
+          LEAN_SHA256: ${{ inputs.lean-sha256 }}
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/lean"
+          mkdir -p "$work"
+          archive="lean-${LEAN_VERSION}-linux.tar.zst"
+          curl -sSLfo "$work/$archive" \
+            "https://github.com/leanprover/lean4/releases/download/v${LEAN_VERSION}/${archive}"
+          echo "${LEAN_SHA256}  $work/$archive" | sha256sum --check --strict
+          tar --zstd -xf "$work/$archive" -C "$work"
+          echo "$work/lean-${LEAN_VERSION}-linux/bin" >> "$GITHUB_PATH"
+      - name: Build Lean project
+        if:
+          contains(inputs.tools, 'lean') && (hashFiles(format('{0}/lakefile.lean', inputs.root)) !=
+          '' || hashFiles(format('{0}/lakefile.toml', inputs.root)) != '')
+        working-directory: ${{ inputs.root }}
+        run: lake build
+      - name: specify formal check
+        working-directory: ${{ inputs.root }}
+        env:
+          CHANGE: ${{ inputs.change }}
+          TIMEOUT_MS: ${{ inputs.timeout-ms }}
+        run: |
+          set -uo pipefail
+          args=(formal check --root . --format markdown --timeout-ms "$TIMEOUT_MS")
+          if [ -n "$CHANGE" ]; then args+=(--change "$CHANGE"); fi
+          case "$TOOLS" in
+            *quint*lean*|*lean*quint*) ;;
+            *quint*) args+=(--tool quint) ;;
+            *lean*) args+=(--tool lean) ;;
+          esac
+          runner=()
+          if [ -f lakefile.lean ] || [ -f lakefile.toml ]; then runner=(lake env); fi
+          "${runner[@]}" specify "${args[@]}" > "$RUNNER_TEMP/formal.md"
+          status=$?
+          cat "$RUNNER_TEMP/formal.md"
+          { echo "## Formal checks"; echo; cat "$RUNNER_TEMP/formal.md"; } >> "$GITHUB_STEP_SUMMARY"
+          exit $status

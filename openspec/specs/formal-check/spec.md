@@ -28,6 +28,22 @@ paths relative to the project root.
 - **WHEN** a `Formal:` line appears inside a fenced code block
 - **THEN** it is ignored
 
+### Requirement: OpenSpec change overlay
+
+With `--change <name>`, the checker SHALL also read `openspec/changes/<name>/specs/**/spec.md`:
+requirements the change adds or modifies replace the main spec's links for the same requirement, and
+requirements under `## REMOVED Requirements` are dropped from the report.
+
+#### Scenario: Modified requirement
+
+- **WHEN** a change modifies a requirement and gives it a new `Formal:` link
+- **THEN** only the change's link runs for that requirement
+
+#### Scenario: Unsafe change name
+
+- **WHEN** the change name contains a path separator
+- **THEN** the command is rejected
+
 ### Requirement: Expected outcomes
 
 Each link SHALL declare `expect=holds` (default) or `expect=fails`, and a check SHALL count as

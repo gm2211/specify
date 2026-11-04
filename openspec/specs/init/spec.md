@@ -49,3 +49,24 @@ evidence boundary.
 
 - **WHEN** AGENTS.md contains a `spec-workflow` region from Specify 0.7
 - **THEN** that region is removed and surrounding text is kept
+
+### Requirement: Claude Code skill
+
+When the OpenSpec tools include `claude` (the default) or `all`, init SHALL install the bundled
+`specify-formal-properties` skill at `.claude/skills/specify-formal-properties/SKILL.md`, replacing
+an older copy.
+
+#### Scenario: Default tools
+
+- **WHEN** `specify init` runs without `--tools`
+- **THEN** the skill file exists under `.claude/skills/`
+
+### Requirement: Agent command
+
+The managed instructions SHALL name the command agents run: `./specify` when the project has that
+wrapper, `npx specify` when `package.json` depends on `specify`, and `specify` otherwise.
+
+#### Scenario: Global install
+
+- **WHEN** the project has neither the wrapper nor a dependency
+- **THEN** the instructions say to run `specify formal check`

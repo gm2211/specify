@@ -25,21 +25,7 @@ jobs:
           OPENSPEC_TELEMETRY: '0'
         run: npx --yes @fission-ai/openspec@1.16.0 validate --specs --strict
   formal-example:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: npm
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - run: npm ci
-      - run: npm run build
-      - run: npm install --global @informalsystems/quint@0.33.1
-      - name: Check the example's Quint links (TLC, Apalache, simulation)
-        run:
-          node dist/src/cli/index.js formal check --root examples/counter --tool quint --format text
-          --timeout-ms 600000
+    uses: ./.github/workflows/formal.yml
+    with:
+      root: examples/counter
+      specify-ref: ${{ github.event.pull_request.head.sha || github.sha }}

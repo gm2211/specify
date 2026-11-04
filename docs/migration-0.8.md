@@ -56,3 +56,9 @@ Apalache; verification now defaults to TLC, so add `backend=apalache` to keep th
   `unlinkedBehaviorIds` is now `unlinkedRequirementIds`.
 - `specify init` writes a `formal-workflow` region to AGENTS.md and removes the old `spec-workflow`
   region.
+
+## Installing
+
+The npm package named `specify` is unrelated to this project. Install from GitHub instead, pinned to
+a tag: `npm install --global github:gm2211/specify#v0.8.1` (or as a devDependency). In CI, use the
+reusable workflow described in [formal checks](formal.md#ci).

@@ -9,6 +9,7 @@ export interface FormalCheckOptions {
   quintBin?: string;
   leanBin?: string;
   tool?: string;
+  change?: string;
 }
 
 export async function formalCheck(options: FormalCheckOptions, ctx: CliContext): Promise<number> {
@@ -25,6 +26,7 @@ export async function formalCheck(options: FormalCheckOptions, ctx: CliContext):
     quintBin: options.quintBin,
     leanBin: options.leanBin,
     tool: options.tool,
+    change: options.change,
   });
   const human = ctx.outputFormat === 'text' || ctx.outputFormat === 'markdown';
   writeOutput(human && !ctx.fields ? formatReport(report) : report, ctx);

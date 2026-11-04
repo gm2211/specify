@@ -59,6 +59,7 @@ someone later weakens the property, the before model stops failing and `formal c
 specify formal check                      # JSON when piped, a table on a terminal
 specify formal check --format text        # requirement → result table
 specify formal check --tool quint         # only Quint links
+specify formal check --change add-cap     # include an OpenSpec change's delta specs
 specify formal check --root path/to/repo --timeout-ms 300000 \
   --quint-bin quint --lean-bin /path/to/lean
 ```
@@ -66,11 +67,34 @@ specify formal check --root path/to/repo --timeout-ms 300000 \
 The command exits 0 only when at least one check ran and every check matched its expectation.
 Requirements without a `Formal:` line are listed so missing coverage stays visible.
 
+With `--change <name>`, requirements that the change adds or modifies replace the main spec's links,
+and requirements it removes disappear from the report. Use it to check a proposal before
+`openspec archive`.
+
 For a Lean project with imports, run through Lake so the caller's compiled dependencies are found:
 
 ```bash
 lake env specify formal check --tool lean
 ```
+
+## CI
+
+```yaml
+jobs:
+  formal:
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.1
+    with: # all optional
+      root: .
+      tools: quint,lean
+      change: '' # an OpenSpec change to include
+      specify-ref: v0.8.1 # keep equal to the tag above
+```
+
+The workflow installs Specify from GitHub, Quint from the npm registry tarball (sha512 checked),
+Apalache (which also provides TLC, sha256 checked), Java 21 and Lean from its release archive
+(sha256 checked). If the root has a `lakefile`, it runs `lake build` and checks under `lake env`.
+The requirement → result table goes to the log and the job summary. To change a tool version,
+override the version and its checksum inputs together.
 
 ## Tools
 
@@ -81,8 +105,8 @@ checks only on trusted models and in an environment whose network exposure is ac
 Lean checks compile the named file and inspect the theorem's transitive axioms. `propext`,
 `Classical.choice` and `Quot.sound` are accepted; `sorry` and custom axioms fail.
 
-Validated with Quint 0.33.1 (TLC and Apalache backends). Lean support was validated with Lean 4.34.1
-in Specify 0.7. Unrecognized tool output is reported as an error, never as a pass.
+Validated with Quint 0.33.1 (Apalache 0.62.4; TLC and Apalache backends) and Lean 4.35.0.
+Unrecognized tool output is reported as an error, never as a pass.
 
 ## Example
 
