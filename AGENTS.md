@@ -40,6 +40,11 @@ For follow-up work discovered along the way, file a new issue and reference the 
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
 
+## Merging
+
+Agents may merge their own PRs in this repository once CI is green and no review threads are open,
+without asking first (Giulio, 2026-11-04: "do it all, merge without asking for specify").
+
 ## Build & Test
 
 Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`. With Quint on PATH,

@@ -13,13 +13,15 @@ export interface CheckFormalOptions {
   timeoutMs?: number;
   /** Run only links for this tool. */
   tool?: 'quint' | 'lean';
+  /** Overlay this OpenSpec change's delta specs on the main specs. */
+  change?: string;
 }
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
 export async function checkFormal(options: CheckFormalOptions): Promise<FormalCheckSummary> {
   const root = path.resolve(options.root);
-  const scan = scanOpenSpec(root);
+  const scan = scanOpenSpec(root, options.change);
   const linked = new Set(scan.references.map((ref) => ref.requirementId));
 
   const results: FormalCheckResult[] = [];

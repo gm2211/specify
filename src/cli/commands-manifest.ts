@@ -33,6 +33,7 @@ export const COMMANDS: CommandDefinition[] = [
     parameters: [
       root,
       string('--tool', 'Run only quint or only lean links'),
+      string('--change', 'Include an OpenSpec change: its delta specs override the main specs'),
       string('--timeout-ms', 'Deadline per check, 1–600000 milliseconds (default 60000)'),
       string('--quint-bin', 'Quint executable (default quint on PATH)'),
       string('--lean-bin', 'Lean executable (default lean on PATH)'),

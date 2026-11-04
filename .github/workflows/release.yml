@@ -1,0 +1,26 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check the tag matches package.json
+        run: test "v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: npm pack
+      - name: Publish the GitHub release with the package tarball
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sha256sum specify-*.tgz > SHA256SUMS
+          gh release create "$GITHUB_REF_NAME" specify-*.tgz SHA256SUMS --generate-notes \
+            --title "Specify ${GITHUB_REF_NAME}"

@@ -4,10 +4,28 @@ Formal checks for [OpenSpec](https://github.com/Fission-AI/OpenSpec) requirement
 requirements in OpenSpec, link a Quint model or Lean theorem under each one with a `Formal:` line,
 and run every linked check with one command.
 
+## Set up a project
+
 ```bash
-npx specify init                 # runs openspec init, creates formal/, adds AGENTS.md instructions
-npx specify formal check         # runs every Formal: line and prints requirement → result
+npm install --global https://github.com/gm2211/specify/releases/download/v0.8.2/specify-0.8.2.tgz
+specify init           # openspec init, formal/, AGENTS.md instructions, Claude Code skill
+specify formal check   # runs every Formal: line and prints requirement → result
 ```
+
+Then add CI, which installs checksum-pinned Quint, TLC/Apalache and Lean and puts the result table
+in the job summary:
+
+```yaml
+jobs:
+  formal:
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.8.2
+```
+
+The npm package named `specify` is unrelated; install from the GitHub release as above, or in a Node
+project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.8.2`. Bumping the tag
+is how a project picks up a new Specify.
+
+## What a link looks like
 
 ```markdown
 ### Requirement: Count reaches the cap
@@ -29,6 +47,9 @@ The counter SHALL reach its cap when steps keep being taken.
 - **`expect=fails`** keeps a "before" model that must produce a counterexample, so a property that
   can never fail is caught.
 - **Lean theorems**, accepted only with standard axioms (no `sorry`).
+- **OpenSpec changes**: `--change <name>` checks a pending change's delta specs before archive.
+- **A Claude Code skill** (`specify-formal-properties`) that `specify init` installs, covering when
+  to model a requirement, Quint vs Lean, fairness, before models and conformance tests.
 
 Results cover the models only, not the application; tie models to code with conformance tests. See
 [formal checks](docs/formal.md) for the full syntax and [migration notes](docs/migration-0.8.md) if

@@ -1,6 +1,6 @@
 {
   "name": "specify",
-  "version": "0.8.0",
+  "version": "0.8.2",
   "description": "Formal checks (Quint, TLC, Apalache, Lean) for OpenSpec requirements",
   "type": "module",
   "bin": {
@@ -17,7 +17,7 @@
     "test": "npm run build && find dist/src -name '*.test.js' -not -path '*/node_modules/*' | sort | xargs node --test",
     "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc",
     "specify": "node --import tsx src/cli/index.ts",
-    "prepare": "git config core.hooksPath .githooks",
+    "prepare": "npm run build && (git config core.hooksPath .githooks 2>/dev/null || true)",
     "prepack": "npm run build"
   },
   "devDependencies": {
@@ -39,6 +39,7 @@
     "dist",
     "README.md",
     "docs",
-    "examples"
+    "examples",
+    "skills"
   ]
 }

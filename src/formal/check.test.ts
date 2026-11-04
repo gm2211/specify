@@ -127,3 +127,45 @@ test('a project without openspec/specs is a setup error', async () => {
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('--change overlays delta specs: added and modified requirements replace main links, removed ones vanish', async () => {
+  await withProject(['- Formal: quint formal/Counter.qnt nonNegative'], async (root, quint) => {
+    const delta = join(root, 'openspec', 'changes', 'add-cap', 'specs', 'counter');
+    await mkdir(delta, { recursive: true });
+    await writeFile(
+      join(delta, 'spec.md'),
+      [
+        '## MODIFIED Requirements',
+        '',
+        '### Requirement: Never negative',
+        'The counter SHALL stay nonnegative and capped.',
+        '',
+        '- Formal: quint formal/Counter.qnt brokenCapped',
+        '',
+        '## ADDED Requirements',
+        '',
+        '### Requirement: Capped',
+        'The counter SHALL stop at its cap.',
+        '',
+        '- Formal: quint formal/Counter.qnt capped temporal',
+        '',
+        '## REMOVED Requirements',
+        '',
+        '### Requirement: Unlinked',
+        '',
+      ].join('\n'),
+    );
+    const main = await checkFormal({ root, quintBin: quint });
+    assert.equal(main.valid, true);
+    const withChange = await checkFormal({ root, quintBin: quint, change: 'add-cap' });
+    assert.deepEqual(
+      withChange.results.map((r) => [r.requirementId, r.check?.property, r.ok]),
+      [
+        ['counter/Never negative', 'brokenCapped', false],
+        ['counter/Capped', 'capped', true],
+      ],
+    );
+    assert.deepEqual(withChange.unlinkedRequirementIds, []);
+    await assert.rejects(checkFormal({ root, change: '../x' }), /Invalid change name/);
+  });
+});

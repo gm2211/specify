@@ -22,6 +22,8 @@ export interface FormalReference {
 export interface OpenSpecScan {
   references: FormalReference[];
   requirementIds: string[];
+  /** Requirements listed under a delta spec's `## REMOVED Requirements`. */
+  removedIds: string[];
 }
 
 const REQUIREMENT = /^###\s+Requirement:(.*)$/;
@@ -29,9 +31,8 @@ const SECTION_END = /^#{1,3}\s/;
 const FENCE = /^\s*(```|~~~)/;
 const FORMAL = /^(?:\*\*|__)?Formal:(?:\*\*|__)?(.*)$/;
 
-/** Find every OpenSpec main spec (`openspec/specs/<capability>/spec.md`) under a root. */
-export function findSpecFiles(root: string): string[] {
-  const specsDir = path.join(root, 'openspec', 'specs');
+/** Find every `spec.md` under a specs directory (`openspec/specs` or a change's `specs`). */
+export function findSpecFiles(specsDir: string): string[] {
   if (!fs.existsSync(specsDir) || !fs.statSync(specsDir).isDirectory()) {
     throw new Error(`No OpenSpec specs at ${specsDir}. Run \`specify init\` first.`);
   }
@@ -49,24 +50,51 @@ export function findSpecFiles(root: string): string[] {
   return files;
 }
 
-export function scanOpenSpec(root: string): OpenSpecScan {
-  const references: FormalReference[] = [];
-  const requirementIds: string[] = [];
-  const specsDir = path.join(root, 'openspec', 'specs');
-  for (const file of findSpecFiles(root)) {
+/**
+ * Scan main specs, optionally overlaid with an OpenSpec change's delta specs: a requirement the
+ * change adds or modifies replaces the main one's links, and one it removes disappears.
+ */
+export function scanOpenSpec(root: string, change?: string): OpenSpecScan {
+  const main = scanSpecsDir(root, path.join(root, 'openspec', 'specs'));
+  if (!change) return main;
+  if (!/^[\w.-]+$/.test(change) || change === 'archive') {
+    throw new Error(`Invalid change name: ${change}`);
+  }
+  const delta = scanSpecsDir(root, path.join(root, 'openspec', 'changes', change, 'specs'));
+  const replaced = new Set([...delta.requirementIds, ...delta.removedIds]);
+  const requirementIds = [
+    ...main.requirementIds.filter((id) => !replaced.has(id)),
+    ...delta.requirementIds,
+  ];
+  return {
+    references: [
+      ...main.references.filter((ref) => !replaced.has(ref.requirementId)),
+      ...delta.references,
+    ],
+    requirementIds: [...new Set(requirementIds)],
+    removedIds: delta.removedIds,
+  };
+}
+
+function scanSpecsDir(root: string, specsDir: string): OpenSpecScan {
+  const result: OpenSpecScan = { references: [], requirementIds: [], removedIds: [] };
+  for (const file of findSpecFiles(specsDir)) {
     const capability = toPosix(path.relative(specsDir, path.dirname(file))) || '.';
     const relativeFile = toPosix(path.relative(root, file));
     const scanned = scanSpecMarkdown(fs.readFileSync(file, 'utf8'), capability, relativeFile);
-    references.push(...scanned.references);
-    requirementIds.push(...scanned.requirementIds);
+    result.references.push(...scanned.references);
+    result.requirementIds.push(...scanned.requirementIds);
+    result.removedIds.push(...scanned.removedIds);
   }
-  return { references, requirementIds };
+  return result;
 }
 
 /** Parse one spec.md. Exported for tests. */
 export function scanSpecMarkdown(text: string, capability: string, file: string): OpenSpecScan {
   const references: FormalReference[] = [];
   const requirementIds: string[] = [];
+  const removedIds: string[] = [];
+  let removedSection = false;
   let current: string | undefined;
   let fence: string | undefined;
   const lines = text.split(/\r?\n/);
@@ -81,12 +109,18 @@ export function scanSpecMarkdown(text: string, capability: string, file: string)
     const requirement = REQUIREMENT.exec(line);
     const name = requirement?.[1].replace(/#+\s*$/, '').trim();
     if (name) {
-      current = `${capability}/${name}`;
-      requirementIds.push(current);
+      if (removedSection) {
+        removedIds.push(`${capability}/${name}`);
+        current = undefined;
+      } else {
+        current = `${capability}/${name}`;
+        requirementIds.push(current);
+      }
       continue;
     }
     if (SECTION_END.test(line)) {
       current = undefined;
+      if (/^##\s/.test(line)) removedSection = /^##\s+REMOVED\b/i.test(line);
       continue;
     }
     const formal = FORMAL.exec(line.trim().replace(/^[-*+]\s+/, ''));
@@ -110,7 +144,7 @@ export function scanSpecMarkdown(text: string, capability: string, file: string)
       });
     }
   }
-  return { references, requirementIds };
+  return { references, requirementIds, removedIds };
 }
 
 const QUINT_KEYS = new Set(['expect', 'backend', 'mode', 'main', 'max-steps', 'samples', 'seed']);

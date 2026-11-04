@@ -110,6 +110,11 @@ test('init runs openspec init, creates formal/, and manages one AGENTS.md region
     assert.match(agents, /^# Mine\n/);
     assert.match(agents, /Keep me\./);
     assert.match(agents, /expect=fails/);
+    assert.match(agents, /Run `specify formal check`/);
+    assert.match(
+      readFileSync(join(dir, '.claude', 'skills', 'specify-formal-properties', 'SKILL.md'), 'utf8'),
+      /name: specify-formal-properties/,
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

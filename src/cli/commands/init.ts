@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { agentsBody, installAgentsRegion } from '../../init/agents.js';
 import { writeOutput } from '../output.js';
 import { ExitCode } from '../exit-codes.js';
@@ -56,11 +57,43 @@ export function init(options: InitOptions, ctx: CliContext): number {
   if (!fs.existsSync(readme)) fs.writeFileSync(readme, FORMAL_README);
 
   const agents = path.resolve(root, options.agents ?? 'AGENTS.md');
-  const command = fs.existsSync(path.join(root, 'specify')) ? './specify' : 'npx specify';
-  installAgentsRegion(agents, agentsBody(command));
+  installAgentsRegion(agents, agentsBody(specifyCommand(root)));
 
-  writeOutput({ root, openspec, formal: formalDir, agents, initialized: true }, ctx);
+  const tools = (options.tools ?? 'claude').split(',').map((tool) => tool.trim());
+  const skill =
+    tools.includes('claude') || tools.includes('all') ? installClaudeSkill(root) : undefined;
+
+  writeOutput(
+    { root, openspec, formal: formalDir, agents, ...(skill ? { skill } : {}), initialized: true },
+    ctx,
+  );
   return ExitCode.SUCCESS;
+}
+
+/** How agents in this project should invoke Specify. */
+function specifyCommand(root: string): string {
+  if (fs.existsSync(path.join(root, 'specify'))) return './specify';
+  try {
+    const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    if (pkg.dependencies?.specify || pkg.devDependencies?.specify) return 'npx specify';
+  } catch {
+    // No package.json: assume a global install.
+  }
+  return 'specify';
+}
+
+/** Copy the bundled property-writing skill into .claude/skills, replacing an older copy. */
+function installClaudeSkill(root: string): string {
+  const source = fileURLToPath(
+    new URL('../../../../skills/formal-properties/SKILL.md', import.meta.url),
+  );
+  const target = path.join(root, '.claude', 'skills', 'specify-formal-properties', 'SKILL.md');
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+  return target;
 }
 
 /** Returns an error message, or undefined on success. OpenSpec output goes to stderr. */
