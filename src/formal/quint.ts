@@ -1,7 +1,13 @@
 import net from 'node:net';
-import type { QuintFormalCheck } from '../spec/types.js';
 import { runProcess } from './process.js';
-import type { FormalOutcome, FormalScope, ProcessResult, RunProcessOptions } from './types.js';
+import type {
+  FormalEvidence,
+  FormalOutcome,
+  FormalScope,
+  ProcessResult,
+  QuintFormalCheck,
+  RunProcessOptions,
+} from './types.js';
 
 const SUCCESS_MARKER = '[ok] No violation found';
 const COUNTEREXAMPLE_MARKERS = ['[violation] Found an issue', 'error: found a counterexample'];
@@ -16,7 +22,7 @@ export interface QuintRunnerOptions {
 
 export function classifyQuintResult(
   result: ProcessResult,
-  evidence: 'simulation' | 'bounded-model-check',
+  evidence: FormalEvidence,
   scope: FormalScope,
   property: string,
 ): FormalOutcome {
@@ -54,10 +60,10 @@ export function classifyQuintResult(
     };
   }
   if (result.exitCode === 0 && reportsSuccess) {
-    return { ...common, status: 'passed' };
+    return { ...common, status: 'holds' };
   }
   if (result.exitCode !== 0 && reportsCounterexample) {
-    return { ...common, status: 'failed', message: `Quint found a counterexample for ${property}` };
+    return { ...common, status: 'fails', message: `Quint found a counterexample for ${property}` };
   }
   return {
     ...common,
@@ -66,30 +72,69 @@ export function classifyQuintResult(
   };
 }
 
+export function evidenceForQuint(ref: QuintFormalCheck): FormalEvidence {
+  if (ref.mode === 'simulate') return 'simulation';
+  return ref.backend === 'tlc' ? 'exhaustive-model-check' : 'bounded-model-check';
+}
+
+export function scopeForQuint(ref: QuintFormalCheck): FormalScope {
+  return {
+    mode: ref.mode,
+    backend: ref.backend,
+    kind: ref.kind,
+    ...(ref.maxSteps === undefined ? {} : { maxSteps: ref.maxSteps }),
+    ...(ref.mode === 'simulate' ? { samples: ref.samples, seed: ref.seed } : {}),
+  };
+}
+
+/** Build the Quint command line for one linked property. Exported for tests. */
+export function quintArgs(ref: QuintFormalCheck, file: string, port?: number): string[] {
+  const property = ref.kind === 'temporal' ? '--temporal' : '--invariant';
+  if (ref.mode === 'simulate') {
+    return [
+      'run',
+      file,
+      '--backend',
+      'typescript',
+      property,
+      ref.property,
+      '--max-steps',
+      String(ref.maxSteps),
+      '--max-samples',
+      String(ref.samples),
+      '--seed',
+      String(ref.seed),
+      '--verbosity',
+      '3',
+      ...(ref.main ? ['--main', ref.main] : []),
+    ];
+  }
+  return [
+    'verify',
+    file,
+    '--backend',
+    ref.backend,
+    property,
+    ref.property,
+    ...(ref.backend === 'apalache' ? ['--max-steps', String(ref.maxSteps ?? 10)] : []),
+    '--verbosity',
+    '3',
+    ...(ref.main ? ['--main', ref.main] : []),
+    ...(port === undefined ? [] : ['--server-endpoint', `127.0.0.1:${port}`]),
+  ];
+}
+
 export async function checkQuint(
   ref: QuintFormalCheck,
   file: string,
   options: QuintRunnerOptions,
 ): Promise<FormalOutcome> {
-  const evidence = ref.mode === 'simulate' ? 'simulation' : 'bounded-model-check';
-  const backend = ref.mode === 'simulate' ? 'typescript' : 'apalache';
-  const scope: FormalScope = {
-    mode: ref.mode,
-    backend,
-    maxSteps: ref.maxSteps,
-    ...(ref.mode === 'simulate' ? { samples: ref.samples, seed: ref.seed } : {}),
-  };
-  const args = [ref.mode === 'simulate' ? 'run' : 'verify', file];
-  args.push('--backend', backend, '--invariant', ref.property, '--max-steps', String(ref.maxSteps));
-  args.push('--verbosity', '3');
-  if (ref.main) args.push('--main', ref.main);
-
-  if (ref.mode === 'simulate') {
-    args.push('--max-samples', String(ref.samples), '--seed', String(ref.seed));
-  } else {
+  const evidence = evidenceForQuint(ref);
+  const scope = scopeForQuint(ref);
+  let port: number | undefined;
+  if (ref.mode === 'verify' && ref.backend === 'apalache') {
     try {
-      const port = await (options.allocatePort ?? allocateLoopbackPort)();
-      args.push('--server-endpoint', `127.0.0.1:${port}`);
+      port = await (options.allocatePort ?? allocateLoopbackPort)();
     } catch (error) {
       return {
         status: 'error',
@@ -104,6 +149,7 @@ export async function checkQuint(
       };
     }
   }
+  const args = quintArgs(ref, file, port);
 
   const run = options.run ?? runProcess;
   const runOptions: RunProcessOptions = { cwd: options.cwd, timeoutMs: options.timeoutMs };

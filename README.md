@@ -1,42 +1,42 @@
 # Specify
 
-Keep product intent in one small, versioned behavioral spec. Stable behavior IDs make decisions
-reviewable as code changes; source quotes keep user direction attached to the behavior it governs.
+Formal checks for [OpenSpec](https://github.com/Fission-AI/OpenSpec) requirements. Write
+requirements in OpenSpec, link a Quint model or Lean theorem under each one with a `Formal:` line,
+and run every linked check with one command.
 
 ```bash
-npm ci
-npm run build
-./specify spec init --spec specify.spec
-./specify view
-./specify spec check --spec specify.spec --base "$BASE"
+npx specify init                 # runs openspec init, creates formal/, adds AGENTS.md instructions
+npx specify formal check         # runs every Formal: line and prints requirement → result
 ```
 
-`spec init` adds concise managed instructions to `AGENTS.md`. `spec check` lints the selected spec
-and requires a spec change or an explicit reason when repository files change without one. See
-[workflow](docs/workflow.md) and [0.4 migration notes](docs/migration-0.4.md).
+```markdown
+### Requirement: Count reaches the cap
 
-Run `specify view` from any project to open its spec in your browser (or `./specify view` from this
-checkout). The viewer ships with Specify: no separate app, frontend installation, or format
-conversion. It discovers YAML, JSON, and directory specs using the same rules as the other commands.
-Use `--spec path/to/project.spec` to select a source when discovery is ambiguous.
+The counter SHALL reach its cap when steps keep being taken.
 
-Browse areas, search intent and stable behavior IDs, inspect original user quotes and formal links,
-and page through large result sets. Source changes appear automatically. Invalid edits keep the last
-readable spec visible with an out-of-date notice until they are fixed. Formal references are not
-proof results. The viewer reads specs without running hooks, tests, or models.
+- Formal: quint formal/Counter.qnt reachesCap temporal main=Counter
+- Formal: quint formal/Counter.qnt reachesCap temporal main=CounterBefore expect=fails
+```
 
-The server binds to `127.0.0.1` on an available port and prints its URL. Use `--no-open` to open it
-manually or `--port 4310` for a fixed port. Keep the command running while browsing; Ctrl-C stops
-it.
+```text
+| Requirement                   | Check                                            | Expect | Result |   |
+| counter/Count reaches the cap | quint reachesCap in Counter (temporal, tlc)       | holds  | holds  | ✓ |
+| counter/Count reaches the cap | quint reachesCap in CounterBefore (temporal, tlc) | fails  | fails  | ✓ |
+```
 
-Use `spec guide` to author a v2 YAML or JSON contract. `spec lint`, `spec split`, `spec context`,
-`formal check`, `schema`, and local stdio MCP tools support authoring and bounded checks of
-explicitly linked formal models. Formal checks report properties of those models, not semantic
-agreement with the prose or correctness of the application. See [formal checks](docs/formal.md) for
-tool setup, examples, and limits. Specify does not run application tests or manage a separate intent
-ledger.
+- **Invariants and temporal properties**, checked by TLC (every reachable state) by default, or by
+  Apalache (bounded) or random simulation.
+- **`expect=fails`** keeps a "before" model that must produce a counterexample, so a property that
+  can never fail is caught.
+- **Lean theorems**, accepted only with standard axioms (no `sorry`).
 
-Agents use the guide's capture → review → reconcile protocol to record conversational decisions,
-surface conflicts before implementation, and check behavior IDs against current code and actual test
-evidence. [Spec Kit adapter](docs/spec-kit.md) exposes the same workflow as optional agent commands
-while retaining the existing spec as the only requirements source.
+Results cover the models only, not the application; tie models to code with conformance tests. See
+[formal checks](docs/formal.md) for the full syntax and [migration notes](docs/migration-0.8.md) if
+you used Specify 0.7's own spec format.
+
+## Develop
+
+```bash
+npm ci && npm run quality && npm test
+./specify formal check --root examples/counter --tool quint --format text   # needs quint on PATH
+```

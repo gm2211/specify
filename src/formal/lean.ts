@@ -2,9 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
-import type { LeanFormalCheck } from '../spec/types.js';
 import { runProcess } from './process.js';
-import type { FormalOutcome } from './types.js';
+import type { FormalOutcome, LeanFormalCheck } from './types.js';
 
 const STANDARD_AXIOMS = new Set(['propext', 'Classical.choice', 'Quot.sound']);
 
@@ -120,7 +119,7 @@ export async function checkLean(
             ? 'timeout'
             : result.outputLimit
               ? 'error'
-              : 'failed';
+              : 'fails';
         outcome.message = result.outputLimit
           ? 'Lean output exceeded the capture limit; no proof result accepted.'
           : 'Lean could not complete theorem validation.';
@@ -132,7 +131,7 @@ export async function checkLean(
     outcome.axioms = certificate.axioms;
     outcome.statement = certificate.statement;
     const extraAxioms = certificate.axioms.filter((axiom) => !STANDARD_AXIOMS.has(axiom));
-    outcome.status = extraAxioms.length === 0 ? 'passed' : 'failed';
+    outcome.status = extraAxioms.length === 0 ? 'holds' : 'fails';
     outcome.message = extraAxioms.length
       ? `Theorem relies on unaccepted axioms: ${extraAxioms.join(', ')}.`
       : 'Lean accepted the theorem using only standard axioms.';

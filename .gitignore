@@ -26,3 +26,6 @@ deploy/terraform/**/*.auto.tfvars
 
 .last-update-check
 
+
+# Apalache output from formal checks
+_apalache-out/

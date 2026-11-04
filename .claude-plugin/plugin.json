@@ -1,6 +1,6 @@
 {
   "name": "specify-dev",
-  "description": "Behavioral contract authoring, structural linting, and external results validation",
+  "description": "Formal checks (Quint, TLC, Apalache, Lean) for OpenSpec requirements",
   "author": {
     "name": "gm2211"
   }

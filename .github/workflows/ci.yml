@@ -20,13 +20,26 @@ jobs:
       - run: npm ci
       - run: npm run quality
       - run: npm test
-      - name: Check spec review against PR base
-        if: github.event_name == 'pull_request'
+      - name: Validate OpenSpec specs
         env:
-          SPEC_BASE: ${{ github.event.pull_request.base.sha }}
-          SPEC_PR_BODY: ${{ github.event.pull_request.body }}
-        run: |
-          reason=$(printf '%s\n' "$SPEC_PR_BODY" | sed -n 's/^Spec review: //p' | head -n 1)
-          args=()
-          if [ -n "$reason" ]; then args=(--reason "$reason"); fi
-          node dist/src/cli/index.js spec check --spec specify.spec --base "$SPEC_BASE" "${args[@]}"
+          OPENSPEC_TELEMETRY: '0'
+        run: npx --yes @fission-ai/openspec@1.16.0 validate --specs --strict
+  formal-example:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npm run build
+      - run: npm install --global @informalsystems/quint@0.33.1
+      - name: Check the example's Quint links (TLC, Apalache, simulation)
+        run:
+          node dist/src/cli/index.js formal check --root examples/counter --tool quint --format text
+          --timeout-ms 600000

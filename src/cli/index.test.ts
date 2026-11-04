@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { spawn, spawnSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import {
+  chmodSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,69 +19,34 @@ function run(args: string[], cwd?: string) {
   return spawnSync(process.execPath, [cli, ...args], { cwd, encoding: 'utf8', timeout: 15000 });
 }
 
-const contract = {
-  version: '2',
-  name: 'Fixture',
-  target: { type: 'cli', binary: 'unused' },
-  areas: [
-    {
-      id: 'account',
-      name: 'Account',
-      behaviors: [
-        { id: 'login', description: 'Valid credentials open a session' },
-        { id: 'logout', description: 'Logout closes the session' },
-      ],
-    },
-  ],
-};
+function tempDir(prefix: string): string {
+  return mkdtempSync(join(tmpdir(), prefix));
+}
 
-test('CLI manifest, help and version expose only the reduced product', () => {
+test('CLI manifest, help and version expose only init and formal check', () => {
   const manifest = run([]);
   assert.equal(manifest.status, 0, manifest.stderr);
   const names = JSON.parse(manifest.stdout).commands.map((c: { name: string }) => c.name);
-  assert.deepEqual(names, [
-    'formal check',
-    'spec init',
-    'spec check',
-    'spec lint',
-    'spec split',
-    'spec context',
-    'spec guide',
-    'view',
-    'schema',
-    'mcp',
-  ]);
-  assert.match(run(['--version']).stdout, /^0\.7\.\d+\n$/);
+  assert.deepEqual(names, ['init', 'formal check']);
+  assert.match(run(['--version']).stdout, /^0\.8\.\d+\n$/);
   const help = run(['--help']);
   assert.equal(help.status, 0);
-  assert.match(help.stdout, /maintained specs/);
-  for (const removed of [
-    'capture',
-    'create',
-    'human',
-    'review',
-    'daemon',
-    'deploy',
-    'verify',
-    'prove',
-    'intent',
-  ]) {
-    const result = run([removed]);
-    assert.equal(result.status, 10, result.stderr);
-    assert.match(result.stdout, /migration/);
+  assert.match(help.stdout, /OpenSpec/);
+  for (const removed of [['spec', 'lint'], ['spec', 'init'], ['view'], ['mcp'], ['schema']]) {
+    const result = run(removed);
+    assert.equal(result.status, 10, removed.join(' '));
+    assert.match(result.stdout, /migration-0\.8/);
   }
 });
 
-test('CLI fails closed on removed, unknown, duplicate and malformed options', () => {
+test('CLI fails closed on unknown, duplicate and malformed options', () => {
   for (const args of [
-    ['mcp', '--http'],
-    ['spec', 'check'],
-    ['verify', '--url', 'http://example.test'],
-    ['spec', 'lint', '--spec'],
-    ['spec', 'lint', '--spec', 'a', '--spec', 'b'],
-    ['--format', 'garbage', 'schema', 'spec'],
-    ['schema', 'commands', '--format'],
+    ['formal', 'check', '--spec', 'x'],
+    ['formal', 'check', '--root'],
+    ['formal', 'check', '--root', 'a', '--root', 'b'],
+    ['--format', 'garbage', 'formal', 'check'],
     ['formal', 'check', '--timeout-ms', '0'],
+    ['formal', 'check', '--tool', 'tla'],
   ]) {
     const result = run(args);
     assert.equal(result.status, 10, args.join(' '));
@@ -81,100 +54,77 @@ test('CLI fails closed on removed, unknown, duplicate and malformed options', ()
   }
 });
 
-test('formal CLI reports unlinked requirements and rejects invalid timeout values', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'specify-formal-cli-'));
+test('formal check prints JSON with unlinked requirements and a table for text output', () => {
+  const dir = tempDir('specify-formal-cli-');
   try {
-    const spec = join(dir, 'contract.json');
-    writeFileSync(spec, JSON.stringify(contract));
-    const result = run(['formal', 'check', '--spec', spec]);
-    assert.equal(result.status, 1, result.stderr);
-    const report = JSON.parse(result.stdout);
+    mkdirSync(join(dir, 'openspec', 'specs', 'account'), { recursive: true });
+    writeFileSync(
+      join(dir, 'openspec', 'specs', 'account', 'spec.md'),
+      '## Requirements\n\n### Requirement: Login\nThe system SHALL log in.\n',
+    );
+    const json = run(['formal', 'check', '--root', dir]);
+    assert.equal(json.status, 1, json.stderr);
+    const report = JSON.parse(json.stdout);
     assert.equal(report.valid, false);
-    assert.equal(report.scope, 'formal-models-only');
-    assert.deepEqual(report.unlinkedBehaviorIds, ['account/login', 'account/logout']);
-    for (const value of ['0', '1.5', '600001', '10seconds']) {
-      const invalid = run(['formal', 'check', '--spec', spec, '--timeout-ms', value]);
-      assert.equal(invalid.status, 10, value);
-      assert.match(invalid.stderr, /timeout-ms/);
-    }
+    assert.deepEqual(report.unlinkedRequirementIds, ['account/Login']);
+    const text = run(['formal', 'check', '--root', dir, '--format', 'text']);
+    assert.equal(text.status, 1);
+    assert.match(text.stdout, /\| Requirement \| Check \| Expect \| Result \|/);
+    assert.match(text.stdout, /- account\/Login/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('contract lint accepts stdin and discovery refuses ambiguous contracts', () => {
-  const stdin = spawnSync(process.execPath, [cli, 'spec', 'lint', '--spec', '-'], {
-    input: JSON.stringify(contract),
-    encoding: 'utf8',
-    timeout: 15000,
-  });
-  assert.equal(stdin.status, 0, stdin.stderr);
-  const dir = mkdtempSync(join(tmpdir(), 'specify-discovery-cli-'));
+test('init runs openspec init, creates formal/, and manages one AGENTS.md region', () => {
+  const dir = tempDir('specify-init-');
   try {
-    writeFileSync(join(dir, 'one.spec.json'), JSON.stringify(contract));
-    writeFileSync(join(dir, 'two.spec.json'), JSON.stringify(contract));
-    const result = run(['spec', 'lint'], dir);
-    assert.equal(result.status, 10);
-    assert.match(result.stderr, /one.spec.json/);
-    assert.match(result.stderr, /two.spec.json/);
+    const fake = join(dir, 'fake-openspec');
+    writeFileSync(
+      fake,
+      `#!${process.execPath}\nconst fs = require('node:fs');\nfs.writeFileSync('openspec-args', JSON.stringify(process.argv.slice(2)));\nfs.mkdirSync('openspec/specs', { recursive: true });\n`,
+    );
+    chmodSync(fake, 0o700);
+    writeFileSync(
+      join(dir, 'AGENTS.md'),
+      '# Mine\n\n<!-- specify:begin:spec-workflow -->\nold\n<!-- specify:end:spec-workflow -->\n\nKeep me.\n',
+    );
+    const first = run(['init', '--root', dir, '--openspec-bin', fake, '--tools', 'none']);
+    assert.equal(first.status, 0, first.stderr);
+    assert.equal(JSON.parse(first.stdout).openspec, 'initialized');
+    assert.deepEqual(JSON.parse(readFileSync(join(dir, 'openspec-args'), 'utf8')), [
+      'init',
+      '--tools',
+      'none',
+      '.',
+    ]);
+    assert.ok(existsSync(join(dir, 'formal', 'README.md')));
+
+    const second = run(['init', '--root', dir, '--openspec-bin', fake]);
+    assert.equal(second.status, 0, second.stderr);
+    assert.equal(JSON.parse(second.stdout).openspec, 'existing');
+
+    const agents = readFileSync(join(dir, 'AGENTS.md'), 'utf8');
+    assert.equal(agents.split('<!-- specify:begin:formal-workflow -->').length, 2);
+    assert.doesNotMatch(agents, /spec-workflow|\nold\n/);
+    assert.match(agents, /^# Mine\n/);
+    assert.match(agents, /Keep me\./);
+    assert.match(agents, /expect=fails/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('view CLI prints its discovered URL, serves the spec, and shuts down on SIGTERM', async () => {
-  const dir = mkdtempSync(join(tmpdir(), 'specify-view-cli-'));
-  const spec = join(dir, 'contract.json');
-  writeFileSync(spec, JSON.stringify(contract));
-  const child = spawn(process.execPath, [cli, 'view', '--spec', spec, '--no-open']);
-  let output = '';
+test('init reports a failing openspec init without writing instructions', () => {
+  const dir = tempDir('specify-init-fail-');
   try {
-    const url = await new Promise<string>((resolve, reject) => {
-      const timeout = setTimeout(
-        () => reject(new Error(`Viewer URL not printed: ${output}`)),
-        5000,
-      );
-      child.stdout.setEncoding('utf8');
-      child.stderr.setEncoding('utf8');
-      child.stdout.on('data', (chunk: string) => {
-        output += chunk;
-        const match = /Specify viewer: (http:\/\/127\.0\.0\.1:\d+\/)/.exec(output);
-        if (match) {
-          clearTimeout(timeout);
-          resolve(match[1]);
-        }
-      });
-      child.once('error', (error) => {
-        clearTimeout(timeout);
-        reject(error);
-      });
-      child.once('exit', (code) => {
-        clearTimeout(timeout);
-        reject(new Error(`Viewer exited before printing URL (${code}): ${output}`));
-      });
-    });
-    const response = await fetch(`${url}spec`);
-    assert.equal(response.status, 200);
-    const payload = await response.json();
-    assert.equal(payload.name, 'Fixture');
-  } finally {
-    child.kill('SIGTERM');
-    await new Promise<void>((resolve) => {
-      if (child.exitCode !== null) resolve();
-      else child.once('exit', () => resolve());
-    });
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('view CLI rejects malformed port values', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'specify-view-port-'));
-  const spec = join(dir, 'contract.json');
-  writeFileSync(spec, JSON.stringify(contract));
-  try {
-    const result = run(['view', '--spec', spec, '--port', '65536', '--no-open']);
-    assert.equal(result.status, 10);
-    assert.match(result.stderr, /port must be an integer/);
+    const fake = join(dir, 'fake-openspec');
+    writeFileSync(fake, `#!${process.execPath}\nprocess.exit(3);\n`);
+    chmodSync(fake, 0o700);
+    const result = run(['init', '--root', dir, '--openspec-bin', fake]);
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /status 3/);
+    assert.equal(existsSync(join(dir, 'AGENTS.md')), false);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

@@ -1,20 +1,12 @@
 #!/usr/bin/env node
 import { COMMANDS } from './commands-manifest.js';
 import { detectOutputFormat } from './output.js';
-import { resolveSpecPath } from './spec-finder.js';
 import { ExitCode } from './exit-codes.js';
 import type { CliContext, OutputFormat } from './types.js';
 
-import { specLint } from './commands/spec-lint.js';
-import { specSplit } from './commands/spec-split.js';
-import { specContext } from './commands/spec-context.js';
-import { specGuide } from './commands/spec-guide.js';
-import { schemaCommand } from './commands/schema.js';
 import { version } from '../version.js';
-import { specInit } from './commands/spec-init.js';
-import { specCheck } from './commands/spec-check.js';
+import { init } from './commands/init.js';
 import { formalCheck } from './commands/formal-check.js';
-import { view } from './commands/view.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -44,12 +36,12 @@ function parse(args: string[], valueFlags: Set<string>, flags: Set<string>): Map
 }
 
 function help(): void {
-  process.stdout.write('Specify — maintained specs for coding agents\n\n');
+  process.stdout.write('Specify — formal checks for OpenSpec requirements\n\n');
   for (const command of COMMANDS) {
     process.stdout.write(`  ${command.name.padEnd(15)} ${command.description}\n`);
   }
   process.stdout.write(
-    '\nGlobal options: --format json|text|markdown|ndjson, --fields paths, --quiet\nUse schema commands for command parameters. Migration: docs/migration-0.4.md\n',
+    '\nGlobal options: --format json|text|markdown|ndjson, --fields paths, --quiet\nRun without arguments for the JSON command manifest. Migration: docs/migration-0.8.md\n',
   );
 }
 
@@ -98,12 +90,11 @@ async function main(args: string[]): Promise<number> {
     quiet: global.has('--quiet') || global.has('-q'),
   };
   const first = rest.shift();
-  const name = first === 'spec' || first === 'formal' ? `${first} ${rest.shift() ?? ''}` : first;
+  const name = first === 'formal' ? `${first} ${rest.shift() ?? ''}` : first;
   const command = COMMANDS.find((entry) => entry.name === name);
   if (!command) {
-    throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.4.md`);
+    throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.8.md`);
   }
-  const target = name === 'schema' ? (rest.shift() ?? '') : '';
   const options = parse(
     rest,
     new Set(
@@ -114,64 +105,29 @@ async function main(args: string[]): Promise<number> {
     new Set(command.parameters.filter((p) => p.type === 'boolean').map((p) => p.name)),
   );
   const get = (key: string): string | undefined => options.get(key);
-  const getSpec = (): string => {
-    const result = resolveSpecPath(get('--spec'));
-    if (!result.path) {
-      throw new Error([result.error ?? 'Missing --spec', ...(result.candidates ?? [])].join('\n'));
-    }
-    if (result.autoDiscovered && !ctx.quiet) {
-      process.stderr.write(`Using auto-discovered spec: ${result.path}\n`);
-    }
-    return result.path;
-  };
   switch (command.name) {
     case 'formal check':
       return formalCheck(
         {
-          spec: getSpec(),
+          root: get('--root'),
+          tool: get('--tool'),
           timeoutMs: get('--timeout-ms'),
           quintBin: get('--quint-bin'),
           leanBin: get('--lean-bin'),
         },
         ctx,
       );
-    case 'spec init':
-      return specInit({ spec: getSpec(), agents: get('--agents') }, ctx);
-    case 'spec check':
-      if (!get('--base')) {
-        throw new Error('Missing --base: use the task start commit or PR base SHA');
-      }
-      return specCheck({ spec: getSpec(), base: get('--base')!, reason: get('--reason') }, ctx);
-    case 'spec lint':
-      return specLint({ spec: get('--spec') === '-' ? '-' : getSpec() }, ctx);
-    case 'spec split':
-      return specSplit(
-        { spec: getSpec(), output: get('--output'), force: options.has('--force') },
-        ctx,
-      );
-    case 'spec context':
-      return specContext(
+    case 'init':
+      return init(
         {
-          spec: getSpec(),
-          outDir: get('--out-dir'),
-          product: get('--product'),
-          design: get('--design'),
-          force: options.has('--force'),
+          root: get('--root'),
+          agents: get('--agents'),
+          tools: get('--tools'),
+          openspecBin: get('--openspec-bin'),
+          skipOpenspec: options.has('--skip-openspec'),
         },
         ctx,
       );
-    case 'spec guide':
-      return specGuide(ctx);
-    case 'schema':
-      return schemaCommand(target, ctx);
-    case 'mcp':
-      {
-        const { startMcpServer } = await import('../mcp/server.js');
-        await startMcpServer();
-      }
-      return 0;
-    case 'view':
-      return view({ spec: getSpec(), port: get('--port'), noOpen: options.has('--no-open') }, ctx);
     default:
       throw new Error(`Unknown command: ${name}`);
   }

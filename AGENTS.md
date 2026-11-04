@@ -42,57 +42,47 @@ For follow-up work discovered along the way, file a new issue and reference the 
 
 ## Build & Test
 
-Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`.
+Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`. With Quint on PATH,
+`./specify formal check --root examples/counter --tool quint` runs the example end to end.
 
 ## Architecture and scope
 
-Specify owns a bundled local spec browser, behavioral contracts, stable behavior IDs, behavior
-source attribution, structural linting, deterministic context projection, and checks of explicitly
-linked Quint and Lean models. Agent guidance covers intent capture, conflict review, and code/test
-reconciliation. Agents perform semantic review; Specify does not observe conversations or certify
-implementation correctness. Formal checks establish results about the authored models only; they do
-not establish that a model captures prose faithfully or that an application satisfies it. External
-coding agents implement behavior and test runners execute application tests. `src/spec` contains
-contract tooling; `src/mcp` exposes five authoring tools over stdio. Specify does not provide an
-intent ledger, application test runner, report pipeline, or deployment stack.
+Specify is a formal-check companion to [OpenSpec](https://github.com/Fission-AI/OpenSpec). OpenSpec
+owns the spec format, change proposals, validation and browsing. Specify owns:
 
-Keep `specify.spec/` current whenever supported behavior changes. Preserve IDs for retained behavior
-and remove promises for deleted features. See `docs/migration-0.4.md` for compatibility boundaries.
+- `src/formal/`: reading `Formal:` lines under OpenSpec requirements (`openspec.ts`), running Quint
+  (TLC, Apalache, simulation) and Lean (`quint.ts`, `lean.ts`, `process.ts`), and the requirement →
+  result report (`check.ts`, `report.ts`).
+- `src/init/` and `src/cli/commands/init.ts`: `specify init` runs `openspec init`, creates
+  `formal/`, and manages one AGENTS.md region.
 
-<!-- specify:begin:spec-workflow -->
+Formal checks establish results about the authored models only; they do not establish that a model
+captures the prose or that an application satisfies it. Specify does not run application tests.
 
-## Maintain specs as you work
+Specify's own requirements live in `openspec/specs/`. Update them whenever supported behavior
+changes, record explicit user decisions with their exact wording in `product-direction`, and run
+`npx @fission-ai/openspec validate --specs --strict`. See `docs/migration-0.8.md` for what was
+removed in 0.8. This repository has no formal models of its own, so `formal check` from the
+repository root reports no links; run it against `examples/counter`.
 
-Canonical spec: "specify.spec". Run commands from "." relative to this file.
+<!-- specify:begin:formal-workflow -->
 
-- Read relevant spec areas and global constraints before editing. Use `./specify spec guide` for
-  structure and its capture, review, and reconcile workflow.
-- Record explicit user decisions directly in the spec, even when no code changes. Keep stable
-  behavior IDs; store exact quotations in source.text and a reference when available. Label
-  proposals and assumptions in prose; never promote guesses into requirements.
-- Keep one feature per area, short behavior descriptions, and detail in details/prose. Use
-  `./specify spec split --spec 'specify.spec'` for oversized single-file specs.
-- Update specs when intent changes. Never rewrite requirements to excuse incomplete implementation.
-  Report unmet requirements in the handoff and issue tracker.
-- Before implementation, review new intent against relevant behaviors, global constraints, and
-  existing plans/tasks. Cite conflicting IDs and sources; resolve authorized changes, surface
-  unresolved decisions, and continue independent work. This is agent review, not a semantic check
-  performed by Specify.
-- After implementation, reconcile affected and potentially regressed behavior IDs against current
-  code and actual smoke/regression results, including the original bug reproduction. Report each as
-  satisfied, gap, or unverified with evidence and revision. Add corrective work to the existing
-  tracker, implement authorized fixes, and repeat; never use checked tasks or passing formal models
-  as application proof.
-- Keep the selected spec authoritative. Plans/tasks reference behavior IDs; do not create duplicate
-  requirements or a separate evidence store. Put command/results and blockers in the existing PR or
-  task tracker. Do not declare completion with unmet requirements or missing required verification.
-- Before finishing, run `./specify spec check --spec 'specify.spec' --base BASE`. Use the task start
-  commit or PR base. If intent is unchanged, pass
-  `--reason 'why existing requirements still cover this change'` instead of making a token spec
-  edit. Include that explanation in the PR.
-- Run project tests separately. This check enforces spec lint and a recorded review reason or source
-  change, not semantic correctness or execution proof.
-- For properties linked from behaviors, run `./specify formal check --spec 'specify.spec'` with
-caller-installed Quint or Lean. A passing model check does not establish that the model captures
-prose or that the application satisfies it.
-<!-- specify:end:spec-workflow -->
+## Formal properties (Specify)
+
+OpenSpec (`openspec/`) holds the requirements. Specify checks the formal models linked to them.
+
+- Link a model under the `### Requirement:` it encodes, one list item per check (formatters join
+  plain lines):
+  - `- Formal: quint formal/<model>.qnt <property> [invariant|temporal] [expect=holds|fails] [backend=tlc|apalache] [main=<module>]`
+  - `- Formal: lean formal/<File>.lean <Namespace.theorem>`
+- Paths are relative to the project root. Keep models and proofs in `formal/`.
+- For every property that must hold, keep a "before" model or mutation linked with `expect=fails`,
+  so a property that can never fail is caught.
+- Write liveness as a temporal property with fairness (`weakFair`). TLC is the default backend and
+  explores every reachable state within the model's constants; `backend=apalache` is bounded by
+  `max-steps`.
+- Run `./specify formal check` before finishing. It exits non-zero when any check differs from its
+  expectation, a Formal line is invalid, or no Formal lines exist.
+- A passing check is a statement about the model only. Tie each model to the code with a conformance
+test, and never weaken a property or flip `expect` to make a check pass.
+<!-- specify:end:formal-workflow -->
