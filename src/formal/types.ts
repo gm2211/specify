@@ -1,12 +1,50 @@
-import type { FormalCheck, LeanFormalCheck, QuintFormalCheck } from '../spec/types.js';
+/** What a linked check must observe. `fails` marks a "before" model or mutation that must break. */
+export type Expectation = 'holds' | 'fails';
+export type QuintKind = 'invariant' | 'temporal';
 
-export type FormalStatus = 'passed' | 'failed' | 'error' | 'timeout' | 'unavailable';
-export type FormalEvidence = 'simulation' | 'bounded-model-check' | 'proof';
+export interface QuintFormalCheck {
+  tool: 'quint';
+  /** Relative to the project root (the directory that contains `openspec/`). */
+  file: string;
+  property: string;
+  kind: QuintKind;
+  /** `verify` explores states with a model checker; `simulate` samples random traces. */
+  mode: 'verify' | 'simulate';
+  /** TLC explores every reachable state; Apalache is bounded by maxSteps; simulation uses Quint's own runner. */
+  backend: 'tlc' | 'apalache' | 'typescript';
+  expect: Expectation;
+  main?: string;
+  /** Apalache and simulation only. */
+  maxSteps?: number;
+  /** Simulation only; both required for reproducible sampling. */
+  samples?: number;
+  seed?: number;
+}
+
+export interface LeanFormalCheck {
+  tool: 'lean';
+  /** Relative to the project root. */
+  file: string;
+  /** Public, fully qualified theorem name. */
+  property: string;
+  expect: 'holds';
+}
+
+export type FormalCheck = QuintFormalCheck | LeanFormalCheck;
+
+/** `holds`: no violation / proof accepted. `fails`: counterexample or rejected proof. */
+export type FormalStatus = 'holds' | 'fails' | 'error' | 'timeout' | 'unavailable';
+export type FormalEvidence =
+  | 'simulation'
+  | 'bounded-model-check'
+  | 'exhaustive-model-check'
+  | 'proof';
 
 export interface FormalScope {
   mode: 'simulate' | 'verify';
-  backend: 'typescript' | 'apalache';
-  maxSteps: number;
+  backend: 'tlc' | 'apalache' | 'typescript';
+  kind: QuintKind;
+  maxSteps?: number;
   samples?: number;
   seed?: number;
 }
@@ -41,17 +79,31 @@ export interface RunProcessOptions {
   env?: NodeJS.ProcessEnv;
 }
 
+/** Where a `Formal:` line was written. */
+export interface FormalSource {
+  /** Spec file relative to the project root. */
+  file: string;
+  line: number;
+  text: string;
+}
+
 export interface FormalCheckResult {
-  behaviorId: string;
-  check: FormalCheck;
+  /** `<capability>/<requirement name>`, e.g. `snooze/Resumed worker works again`. */
+  requirementId: string;
+  source: FormalSource;
+  /** Absent when the `Formal:` line could not be parsed. */
+  check?: FormalCheck;
   outcome: FormalOutcome;
+  /** True only when the observed status equals the expectation. */
+  ok: boolean;
 }
 
 export interface FormalCheckSummary {
   valid: boolean;
   scope: 'formal-models-only';
+  root: string;
   results: FormalCheckResult[];
-  unlinkedBehaviorIds: string[];
+  /** Requirements with no `Formal:` line; listed so missing coverage stays visible. */
+  unlinkedRequirementIds: string[];
+  totals: { checks: number; ok: number; notOk: number };
 }
-
-export type { FormalCheck, LeanFormalCheck, QuintFormalCheck };

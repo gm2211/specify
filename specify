@@ -4,9 +4,8 @@
 # Auto-builds TypeScript if needed, then runs the CLI.
 #
 #   ./specify --help
-#   ./specify spec lint --spec spec.yaml
-#   ./specify spec check --spec spec.yaml --base origin/main
-#   ./specify spec init --spec spec.yaml
+#   ./specify init
+#   ./specify formal check --root examples/counter --format text
 
 set -euo pipefail
 

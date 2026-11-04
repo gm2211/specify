@@ -52,7 +52,7 @@ if (process.argv.includes('-o')) {
 
 async function check(directory: string, executable: string, timeoutMs = 5000) {
   return checkLean(
-    { tool: 'lean', file: 'Proof.lean', property: 'Counter.holds' },
+    { tool: 'lean', file: 'Proof.lean', property: 'Counter.holds', expect: 'holds' },
     join(directory, 'Proof.lean'),
     { executable, cwd: directory, timeoutMs },
   );
@@ -61,7 +61,7 @@ async function check(directory: string, executable: string, timeoutMs = 5000) {
 test('Lean requires a theorem certificate, preserves evidence, and removes temporary files', async () => {
   await fixture('valid', async (directory, executable) => {
     const outcome = await check(directory, executable);
-    assert.equal(outcome.status, 'passed');
+    assert.equal(outcome.status, 'holds');
     assert.equal(outcome.evidence, 'proof');
     assert.equal(outcome.statement, 'True');
     assert.deepEqual(outcome.axioms, ['propext']);
@@ -81,7 +81,7 @@ test('Lean never promotes sorry or custom assumptions into a passed proof', asyn
   ]) {
     await fixture(mode, async (directory, executable) => {
       const outcome = await check(directory, executable);
-      assert.equal(outcome.status, 'failed');
+      assert.equal(outcome.status, 'fails');
       assert.deepEqual(outcome.axioms, [axiom]);
       assert.match(outcome.message!, /unaccepted axioms/);
     });
@@ -101,7 +101,7 @@ test('Lean requires successful source and wrapper compilation', async () => {
   for (const mode of ['compile-fail', 'wrapper-fail']) {
     await fixture(mode, async (directory, executable) => {
       const outcome = await check(directory, executable);
-      assert.equal(outcome.status, 'failed');
+      assert.equal(outcome.status, 'fails');
       assert.equal(outcome.exitCode, 1);
       const callText = await readFile(join(directory, 'calls'), 'utf8');
       const calls = callText.trim().split('\n');

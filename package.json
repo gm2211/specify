@@ -1,7 +1,7 @@
 {
   "name": "specify",
-  "version": "0.7.2",
-  "description": "Focused specs, agent guidance, and structural linting",
+  "version": "0.8.0",
+  "description": "Formal checks (Quint, TLC, Apalache, Lean) for OpenSpec requirements",
   "type": "module",
   "bin": {
     "specify": "dist/src/cli/index.js"
@@ -12,24 +12,16 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier . --check",
     "format:write": "prettier . --write",
-    "quality": "npm run typecheck && npm run lint && npm run validate && npm run format",
+    "quality": "npm run typecheck && npm run lint && npm run format",
     "sonar": "sonar-scanner",
-    "validate": "node --import tsx src/cli/index.ts spec lint --spec specify.spec",
     "test": "npm run build && find dist/src -name '*.test.js' -not -path '*/node_modules/*' | sort | xargs node --test",
     "build": "node --input-type=module -e \"import { rmSync } from 'node:fs'; rmSync('dist', { recursive: true, force: true });\" && tsc",
     "specify": "node --import tsx src/cli/index.ts",
     "prepare": "git config core.hooksPath .githooks",
     "prepack": "npm run build"
   },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.1",
-    "ajv": "^8.18.0",
-    "js-yaml": "^4.3.2",
-    "zod": "^4.6.7"
-  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.13.4",
     "eslint": "^10.4.0",
     "eslint-config-prettier": "^10.1.8",
@@ -47,7 +39,6 @@
     "dist",
     "README.md",
     "docs",
-    "integrations",
-    "src/spec/examples"
+    "examples"
   ]
 }

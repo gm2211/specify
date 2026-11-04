@@ -1,8 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { QuintFormalCheck } from '../spec/types.js';
-import { checkQuint, classifyQuintResult } from './quint.js';
-import type { ProcessResult } from './types.js';
+import { checkQuint, classifyQuintResult, quintArgs } from './quint.js';
+import type { ProcessResult, QuintFormalCheck } from './types.js';
 
 const base: ProcessResult = {
   exitCode: 0,
@@ -15,8 +14,13 @@ const base: ProcessResult = {
 };
 
 test('Quint only passes on a zero exit and its explicit success marker', () => {
-  const scope = { mode: 'verify' as const, backend: 'apalache' as const, maxSteps: 4 };
-  assert.equal(classifyQuintResult(base, 'bounded-model-check', scope, 'safe').status, 'passed');
+  const scope = {
+    mode: 'verify' as const,
+    backend: 'apalache' as const,
+    kind: 'invariant' as const,
+    maxSteps: 4,
+  };
+  assert.equal(classifyQuintResult(base, 'bounded-model-check', scope, 'safe').status, 'holds');
   assert.equal(
     classifyQuintResult(
       { ...base, stdout: 'Finished successfully' },
@@ -46,7 +50,7 @@ test('Quint only passes on a zero exit and its explicit success marker', () => {
       scope,
       'safe',
     ).status,
-    'failed',
+    'fails',
   );
   assert.equal(
     classifyQuintResult({ ...base, unavailable: true }, 'bounded-model-check', scope, 'safe')
@@ -64,87 +68,84 @@ test('Quint only passes on a zero exit and its explicit success marker', () => {
   );
 });
 
-test('Quint simulation uses explicit TypeScript backend, bound, sample count and seed', async () => {
+const tlc: QuintFormalCheck = {
+  tool: 'quint',
+  file: 'snooze.qnt',
+  property: 'eventuallyWorking',
+  kind: 'temporal',
+  mode: 'verify',
+  backend: 'tlc',
+  expect: 'holds',
+  main: 'snoozeResume',
+};
+
+test('TLC temporal checks pass --temporal and no step bound or Apalache endpoint', async () => {
   let args: string[] = [];
-  const ref: QuintFormalCheck = {
-    tool: 'quint',
-    file: 'counter.qnt',
-    property: 'safe',
-    mode: 'simulate',
-    main: 'counter',
-    maxSteps: 7,
-    samples: 11,
-    seed: 23,
-  };
-  const outcome = await checkQuint(ref, '/spec/counter.qnt', {
-    executable: '/tools/quint',
-    cwd: '/spec',
+  let ports = 0;
+  const outcome = await checkQuint(tlc, '/p/formal/snooze.qnt', {
+    executable: 'quint',
+    cwd: '/p',
     timeoutMs: 1_000,
-    run: async (_executable, receivedArgs) => {
-      args = receivedArgs;
+    allocatePort: async () => {
+      ports++;
+      return 1;
+    },
+    run: async (_executable, received) => {
+      args = received;
       return base;
     },
   });
-  assert.equal(outcome.status, 'passed');
-  assert.equal(outcome.evidence, 'simulation');
-  assert.deepEqual(outcome.scope, {
-    mode: 'simulate',
-    backend: 'typescript',
-    maxSteps: 7,
-    samples: 11,
-    seed: 23,
-  });
+  assert.equal(outcome.status, 'holds');
+  assert.equal(outcome.evidence, 'exhaustive-model-check');
+  assert.equal(ports, 0);
   assert.deepEqual(args, [
-    'run',
-    '/spec/counter.qnt',
+    'verify',
+    '/p/formal/snooze.qnt',
     '--backend',
-    'typescript',
-    '--invariant',
-    'safe',
-    '--max-steps',
-    '7',
+    'tlc',
+    '--temporal',
+    'eventuallyWorking',
     '--verbosity',
     '3',
     '--main',
-    'counter',
-    '--max-samples',
-    '11',
-    '--seed',
-    '23',
+    'snoozeResume',
   ]);
 });
 
-test('Quint bounded verification pins Apalache to the local allocated endpoint', async () => {
+test('Apalache verification is bounded and pinned to an allocated loopback endpoint', async () => {
   let args: string[] = [];
-  let requestedHost: string | undefined;
   const ref: QuintFormalCheck = {
-    tool: 'quint',
-    file: 'counter.qnt',
-    property: 'safe',
-    mode: 'verify',
+    ...tlc,
+    kind: 'invariant',
+    backend: 'apalache',
     maxSteps: 9,
+    main: undefined,
   };
-  const outcome = await checkQuint(ref, '/spec/counter.qnt', {
-    executable: '/tools/quint',
-    cwd: '/spec',
+  const outcome = await checkQuint(ref, '/p/c.qnt', {
+    executable: 'quint',
+    cwd: '/p',
     timeoutMs: 1_000,
     allocatePort: async () => 18828,
-    run: async (_executable, receivedArgs, options) => {
-      args = receivedArgs;
-      requestedHost = options.cwd;
-      return base;
+    run: async (_executable, received) => {
+      args = received;
+      return { ...base, exitCode: 1, stdout: '[violation] Found an issue' };
     },
   });
-  assert.equal(outcome.status, 'passed');
+  assert.equal(outcome.status, 'fails');
   assert.equal(outcome.evidence, 'bounded-model-check');
-  assert.deepEqual(outcome.scope, { mode: 'verify', backend: 'apalache', maxSteps: 9 });
+  assert.deepEqual(outcome.scope, {
+    mode: 'verify',
+    backend: 'apalache',
+    kind: 'invariant',
+    maxSteps: 9,
+  });
   assert.deepEqual(args, [
     'verify',
-    '/spec/counter.qnt',
+    '/p/c.qnt',
     '--backend',
     'apalache',
     '--invariant',
-    'safe',
+    'eventuallyWorking',
     '--max-steps',
     '9',
     '--verbosity',
@@ -152,5 +153,35 @@ test('Quint bounded verification pins Apalache to the local allocated endpoint',
     '--server-endpoint',
     '127.0.0.1:18828',
   ]);
-  assert.equal(requestedHost, '/spec');
+});
+
+test('simulation uses the TypeScript runner with an explicit bound, sample count and seed', () => {
+  const ref: QuintFormalCheck = {
+    tool: 'quint',
+    file: 'c.qnt',
+    property: 'safe',
+    kind: 'invariant',
+    mode: 'simulate',
+    backend: 'typescript',
+    expect: 'holds',
+    maxSteps: 7,
+    samples: 11,
+    seed: 23,
+  };
+  assert.deepEqual(quintArgs(ref, '/p/c.qnt'), [
+    'run',
+    '/p/c.qnt',
+    '--backend',
+    'typescript',
+    '--invariant',
+    'safe',
+    '--max-steps',
+    '7',
+    '--max-samples',
+    '11',
+    '--seed',
+    '23',
+    '--verbosity',
+    '3',
+  ]);
 });

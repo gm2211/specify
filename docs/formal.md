@@ -1,106 +1,94 @@
-# Linked formal models
+# Formal checks for OpenSpec requirements
 
-Behaviors may link small models or theorems in Quint and Lean. The links make selected properties
-reviewable and runnable alongside their plain-language requirement. They do not translate prose into
-logic, detect natural-language conflicts, or verify the application. A model can be internally
-consistent and still encode the wrong requirement; application tests and review remain separate.
+Specify links Quint models and Lean theorems to OpenSpec requirements and runs them. A link is a
+`Formal:` line under the requirement it encodes. The checks say something about the models only: a
+model can be internally consistent and still encode the wrong requirement, and it says nothing about
+the application unless a conformance test ties the two together.
 
-## Agent authoring workflow
+## Linking a check
 
-Start from an existing behavior ID and its recorded user wording. List the assumptions needed to
-make that requirement precise; label unresolved assumptions as proposals rather than requirements.
-For stateful behavior, write a Quint model with initial states, allowed transitions, and an
-invariant. For a mathematical property, state a Lean theorem with explicit premises and supply its
-proof.
+```markdown
+### Requirement: Resumed worker works again
 
-Review which parts of the requirement the property covers. The counter example below checks
-nonnegativity, but that invariant alone does not establish that each increment adds exactly one. Add
-a separate property when that guarantee matters. Keep application smoke and regression tests linked
-to the same behavior through the project's existing testing workflow.
+A worker an operator resumed SHALL work again once any snooze on it lapses.
 
-Run the native check, then deliberately violate the property in a temporary copy to confirm a
-counterexample or proof failure is detected. Restore the intended source and rerun. When behavior
-changes, review its linked models alongside code and tests; never weaken a property merely to turn a
-failing check green.
+- Formal: quint formal/snooze.qnt eventuallyWorking temporal main=snoozeResume
+- Formal: quint formal/snooze.qnt eventuallyWorking temporal main=snoozeBefore expect=fails
 
-## Linking a property
+#### Scenario: Resume after snooze
 
-Put `formal` on a behavior. Paths are relative to the spec directory, or to the parent directory of
-a single-file spec. `spec split` rebases these paths so the same model files remain targeted. Keep
-each property close to the behavior it represents:
-
-```yaml
-areas:
-  - id: counter
-    name: Counter
-    behaviors:
-      - id: count-never-negative
-        description:
-          The counter starts at zero, stays nonnegative, and each increment increases it by one.
-        formal:
-          - tool: quint
-            file: examples/formal/Counter.qnt
-            property: nonNegative
-            mode: verify
-            maxSteps: 8
-          - tool: quint
-            file: examples/formal/Counter.qnt
-            property: nonNegative
-            mode: simulate
-            maxSteps: 8
-            samples: 20
-            seed: 17
-          - tool: lean
-            file: examples/formal/Counter.lean
-            property: Counter.incrementPreservesNonnegative
+- **WHEN** an operator resumes a snoozed worker
+- **THEN** it works again once the snooze lapses
 ```
 
-Quint references name a property, select `simulate` or bounded `verify`, and set a nonnegative
-`maxSteps`. Simulation also requires `samples` and `seed`; verification forbids them. Verification
-uses Apalache for an explicit bounded state-space check, not an unbounded proof. Simulation uses
-Quint's TypeScript backend and the recorded seed. See the
-[Quint language basics](https://quint.sh/docs/language-basics) and
-[model checker overview](https://quint.sh/docs/model-checkers) for upstream language and
-verification details. Lean references identify a public theorem by its fully qualified name. Private
-declarations cannot be checked through this link; see the
-[Lean language reference](https://lean-lang.org/doc/reference/latest/) for Lean's theorem and proof
-model.
+Grammar, one check per line, whitespace separated (paths cannot contain spaces):
 
-`formal check` evaluates every reference declared in `Behavior.formal`; behavior IDs without formal
-links remain visible in its report. A spec with no formal references fails rather than reporting a
-vacuous pass. Output labels its evidence as `formal-models-only`.
+```text
+Formal: quint <file> <property> [invariant|temporal] [expect=holds|fails]
+              [backend=tlc|apalache] [mode=verify|simulate] [main=<module>]
+              [max-steps=N] [samples=N] [seed=N]
+Formal: lean  <file> <Namespace.theorem>
+```
 
-## Running checks
+Write each link as its own list item (`- Formal: …`). Plain consecutive lines are one Markdown
+paragraph, and formatters such as Prettier join them; Specify reports joined links as invalid rather
+than guessing. Bold (`**Formal:** …`) and backtick-wrapped links also work. Lines inside fenced code
+blocks are ignored. A line outside a requirement, or one with an unknown or inapplicable option, is
+reported as an invalid check and fails the run.
 
-Install the tools outside Specify and make them available on `PATH`, or select their executables:
+| Option                   | Default         | Meaning                                                                                      |
+| ------------------------ | --------------- | -------------------------------------------------------------------------------------------- |
+| `invariant` / `temporal` | `invariant`     | Quint `--invariant` or `--temporal`                                                          |
+| `expect`                 | `holds`         | `fails` marks a "before" model or mutation that must produce a counterexample                |
+| `backend`                | `tlc`           | `tlc` explores every reachable state; `apalache` is bounded by `max-steps`                   |
+| `max-steps`              | `10` (Apalache) | Not allowed with TLC                                                                         |
+| `mode=simulate`          |                 | Random traces with Quint's own runner; needs `max-steps`, `samples`, `seed`; invariants only |
+| `main`                   | file name       | Quint module to check, for files with several modules                                        |
+
+Lean links accept `expect=holds` only.
+
+## Why `expect=fails`
+
+A property that can never fail passes every check. For each property that must hold, keep a "before"
+model (the design with the bug) or a deliberate mutation, and link it with `expect=fails`. If
+someone later weakens the property, the before model stops failing and `formal check` fails.
+
+## Running
 
 ```bash
-specify formal check --spec specify.spec
-specify formal check --spec specify.spec --timeout-ms 90000 \
+specify formal check                      # JSON when piped, a table on a terminal
+specify formal check --format text        # requirement → result table
+specify formal check --tool quint         # only Quint links
+specify formal check --root path/to/repo --timeout-ms 300000 \
   --quint-bin quint --lean-bin /path/to/lean
 ```
 
-For a Lean project with imports, run through Lake from that project's root so the caller's compiled
-dependencies are available:
+The command exits 0 only when at least one check ran and every check matched its expectation.
+Requirements without a `Formal:` line are listed so missing coverage stays visible.
+
+For a Lean project with imports, run through Lake so the caller's compiled dependencies are found:
 
 ```bash
-lake env specify formal check --spec specify.spec
+lake env specify formal check --tool lean
 ```
 
-Specify does not download tools. Quint may bootstrap its own backend; that tool behavior is outside
-Specify's control. Quint's Apalache integration may bind a temporary server to `0.0.0.0` even when
-the client uses loopback. Run formal checks only on trusted model/tool inputs and in an environment
-whose network exposure is acceptable; Specify does not sandbox these processes.
+## Tools
 
-Lean checks compile the selected file and inspect the named theorem and its transitive axioms.
-`propext`, `Classical.choice`, and `Quot.sound` are accepted; `sorry` and custom axioms do not pass.
-Specify does not manage or build caller-owned Lean dependencies.
+Install the tools yourself; Specify does not download them. TLC and Apalache need Java 17 or newer.
+Quint may download Apalache or TLC jars on first use. Apalache may bind a temporary server; run
+checks only on trusted models and in an environment whose network exposure is acceptable.
 
-Validated with Quint 0.32.0 (Apalache 0.56.1) and Lean 4.34.1. Upstream CLI or Lean metaprogramming
-changes may require adapter updates; unrecognized results fail rather than count as passing checks.
+Lean checks compile the named file and inspect the theorem's transitive axioms. `propext`,
+`Classical.choice` and `Quot.sound` are accepted; `sorry` and custom axioms fail.
 
-## Example files
+Validated with Quint 0.33.1 (TLC and Apalache backends). Lean support was validated with Lean 4.34.1
+in Specify 0.7. Unrecognized tool output is reported as an error, never as a pass.
 
-The repository includes a small Quint counter model and Lean theorem under
-[`src/spec/examples/formal/`](../src/spec/examples/formal/). They demonstrate model-level checks;
-they are not connected to or evidence about Specify's running implementation.
+## Example
+
+[`examples/counter`](../examples/counter) has an OpenSpec spec with invariant, temporal, bounded,
+simulated and Lean links, including before models that must fail:
+
+```bash
+specify formal check --root examples/counter --tool quint --format text
+```

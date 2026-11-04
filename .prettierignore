@@ -14,3 +14,6 @@ webapp/dist/
 package-lock.json
 webapp/package-lock.json
 *.cast
+
+# Formal: lines must stay one per line
+examples/*/openspec/
