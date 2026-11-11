@@ -115,7 +115,8 @@ Not every requirement should be modeled. Say so explicitly, with a reason:
 The link passes when a test case whose name contains that text passed, and none with that text
 failed, in the JUnit XML or TAP files listed in `testReports`. Put the requirement id in the test
 name. Specify never runs your tests: have the test run write a report first (for Node's runner,
-`node --test --test-reporter=junit --test-reporter-destination=reports/junit.xml`).
+`node --test --test-reporter=junit --test-reporter-destination=reports/junit.xml`; the directory
+must exist).
 
 A conformance test should replay what the model does. `specify trace export` samples traces from
 every Quint model that a requirement expects to hold and writes them as

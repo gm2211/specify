@@ -49,8 +49,8 @@ without asking first (Giulio, 2026-11-04: "do it all, merge without asking for s
 
 Run `npm ci`, `npm run quality`, and `npm test`. Build with `npm run build`. With Quint on PATH,
 `./specify gate --format text` gates this repository (write the test report first, as CI does:
-`npm test -- --test-reporter=junit --test-reporter-destination=reports/junit.xml`), and
-`./specify formal check --root examples/counter --tool quint` runs the example end to end.
+`mkdir -p reports && npm test -- --test-reporter=junit --test-reporter-destination=reports/junit.xml`),
+and `./specify formal check --root examples/counter --tool quint` runs the example end to end.
 
 ## Architecture and scope
 
