@@ -15,6 +15,8 @@ Source (2026-11-04, approving the plan "OpenSpec plus a small formal checker"): 
 into this? how do I replicate this setup across all projects" and "tell the specify coordinator to
 do it".
 
+- Formal: none (product decision)
+
 #### Scenario: Removed surface
 
 - **WHEN** a user runs a 0.7 command such as `spec lint`, `view` or `mcp`
@@ -25,6 +27,28 @@ do it".
 - **WHEN** a user wants requirements with formal checks in a new repository
 - **THEN** they run `specify init` and add `Formal:` lines under OpenSpec requirements
 
+### Requirement: Enforce spec-driven development
+
+Specify SHALL enforce spec-driven development rather than only report on it: one gate covers the
+chain from requirement to model to test, and agents, git hooks and CI run it. Specify SHALL read a
+project's test reports and MUST NOT run application tests. New projects start `strict`; existing
+ones start `warn`.
+
+- Formal: none (product decision)
+
+#### Scenario: Source of the decision
+
+- **WHEN** a reader asks why Specify gates work
+- **THEN** the record is the request of 2026-11-11, "figure out the current usefulness of this and
+  how we could turn this more and more into something of a useful companion to enforce
+  spec-driven-development and formal validation", followed by "implement plan" in reply to the
+  roadmap that recommended reading test reports without running tests, and strict for new projects
+
+#### Scenario: Agent weakens a property
+
+- **WHEN** an agent edits a linked property without an OpenSpec change proposal
+- **THEN** the strict gate fails in the agent's Stop hook and in CI
+
 ### Requirement: Encode properties formally
 
 Specify SHALL help coding agents encode intended properties in Quint or Lean and keep them linked to
@@ -32,6 +56,8 @@ the requirement they represent.
 
 Source (2026-10-03): "also I wanted it to be a companion that helped encode properties in formal
 validation languages like quint.sh or Lean".
+
+- Formal: none (product decision)
 
 #### Scenario: Agent adds a property
 
@@ -44,9 +70,10 @@ Every project SHALL be able to adopt the same setup with `specify init` plus a s
 so a Specify version bump updates all of them.
 
 Source (2026-11-04): "how do I replicate this setup across all projects". Delivered in 0.8.2 as
-`specify init` (OpenSpec, `formal/`, AGENTS.md, Claude Code skill) plus the reusable workflow
-`gm2211/specify/.github/workflows/formal.yml`. Specify installs from GitHub because the npm package
-named `specify` belongs to someone else.
+`specify init` plus the reusable workflow `formal.yml`. Specify installs from GitHub because the npm
+name `specify` belongs to someone else.
+
+- Formal: none (product decision)
 
 #### Scenario: Version bump
 
@@ -55,15 +82,16 @@ named `specify` belongs to someone else.
 
 ### Requirement: Results visible in a UI
 
-Specify SHALL let users see formal results per requirement: the `formal check` table locally and the
-same table in the GitHub job summary of the reusable workflow. A UI next to OpenSpec's own
-requirement views is not built.
+Specify SHALL let users see formal results per requirement: the `gate` table locally and in the
+GitHub job summary of the reusable workflow. A UI next to OpenSpec's requirement views is not built.
 
 Source (2026-10-04): "I want all my projects and all the users of specify to seamlessly be able to
-get a ui to see the spec". The bundled viewer that served this was removed with Specify's own spec
-format; the CI job summary is the shared view of formal results for now.
+get a ui to see the spec". The bundled viewer was removed with Specify's own spec format; the CI job
+summary is the shared view for now.
+
+- Formal: none (product decision)
 
 #### Scenario: Reading results today
 
-- **WHEN** a user runs `specify formal check --format text` or opens the CI job summary
-- **THEN** they see one row per requirement and check
+- **WHEN** a user runs `specify gate --format text` or opens the CI job summary
+- **THEN** they see one row per requirement

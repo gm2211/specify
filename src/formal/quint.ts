@@ -1,5 +1,6 @@
 import net from 'node:net';
 import { runProcess } from './process.js';
+import { extractCounterexample } from './trace.js';
 import type {
   FormalEvidence,
   FormalOutcome,
@@ -63,7 +64,13 @@ export function classifyQuintResult(
     return { ...common, status: 'holds' };
   }
   if (result.exitCode !== 0 && reportsCounterexample) {
-    return { ...common, status: 'fails', message: `Quint found a counterexample for ${property}` };
+    const trace = extractCounterexample(output);
+    return {
+      ...common,
+      status: 'fails',
+      message: `Quint found a counterexample for ${property}`,
+      ...(trace ? { trace } : {}),
+    };
   }
   return {
     ...common,

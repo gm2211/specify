@@ -13,6 +13,13 @@ The checker SHALL read `Formal:` lines written under `### Requirement:` headings
 `openspec/specs/**/spec.md`, identify each by `<capability>/<requirement name>`, and resolve model
 paths relative to the project root.
 
+- Formal: none (input/output behavior, covered by unit tests)
+
+#### Scenario: Waiver
+
+- **WHEN** a requirement contains `Formal: none (covered by tests)`
+- **THEN** the report counts it as waived and runs no check for it
+
 #### Scenario: Linked requirement
 
 - **WHEN** a requirement contains `Formal: quint formal/c.qnt safe`
@@ -34,6 +41,10 @@ With `--change <name>`, the checker SHALL also read `openspec/changes/<name>/spe
 requirements the change adds or modifies replace the main spec's links for the same requirement, and
 requirements under `## REMOVED Requirements` are dropped from the report.
 
+- Formal: quint formal/Overlay.qnt overlaySound main=Overlay
+- Formal: quint formal/Overlay.qnt overlaySound main=OverlayBefore expect=fails
+- Verify: test formal-check/OpenSpec change overlay
+
 #### Scenario: Modified requirement
 
 - **WHEN** a change modifies a requirement and gives it a new `Formal:` link
@@ -50,6 +61,10 @@ Each link SHALL declare `expect=holds` (default) or `expect=fails`, and a check 
 passing only when the observed result equals its expectation. Lean links SHALL accept `expect=holds`
 only.
 
+- Formal: quint formal/Verdict.qnt errorNeverPasses main=Verdict
+- Formal: quint formal/Verdict.qnt errorNeverPasses main=VerdictBefore expect=fails
+- Verify: test formal-check/Expected outcomes
+
 #### Scenario: Before model keeps failing
 
 - **WHEN** a link with `expect=fails` finds a counterexample
@@ -65,6 +80,8 @@ only.
 Quint links SHALL check either an invariant (default, `--invariant`) or a temporal property
 (`temporal`, `--temporal`). Temporal properties SHALL require `mode=verify`.
 
+- Formal: none (input/output behavior, covered by unit tests)
+
 #### Scenario: Liveness with fairness
 
 - **WHEN** a link reads `Formal: quint formal/s.qnt eventuallyDone temporal`
@@ -78,6 +95,8 @@ runner and require `max-steps`, `samples` and `seed`. Options that do not apply 
 backend or mode SHALL be rejected. The report labels evidence as exhaustive, bounded, simulation, or
 proof.
 
+- Formal: none (input/output behavior, covered by unit tests)
+
 #### Scenario: Step bound on TLC
 
 - **WHEN** a TLC link sets `max-steps`
@@ -87,6 +106,8 @@ proof.
 
 Lean links SHALL compile the named file and inspect the public theorem and its transitive axioms;
 `sorry` and custom axioms fail, while `propext`, `Classical.choice` and `Quot.sound` are allowed.
+
+- Formal: none (input/output behavior, covered by unit tests)
 
 #### Scenario: Proof with sorry
 
@@ -98,6 +119,10 @@ Lean links SHALL compile the named file and inspect the public theorem and its t
 The command SHALL print a requirement-to-result table for text output and a JSON summary otherwise,
 list requirements without `Formal:` lines, and exit 0 only when at least one check ran and every
 check matched its expectation.
+
+- Formal: quint formal/Verdict.qnt noVacuousPass main=Verdict
+- Formal: quint formal/Verdict.qnt noVacuousPass main=VerdictBefore expect=fails
+- Verify: test formal-check/Report and exit status
 
 #### Scenario: No links
 
@@ -114,6 +139,8 @@ check matched its expectation.
 The checker SHALL invoke caller-provided `quint` and `lean` executables without downloading them and
 without a sandbox. Lean project dependencies stay caller-managed.
 
+- Formal: none (input/output behavior, covered by unit tests)
+
 #### Scenario: Tool missing
 
 - **WHEN** `quint` is not on PATH
@@ -123,6 +150,8 @@ without a sandbox. Lean project dependencies stay caller-managed.
 
 Results SHALL be labeled `formal-models-only`. A passing check MUST NOT be presented as proof that
 the model matches the requirement prose or that the application satisfies the model.
+
+- Formal: none (input/output behavior, covered by unit tests)
 
 #### Scenario: All checks pass
 

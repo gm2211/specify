@@ -19,11 +19,28 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run quality
-      - run: npm test
+      - name: Test (JUnit report for the gate's Verify lines)
+        run: >-
+          mkdir -p reports && npm test -- --test-reporter=spec --test-reporter-destination=stdout
+          --test-reporter=junit --test-reporter-destination=reports/junit.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: reports/junit.xml
       - name: Validate OpenSpec specs
         env:
           OPENSPEC_TELEMETRY: '0'
         run: npx --yes @fission-ai/openspec@1.16.0 validate --specs --strict
+  # Specify gates itself: strict policy, its own Quint models, and the conformance tests above.
+  gate-self:
+    needs: check
+    uses: ./.github/workflows/formal.yml
+    with:
+      root: .
+      tools: quint
+      test-reports-artifact: test-reports
+      specify-ref: ${{ github.event.pull_request.head.sha || github.sha }}
   formal-example:
     uses: ./.github/workflows/formal.yml
     with:

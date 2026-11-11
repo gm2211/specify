@@ -57,15 +57,25 @@ Apalache; verification now defaults to TLC, so add `backend=apalache` to keep th
 - `specify init` writes a `formal-workflow` region to AGENTS.md and removes the old `spec-workflow`
   region.
 
+## 0.9: the gate
+
+0.9 adds `specify gate`, `specify lock` and `specify trace export`; `formal check` is unchanged
+apart from printing counterexample traces and counting waivers. A project without
+`formal/specify.json` gets the `warn` policy, so the gate passes wherever `formal check` passed and
+lists what the `strict` policy would reject. The reusable workflow now runs the gate, ignores its
+`change` input (every active change is checked), and needs no other change in callers. To opt in to
+enforcement, run `specify init` again, set `"policy": "strict"`, and follow
+[the gate](formal.md#the-gate).
+
 ## Installing
 
 The npm package named `specify` is unrelated to this project. Install the release tarball, pinned to
 a tag:
 
 ```bash
-npm install --global https://github.com/gm2211/specify/releases/download/v0.8.2/specify-0.8.2.tgz
+npm install --global https://github.com/gm2211/specify/releases/download/v0.9.0/specify-0.9.0.tgz
 ```
 
 In a Node project, a dev dependency also works:
-`npm install --save-dev github:gm2211/specify#v0.8.2` (npm cannot build a GitHub dependency in a
+`npm install --save-dev github:gm2211/specify#v0.9.0` (npm cannot build a GitHub dependency in a
 global install). In CI, use the reusable workflow described in [formal checks](formal.md#ci).

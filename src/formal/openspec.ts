@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import type { FormalCheck, FormalSource } from './types.js';
+import type { FormalCheck, FormalSource, FormalWaiver, VerifyLink } from './types.js';
 
 /**
  * Reads `Formal:` lines from OpenSpec specs. OpenSpec owns the spec format; Specify only reads
@@ -24,12 +24,17 @@ export interface OpenSpecScan {
   requirementIds: string[];
   /** Requirements listed under a delta spec's `## REMOVED Requirements`. */
   removedIds: string[];
+  /** `Formal: none (reason)` waivers. */
+  waivers: FormalWaiver[];
+  /** `Verify:` lines linking requirements to tests. */
+  verifies: VerifyLink[];
 }
 
 const REQUIREMENT = /^###\s+Requirement:(.*)$/;
 const SECTION_END = /^#{1,3}\s/;
 const FENCE = /^\s*(```|~~~)/;
 const FORMAL = /^(?:\*\*|__)?Formal:(?:\*\*|__)?(.*)$/;
+const VERIFY = /^(?:\*\*|__)?Verify:(?:\*\*|__)?(.*)$/;
 
 /** Find every `spec.md` under a specs directory (`openspec/specs` or a change's `specs`). */
 export function findSpecFiles(specsDir: string): string[] {
@@ -66,18 +71,42 @@ export function scanOpenSpec(root: string, change?: string): OpenSpecScan {
     ...main.requirementIds.filter((id) => !replaced.has(id)),
     ...delta.requirementIds,
   ];
+  const kept = <T extends { requirementId: string }>(items: T[]): T[] =>
+    items.filter((item) => !replaced.has(item.requirementId));
   return {
-    references: [
-      ...main.references.filter((ref) => !replaced.has(ref.requirementId)),
-      ...delta.references,
-    ],
+    references: [...kept(main.references), ...delta.references],
     requirementIds: [...new Set(requirementIds)],
     removedIds: delta.removedIds,
+    waivers: [...kept(main.waivers), ...delta.waivers],
+    verifies: [...kept(main.verifies), ...delta.verifies],
   };
 }
 
+/** Active OpenSpec changes: directories under `openspec/changes` (except `archive`) with delta specs. */
+export function listActiveChanges(root: string): string[] {
+  const dir = path.join(root, 'openspec', 'changes');
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() &&
+        entry.name !== 'archive' &&
+        /^[\w.-]+$/.test(entry.name) &&
+        fs.existsSync(path.join(dir, entry.name, 'specs')),
+    )
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+}
+
 function scanSpecsDir(root: string, specsDir: string): OpenSpecScan {
-  const result: OpenSpecScan = { references: [], requirementIds: [], removedIds: [] };
+  const result: OpenSpecScan = {
+    references: [],
+    requirementIds: [],
+    removedIds: [],
+    waivers: [],
+    verifies: [],
+  };
   for (const file of findSpecFiles(specsDir)) {
     const capability = toPosix(path.relative(specsDir, path.dirname(file))) || '.';
     const relativeFile = toPosix(path.relative(root, file));
@@ -85,6 +114,8 @@ function scanSpecsDir(root: string, specsDir: string): OpenSpecScan {
     result.references.push(...scanned.references);
     result.requirementIds.push(...scanned.requirementIds);
     result.removedIds.push(...scanned.removedIds);
+    result.waivers.push(...scanned.waivers);
+    result.verifies.push(...scanned.verifies);
   }
   return result;
 }
@@ -94,6 +125,8 @@ export function scanSpecMarkdown(text: string, capability: string, file: string)
   const references: FormalReference[] = [];
   const requirementIds: string[] = [];
   const removedIds: string[] = [];
+  const waivers: FormalWaiver[] = [];
+  const verifies: VerifyLink[] = [];
   let removedSection = false;
   let current: string | undefined;
   let fence: string | undefined;
@@ -123,9 +156,33 @@ export function scanSpecMarkdown(text: string, capability: string, file: string)
       if (/^##\s/.test(line)) removedSection = /^##\s+REMOVED\b/i.test(line);
       continue;
     }
-    const formal = FORMAL.exec(line.trim().replace(/^[-*+]\s+/, ''));
-    if (!formal) continue;
+    const item = line.trim().replace(/^[-*+]\s+/, '');
     const source: FormalSource = { file, line: index + 1, text: line.trim() };
+    const verify = VERIFY.exec(item);
+    if (verify) {
+      verifies.push({
+        requirementId: current ?? `${capability}/(none)`,
+        source,
+        ...(current
+          ? parseVerifyLine(verify[1])
+          : { error: 'Verify line is not under a "### Requirement:" heading' }),
+      });
+      continue;
+    }
+    const formal = FORMAL.exec(item);
+    if (!formal) continue;
+    const reason = current ? waiverReason(formal[1]) : undefined;
+    if (current && reason !== undefined) {
+      if (reason) waivers.push({ requirementId: current, reason, source });
+      else {
+        references.push({
+          requirementId: current,
+          source,
+          error: 'A waiver needs a reason: "Formal: none (why this is not modeled)"',
+        });
+      }
+      continue;
+    }
     if (!current) {
       references.push({
         requirementId: `${capability}/(none)`,
@@ -144,7 +201,32 @@ export function scanSpecMarkdown(text: string, capability: string, file: string)
       });
     }
   }
-  return { references, requirementIds, removedIds };
+  return { references, requirementIds, removedIds, waivers, verifies };
+}
+
+/** The reason of a `none (<reason>)` waiver; `undefined` when the line is not a waiver. */
+function waiverReason(raw: string): string | undefined {
+  const [word, ...rest] = unquote(raw).split(/\s+/);
+  if (word !== 'none') return undefined;
+  return rest
+    .join(' ')
+    .replace(/^\((.*)\)$/, '$1')
+    .trim();
+}
+
+function unquote(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^`(.*)`$/, '$1')
+    .trim();
+}
+
+/** Grammar: `test <name>`; the name may be quoted and is matched as a substring of test case names. */
+function parseVerifyLine(raw: string): { test: string } | { error: string } {
+  const match = /^test\s+(.+)$/.exec(unquote(raw));
+  const name = match?.[1].replace(/^(["'])(.*)\1$/, '$2').trim();
+  if (!name) return { error: 'Expected "Verify: test <test name>"' };
+  return { test: name };
 }
 
 const QUINT_KEYS = new Set(['expect', 'backend', 'mode', 'main', 'max-steps', 'samples', 'seed']);
@@ -157,10 +239,7 @@ const LEAN_KEYS = new Set(['expect']);
  *   lean <file> <Namespace.theorem>
  */
 export function parseFormalLine(raw: string): FormalCheck {
-  const body = raw
-    .trim()
-    .replace(/^`(.*)`$/, '$1')
-    .trim();
+  const body = unquote(raw);
   if (body.includes('Formal:')) {
     throw new Error(
       'Several Formal: links share one line, often because a Markdown formatter joined them; put each on its own list item',

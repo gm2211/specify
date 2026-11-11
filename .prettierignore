@@ -17,3 +17,4 @@ webapp/package-lock.json
 
 # Formal: lines must stay one per line
 examples/*/openspec/
+formal/traces/

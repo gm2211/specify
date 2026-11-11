@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "requirements": {
+    "counter/Count never goes negative": {
+      "links": [
+        {
+          "link": "lean formal/Counter.lean Counter.incrementPreservesNonnegative",
+          "expect": "holds",
+          "definition": "894433989060d01d"
+        },
+        {
+          "link": "quint formal/Counter.qnt nonNegative invariant apalache main=Counter",
+          "expect": "holds",
+          "definition": "5140d14d062fc10f"
+        },
+        {
+          "link": "quint formal/Counter.qnt nonNegative invariant simulate main=Counter",
+          "expect": "holds",
+          "definition": "5140d14d062fc10f"
+        },
+        {
+          "link": "quint formal/Counter.qnt nonNegative invariant tlc main=Counter",
+          "expect": "holds",
+          "definition": "5140d14d062fc10f"
+        },
+        {
+          "link": "quint formal/Counter.qnt nonNegative invariant tlc main=CounterBefore",
+          "expect": "fails",
+          "definition": "5140d14d062fc10f"
+        }
+      ]
+    },
+    "counter/Count reaches the cap": {
+      "links": [
+        {
+          "link": "quint formal/Counter.qnt reachesCap temporal tlc main=Counter",
+          "expect": "holds",
+          "definition": "ce9b55c918ebe72a"
+        },
+        {
+          "link": "quint formal/Counter.qnt reachesCap temporal tlc main=CounterBefore",
+          "expect": "fails",
+          "definition": "ce9b55c918ebe72a"
+        }
+      ]
+    }
+  }
+}

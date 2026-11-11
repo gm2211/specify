@@ -70,19 +70,35 @@ fails, either the model or the code is wrong; find out which.
 - Options: `invariant|temporal`, `expect=holds|fails`, `backend=tlc|apalache` (Apalache needs
   `max-steps=N`), `mode=simulate max-steps=N samples=N seed=N` for quick random traces,
   `main=<module>`.
-- Run `specify formal check --format text`. Use `--tool quint` while iterating, and
-  `--change <name>` to check a pending OpenSpec change's delta specs.
+- Run `specify formal check --format text --tool quint` while iterating on one model, and
+  `specify gate --format text` before finishing. The gate also checks every active OpenSpec change's
+  delta specs.
+- A requirement that should not be modeled gets `- Formal: none (<reason>)`. Under the strict policy
+  a requirement with neither a link nor a waiver fails the gate.
 - Read a counterexample from the trace Quint prints: it is a sequence of states leading to the
   violation. Explain it in plain words before changing anything.
 
 ## 5. Tie the model to the code
 
-The model and the code drift unless a test pins them together. For each model, add a conformance
-test in the project's normal test suite that replays the model's key scenarios (or a trace Quint
-produced with `--out-itf`) against the real implementation. Name the requirement in the test name so
-a reader can follow requirement → model → test.
+The model and the code drift unless a test pins them together, and the gate requires it:
 
-## 6. Lean theorems
+1. Run `specify trace export`. It writes ITF traces of each model under `formal/traces/<module>/`
+   (JSON: `states` is a list of variable assignments; sets are `{"#set": [...]}`, tuples
+   `{"#tup": [...]}`, big integers `{"#bigint": "3"}`). Commit them.
+2. Add a conformance test to the project's normal test suite that reads every state of every trace
+   and asserts the real implementation agrees with it. Put the requirement id in the test name.
+3. Link it under the requirement: `- Verify: test <requirement id>`.
+4. Make the test run write a JUnit or TAP report at a path listed in `testReports` in
+   `formal/specify.json`. Specify reads the report; it does not run the tests.
+
+## 6. Lock, and never weaken silently
+
+After adding or changing links or properties, run `specify lock` and commit `formal/specify.lock`.
+The gate compares it with the base branch. Removing a link, replacing links with a waiver, flipping
+`expect`, or editing a linked property fails unless an OpenSpec change proposal names that
+requirement in its delta specs. If a property really must change, write the proposal first.
+
+## 7. Lean theorems
 
 - State the theorem with explicit premises; keep it public and fully qualified.
 - `sorry` and custom axioms fail the check; `propext`, `Classical.choice` and `Quot.sound` are

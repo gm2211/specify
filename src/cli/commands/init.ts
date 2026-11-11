@@ -2,7 +2,9 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CONFIG_FILE } from '../../formal/config.js';
 import { agentsBody, installAgentsRegion } from '../../init/agents.js';
+import { installPrePushHook, installStopHook } from '../../init/hooks.js';
 import { writeOutput } from '../output.js';
 import { ExitCode } from '../exit-codes.js';
 import type { CliContext } from '../types.js';
@@ -27,8 +29,12 @@ Link each one from the requirement it encodes, one list item per check:
     - Formal: quint formal/example.qnt eventuallyDone temporal expect=holds
     - Formal: quint formal/example_before.qnt eventuallyDone temporal expect=fails
     - Formal: lean formal/Example.lean Example.someTheorem
+    - Formal: none (pure input/output, covered by tests)
+    - Verify: test <name of the conformance test>
 
-Run \`specify formal check\` from the project root.
+\`specify.json\` sets the gate policy (\`strict\` or \`warn\`) and the test reports to read.
+\`specify.lock\` records every link; update it with \`specify lock\` and commit it.
+Run \`specify gate\` from the project root.
 `;
 
 export function init(options: InitOptions, ctx: CliContext): number {
@@ -37,9 +43,10 @@ export function init(options: InitOptions, ctx: CliContext): number {
     throw new Error(`Project root is not a directory: ${root}`);
   }
 
+  const hadSpecs = fs.existsSync(path.join(root, 'openspec'));
   let openspec: 'initialized' | 'existing' | 'skipped' = 'skipped';
   if (!options.skipOpenspec) {
-    if (fs.existsSync(path.join(root, 'openspec'))) {
+    if (hadSpecs) {
       openspec = 'existing';
     } else {
       const failure = runOpenspecInit(root, options);
@@ -56,15 +63,34 @@ export function init(options: InitOptions, ctx: CliContext): number {
   const readme = path.join(formalDir, 'README.md');
   if (!fs.existsSync(readme)) fs.writeFileSync(readme, FORMAL_README);
 
+  // New projects start strict; a project that already had specs opts in when it is ready.
+  const config = path.join(root, CONFIG_FILE);
+  const policy = hadSpecs ? 'warn' : 'strict';
+  if (!fs.existsSync(config)) {
+    fs.writeFileSync(config, `${JSON.stringify({ policy, testReports: [] }, null, 2)}\n`);
+  }
+
+  const command = specifyCommand(root);
   const agents = path.resolve(root, options.agents ?? 'AGENTS.md');
-  installAgentsRegion(agents, agentsBody(specifyCommand(root)));
+  installAgentsRegion(agents, agentsBody(command));
 
   const tools = (options.tools ?? 'claude').split(',').map((tool) => tool.trim());
-  const skill =
-    tools.includes('claude') || tools.includes('all') ? installClaudeSkill(root) : undefined;
+  const claude = tools.includes('claude') || tools.includes('all');
+  const skill = claude ? installClaudeSkill(root) : undefined;
+  const stopHook = claude ? installStopHook(root, command) : undefined;
+  const prePush = installPrePushHook(root, command);
 
   writeOutput(
-    { root, openspec, formal: formalDir, agents, ...(skill ? { skill } : {}), initialized: true },
+    {
+      root,
+      openspec,
+      formal: formalDir,
+      config,
+      agents,
+      ...(skill ? { skill } : {}),
+      hooks: { ...(stopHook ? { stop: stopHook } : {}), prePush },
+      initialized: true,
+    },
     ctx,
   );
   return ExitCode.SUCCESS;

@@ -9,16 +9,19 @@ const LEGACY_REGIONS = ['intent-workflow', 'spec-workflow'];
 export function agentsBody(command: string): string {
   return `## Formal properties (Specify)
 
-OpenSpec (\`openspec/\`) holds the requirements. Specify checks the formal models linked to them.
+OpenSpec (\`openspec/\`) holds the requirements. Specify checks the formal models linked to them and gates the work on the result.
 
 - Link a model under the \`### Requirement:\` it encodes, one list item per check (formatters join plain lines):
   - \`- Formal: quint formal/<model>.qnt <property> [invariant|temporal] [expect=holds|fails] [backend=tlc|apalache] [main=<module>]\`
   - \`- Formal: lean formal/<File>.lean <Namespace.theorem>\`
+  - \`- Formal: none (<reason>)\` waives a requirement that should not be modeled, such as pure input/output behavior.
 - Paths are relative to the project root. Keep models and proofs in \`formal/\`.
-- For every property that must hold, keep a "before" model or mutation linked with \`expect=fails\`, so a property that can never fail is caught.
+- For every Quint property that must hold, link the same property on a "before" model or mutation with \`expect=fails\`, so a property that can never fail is caught.
 - Write liveness as a temporal property with fairness (\`weakFair\`). TLC is the default backend and explores every reachable state within the model's constants; \`backend=apalache\` is bounded by \`max-steps\`.
-- Run \`${command} formal check\` before finishing. It exits non-zero when any check differs from its expectation, a Formal line is invalid, or no Formal lines exist.
-- A passing check is a statement about the model only. Tie each model to the code with a conformance test, and never weaken a property or flip \`expect\` to make a check pass.`;
+- Tie each model to the code: write a conformance test that replays the traces from \`${command} trace export\` against the implementation, and name it under the requirement with \`- Verify: test <test name>\`. Specify reads the test reports listed in \`formal/specify.json\`; it does not run tests.
+- Run \`${command} gate\` before finishing. Under the \`strict\` policy it fails when a check differs from its expectation, a requirement has neither a link nor a waiver, a property has no \`expect=fails\` link, a \`Verify:\` test is missing or red, or \`formal/specify.lock\` is out of date.
+- After changing links or properties, run \`${command} lock\` and commit \`formal/specify.lock\`. Removing a link, flipping \`expect\` or editing a linked property needs an OpenSpec change proposal that names the requirement; never do it just to make a check pass.
+- A passing check is a statement about the model only.`;
 }
 
 /** Add or update the managed region, preserving all text outside it. */

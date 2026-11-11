@@ -1,0 +1,4 @@
+{
+  "policy": "strict",
+  "testReports": ["reports/junit.xml"]
+}
