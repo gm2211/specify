@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# pre-push hook — auto-bump semver patch if version hasn't changed since last push.
+# pre-push hook — run the Specify gate, then auto-bump semver patch if version hasn't changed since
+# last push.
 #
 # Git supplies the remote name and URL as arguments, and feeds lines of the form:
 #   <local ref> <local sha> <remote ref> <remote sha>
@@ -9,6 +10,10 @@ set -euo pipefail
 
 REMOTE="$1"
 REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# Run the gate on changed specs and models first. A missing Quint or Lean does not block here; CI
+# installs them.
+"$REPO_ROOT/specify" gate --hook pre-push --changed --skip-verify </dev/null
 
 # Read push info from stdin
 while read -r local_ref local_sha remote_ref remote_sha; do

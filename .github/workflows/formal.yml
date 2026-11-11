@@ -1,13 +1,13 @@
-# Reusable workflow: run `specify formal check` with checksum-pinned tools.
+# Reusable workflow: run `specify gate` with checksum-pinned tools.
 #
 # In another repository:
 #
 #   jobs:
 #     formal:
-#       uses: gm2211/specify/.github/workflows/formal.yml@v0.8.2
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
 #
-# Set `specify-ref` to the same tag. Results appear in the job summary as a requirement → result
-# table. Override the tool versions and checksums together.
+# Set `specify-ref` to the same tag. The gate's traceability table and failures appear in the job
+# summary. Override the tool versions and checksums together.
 name: Formal checks
 on:
   workflow_call:
@@ -20,8 +20,21 @@ on:
         description: Comma-separated tools to install and run (quint, lean)
         type: string
         default: quint,lean
+      policy:
+        description: strict or warn; empty uses formal/specify.json
+        type: string
+        default: ''
+      test-reports-artifact:
+        description:
+          Artifact with the test reports that Verify lines read, uploaded earlier in the run
+        type: string
+        default: ''
+      test-reports-path:
+        description: Directory under the root where that artifact is extracted
+        type: string
+        default: reports
       change:
-        description: Also check this OpenSpec change's delta specs
+        description: Ignored; the gate checks every active OpenSpec change
         type: string
         default: ''
       timeout-ms:
@@ -31,7 +44,7 @@ on:
       specify-ref:
         description: Git ref of gm2211/specify to install
         type: string
-        default: v0.8.2
+        default: v0.9.0
       quint-version:
         type: string
         default: 0.33.1
@@ -62,6 +75,14 @@ jobs:
       TOOLS: ${{ inputs.tools }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The drift lock is compared with the base branch.
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        if: inputs.test-reports-artifact != ''
+        with:
+          name: ${{ inputs.test-reports-artifact }}
+          path: ${{ inputs.root }}/${{ inputs.test-reports-path }}
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -129,15 +150,19 @@ jobs:
           '' || hashFiles(format('{0}/lakefile.toml', inputs.root)) != '')
         working-directory: ${{ inputs.root }}
         run: lake build
-      - name: specify formal check
+      - name: specify gate
         working-directory: ${{ inputs.root }}
         env:
-          CHANGE: ${{ inputs.change }}
+          POLICY: ${{ inputs.policy }}
+          BASE_REF: ${{ github.base_ref }}
           TIMEOUT_MS: ${{ inputs.timeout-ms }}
         run: |
           set -uo pipefail
-          args=(formal check --root . --format markdown --timeout-ms "$TIMEOUT_MS")
-          if [ -n "$CHANGE" ]; then args+=(--change "$CHANGE"); fi
+          args=(gate --root . --format markdown --timeout-ms "$TIMEOUT_MS")
+          if [ -n "$POLICY" ]; then args+=(--policy "$POLICY"); fi
+          if [ -n "$BASE_REF" ] && git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null; then
+            args+=(--base "origin/$BASE_REF")
+          fi
           case "$TOOLS" in
             *quint*lean*|*lean*quint*) ;;
             *quint*) args+=(--tool quint) ;;
@@ -148,5 +173,5 @@ jobs:
           "${runner[@]}" specify "${args[@]}" > "$RUNNER_TEMP/formal.md"
           status=$?
           cat "$RUNNER_TEMP/formal.md"
-          { echo "## Formal checks"; echo; cat "$RUNNER_TEMP/formal.md"; } >> "$GITHUB_STEP_SUMMARY"
+          { echo "## Specify gate"; echo; cat "$RUNNER_TEMP/formal.md"; } >> "$GITHUB_STEP_SUMMARY"
           exit $status

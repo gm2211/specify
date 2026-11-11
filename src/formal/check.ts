@@ -1,9 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { checkLean } from './lean.js';
-import { scanOpenSpec } from './openspec.js';
+import { scanOpenSpec, type FormalReference } from './openspec.js';
 import { checkQuint, evidenceForQuint, scopeForQuint } from './quint.js';
-import type { FormalCheck, FormalCheckResult, FormalCheckSummary, FormalOutcome } from './types.js';
+import type {
+  Expectation,
+  FormalCheck,
+  FormalCheckResult,
+  FormalCheckSummary,
+  FormalOutcome,
+  FormalStatus,
+} from './types.js';
 
 export interface CheckFormalOptions {
   /** Project root: the directory containing `openspec/`. */
@@ -19,13 +26,44 @@ export interface CheckFormalOptions {
 
 const DEFAULT_TIMEOUT_MS = 60_000;
 
+/** A check passes only when the observed status equals its expectation; errors never pass. */
+export function matchesExpectation(status: FormalStatus, expect: Expectation): boolean {
+  return status === expect;
+}
+
+/** A run is valid only when at least one check ran and every check matched its expectation. */
+export function isValidRun(oks: boolean[]): boolean {
+  return oks.length > 0 && oks.every(Boolean);
+}
+
 export async function checkFormal(options: CheckFormalOptions): Promise<FormalCheckSummary> {
   const root = path.resolve(options.root);
   const scan = scanOpenSpec(root, options.change);
-  const linked = new Set(scan.references.map((ref) => ref.requirementId));
+  const covered = new Set([
+    ...scan.references.map((ref) => ref.requirementId),
+    ...scan.waivers.map((waiver) => waiver.requirementId),
+  ]);
+  const results = await runReferences(scan.references, options);
+  const ok = results.filter((result) => result.ok).length;
+  return {
+    valid: isValidRun(results.map((result) => result.ok)),
+    scope: 'formal-models-only',
+    root,
+    results,
+    unlinkedRequirementIds: scan.requirementIds.filter((id) => !covered.has(id)),
+    waivers: scan.waivers,
+    totals: { checks: results.length, ok, notOk: results.length - ok },
+  };
+}
 
+/** Run the given links in order. Invalid lines become error results. */
+export async function runReferences(
+  references: FormalReference[],
+  options: CheckFormalOptions,
+): Promise<FormalCheckResult[]> {
+  const root = path.resolve(options.root);
   const results: FormalCheckResult[] = [];
-  for (const ref of scan.references) {
+  for (const ref of references) {
     if (options.tool && ref.check && ref.check.tool !== options.tool) continue;
     if (!ref.check) {
       results.push({
@@ -42,19 +80,10 @@ export async function checkFormal(options: CheckFormalOptions): Promise<FormalCh
       source: ref.source,
       check: ref.check,
       outcome,
-      ok: outcome.status === ref.check.expect,
+      ok: matchesExpectation(outcome.status, ref.check.expect),
     });
   }
-
-  const ok = results.filter((result) => result.ok).length;
-  return {
-    valid: results.length > 0 && ok === results.length,
-    scope: 'formal-models-only',
-    root,
-    results,
-    unlinkedRequirementIds: scan.requirementIds.filter((id) => !linked.has(id)),
-    totals: { checks: results.length, ok, notOk: results.length - ok },
-  };
+  return results;
 }
 
 function errorOutcome(evidence: FormalOutcome['evidence'], message: string): FormalOutcome {

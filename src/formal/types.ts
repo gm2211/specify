@@ -60,6 +60,8 @@ export interface FormalOutcome {
   axioms?: string[];
   statement?: string;
   scope?: FormalScope;
+  /** The counterexample trace the tool printed, when one was found. */
+  trace?: string;
 }
 
 export interface ProcessResult {
@@ -96,6 +98,24 @@ export interface FormalCheckResult {
   outcome: FormalOutcome;
   /** True only when the observed status equals the expectation. */
   ok: boolean;
+  /** Set when the link comes from an active OpenSpec change's delta specs. */
+  change?: string;
+}
+
+/** `Formal: none (reason)`: the requirement is deliberately not modeled. */
+export interface FormalWaiver {
+  requirementId: string;
+  reason: string;
+  source: FormalSource;
+}
+
+/** `Verify: test "<name>"`: a test in the project's own test report that ties the model to code. */
+export interface VerifyLink {
+  requirementId: string;
+  source: FormalSource;
+  /** Substring that must match at least one test case name. Absent when the line is invalid. */
+  test?: string;
+  error?: string;
 }
 
 export interface FormalCheckSummary {
@@ -103,7 +123,9 @@ export interface FormalCheckSummary {
   scope: 'formal-models-only';
   root: string;
   results: FormalCheckResult[];
-  /** Requirements with no `Formal:` line; listed so missing coverage stays visible. */
+  /** Requirements with no `Formal:` link and no waiver; listed so missing coverage stays visible. */
   unlinkedRequirementIds: string[];
+  /** Requirements waived with `Formal: none (reason)`. */
+  waivers: FormalWaiver[];
   totals: { checks: number; ok: number; notOk: number };
 }

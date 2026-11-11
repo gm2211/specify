@@ -1,0 +1,169 @@
+{
+  "version": 1,
+  "requirements": {
+    "ci-workflow/Base ref and test reports": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Checksum-pinned tools": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Lean projects": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Release tarballs": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Results in the job summary": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Reusable workflow": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "formal-check/Caller-owned tools": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/Evidence boundary": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/Expected outcomes": {
+      "links": [
+        {
+          "link": "quint formal/Verdict.qnt errorNeverPasses invariant tlc main=Verdict",
+          "expect": "holds",
+          "definition": "43b7cfd1de327069"
+        },
+        {
+          "link": "quint formal/Verdict.qnt errorNeverPasses invariant tlc main=VerdictBefore",
+          "expect": "fails",
+          "definition": "43b7cfd1de327069"
+        }
+      ]
+    },
+    "formal-check/Formal lines link checks to requirements": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/Invariant and temporal Quint properties": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/Lean theorems": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/OpenSpec change overlay": {
+      "links": [
+        {
+          "link": "quint formal/Overlay.qnt overlaySound invariant tlc main=Overlay",
+          "expect": "holds",
+          "definition": "3f8761a0d44d576e"
+        },
+        {
+          "link": "quint formal/Overlay.qnt overlaySound invariant tlc main=OverlayBefore",
+          "expect": "fails",
+          "definition": "3f8761a0d44d576e"
+        }
+      ]
+    },
+    "formal-check/Quint backends": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "formal-check/Report and exit status": {
+      "links": [
+        {
+          "link": "quint formal/Verdict.qnt noVacuousPass invariant tlc main=Verdict",
+          "expect": "holds",
+          "definition": "7b0aabe9911097eb"
+        },
+        {
+          "link": "quint formal/Verdict.qnt noVacuousPass invariant tlc main=VerdictBefore",
+          "expect": "fails",
+          "definition": "7b0aabe9911097eb"
+        }
+      ]
+    },
+    "gate/Active changes are checked": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Before models are required": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Changed-only runs": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Counterexamples are shown": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Coverage policy": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Drift lock": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Hook mode": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Policy strictness": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Trace export": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Traceability report": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Verify links read test reports": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Weakening needs a change proposal": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "init/Agent command": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Agent Stop hook": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Claude Code skill": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Formal folder": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Gate policy file": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Managed agent instructions": {
+      "links": [
+        {
+          "link": "quint formal/ManagedRegion.qnt oneRegion invariant tlc main=ManagedRegion",
+          "expect": "holds",
+          "definition": "6d5e95523dbfae80"
+        },
+        {
+          "link": "quint formal/ManagedRegion.qnt oneRegion invariant tlc main=ManagedRegionBefore",
+          "expect": "fails",
+          "definition": "6d5e95523dbfae80"
+        }
+      ]
+    },
+    "init/Pre-push hook": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "init/Set up OpenSpec": {
+      "waived": "file setup behavior, covered by unit tests"
+    },
+    "product-direction/Encode properties formally": {
+      "waived": "product decision"
+    },
+    "product-direction/Enforce spec-driven development": {
+      "waived": "product decision"
+    },
+    "product-direction/OpenSpec formal companion": {
+      "waived": "product decision"
+    },
+    "product-direction/Results visible in a UI": {
+      "waived": "product decision"
+    },
+    "product-direction/Same setup across projects": {
+      "waived": "product decision"
+    }
+  }
+}

@@ -7,6 +7,7 @@ import type { CliContext, OutputFormat } from './types.js';
 import { version } from '../version.js';
 import { init } from './commands/init.js';
 import { formalCheck } from './commands/formal-check.js';
+import { gate, lock, traceExport } from './commands/gate.js';
 export { COMMANDS };
 
 const globalValues = new Set(['--format', '--output-format', '--fields']);
@@ -36,7 +37,7 @@ function parse(args: string[], valueFlags: Set<string>, flags: Set<string>): Map
 }
 
 function help(): void {
-  process.stdout.write('Specify — formal checks for OpenSpec requirements\n\n');
+  process.stdout.write('Specify — a spec-driven development gate for OpenSpec requirements\n\n');
   for (const command of COMMANDS) {
     process.stdout.write(`  ${command.name.padEnd(15)} ${command.description}\n`);
   }
@@ -90,7 +91,7 @@ async function main(args: string[]): Promise<number> {
     quiet: global.has('--quiet') || global.has('-q'),
   };
   const first = rest.shift();
-  const name = first === 'formal' ? `${first} ${rest.shift() ?? ''}` : first;
+  const name = first === 'formal' || first === 'trace' ? `${first} ${rest.shift() ?? ''}` : first;
   const command = COMMANDS.find((entry) => entry.name === name);
   if (!command) {
     throw new Error(`Unknown or removed command: ${name}. See docs/migration-0.8.md`);
@@ -115,6 +116,37 @@ async function main(args: string[]): Promise<number> {
           timeoutMs: get('--timeout-ms'),
           quintBin: get('--quint-bin'),
           leanBin: get('--lean-bin'),
+        },
+        ctx,
+      );
+    case 'gate':
+      return gate(
+        {
+          root: get('--root'),
+          tool: get('--tool'),
+          policy: get('--policy'),
+          base: get('--base'),
+          testReport: get('--test-report'),
+          hook: get('--hook'),
+          timeoutMs: get('--timeout-ms'),
+          quintBin: get('--quint-bin'),
+          leanBin: get('--lean-bin'),
+          changed: options.has('--changed'),
+          skipVerify: options.has('--skip-verify'),
+        },
+        ctx,
+      );
+    case 'lock':
+      return lock({ root: get('--root') }, ctx);
+    case 'trace export':
+      return traceExport(
+        {
+          root: get('--root'),
+          out: get('--out'),
+          traces: get('--traces'),
+          maxSteps: get('--max-steps'),
+          seed: get('--seed'),
+          quintBin: get('--quint-bin'),
         },
         ctx,
       );

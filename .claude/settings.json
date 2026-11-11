@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./specify gate --hook stop --changed --skip-verify"
+          }
+        ]
+      }
+    ]
+  }
+}

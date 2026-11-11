@@ -29,3 +29,6 @@ deploy/terraform/**/*.auto.tfvars
 
 # Apalache output from formal checks
 _apalache-out/
+
+# Test reports read by `specify gate`
+reports/

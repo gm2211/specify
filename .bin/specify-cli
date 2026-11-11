@@ -17,7 +17,7 @@ const REPO_ROOT = resolve(__dirname, '..');
 // Store paths
 const SPECIFY_DIR = resolve(REPO_ROOT, '.specify');
 const ACTIVITY_FILE = resolve(SPECIFY_DIR, 'activity-log.jsonl');
-const SPEC_PATH = resolve(REPO_ROOT, 'specify.spec');
+const SPEC_PATH = resolve(REPO_ROOT, 'openspec', 'specs');
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,45 +48,28 @@ function out(obj) {
 // ── subcommands ───────────────────────────────────────────────────────────────
 
 function cmdStatus() {
-  const running = existsSync(SPEC_PATH);
-  out({
-    running,
-    mode: 'local',
-    specPath: SPEC_PATH,
-    lastVerifyAt: existsSync(resolve(SPECIFY_DIR, 'verify/verify-result.json'))
-      ? (readFileSync(resolve(SPECIFY_DIR, 'verify/verify-result.json'), 'utf8').match(
-          /"updatedAt"\s*:\s*"([^"]+)"/,
-        )?.[1] ?? null)
-      : null,
-  });
+  out({ running: existsSync(SPEC_PATH), mode: 'local', specPath: SPEC_PATH, lastVerifyAt: null });
 }
 
+/** Runs the gate: formal checks, coverage policy, Verify test results and the drift lock. */
 function cmdVerify(_flags) {
-  const verifyResultPath = resolve(SPECIFY_DIR, 'verify/verify-result.json');
-  if (!existsSync(verifyResultPath)) {
-    out({ verified: false, missingMarkers: [], reason: 'No recorded results' });
-    return;
-  }
-  const checked = spawnSync(
-    resolve(REPO_ROOT, 'specify'),
-    ['verify', '--spec', SPEC_PATH, '--report', verifyResultPath, '--json'],
-    { encoding: 'utf8', timeout: 60000 },
-  );
+  const checked = spawnSync(resolve(REPO_ROOT, 'specify'), ['gate', '--format', 'json'], {
+    cwd: REPO_ROOT,
+    encoding: 'utf8',
+    timeout: 600000,
+  });
   try {
     const result = JSON.parse(checked.stdout);
-    const missing = result.valid
-      ? [
-          ...result.missingIds,
-          ...result.report.results.filter((r) => r.status !== 'passed').map((r) => r.id),
-        ]
-      : [];
     out({
-      verified: checked.status === 0 && result.valid === true && result.report.pass === true,
-      missingMarkers: missing.map((id) => ({ section: id.split('/')[0], expectedMarker: id })),
-      ...(result.valid ? {} : { reason: 'Invalid recorded results' }),
+      verified: checked.status === 0 && result.valid === true,
+      missingMarkers: (result.failures ?? []).map((failure) => ({
+        section: failure.split('/')[0],
+        expectedMarker: failure.split(':')[0],
+      })),
+      ...(result.valid ? {} : { reason: 'Gate closed' }),
     });
   } catch {
-    out({ verified: false, missingMarkers: [], reason: 'Results validation failed' });
+    out({ verified: false, missingMarkers: [], reason: 'Gate did not return a result' });
   }
 }
 
