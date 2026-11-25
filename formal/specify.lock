@@ -7,7 +7,13 @@
     "ci-workflow/Checksum-pinned tools": {
       "waived": "GitHub workflow behavior, exercised by CI itself"
     },
+    "ci-workflow/Gate result cache": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
     "ci-workflow/Lean projects": {
+      "waived": "GitHub workflow behavior, exercised by CI itself"
+    },
+    "ci-workflow/Opt-in pull request comment": {
       "waived": "GitHub workflow behavior, exercised by CI itself"
     },
     "ci-workflow/Release tarballs": {
@@ -53,12 +59,12 @@
         {
           "link": "quint formal/Overlay.qnt overlaySound invariant tlc main=Overlay",
           "expect": "holds",
-          "definition": "3f8761a0d44d576e"
+          "definition": "d167b4c7ebe726e0"
         },
         {
           "link": "quint formal/Overlay.qnt overlaySound invariant tlc main=OverlayBefore",
           "expect": "fails",
-          "definition": "3f8761a0d44d576e"
+          "definition": "d167b4c7ebe726e0"
         }
       ]
     },
@@ -88,6 +94,9 @@
     "gate/Changed-only runs": {
       "waived": "input/output behavior, covered by unit tests"
     },
+    "gate/Checks run concurrently": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
     "gate/Counterexamples are shown": {
       "waived": "input/output behavior, covered by unit tests"
     },
@@ -98,6 +107,9 @@
       "waived": "input/output behavior, covered by unit tests"
     },
     "gate/Hook mode": {
+      "waived": "input/output behavior, covered by unit tests"
+    },
+    "gate/Passing checks are cached": {
       "waived": "input/output behavior, covered by unit tests"
     },
     "gate/Policy strictness": {

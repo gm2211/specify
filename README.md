@@ -8,7 +8,7 @@ land. Agents, git hooks and CI all run that command.
 ## Set up a project
 
 ```bash
-npm install --global https://github.com/gm2211/specify/releases/download/v0.9.0/specify-0.9.0.tgz
+npm install --global https://github.com/gm2211/specify/releases/download/v0.9.1/specify-0.9.1.tgz
 specify init    # openspec init, formal/, gate policy, AGENTS.md, Claude Code skill and hooks
 specify gate    # checks, coverage policy, Verify test results and the drift lock
 ```
@@ -19,11 +19,11 @@ base branch, and puts the result table in the job summary:
 ```yaml
 jobs:
   formal:
-    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
 ```
 
 The npm package named `specify` is unrelated; install from the GitHub release as above, or in a Node
-project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.9.0`. Bumping the tag
+project as a dev dependency: `npm install --save-dev github:gm2211/specify#v0.9.1`. Bumping the tag
 is how a project picks up a new Specify.
 
 ## What a link looks like

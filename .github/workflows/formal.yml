@@ -4,10 +4,15 @@
 #
 #   jobs:
 #     formal:
-#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
 #
 # Set `specify-ref` to the same tag. The gate's traceability table and failures appear in the job
 # summary. Override the tool versions and checksums together.
+#
+# Passing check results are cached (actions/cache) by model files and tool versions; set
+# `cache: false` to re-run everything. The gate table is uploaded as the `specify-gate-table`
+# artifact; to post it as a pull request comment, add a second job that calls gate-comment.yml (it
+# declares `pull-requests: write` itself, so this workflow stays read-only).
 name: Formal checks
 on:
   workflow_call:
@@ -33,6 +38,10 @@ on:
         description: Directory under the root where that artifact is extracted
         type: string
         default: reports
+      cache:
+        description: Reuse passing check results from earlier runs (actions/cache)
+        type: boolean
+        default: true
       change:
         description: Ignored; the gate checks every active OpenSpec change
         type: string
@@ -44,7 +53,7 @@ on:
       specify-ref:
         description: Git ref of gm2211/specify to install
         type: string
-        default: v0.9.0
+        default: v0.9.1
       quint-version:
         type: string
         default: 0.33.1
@@ -150,12 +159,27 @@ jobs:
           '' || hashFiles(format('{0}/lakefile.toml', inputs.root)) != '')
         working-directory: ${{ inputs.root }}
         run: lake build
+      - name: Restore gate cache
+        id: gate-cache
+        if: inputs.cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.root }}/.specify/cache/gate
+          # Entries are content-addressed (check, model files, tool version), so a prefix match
+          # only ever supplies entries that are valid or unused.
+          key:
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{
+            inputs.lean-version }}-${{ hashFiles(format('{0}/**/*.qnt', inputs.root),
+            format('{0}/**/*.lean', inputs.root)) }}
+          restore-keys: |
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{ inputs.lean-version }}-
       - name: specify gate
         working-directory: ${{ inputs.root }}
         env:
           POLICY: ${{ inputs.policy }}
           BASE_REF: ${{ github.base_ref }}
           TIMEOUT_MS: ${{ inputs.timeout-ms }}
+          USE_CACHE: ${{ inputs.cache }}
         run: |
           set -uo pipefail
           args=(gate --root . --format markdown --timeout-ms "$TIMEOUT_MS")
@@ -163,6 +187,7 @@ jobs:
           if [ -n "$BASE_REF" ] && git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null; then
             args+=(--base "origin/$BASE_REF")
           fi
+          if [ "$USE_CACHE" != "true" ]; then args+=(--no-cache); fi
           case "$TOOLS" in
             *quint*lean*|*lean*quint*) ;;
             *quint*) args+=(--tool quint) ;;
@@ -175,3 +200,19 @@ jobs:
           cat "$RUNNER_TEMP/formal.md"
           { echo "## Specify gate"; echo; cat "$RUNNER_TEMP/formal.md"; } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+      - name: Save gate cache
+        if: always() && inputs.cache && steps.gate-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.root }}/.specify/cache/gate
+          key:
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{
+            inputs.lean-version }}-${{ hashFiles(format('{0}/**/*.qnt', inputs.root),
+            format('{0}/**/*.lean', inputs.root)) }}
+      - name: Upload gate table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: specify-gate-table
+          path: ${{ runner.temp }}/formal.md
+          if-no-files-found: ignore

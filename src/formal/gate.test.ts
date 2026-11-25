@@ -234,7 +234,10 @@ test('strict gate: opens when every link, before model, test and the lock are in
       { requirementId: 'counter/Never negative', model: '1/1 ✓', before: '1/1 ✓', test: '1/1 ✓' },
       { requirementId: 'counter/Prints', model: 'waived', before: '-', test: '-' },
     ]);
-    assert.match(formatGate(gate), /Gate open: 2\/2 checks as expected, 1 waived, policy strict/);
+    assert.match(
+      formatGate(gate),
+      /Gate open: 2\/2 checks as expected, 2 reused from the cache, 1 waived, policy strict/,
+    );
   });
 });
 
@@ -379,5 +382,115 @@ test('hooks tolerate a missing tool but nothing else', async () => {
     const hook = await runGate({ root, quintBin: missing, tolerateUnavailable: true });
     assert.equal(hook.valid, true, JSON.stringify(hook.failures));
     assert.equal(hook.warnings.length, 2);
+  });
+});
+
+test('definitionText takes the whole definition, past blank lines, up to the next declaration', () => {
+  const check = {
+    tool: 'quint',
+    file: 'f.qnt',
+    property: 'safe',
+    kind: 'invariant',
+    mode: 'verify',
+    backend: 'tlc',
+    expect: 'holds',
+  } as const;
+  const model = [
+    'module M {',
+    '  var n: int',
+    '  val safe = n >= 0 and',
+    '',
+    '    // second paragraph',
+    '    n < 10',
+    '',
+    '    and n != 5',
+    '',
+    '  // about other',
+    '  val other = true',
+    '  def nested = {',
+    '    val inner = 1',
+    '',
+    '    inner + 1',
+    '  }',
+    '}',
+  ].join('\n');
+  assert.equal(
+    definitionText(model, check),
+    'val safe = n >= 0 and // second paragraph n < 10 and n != 5',
+  );
+  assert.equal(
+    definitionText(model, { ...check, property: 'nested' }),
+    'def nested = { val inner = 1 inner + 1 }',
+    'a nested val and a blank line inside a block stay part of the definition',
+  );
+  const edited = model.replace('and n != 5', 'and n != 6');
+  assert.notEqual(
+    definitionText(edited, check),
+    definitionText(model, check),
+    'an edit in a later paragraph changes the hash input',
+  );
+  assert.equal(definitionText(model, { ...check, property: 'other' }), 'val other = true');
+});
+
+test('gate cache: reuses passing checks, re-runs after a model edit, honours noCache', async () => {
+  await withProject(async ({ root, quint, write, git }) => {
+    git('init', '-q');
+    const first = await runGate({ root, quintBin: quint, skipVerify: true });
+    assert.equal(first.cachedChecks, 0);
+    assert.ok(fs.existsSync(path.join(root, '.specify/cache/gate/.gitignore')));
+
+    const second = await runGate({ root, quintBin: quint, skipVerify: true });
+    assert.equal(second.cachedChecks, 2);
+    assert.ok(second.results.every((result) => result.cached && result.ok));
+    assert.deepEqual(
+      second.results.map((r) => [r.requirementId, r.ok]),
+      first.results.map((r) => [r.requirementId, r.ok]),
+    );
+    assert.match(formatGate(second), /2 reused from the cache/);
+
+    const bypass = await runGate({ root, quintBin: quint, skipVerify: true, noCache: true });
+    assert.equal(bypass.cachedChecks, 0);
+
+    write('formal/Counter.qnt', `${MODEL}\n// edited\n`);
+    const edited = await runGate({ root, quintBin: quint, skipVerify: true });
+    assert.equal(edited.cachedChecks, 0, 'a changed model file invalidates the cache');
+
+    // A different tool version is a different key.
+    const other = path.join(root, 'quint-v2');
+    fs.writeFileSync(
+      other,
+      fakeQuint.replace(
+        'const args',
+        "if (process.argv[2] === '--version') { console.log('9.9'); process.exit(0); }\nconst args",
+      ),
+      { mode: 0o700 },
+    );
+    const upgraded = await runGate({ root, quintBin: other, skipVerify: true });
+    assert.equal(upgraded.cachedChecks, 0);
+  });
+});
+
+test('gate cache: failures are never cached and checks run concurrently in order', async () => {
+  await withProject(async ({ root, quint, write }) => {
+    write('formal/Counter.qnt', MODEL.replace('val other = true', 'val broken = false'));
+    write(
+      'openspec/specs/counter/spec.md',
+      spec([
+        '- Formal: quint formal/Counter.qnt safe main=Counter',
+        '- Formal: quint formal/Counter.qnt broken main=Counter',
+        '- Formal: quint formal/Counter.qnt safe main=Before expect=fails',
+      ]),
+    );
+    await runGate({ root, quintBin: quint, skipVerify: true });
+    const again = await runGate({ root, quintBin: quint, skipVerify: true, jobs: 3 });
+    assert.equal(again.cachedChecks, 2, 'the failing check was re-run');
+    assert.deepEqual(
+      again.results.map((result) => [result.check?.property, result.ok]),
+      [
+        ['safe', true],
+        ['broken', false],
+        ['safe', true],
+      ],
+    );
   });
 });

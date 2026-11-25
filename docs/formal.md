@@ -96,6 +96,8 @@ specify gate --base origin/main            # compare the lock with another ref (
 specify gate --skip-verify                 # leave test results out (before the tests have run)
 specify gate --test-report a.xml,b.tap     # instead of testReports in the config
 specify gate --policy warn
+specify gate --no-cache                    # re-run every check, ignoring cached passes
+specify gate --jobs 2                      # checks run at once (default 1)
 ```
 
 ### Waivers
@@ -129,11 +131,23 @@ out of formatters. The test reads each state and asserts the implementation agre
 specify trace export --traces 10 --max-steps 20 --seed 1
 ```
 
+### Caching and concurrency
+
+A check that passed is stored under `.specify/cache/gate` (the directory ignores itself) and is not
+run again while the check, every `.qnt` and `.lean` file under the root (plus the Lean project
+files) and the tool's `--version` output stay the same. Failing, erroring and timed-out checks are
+never cached, so they always run again. The rest run one at a time; `--jobs <n>` runs up to `n`
+concurrently, reported in link order. Concurrent `quint verify` runs share one Apalache/TLC working
+directory and can interfere, so concurrency is opt-in. `--no-cache` ignores the cache; a tool whose
+`--version` fails is never cached.
+
 ### The drift lock
 
 `specify lock` writes `formal/specify.lock`: for each requirement its waiver, or each link with its
-expectation and a hash of the property's text. Commit it. The gate fails when the lock does not
-match the specs, and compares the specs with the lock at the base ref. Each of these is a weakening:
+expectation and a hash of the property's text (for a Quint `val`, `def` or `temporal`, the whole
+definition up to the next declaration, blank lines included). Commit it. The gate fails when the
+lock does not match the specs, and compares the specs with the lock at the base ref. Each of these
+is a weakening:
 
 - a requirement or link that had a check is removed (`requirement-removed`, `link-removed`),
 - links are replaced by a waiver (`waived`),
@@ -172,15 +186,35 @@ lake env specify formal check --tool lean
 ```yaml
 jobs:
   formal:
-    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
     with: # all optional
       root: .
       tools: quint,lean
       policy: '' # strict or warn; empty uses formal/specify.json
       test-reports-artifact: '' # artifact holding the reports that Verify lines read
       test-reports-path: reports # where it is extracted, under the root
-      specify-ref: v0.9.0 # keep equal to the tag above
+      specify-ref: v0.9.1 # keep equal to the tag above
+      cache: true # reuse passing checks between runs (actions/cache); false re-runs everything
 ```
+
+The gate workflow keeps `permissions: contents: read` and uploads the table as the
+`specify-gate-table` artifact. To also post it as one pull request comment (edited on every run),
+add a second job that calls `gate-comment.yml`; that workflow declares `pull-requests: write`
+itself, so the caller grants it to that job only and the gate job stays read-only:
+
+```yaml
+jobs:
+  formal:
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
+  comment:
+    needs: formal
+    if: always() && github.event_name == 'pull_request'
+    permissions: { pull-requests: write }
+    uses: gm2211/specify/.github/workflows/gate-comment.yml@v0.9.1
+```
+
+Fork pull requests get a read-only token; the comment step then fails quietly and the gate result is
+unaffected. Callers that do not add the comment job need no change.
 
 The workflow installs Specify from GitHub, Quint from the npm registry tarball (sha512 checked),
 Apalache (which also provides TLC, sha256 checked), Java 21 and Lean from its release archive
@@ -202,7 +236,7 @@ jobs:
         with: { name: test-reports, path: reports/junit.xml }
   gate:
     needs: test
-    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
+    uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
     with: { test-reports-artifact: test-reports }
 ```
 

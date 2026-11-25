@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { runReferences, type CheckFormalOptions } from './check.js';
+import { CheckCache, mapLimit } from './cache.js';
+import { matchesExpectation, runReferences, type CheckFormalOptions } from './check.js';
 import { loadConfig, type Policy } from './config.js';
 import { changedFiles, fileAtRef } from './git.js';
 import {
@@ -30,7 +31,17 @@ export interface GateOptions extends Omit<CheckFormalOptions, 'change'> {
   testReports?: string[];
   /** A missing tool does not fail the gate (for local hooks; CI installs the tools). */
   tolerateUnavailable?: boolean;
+  /** Re-run every check instead of reusing passing results cached under `.specify/cache/gate`. */
+  noCache?: boolean;
+  /** Checks run at the same time (default 1; concurrent Quint runs can interfere, see DEFAULT_JOBS). */
+  jobs?: number;
 }
+
+/**
+ * Serial by default: concurrent `quint verify` runs share one Apalache/TLC working directory
+ * (`_apalache-out`) and returned unrecognized output in CI. `--jobs` opts in to concurrency.
+ */
+const DEFAULT_JOBS = 1;
 
 export type LockStatus = 'ok' | 'missing' | 'stale' | 'invalid';
 
@@ -49,6 +60,8 @@ export interface GateSummary {
   results: FormalCheckResult[];
   /** Checks left out by `--changed` because neither their spec nor their model changed. */
   skippedChecks: number;
+  /** Checks answered from the cache of passing results instead of being run. */
+  cachedChecks: number;
   waivers: FormalWaiver[];
   findings: PolicyFinding[];
   verify: VerifyResult[];
@@ -100,11 +113,32 @@ export async function runGate(options: GateOptions): Promise<GateSummary> {
   const byTool = selected.filter(
     ({ ref }) => !options.tool || !ref.check || ref.check.tool === options.tool,
   );
-  const results: FormalCheckResult[] = [];
-  for (const { ref, change } of byTool) {
-    const [result] = await runReferences([ref], options);
-    results.push(change ? { ...result, change } : result);
-  }
+  const cache = new CheckCache({
+    root,
+    quintBin: options.quintBin ?? 'quint',
+    leanBin: options.leanBin ?? 'lean',
+    disabled: options.noCache,
+  });
+  let cachedChecks = 0;
+  const results = await mapLimit(byTool, options.jobs ?? DEFAULT_JOBS, async ({ ref, change }) => {
+    const hit = ref.check ? await cache.get(ref.check) : undefined;
+    let result: FormalCheckResult;
+    if (ref.check && hit) {
+      cachedChecks++;
+      result = {
+        requirementId: ref.requirementId,
+        source: ref.source,
+        check: ref.check,
+        outcome: hit,
+        ok: matchesExpectation(hit.status, ref.check.expect),
+        cached: true,
+      };
+    } else {
+      [result] = await runReferences([ref], options);
+      if (result.check && result.ok) await cache.set(result.check, result.outcome);
+    }
+    return change ? { ...result, change } : result;
+  });
 
   const reports = options.testReports ?? config.testReports;
   const verify = checkVerifyLinks(verifyLinks, loadTestReports(root, reports));
@@ -181,6 +215,7 @@ export async function runGate(options: GateOptions): Promise<GateSummary> {
     policy,
     results,
     skippedChecks: pending.length - selected.length,
+    cachedChecks,
     waivers: scan.waivers,
     findings,
     verify,

@@ -1,6 +1,6 @@
 {
   "name": "specify",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "description": "Formal checks (Quint, TLC, Apalache, Lean) for OpenSpec requirements",
   "type": "module",
   "bin": {
