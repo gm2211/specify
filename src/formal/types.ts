@@ -100,6 +100,8 @@ export interface FormalCheckResult {
   ok: boolean;
   /** Set when the link comes from an active OpenSpec change's delta specs. */
   change?: string;
+  /** True when the outcome was reused from the gate cache instead of running the tool. */
+  cached?: boolean;
 }
 
 /** `Formal: none (reason)`: the requirement is deliberately not modeled. */

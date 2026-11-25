@@ -133,6 +133,8 @@ async function main(args: string[]): Promise<number> {
           leanBin: get('--lean-bin'),
           changed: options.has('--changed'),
           skipVerify: options.has('--skip-verify'),
+          noCache: options.has('--no-cache'),
+          jobs: get('--jobs'),
         },
         ctx,
       );

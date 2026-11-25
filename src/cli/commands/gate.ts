@@ -18,6 +18,8 @@ export interface GateCliOptions {
   hook?: string;
   changed?: boolean;
   skipVerify?: boolean;
+  noCache?: boolean;
+  jobs?: string;
 }
 
 function integer(value: string | undefined, fallback: number, name: string, max: number): number {
@@ -64,6 +66,8 @@ export async function gate(options: GateCliOptions, ctx: CliContext): Promise<nu
     base: options.base,
     changed: options.changed,
     skipVerify: options.skipVerify,
+    noCache: options.noCache,
+    jobs: integer(options.jobs, 0, '--jobs', 64) || undefined,
     testReports: options.testReport?.split(',').filter(Boolean),
     tolerateUnavailable: options.hook !== undefined,
   });

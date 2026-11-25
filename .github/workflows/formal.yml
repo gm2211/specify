@@ -4,10 +4,16 @@
 #
 #   jobs:
 #     formal:
-#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.0
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
 #
 # Set `specify-ref` to the same tag. The gate's traceability table and failures appear in the job
 # summary. Override the tool versions and checksums together.
+#
+# Passing check results are cached (actions/cache) by model files and tool versions; set
+# `cache: false` to re-run everything. `pr-comment: true` also posts the table as one pull request
+# comment, updated on every run; the calling job must then grant `pull-requests: write`:
+#
+#   permissions: { contents: read, pull-requests: write }
 name: Formal checks
 on:
   workflow_call:
@@ -33,6 +39,16 @@ on:
         description: Directory under the root where that artifact is extracted
         type: string
         default: reports
+      cache:
+        description: Reuse passing check results from earlier runs (actions/cache)
+        type: boolean
+        default: true
+      pr-comment:
+        description:
+          Post the gate table as one pull request comment, updated on each run. The caller must
+          grant pull-requests write; without it the comment is skipped and the job is unaffected.
+        type: boolean
+        default: false
       change:
         description: Ignored; the gate checks every active OpenSpec change
         type: string
@@ -44,7 +60,7 @@ on:
       specify-ref:
         description: Git ref of gm2211/specify to install
         type: string
-        default: v0.9.0
+        default: v0.9.1
       quint-version:
         type: string
         default: 0.33.1
@@ -66,8 +82,10 @@ on:
         description: sha256 of lean-<version>-linux.tar.zst
         type: string
         default: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
-permissions:
-  contents: read
+# No `permissions` block on purpose: a called workflow cannot ask for more than its caller grants,
+# so declaring `pull-requests: write` here would break callers that grant only `contents: read`.
+# The token therefore has whatever the caller grants; the only write this workflow performs is the
+# opt-in pull request comment.
 jobs:
   formal:
     runs-on: ubuntu-latest
@@ -150,12 +168,27 @@ jobs:
           '' || hashFiles(format('{0}/lakefile.toml', inputs.root)) != '')
         working-directory: ${{ inputs.root }}
         run: lake build
+      - name: Restore gate cache
+        id: gate-cache
+        if: inputs.cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ inputs.root }}/.specify/cache/gate
+          # Entries are content-addressed (check, model files, tool version), so a prefix match
+          # only ever supplies entries that are valid or unused.
+          key:
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{
+            inputs.lean-version }}-${{ hashFiles(format('{0}/**/*.qnt', inputs.root),
+            format('{0}/**/*.lean', inputs.root)) }}
+          restore-keys: |
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{ inputs.lean-version }}-
       - name: specify gate
         working-directory: ${{ inputs.root }}
         env:
           POLICY: ${{ inputs.policy }}
           BASE_REF: ${{ github.base_ref }}
           TIMEOUT_MS: ${{ inputs.timeout-ms }}
+          USE_CACHE: ${{ inputs.cache }}
         run: |
           set -uo pipefail
           args=(gate --root . --format markdown --timeout-ms "$TIMEOUT_MS")
@@ -163,6 +196,7 @@ jobs:
           if [ -n "$BASE_REF" ] && git rev-parse --verify --quiet "origin/$BASE_REF" >/dev/null; then
             args+=(--base "origin/$BASE_REF")
           fi
+          if [ "$USE_CACHE" != "true" ]; then args+=(--no-cache); fi
           case "$TOOLS" in
             *quint*lean*|*lean*quint*) ;;
             *quint*) args+=(--tool quint) ;;
@@ -175,3 +209,33 @@ jobs:
           cat "$RUNNER_TEMP/formal.md"
           { echo "## Specify gate"; echo; cat "$RUNNER_TEMP/formal.md"; } >> "$GITHUB_STEP_SUMMARY"
           exit $status
+      - name: Save gate cache
+        if: always() && inputs.cache && steps.gate-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ inputs.root }}/.specify/cache/gate
+          key:
+            specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{
+            inputs.lean-version }}-${{ hashFiles(format('{0}/**/*.qnt', inputs.root),
+            format('{0}/**/*.lean', inputs.root)) }}
+      - name: Comment on the pull request
+        if: always() && inputs.pr-comment && github.event.pull_request.number != ''
+        # A read-only token (fork pull requests, or a caller without pull-requests: write) must not
+        # turn a passing gate red.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [ -s "$RUNNER_TEMP/formal.md" ] || exit 0
+          marker='<!-- specify-gate -->'
+          { echo "$marker"; echo "## Specify gate"; echo; cat "$RUNNER_TEMP/formal.md"; } > "$RUNNER_TEMP/comment.md"
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          fi

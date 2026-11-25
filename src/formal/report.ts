@@ -75,9 +75,10 @@ export function formatGate(summary: GateSummary): string {
   const skipped = summary.skippedChecks
     ? `, ${summary.skippedChecks} unchanged checks skipped`
     : '';
+  const cached = summary.cachedChecks ? `, ${summary.cachedChecks} reused from the cache` : '';
   lines.push(
     '',
-    `${summary.valid ? 'Gate open' : 'Gate closed'}: ${summary.totals.ok}/${summary.totals.checks} checks as expected${skipped}, ${summary.waivers.length} waived, policy ${summary.policy}. Results cover the formal models only, not the application.`,
+    `${summary.valid ? 'Gate open' : 'Gate closed'}: ${summary.totals.ok}/${summary.totals.checks} checks as expected${skipped}${cached}, ${summary.waivers.length} waived, policy ${summary.policy}. Results cover the formal models only, not the application.`,
   );
   return lines.join('\n');
 }

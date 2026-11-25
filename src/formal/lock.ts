@@ -49,9 +49,24 @@ function isQuintDeclaration(line: string): boolean {
   const text = line.trim().replace(/^pure\s+/, '');
   return (
     text.startsWith('}') ||
-    text.startsWith('//') ||
-    /^(val|def|temporal|action|var|const|type|import|export|module|run|nondet)\b/.test(text)
+    /^(val|def|temporal|action|var|const|type|import|export|module|run|nondet|assume)\b/.test(text)
   );
+}
+
+function isBlankOrComment(line: string): boolean {
+  const text = line.trim();
+  return text === '' || text.startsWith('//');
+}
+
+/** Net open brackets on a line, ignoring strings and `//` comments. */
+function nesting(line: string): number {
+  const code = line.replaceAll(/"(?:[^"\\]|\\.)*"/g, '').replace(/\/\/.*$/, '');
+  let depth = 0;
+  for (const char of code) {
+    if ('{(['.includes(char)) depth++;
+    else if ('})]'.includes(char)) depth--;
+  }
+  return depth;
 }
 
 /** The text that defines a linked property, so edits to it show up in the lock. */
@@ -76,11 +91,17 @@ export function definitionText(source: string, check: FormalCheck): string | und
     check.property;
   const first = lines.findIndex((line) => declares(line));
   if (first === -1) return undefined;
+  // The whole definition: everything up to the next declaration at the same nesting level, so
+  // blank lines inside it (and nested `val`/`def` inside a block body) stay part of it.
   const body = [lines[first]];
+  let depth = nesting(lines[first]);
   for (const line of lines.slice(first + 1)) {
-    if (!line.trim() || isQuintDeclaration(line)) break;
+    if (depth <= 0 && isQuintDeclaration(line)) break;
     body.push(line);
+    depth += nesting(line);
   }
+  // Trailing blank lines and comments belong to what follows.
+  while (body.length > 1 && isBlankOrComment(body.at(-1) ?? '')) body.pop();
   return squash(body.join(' '));
 }
 
