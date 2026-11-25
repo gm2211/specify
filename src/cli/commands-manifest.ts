@@ -54,7 +54,10 @@ export const COMMANDS: CommandDefinition[] = [
       string('--base', 'Git ref the drift lock and --changed compare against (default HEAD)'),
       flag('--skip-verify', 'Do not require test results for Verify lines'),
       flag('--no-cache', 'Re-run every check instead of reusing cached passing results'),
-      string('--jobs', 'Checks to run at the same time (default: up to 4)'),
+      string(
+        '--jobs',
+        'Checks to run at the same time (default: 1; Quint runs may interfere when concurrent)',
+      ),
       string('--test-report', 'Comma-separated JUnit XML or TAP files (default: config)'),
       string('--hook', 'stop or pre-push: report on stderr; a missing tool does not block'),
       string('--tool', 'Run only quint or only lean links'),

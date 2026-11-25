@@ -131,8 +131,8 @@ Failing checks SHALL always re-run, an unreadable tool version SHALL disable cac
 
 ### Requirement: Checks run concurrently
 
-The gate SHALL run checks at the same time, at most `--jobs` at once (default up to 4), and report
-them in link order.
+The gate SHALL run up to `--jobs` checks at the same time (default 1, serial) and report them in
+link order.
 
 - Formal: none (input/output behavior, covered by unit tests)
 

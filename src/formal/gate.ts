@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import os from 'node:os';
 import { CheckCache, mapLimit } from './cache.js';
 import { matchesExpectation, runReferences, type CheckFormalOptions } from './check.js';
 import { loadConfig, type Policy } from './config.js';
@@ -34,11 +33,15 @@ export interface GateOptions extends Omit<CheckFormalOptions, 'change'> {
   tolerateUnavailable?: boolean;
   /** Re-run every check instead of reusing passing results cached under `.specify/cache/gate`. */
   noCache?: boolean;
-  /** Checks run at the same time (default: up to 4, fewer on small machines). */
+  /** Checks run at the same time (default 1; concurrent Quint runs can interfere, see DEFAULT_JOBS). */
   jobs?: number;
 }
 
-const DEFAULT_JOBS = Math.max(1, Math.min(4, os.availableParallelism()));
+/**
+ * Serial by default: concurrent `quint verify` runs share one Apalache/TLC working directory
+ * (`_apalache-out`) and returned unrecognized output in CI. `--jobs` opts in to concurrency.
+ */
+const DEFAULT_JOBS = 1;
 
 export type LockStatus = 'ok' | 'missing' | 'stale' | 'invalid';
 

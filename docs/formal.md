@@ -97,7 +97,7 @@ specify gate --skip-verify                 # leave test results out (before the 
 specify gate --test-report a.xml,b.tap     # instead of testReports in the config
 specify gate --policy warn
 specify gate --no-cache                    # re-run every check, ignoring cached passes
-specify gate --jobs 2                      # checks run at once (default: up to 4)
+specify gate --jobs 2                      # checks run at once (default 1)
 ```
 
 ### Waivers
@@ -136,9 +136,10 @@ specify trace export --traces 10 --max-steps 20 --seed 1
 A check that passed is stored under `.specify/cache/gate` (the directory ignores itself) and is not
 run again while the check, every `.qnt` and `.lean` file under the root (plus the Lean project
 files) and the tool's `--version` output stay the same. Failing, erroring and timed-out checks are
-never cached, so they always run again. The rest run concurrently, at most `--jobs` at a time, and
-are reported in link order. `--no-cache` ignores the cache; a tool whose `--version` fails is never
-cached.
+never cached, so they always run again. The rest run one at a time; `--jobs <n>` runs up to `n`
+concurrently, reported in link order. Concurrent `quint verify` runs share one Apalache/TLC working
+directory and can interfere, so concurrency is opt-in. `--no-cache` ignores the cache; a tool whose
+`--version` fails is never cached.
 
 ### The drift lock
 
