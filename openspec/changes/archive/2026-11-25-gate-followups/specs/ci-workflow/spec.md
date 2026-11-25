@@ -15,14 +15,18 @@ which case it SHALL pass `--no-cache` to the gate.
 
 ### Requirement: Opt-in pull request comment
 
-When the `pr-comment` input is `true` (default `false`) on a pull request, the workflow SHALL post
-the gate table as one comment and update that comment on later runs. The workflow SHALL NOT declare
-`pull-requests: write`; the caller grants it, and a failure to comment SHALL NOT fail the job.
-Callers that grant only `contents: read` SHALL keep working unchanged.
+A separate `gate-comment.yml` workflow, declaring `pull-requests: write`, SHALL post the gate table
+(the `specify-gate-table` artifact from `formal.yml`) as one pull request comment and edit it on
+later runs. `formal.yml` SHALL keep `permissions: contents: read` and have no comment input.
 
 - Formal: none (GitHub workflow behavior, exercised by CI itself)
 
-#### Scenario: Read-only caller
+#### Scenario: Updated pull request
 
-- **WHEN** the caller grants only `contents: read`
+- **WHEN** a pull request whose caller uses the comment workflow is pushed to again
+- **THEN** the existing gate comment is edited rather than a second one added
+
+#### Scenario: Caller without the comment job
+
+- **WHEN** the caller grants only `contents: read` and does not call the comment workflow
 - **THEN** the gate runs as before and no comment is posted

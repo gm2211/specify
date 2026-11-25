@@ -10,10 +10,9 @@
 # summary. Override the tool versions and checksums together.
 #
 # Passing check results are cached (actions/cache) by model files and tool versions; set
-# `cache: false` to re-run everything. `pr-comment: true` also posts the table as one pull request
-# comment, updated on every run; the calling job must then grant `pull-requests: write`:
-#
-#   permissions: { contents: read, pull-requests: write }
+# `cache: false` to re-run everything. The gate table is uploaded as the `specify-gate-table`
+# artifact; to post it as a pull request comment, add a second job that calls gate-comment.yml (it
+# declares `pull-requests: write` itself, so this workflow stays read-only).
 name: Formal checks
 on:
   workflow_call:
@@ -43,12 +42,6 @@ on:
         description: Reuse passing check results from earlier runs (actions/cache)
         type: boolean
         default: true
-      pr-comment:
-        description:
-          Post the gate table as one pull request comment, updated on each run. The caller must
-          grant pull-requests write; without it the comment is skipped and the job is unaffected.
-        type: boolean
-        default: false
       change:
         description: Ignored; the gate checks every active OpenSpec change
         type: string
@@ -82,10 +75,8 @@ on:
         description: sha256 of lean-<version>-linux.tar.zst
         type: string
         default: 7289597a44543246c9227b8cae501767e095ce17f6d448b95fc4a8dc97268f6d
-# No `permissions` block on purpose: a called workflow cannot ask for more than its caller grants,
-# so declaring `pull-requests: write` here would break callers that grant only `contents: read`.
-# The token therefore has whatever the caller grants; the only write this workflow performs is the
-# opt-in pull request comment.
+permissions:
+  contents: read
 jobs:
   formal:
     runs-on: ubuntu-latest
@@ -218,24 +209,10 @@ jobs:
             specify-gate-${{ runner.os }}-${{ inputs.specify-ref }}-${{ inputs.quint-version }}-${{
             inputs.lean-version }}-${{ hashFiles(format('{0}/**/*.qnt', inputs.root),
             format('{0}/**/*.lean', inputs.root)) }}
-      - name: Comment on the pull request
-        if: always() && inputs.pr-comment && github.event.pull_request.number != ''
-        # A read-only token (fork pull requests, or a caller without pull-requests: write) must not
-        # turn a passing gate red.
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          set -euo pipefail
-          [ -s "$RUNNER_TEMP/formal.md" ] || exit 0
-          marker='<!-- specify-gate -->'
-          { echo "$marker"; echo "## Specify gate"; echo; cat "$RUNNER_TEMP/formal.md"; } > "$RUNNER_TEMP/comment.md"
-          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
-            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
-          if [ -n "$id" ]; then
-            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
-          else
-            gh api --method POST "repos/$REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
-          fi
+      - name: Upload gate table
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: specify-gate-table
+          path: ${{ runner.temp }}/formal.md
+          if-no-files-found: ignore

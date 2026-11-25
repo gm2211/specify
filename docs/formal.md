@@ -194,24 +194,26 @@ jobs:
       test-reports-path: reports # where it is extracted, under the root
       specify-ref: v0.9.1 # keep equal to the tag above
       cache: true # reuse passing checks between runs (actions/cache); false re-runs everything
-      pr-comment: false # true posts the gate table as one pull request comment
 ```
 
-With `pr-comment: true` the workflow creates or updates a single comment on the pull request. It
-declares no `pull-requests` permission of its own, because a called workflow cannot be granted more
-than its caller allows (and asking for more fails callers that grant only `contents: read`). The
-caller grants it:
+The gate workflow keeps `permissions: contents: read` and uploads the table as the
+`specify-gate-table` artifact. To also post it as one pull request comment (edited on every run),
+add a second job that calls `gate-comment.yml`; that workflow declares `pull-requests: write`
+itself, so the caller grants it to that job only and the gate job stays read-only:
 
 ```yaml
 jobs:
   formal:
-    permissions: { contents: read, pull-requests: write }
     uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
-    with: { pr-comment: true }
+  comment:
+    needs: formal
+    if: always() && github.event_name == 'pull_request'
+    permissions: { pull-requests: write }
+    uses: gm2211/specify/.github/workflows/gate-comment.yml@v0.9.1
 ```
 
-Without that grant (or on fork pull requests, whose token is read-only) the comment step fails
-quietly and the gate result is unaffected.
+Fork pull requests get a read-only token; the comment step then fails quietly and the gate result is
+unaffected. Callers that do not add the comment job need no change.
 
 The workflow installs Specify from GitHub, Quint from the npm registry tarball (sha512 checked),
 Apalache (which also provides TLC, sha256 checked), Java 21 and Lean from its release archive

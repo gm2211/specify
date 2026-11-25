@@ -1,0 +1,56 @@
+# Reusable workflow: post the gate table from formal.yml as one pull request comment.
+#
+# Opt in with a second job next to the gate job. Only this job gets `pull-requests: write`; the gate
+# job keeps `contents: read`:
+#
+#   jobs:
+#     formal:
+#       uses: gm2211/specify/.github/workflows/formal.yml@v0.9.1
+#     comment:
+#       needs: formal
+#       if: always() && github.event_name == 'pull_request'
+#       permissions: { pull-requests: write }
+#       uses: gm2211/specify/.github/workflows/gate-comment.yml@v0.9.1
+#
+# The comment is created once and edited on later runs. Fork pull requests get a read-only token, so
+# the comment is skipped there and nothing fails.
+name: Gate comment
+on:
+  workflow_call:
+    inputs:
+      artifact:
+        description: Artifact holding formal.md, uploaded by formal.yml in the same run
+        type: string
+        default: specify-gate-table
+permissions:
+  pull-requests: write
+jobs:
+  comment:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.number != ''
+    steps:
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: ${{ inputs.artifact }}
+          path: ${{ runner.temp }}/gate-table
+      - name: Post or update the comment
+        # A read-only token must not turn a passing gate red.
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          table="$RUNNER_TEMP/gate-table/formal.md"
+          [ -s "$table" ] || exit 0
+          marker='<!-- specify-gate -->'
+          { echo "$marker"; echo "## Specify gate"; echo; cat "$table"; } > "$RUNNER_TEMP/comment.md"
+          id=$(gh api --paginate "repos/$REPO/issues/$PR/comments" \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
+          if [ -n "$id" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$id" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          else
+            gh api --method POST "repos/$REPO/issues/$PR/comments" -F body=@"$RUNNER_TEMP/comment.md" >/dev/null
+          fi
